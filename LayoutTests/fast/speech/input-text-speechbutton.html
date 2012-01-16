@@ -1,0 +1,54 @@
+<!DOCTYPE HTML PUBLIC "-//IETF//DTD HTML//EN">
+<html>
+<head>
+<link rel="stylesheet" href="../js/resources/js-test-style.css">
+<script src="../js/resources/js-test-pre.js"></script>
+</head>
+<body>
+<p id="description"></p>
+<div id="console"></div>
+<script type="text/javascript">
+description('Tests for speech button click with &lt;input type="text" speech>.');
+
+function onWebkitSpeechChange() {
+    shouldBeEqualToString('document.getElementById("speechInput").value', 'Pictures of the moon');
+    setTimeout(function() {
+        var input = document.getElementById('speechInput');
+        input.dir = 'rtl';
+        input.value = '';
+        input.onwebkitspeechchange = function() {
+            shouldBeEqualToString('document.getElementById("speechInput").value',
+                                  'Pictures of the moon');
+            finishJSTest();
+        };
+
+        var x = input.offsetLeft + 4;
+        var y = input.offsetTop + input.offsetHeight / 2;
+        eventSender.mouseMoveTo(x, y);
+        eventSender.mouseDown();
+        eventSender.mouseUp();
+    }, 50);
+}
+
+function run() {
+    if (window.layoutTestController && window.eventSender) {
+        layoutTestController.setMockSpeechInputResult('Pictures of the moon');
+
+        // Clicking the speech button should fill in mock speech-recognized text.
+        var input = document.getElementById('speechInput');
+        var x = input.offsetLeft + input.offsetWidth - 4;
+        var y = input.offsetTop + input.offsetHeight / 2;
+        eventSender.mouseMoveTo(x, y);
+        eventSender.mouseDown();
+        eventSender.mouseUp();
+    }
+}
+
+window.onload = run;
+window.jsTestIsAsync = true;
+window.successfullyParsed = true;
+</script>
+<script src="../js/resources/js-test-post.js"></script>
+<input id='speechInput' x-webkit-speech onwebkitspeechchange="onWebkitSpeechChange()">
+</body>
+</html>

@@ -1,0 +1,5 @@
+ALERT: hello
+CONSOLE MESSAGE: line 1: ReferenceError: Can't find variable: sayHello
+This test copies the content of an iframe and pastes it in an editable area in an xhtml document and verifies that no script, handlers or javascript urls are copied.
+
+

@@ -1,0 +1,83 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.01 Transitional//EN" "http://www.w3.org/TR/html4/loose.dtd">
+<html>
+<head>
+<style>
+.unused {
+    color: green;
+}
+</style>
+<script src="../http/tests/inspector/inspector-test.js"></script>
+<script src="audits-tests.js"></script>
+
+<!-- These scripts are needed to result in a violation of the max JS resource count from the same domain -->
+<script src="resources/audits-script1.js"></script>
+<link rel="stylesheet" href="resources/audits-style1.css" type="text/css">
+<script src="resources/audits-script2.js"></script>
+<script>
+
+function doit()
+{
+    function callback(result)
+    {
+        if (result === "refreshing")
+            return;
+        var output = document.getElementById("outputPre");
+        output.textContent = result;
+        notifyDone();
+    }
+    evaluateInWebInspector("frontend_runAudits", callback);
+}
+
+
+// Frontend functions.
+
+function frontend_runAudits(testController)
+{
+    if (!WebInspector.panels.resources.resourceTrackingEnabled) {
+        WebInspector.panels.resources._toggleResourceTracking();
+        return "refreshing";
+    }
+
+    testController.waitUntilDone();
+    WebInspector.AuditRuleResult.resourceDomain = function() {
+        return "[domain]";
+    };
+    try {
+        const launcherView = WebInspector.panels.audits._launcherView;
+        launcherView._selectAllClicked(true);
+        launcherView._auditPresentStateElement.checked = true;
+        launcherView._launchButtonClicked();
+
+        testController.runAfterPendingDispatches(function() {
+            // Audits are done, check results.
+            var output = frontend_collectAuditResults();
+            // Avoid influencing tests that require resource tracking to be disabled.
+            WebInspector.panels.resources._toggleResourceTracking();
+            testController.runAfterPendingDispatches(function() {
+                testController.notifyDone(output.join("\n"));
+            });
+        });
+    } catch(e) {
+        testController.notifyDone("Exception: " + e.toString());
+    }
+}
+
+</script>
+</head>
+
+<body onload="onload()">
+Tests audit rules.
+
+<style>
+.violation { color: red; }
+</style>
+<link rel="stylesheet" href="resources/audits-style1.css" type="text/css">
+<img src="foo1.jpg">
+<img src="foo2.jpg" width=100>
+<img src="foo3.jpg" style="position: absolute">
+
+<pre id="outputPre">
+</pre>
+
+</body>
+</html>

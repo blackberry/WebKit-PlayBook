@@ -1,0 +1,3 @@
+This test copies the content of an iframe and pastes it in an editable area and verifies that no script, handlers or javascript urls are copied.
+
+

@@ -1,0 +1,31 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of SPAN > BODY > HTML > #document to 3 of SPAN > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 0 of SPAN > BODY > HTML > #document to 0 of SPAN > BODY > HTML > #document toDOMRange:range from 1 of #text > SPAN > BODY > HTML > #document to 30 of #text > SPAN > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldEndEditingInDOMRange:range from 0 of SPAN > BODY > HTML > #document to 3 of SPAN > BODY > HTML > #document
+EDITING DELEGATE: webViewDidEndEditing:WebViewDidEndEditingNotification
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of SPAN > BODY > HTML > #document to 0 of SPAN > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x20
+        RenderText {#text} at (0,0) size 507x19
+          text run at (0,0) width 102: "This tests copy. "
+          text run at (102,0) width 405: "Non-inheritable styles should be brought down from stylesheets."
+      RenderBlock {SPAN} at (0,36) size 784x60
+        RenderBlock (anonymous) at (0,0) size 784x20
+          RenderText {#text} at (0,0) size 183x19
+            text run at (0,0) width 183: "This shouldn't have a border."
+        RenderBlock {DIV} at (0,20) size 784x20
+          RenderText {#text} at (0,0) size 289x19
+            text run at (0,0) width 289: "This should have blue border when its pasted."
+        RenderBlock (anonymous) at (0,40) size 784x20
+          RenderText {#text} at (0,0) size 183x19
+            text run at (0,0) width 183: "This shouldn't have a border."
+      RenderBlock {SPAN} at (0,96) size 784x20
+caret: position 0 of child 5 {SPAN} of body

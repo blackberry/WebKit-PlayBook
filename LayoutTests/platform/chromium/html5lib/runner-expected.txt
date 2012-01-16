@@ -1,0 +1,238 @@
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 0: Warning: Problem parsing viewBox=""
+CONSOLE MESSAGE: line 0: Warning: Problem parsing viewBox=""
+CONSOLE MESSAGE: line 0: Warning: Problem parsing viewBox=""
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 1: Uncaught SyntaxError: Unexpected token <
+CONSOLE MESSAGE: line 2: PASS
+CONSOLE MESSAGE: line 2: FOO<span>BAR</span>BAZ
+resources/pending-spec-changes-plain-text-unsafe.dat: PASS
+
+resources/pending-spec-changes.dat: PASS
+
+resources/plain-text-unsafe.dat: PASS
+
+resources/tests1.dat: PASS
+
+resources/tests2.dat: PASS
+
+resources/tests3.dat: PASS
+
+resources/tests4.dat: PASS
+
+resources/tests5.dat: PASS
+
+resources/tests6.dat: PASS
+
+resources/tests7.dat:
+30
+
+Test 30 of 30 in resources/tests7.dat failed. Input:
+<select><keygen>
+Got:
+| <html>
+|   <head>
+|   <body>
+|     <select>
+|     <keygen>
+|       <option>
+|         "2048 (High Grade)"
+|       <option>
+|         "1024 (Medium Grade)"
+Expected:
+| <html>
+|   <head>
+|   <body>
+|     <select>
+|     <keygen>
+resources/tests8.dat: PASS
+
+resources/tests9.dat: PASS
+
+resources/tests10.dat:
+38
+51
+52
+
+Test 38 of 52 in resources/tests10.dat failed. Input:
+<svg><script></script><path>
+Got:
+| <html>
+|   <head>
+|   <body>
+|     <svg svg>
+|       <svg script>
+|         <svg path>
+Expected:
+| <html>
+|   <head>
+|   <body>
+|     <svg svg>
+|       <svg script>
+|       <svg path>
+
+Test 51 of 52 in resources/tests10.dat failed. Input:
+<math><annotation-xml><svg><foreignObject><div><math><mi></mi></math><span></span></div></foreignObject><path></path></svg></annotation-xml><mi>
+Got:
+| <html>
+|   <head>
+|   <body>
+|     <math math>
+|       <math annotation-xml>
+|         <svg svg>
+|           <svg foreignObject>
+|             <div>
+|               <math math>
+|                 <math mi>
+|               <span>
+|             <path>
+|       <math mi>
+Expected:
+| <html>
+|   <head>
+|   <body>
+|     <math math>
+|       <math annotation-xml>
+|         <svg svg>
+|           <svg foreignObject>
+|             <div>
+|               <math math>
+|                 <math mi>
+|               <span>
+|           <svg path>
+|       <math mi>
+
+Test 52 of 52 in resources/tests10.dat failed. Input:
+<math><annotation-xml><svg><foreignObject><math><mi><svg></svg></mi><mo></mo></math><span></span></foreignObject><path></path></svg></annotation-xml><mi>
+Got:
+| <html>
+|   <head>
+|   <body>
+|     <math math>
+|       <math annotation-xml>
+|         <svg svg>
+|           <svg foreignObject>
+|             <math math>
+|               <math mi>
+|                 <svg svg>
+|               <math mo>
+|             <span>
+|             <path>
+|       <math mi>
+Expected:
+| <html>
+|   <head>
+|   <body>
+|     <math math>
+|       <math annotation-xml>
+|         <svg svg>
+|           <svg foreignObject>
+|             <math math>
+|               <math mi>
+|                 <svg svg>
+|               <math mo>
+|             <span>
+|           <svg path>
+|       <math mi>
+resources/tests11.dat: PASS
+
+resources/tests12.dat: PASS
+
+resources/tests14.dat: PASS
+
+resources/tests15.dat: PASS
+
+resources/tests16.dat: PASS
+
+resources/tests17.dat: PASS
+
+resources/tests18.dat: PASS
+
+resources/tests19.dat:
+63
+
+Test 63 of 97 in resources/tests19.dat failed. Input:
+<!doctype html><keygen><frameset>
+Got:
+| <!DOCTYPE html>
+| <html>
+|   <head>
+|   <body>
+|     <keygen>
+|       <option>
+|         "2048 (High Grade)"
+|       <option>
+|         "1024 (Medium Grade)"
+Expected:
+| <!DOCTYPE html>
+| <html>
+|   <head>
+|   <body>
+|     <keygen>
+resources/tests20.dat: PASS
+
+resources/tests21.dat: PASS
+
+resources/tests_innerHTML_1.dat: PASS
+
+resources/webkit01.dat: PASS
+
+resources/webkit02.dat: PASS
+
+resources/doctype01.dat: PASS
+
+resources/scriptdata01.dat: PASS
+
+resources/html5test-com.dat: PASS
+
+resources/entities01.dat: PASS
+
+resources/entities02.dat: PASS
+
+resources/comments01.dat: PASS
+
+resources/adoption01.dat: PASS
+
+resources/adoption02.dat: PASS
+
+resources/inbody01.dat: PASS
+
+resources/isindex.dat: PASS
+
+resources/tables01.dat: PASS
+
+resources/tricky01.dat: PASS
+
+resources/scripted/adoption01.dat:
+1
+
+Test 1 of 1 in resources/scripted/adoption01.dat failed. Input:
+<p><b id="A"><script>document.getElementById("A").id = "B"</script></p>TEXT</b>
+Got:
+| <html>
+|   <head>
+|   <body>
+|     <p>
+|       <b>
+|         id="B"
+|         <script>
+|           "document.getElementById("A").id = "B""
+|     <b>
+|       id="B"
+|       "TEXT"
+Expected:
+| <html>
+|   <head>
+|   <body>
+|     <p>
+|       <b>
+|         id="B"
+|         <script>
+|           "document.getElementById("A").id = "B""
+|     <b>
+|       id="A"
+|       "TEXT"
+resources/scripted/webkit01.dat: PASS

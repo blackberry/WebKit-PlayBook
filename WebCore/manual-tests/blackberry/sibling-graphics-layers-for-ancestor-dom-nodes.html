@@ -1,0 +1,65 @@
+<!-- IE in quirks mode -->
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD HTML 4.0//EN">
+<link rel="stylesheet" href="http://limpid.nl/lab/css/fixed/layout.css" type="text/css">
+<title>Fixed right-sidebar</title>
+<style type="text/css">
+    body {
+        margin: 0;
+        padding :0 150px 0 0;
+    }
+
+    div#right-sidebar {
+        position:fixed;
+        top: 0;
+        right: 0;
+        width: 150px;
+        height: 50%;
+    }
+
+    @media screen{
+        * html body{
+        overflow:hidden;
+    }
+
+    * html div#content{
+        height:100%;
+        overflow:auto;
+    }
+
+    .button {
+        background-color: #cccccc;
+        color: black;
+        font-weight: bold;
+        font-size: 80%;
+        font-family: sans-serif;
+        text-align: center;
+        border-style: outset;
+        border-width: 2px;
+        margin: 5px;
+        padding: 2px;
+        cursor: hand;
+        vertical-align: middle;
+        position: relative;
+        left: -150px;
+    }
+
+    .navbutton {
+        width: 125px;
+    }
+</style>
+
+Click one of the following buttons:
+<div id="right-sidebar">
+    <p> The gree box, and but button should scroll together ...</p>
+        <div class="button navbutton" onmouseover="this.style.borderStyle='inset'"
+            onmouseout="this.style.borderStyle='outset'"
+            onclick="location.href='http://www.google.com'"> Click me!
+        </div>
+    </div>
+<div id="content">
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+<br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br><br>
+content<br>
+</div>

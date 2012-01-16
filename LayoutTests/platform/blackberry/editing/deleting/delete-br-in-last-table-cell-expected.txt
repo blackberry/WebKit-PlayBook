@@ -1,0 +1,36 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x20
+        RenderInline {A} at (0,0) size 71x19 [color=#0000EE]
+          RenderText {#text} at (0,0) size 71x19
+            text run at (0,0) width 71: "Bug 35369"
+        RenderText {#text} at (71,0) size 31x19
+          text run at (71,0) width 31: " and "
+        RenderInline {A} at (0,0) size 71x19 [color=#0000EE]
+          RenderText {#text} at (102,0) size 71x19
+            text run at (102,0) width 71: "Bug 35632"
+      RenderBlock {P} at (0,36) size 784x20
+        RenderText {#text} at (0,0) size 545x19
+          text run at (0,0) width 545: "Executing a delete command when positioned before a BR in a table cell (esp. the last)"
+      RenderBlock {DIV} at (0,72) size 784x50
+        RenderTable {TABLE} at (0,0) size 26x50
+          RenderTableSection {TBODY} at (0,0) size 26x50
+            RenderTableRow {TR} at (0,2) size 26x22
+              RenderTableCell {TD} at (2,2) size 10x22 [r=0 c=0 rs=1 cs=1]
+                RenderText {#text} at (1,1) size 8x19
+                  text run at (1,1) width 8: "1"
+              RenderTableCell {TD} at (14,2) size 10x22 [r=0 c=1 rs=1 cs=1]
+                RenderText {#text} at (1,1) size 8x19
+                  text run at (1,1) width 8: "2"
+            RenderTableRow {TR} at (0,26) size 26x22
+              RenderTableCell {TD} at (2,26) size 10x22 [r=1 c=0 rs=1 cs=1]
+                RenderText {#text} at (1,1) size 8x19
+                  text run at (1,1) width 8: "3"
+              RenderTableCell {TD} at (14,26) size 10x22 [r=1 c=1 rs=1 cs=1]
+                RenderText {#text} at (1,1) size 8x19
+                  text run at (1,1) width 8: "4"
+                RenderBR {BR} at (9,16) size 0x0
+caret: position 1 of child 0 {#text} of child 1 {TD} of child 1 {TR} of child 0 {TBODY} of child 1 {TABLE} of child 5 {DIV} of body

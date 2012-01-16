@@ -1,0 +1,23 @@
+This tests that Paste commands fires textInput events.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL testTargetTextarea.value should be PlainHello. Was .
+FAIL testTargetInput.value should be PlainHello. Was .
+FAIL testTargetEditable.innerHTML should be PlainHello. Was .
+FAIL testTargetTextarea.value should be RichHello. Was .
+FAIL testTargetInput.value should be RichHello. Was .
+FAIL testTargetEditable.innerHTML should be <b>Rich</b>Hello. Was .
+FAIL textInputCount should be 6. Was 0.
+PASS testTargetTextarea.value is ''
+PASS testTargetInput.value is ''
+PASS testTargetEditable.innerHTML is ''
+PASS testTargetTextarea.value is ''
+PASS testTargetInput.value is ''
+PASS testTargetEditable.innerHTML is ''
+FAIL textInputCount should be 6. Was 0.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

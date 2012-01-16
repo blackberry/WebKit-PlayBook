@@ -1,0 +1,58 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 1 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 1 of #text > DIV > BODY > HTML > #document to 1 of #text > DIV > BODY > HTML > #document toDOMRange:range from 6 of #text > DIV > LI > UL > DIV > BODY > HTML > #document to 6 of #text > DIV > LI > UL > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+EDITING DELEGATE: shouldEndEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 3 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidEndEditing:WebViewDidEndEditingNotification
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 1 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 3 of #text > DIV > LI > UL > DIV > BODY > HTML > #document to 3 of #text > DIV > LI > UL > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x576
+      RenderBlock {P} at (0,0) size 784x21
+        RenderText {#text} at (0,0) size 551x21
+          text run at (0,0) width 551: "This tests pasting a list into a position that would normally result in an end merge."
+      RenderBlock {DIV} at (0,37) size 784x95
+        RenderBlock (anonymous) at (0,0) size 784x21
+          RenderText {#text} at (0,0) size 8x21
+            text run at (0,0) width 8: "x"
+        RenderBlock {UL} at (0,37) size 784x21
+          RenderListItem {LI} at (40,0) size 744x21
+            RenderBlock {DIV} at (0,0) size 744x21
+              RenderListMarker at (-18,0) size 7x21: bullet
+              RenderText {#text} at (0,0) size 43x21
+                text run at (0,0) width 43: "Item 1"
+        RenderBlock (anonymous) at (0,74) size 784x21
+          RenderText {#text} at (0,0) size 8x21
+            text run at (0,0) width 8: "x"
+      RenderBlock {P} at (0,148) size 784x42
+        RenderText {#text} at (0,0) size 755x42
+          text run at (0,0) width 251: "This tests pasting text into a list item. "
+          text run at (251,0) width 504: "The last bit of content in the incoming fragment should be merged with the"
+          text run at (0,21) width 314: "paragraph after the position being pasted into."
+      RenderBlock {DIV} at (0,206) size 784x42
+        RenderBlock {UL} at (0,0) size 784x42
+          RenderListItem {LI} at (40,0) size 744x42
+            RenderBlock {DIV} at (0,0) size 744x21
+              RenderListMarker at (-18,0) size 7x21: bullet
+              RenderText {#text} at (0,0) size 31x21
+                text run at (0,0) width 31: "Item"
+              RenderText {#text} at (31,0) size 21x21
+                text run at (31,0) width 21: "foo"
+            RenderBlock {DIV} at (0,21) size 744x21
+              RenderText {#text} at (0,0) size 24x21
+                text run at (0,0) width 24: "bar"
+              RenderText {#text} at (24,0) size 12x21
+                text run at (24,0) width 12: " 1"
+caret: position 3 of child 0 {#text} of child 1 {DIV} of child 0 {LI} of child 0 {UL} of child 10 {DIV} of body

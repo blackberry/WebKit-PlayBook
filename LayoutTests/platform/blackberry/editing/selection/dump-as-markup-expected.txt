@@ -1,0 +1,50 @@
+CONSOLE MESSAGE: line 15: ReferenceError: Can't find variable: Markup
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x301
+  RenderBlock {HTML} at (0,0) size 800x301
+    RenderBody {BODY} at (8,8) size 784x285
+      RenderBlock {DIV} at (0,0) size 784x30
+        RenderBlock (anonymous) at (0,0) size 784x20
+          RenderText {#text} at (0,0) size 21x19
+            text run at (0,0) width 21: "foo"
+        RenderBlock {HR} at (0,28) size 784x2 [border: (1px inset #000000)]
+      RenderBlock (anonymous) at (0,38) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,66) size 784x20
+        RenderText {#text} at (0,0) size 21x19
+          text run at (0,0) width 21: "foo"
+        RenderText {#text} at (21,0) size 24x19
+          text run at (21,0) width 4: " "
+          text run at (25,0) width 20: "bar"
+      RenderBlock (anonymous) at (0,86) size 784x20
+        RenderInline {SPAN} at (0,0) size 21x19
+          RenderText {#text} at (0,0) size 21x19
+            text run at (0,0) width 21: "foo"
+        RenderInline {SPAN} at (0,0) size 20x19
+          RenderText {#text} at (21,0) size 20x19
+            text run at (21,0) width 20: "bar"
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {DIV} at (0,106) size 784x20
+        RenderBlock {DIV} at (0,0) size 784x20
+          RenderInline {B} at (0,0) size 20x19
+            RenderText {#text} at (0,0) size 20x19
+              text run at (0,0) width 20: "sdf"
+          RenderInline {I} at (0,0) size 18x19
+            RenderText {#text} at (20,0) size 18x19
+              text run at (20,0) width 18: "sdf"
+          RenderText {#text} at (38,0) size 19x19
+            text run at (38,0) width 19: "sdf"
+      RenderBlock (anonymous) at (0,126) size 784x159
+        RenderPartObject {IFRAME} at (0,0) size 304x154 [border: (2px inset #000000)]
+          layer at (0,0) size 300x150
+            RenderView at (0,0) size 300x150
+          layer at (0,0) size 300x16
+            RenderBlock {HTML} at (0,0) size 300x16
+              RenderBody {BODY} at (8,16) size 284x0
+                RenderBlock {P} at (0,0) size 284x0
+        RenderText {#text} at (0,0) size 0x0
+        RenderText {#text} at (0,0) size 0x0
+layer at (13,52) size 151x16
+  RenderBlock {DIV} at (3,4) size 151x16

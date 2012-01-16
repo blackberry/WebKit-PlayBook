@@ -1,0 +1,4 @@
+--asdf Content-type: text/html
+This test passes if it does not crash.
+
+--asdf Content-type: text/random This chunk doesn't have a content type, which can cause the policy for this load to be ignored. This causes the request to be canceled. --asdf--

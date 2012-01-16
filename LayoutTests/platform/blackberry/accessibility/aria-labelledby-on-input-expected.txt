@@ -1,0 +1,3 @@
+This computer will self-destruct in   minutes.
+
+The accessibility title is ""

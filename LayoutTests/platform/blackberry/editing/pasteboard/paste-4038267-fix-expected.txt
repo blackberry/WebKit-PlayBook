@@ -1,0 +1,49 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 3 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x266 [border: (2px solid #0000FF)]
+        RenderBlock {DIV} at (14,14) size 756x83
+          RenderText {#text} at (0,0) size 67x26
+            text run at (0,0) width 67: "Tests: "
+          RenderBR {BR} at (0,0) size 0x0
+          RenderText {#text} at (0,27) size 113x27
+            text run at (0,27) width 113: "Bug fix for "
+          RenderInline {A} at (0,0) size 260x27 [color=#0000EE]
+            RenderText {#text} at (113,27) size 260x27
+              text run at (113,27) width 260: "<rdar://problem/4038267>"
+          RenderText {#text} at (373,27) size 747x55
+            text run at (373,27) width 374: " REGRESSION (Mail): Crash copying"
+            text run at (0,55) width 287: "and pasting end of paragraph."
+        RenderBlock {DIV} at (14,113) size 756x139
+          RenderBlock (anonymous) at (0,0) size 756x83
+            RenderText {#text} at (0,0) size 189x26
+              text run at (0,0) width 189: "Expected Results: "
+            RenderBR {BR} at (189,21) size 0x0
+            RenderText {#text} at (0,27) size 732x55
+              text run at (0,27) width 732: "Should see this content in the red box below (insertion point must be on the"
+              text run at (0,55) width 308: "second line, right before \"bar\"):"
+          RenderBlock {DIV} at (0,83) size 756x28
+            RenderText {#text} at (0,0) size 32x27
+              text run at (0,0) width 32: "foo"
+          RenderBlock {DIV} at (0,111) size 756x28
+            RenderText {#text} at (0,0) size 31x27
+              text run at (0,0) width 31: "bar"
+      RenderBlock {DIV} at (0,290) size 784x60
+        RenderBlock {DIV} at (0,0) size 784x60 [border: (2px solid #FF0000)]
+          RenderBlock {DIV} at (2,2) size 780x28
+            RenderText {#text} at (0,0) size 32x27
+              text run at (0,0) width 32: "foo"
+          RenderBlock {DIV} at (2,30) size 780x28
+            RenderText {#text} at (0,0) size 31x27
+              text run at (0,0) width 31: "bar"
+selection start: position 3 of child 0 {#text} of child 1 {DIV} of child 1 {DIV} of child 3 {DIV} of body
+selection end:   position 0 of child 2 {DIV} of child 1 {DIV} of child 3 {DIV} of body

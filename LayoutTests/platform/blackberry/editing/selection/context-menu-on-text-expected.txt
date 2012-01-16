@@ -1,0 +1,5 @@
+CONSOLE MESSAGE: line 24: TypeError: Result of expression 'items' [undefined] is not an object.
+This test checks that the context menu is shown over a simple non-editable text.
+
+Lorem ipsum
+FAIL

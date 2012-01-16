@@ -1,0 +1,21 @@
+CONSOLE MESSAGE: line 18: ReferenceError: Can't find variable: Markup
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x130
+  RenderBlock {HTML} at (0,0) size 800x130
+    RenderBody {BODY} at (8,8) size 784x114
+      RenderBlock {DIV} at (0,0) size 784x114
+        RenderInline {FONT} at (0,0) size 564x112
+          RenderText {#text} at (0,1) size 274x55
+            text run at (0,1) width 274: "A man with 2 "
+          RenderInline {SPAN} at (0,0) size 290x50
+            RenderText {#text} at (274,7) size 290x50
+              text run at (274,7) width 290: "font faces"
+          RenderBR {BR} at (564,1) size 0x55
+          RenderText {#text} at (0,58) size 368x55
+            text run at (0,58) width 368: "Death comes in all "
+          RenderText {#text} at (368,58) size 182x55
+            text run at (368,58) width 182: "font sizes"
+        RenderText {#text} at (0,0) size 0x0
+selection start: position 1 of child 0 {#text} of child 0 {FONT} of child 1 {DIV} of body
+selection end:   position 10 of child 4 {#text} of child 0 {FONT} of child 1 {DIV} of body

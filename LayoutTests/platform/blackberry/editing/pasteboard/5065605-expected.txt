@@ -1,0 +1,21 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x20
+        RenderText {#text} at (0,0) size 517x19
+          text run at (0,0) width 517: "This tests for a bug where text copied with Select All + Copy would lose its color."
+      RenderBlock {DIV} at (0,36) size 784x60
+        RenderBlock (anonymous) at (0,0) size 784x20
+          RenderInline {FONT} at (0,0) size 148x19 [color=#FF0000]
+            RenderText {#text} at (0,0) size 148x19
+              text run at (0,0) width 148: "This text should be red."
+        RenderBlock {DIV} at (0,20) size 784x20
+          RenderInline {FONT} at (0,0) size 148x19 [color=#FF0000]
+            RenderText {#text} at (0,0) size 148x19
+              text run at (0,0) width 148: "This text should be red."
+        RenderBlock {DIV} at (0,40) size 784x20
+          RenderInline {FONT} at (0,0) size 0x19 [color=#FF0000]
+            RenderBR {BR} at (0,0) size 0x19
+caret: position 0 of child 0 {BR} of child 0 {FONT} of child 2 {DIV} of child 2 {DIV} of body

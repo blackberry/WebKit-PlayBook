@@ -1,0 +1,4 @@
+This test verifies that we can get text/html from the clipboard during an onpaste event. This test requires DRT.
+Paste content in this div.
+FAIL
+

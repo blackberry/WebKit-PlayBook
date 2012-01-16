@@ -1,0 +1,162 @@
+// This file indicates the expectations for running Chromium under
+// the GPU-accelerated codepaths as defined in
+// WebKitTools/Scripts/webkitpy/layout_tests/port/chromium_gpu.py
+//
+// We skip most of the tests in the repository because they don't trigger
+// the accelerated code paths. We actually only run some of the canvas and
+// compositing tests (as listed below).
+WONTFIX SKIP : accessibility = PASS FAIL
+WONTFIX SKIP : animations = PASS FAIL
+WONTFIX SKIP : canvas = PASS FAIL
+WONTFIX SKIP : css1 = PASS FAIL
+WONTFIX SKIP : css2.1 = PASS FAIL
+WONTFIX SKIP : css3 = PASS FAIL
+WONTFIX SKIP : dom = PASS FAIL
+WONTFIX SKIP : editing = PASS FAIL
+WONTFIX SKIP : fast = PASS FAIL
+
+WONTFIX SKIP : fonts = PASS FAIL
+WONTFIX SKIP : fullscreen = PASS FAIL
+WONTFIX SKIP : html5lib = PASS FAIL
+WONTFIX SKIP : http = PASS FAIL
+WONTFIX SKIP : ietestcenter = PASS FAIL
+WONTFIX SKIP : inspector = PASS FAIL
+WONTFIX SKIP : java = PASS FAIL
+WONTFIX SKIP : loader = PASS FAIL
+WONTFIX SKIP : mathml = PASS FAIL
+WONTFIX SKIP : media = PASS FAIL
+WONTFIX SKIP : perf = PASS FAIL
+WONTFIX SKIP : platform = PASS FAIL
+WONTFIX SKIP : plugins = PASS FAIL
+WONTFIX SKIP : printing = PASS FAIL
+WONTFIX SKIP : resources = PASS FAIL
+WONTFIX SKIP : scrollbars = PASS FAIL
+WONTFIX SKIP : security = PASS FAIL
+WONTFIX SKIP : storage = PASS FAIL
+WONTFIX SKIP : svg = PASS FAIL
+WONTFIX SKIP : tables = PASS FAIL
+WONTFIX SKIP : transforms = PASS FAIL
+WONTFIX SKIP : transitions = PASS FAIL
+WONTFIX SKIP : traversal = PASS FAIL
+WONTFIX SKIP : userscripts = PASS FAIL
+WONTFIX SKIP : webarchive = PASS FAIL
+WONTFIX SKIP : http/tests/websocket = PASS FAIL
+WONTFIX SKIP : wml = PASS FAIL
+
+// (These are the tests we actually run and expect to pass)
+// We need to explicitly list fast/canvas and canvas/philip because the
+// parent directories are otherwise SKIPPed. We list compositing for completeness.
+//
+// FIXME: remove the FAILs from the following three lines.
+BUGNONE : compositing = PASS FAIL
+BUGNONE : fast/canvas = PASS FAIL
+BUGNONE : canvas/philip = PASS FAIL
+
+//
+// Actual failure suppressions should go below this line
+//
+
+// All (?) video-related compositor tests are failing in
+// DumpRenderTree right now.
+BUGWK47231 SKIP : compositing/geometry/clipped-video-controller.html = TIMEOUT
+BUGWK47231 SKIP : compositing/geometry/video-fixed-scrolling.html = TIMEOUT
+BUGWK47231 SKIP : compositing/geometry/video-opacity-overlay.html = TIMEOUT
+BUGWK47231 SKIP : compositing/layers-inside-overflow-scroll.html = TIMEOUT
+BUGWK47231 SKIP : compositing/overflow/overflow-compositing-descendant.html = TIMEOUT
+BUGWK47231 SKIP : compositing/overflow/scroll-ancestor-update.html = TIMEOUT
+BUGWK47231 SKIP : compositing/reflections/load-video-in-reflection.html = TIMEOUT
+BUGWK47231 SKIP : compositing/self-painting-layers.html = TIMEOUT
+BUGWK47231 SKIP : compositing/self-painting-layers2.html = TIMEOUT
+BUGWK47231 SKIP : compositing/video/video-background-color.html = TIMEOUT
+BUGWK47231 SKIP : compositing/video/video-poster.html = TIMEOUT
+
+// The following compositor tests are currently timing out. Need to
+// investigate why.
+BUGWK47923 SKIP : compositing/checkerboard.html = TIMEOUT
+BUGWK47923 SKIP : compositing/color-matching/image-color-matching.html = TIMEOUT
+BUGWK47923 SKIP : compositing/geometry/abs-position-inside-opacity.html = TIMEOUT
+BUGWK47923 SKIP : compositing/iframes/become-overlapped-iframe.html = TIMEOUT
+BUGWK47923 SKIP : compositing/masks/direct-image-mask.html = TIMEOUT
+BUGWK47923 SKIP : compositing/overflow/ancestor-overflow.html = TIMEOUT
+BUGWK47923 SKIP : compositing/repaint/composited-document-element.html = TIMEOUT
+BUGWK47923 SKIP : compositing/shadows/shadow-drawing.html = TIMEOUT
+BUGWK47923 SKIP : compositing/tiling/constrained-layer-size.html = TIMEOUT
+BUGWK47923 SKIP : compositing/z-order/negative-z-index.html = TIMEOUT
+
+// The following test is flaky; it occasionally times out, but not always.
+BUGWK47924 SKIP : compositing/iframes/composited-iframe-alignment.html = TIMEOUT
+
+// Chromium does not support PDF content in <img> tags.
+WONTFIX SKIP : compositing/color-matching/pdf-image-match.html = FAIL
+WONTFIX SKIP : compositing/images/direct-pdf-image.html = FAIL
+// Chromium does not support PDF or plugin content in layers right now.
+BUGWK47925 SKIP : compositing/plugins/composited-plugin.html = FAIL
+
+// The word "compositing" appears in Chromium's pixel results and not
+// in Safari's; this should probably be fixed.
+BUGWK47926 SKIP: compositing/geometry/composited-html-size.html = FAIL
+
+// These tests are missing an entire layer in the layer tree output.
+BUGWK47927 SKIP : compositing/geometry/limit-layer-bounds-clipping-ancestor.html = FAIL
+
+// The following failure seems suspicious because it does not contain
+// any text; it seems that the layer tree should precisely match
+// Safari's.
+BUGWK47944 SKIP : compositing/geometry/limit-layer-bounds-overflow-root.html = FAIL
+
+// The following failure is missing a tiled layer where Safari has
+// one, in addition to having a layer positioned differently than in
+// Safari.
+BUGWK47946 SKIP : compositing/geometry/limit-layer-bounds-transformed-overflow.html = FAIL
+
+// All of the tests involving masks appear to be failing right now.
+BUGWK47947 SKIP : compositing/masks/masked-ancestor.html = FAIL
+BUGWK47947 SKIP : compositing/masks/multiple-masks.html = FAIL
+BUGWK47947 SKIP : compositing/masks/simple-composited-mask.html = FAIL
+
+// Nearly all tests involving reflections are failing right now.
+BUGWK47949 SKIP : compositing/reflections/animation-inside-reflection.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/compositing-change-inside-reflection.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/deeply-nested-reflections.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/masked-reflection-on-composited.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-anchor-point.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-animated.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-mask-change.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-on-overflow.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-opacity.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-size-change.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-transformed.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-transformed2.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection-transition.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/nested-reflection.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/reflection-on-composited.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/reflection-opacity.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/reflection-ordering.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/reflection-positioning.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/reflection-positioning2.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/simple-composited-reflections.html = FAIL
+BUGWK47949 SKIP : compositing/reflections/transform-inside-reflection.html = FAIL
+
+// Most of the tiling tests are misbehaving in Chrome even though the
+// DRT output looks similar to Safari's. These need to be investigated.
+BUGWK47951 SKIP : compositing/tiling/huge-layer-add-remove-child.html = FAIL
+BUGWK47951 SKIP : compositing/tiling/huge-layer-img.html = FAIL
+BUGWK47951 SKIP : compositing/tiling/huge-layer-with-layer-children.html = FAIL
+BUGWK47951 SKIP : compositing/tiling/huge-layer.html = FAIL
+
+BUGWK47952 SKIP : compositing/transitions/scale-transition-no-start.html = FAIL
+
+// These compositor WebGL tests fail.
+BUGWK47953 SKIP : compositing/webgl/webgl-background-color.html = FAIL
+BUGWK47953 SKIP : compositing/webgl/webgl-reflection.html = FAIL
+
+BUGWK47241 SKIP : fast/canvas/access-zero-sized-canvas.html = CRASH
+BUGWK47241 SKIP : fast/canvas/canvas-skia-excessive-size.html = CRASH
+BUGWK47241 SKIP : fast/canvas/toDataURL-noData.html = CRASH
+
+BUGWK47242 SKIP : fast/canvas/canvas-putImageData.html = CRASH
+
+// Need to investigate WebGL support in DRT.
+BUGWK47243 SKIP : fast/canvas/webgl/gl-object-get-calls.html = TIMEOUT
+BUGWK47243 SKIP : fast/canvas/webgl/tex-image-and-uniform-binding-bugs.html = TIMEOUT
+BUGWK47243 SKIP : fast/canvas/webgl/uniform-location.html = TIMEOUT

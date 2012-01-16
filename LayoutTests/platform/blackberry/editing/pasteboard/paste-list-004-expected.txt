@@ -1,0 +1,7 @@
+CONSOLE MESSAGE: line 0: Expected 8 list items, found 3
+Pasting a list item into the middle of another list item should split the target list item into two with the pasted content in between.
+
+one two
+three four
+monsters walking cross the floor
+FAIL

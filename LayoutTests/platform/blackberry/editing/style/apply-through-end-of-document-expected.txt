@@ -1,0 +1,29 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x579
+      RenderBlock {P} at (0,0) size 784x40
+        RenderText {#text} at (0,0) size 53x19
+          text run at (0,0) width 53: "Test for "
+        RenderInline {I} at (0,0) size 747x39
+          RenderInline {A} at (0,0) size 154x19 [color=#0000EE]
+            RenderText {#text} at (53,0) size 154x19
+              text run at (53,0) width 154: "rdar://problem/6864786"
+          RenderText {#text} at (207,0) size 747x39
+            text run at (207,0) width 540: ": REGRESSION: Crash below ApplyStyleCommand::applyInlineStyleToRange when"
+            text run at (0,20) width 185: "reviewing a patch in Bugzilla"
+        RenderText {#text} at (185,20) size 4x19
+          text run at (185,20) width 4: "."
+      RenderBlock {P} at (0,56) size 784x20
+        RenderText {#text} at (0,0) size 217x19
+          text run at (0,0) width 217: "The test passes if it does not crash."
+      RenderBlock {DIV} at (0,92) size 784x43
+        RenderText {#text} at (0,1) size 563x41
+          text run at (0,1) width 563: "Copy the second word in this sentence."
+      RenderBlock {PRE} at (0,148) size 784x16
+        RenderText {#text} at (0,0) size 200x16
+          text run at (0,0) width 200: "Select All here and paste"
+        RenderBR {BR} at (200,12) size 0x0
+selection start: position 0 of child 0 {#text} of child 7 {PRE} of body
+selection end:   position 25 of child 0 {#text} of child 7 {PRE} of body

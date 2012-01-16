@@ -1,0 +1,3 @@
+Click
+
+FAIL! This test fails because the ARIA link above does NOT support the press action, but it should.

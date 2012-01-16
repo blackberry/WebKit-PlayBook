@@ -1,0 +1,7 @@
+< [index] >
+2d.drawImage.zerocanvas
+References: 2d.drawImage.zerocanvas
+Actual output:
+Expected output:
+
+Passed

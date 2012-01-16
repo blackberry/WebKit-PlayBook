@@ -1,0 +1,4 @@
+Hello
+function sayHello() { alert("Hello"); }
+World
+<div id="pastehere" contenteditable="true"></div>

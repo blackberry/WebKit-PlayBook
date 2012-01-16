@@ -1,0 +1,102 @@
+<html>
+<head>
+<link rel="stylesheet" href="../../fast/js/resources/js-test-style.css">
+<script src="../../fast/js/resources/js-test-pre.js"></script>
+<script src="../../fast/js/resources/js-test-post-function.js"></script>
+<script src="resources/shared.js"></script>
+</head>
+<body>
+<p id="description"></p>
+<div id="console"></div>
+<script>
+
+description("Test IndexedDB's openCursor.");
+if (window.layoutTestController)
+    layoutTestController.waitUntilDone();
+
+function emptyCursorSuccess()
+{
+    debug("Empty cursor opened successfully.")
+    verifySuccessEvent(event);
+    // FIXME: check that we can iterate the cursor.
+    done();
+}
+
+function openEmptyCursor()
+{
+    debug("Opening an empty cursor.");
+    keyRange = webkitIDBKeyRange.leftBound("InexistentKey");
+    result = evalAndLog("objectStore.openCursor(keyRange)");
+    verifyResult(result);
+    result.onsuccess = emptyCursorSuccess;
+    result.onerror = unexpectedErrorCallback;
+}
+
+function cursorSuccess()
+{
+    debug("Cursor opened successfully.")
+    verifySuccessEvent(event);
+    // FIXME: check that we can iterate the cursor.
+    shouldBe("event.result.direction", "0");
+    shouldBe("event.result.key", "'myKey'");
+    shouldBe("event.result.value", "'myValue'");
+    debug("");
+    openEmptyCursor();
+}
+
+function openCursor()
+{
+    debug("Opening cursor");
+    keyRange = webkitIDBKeyRange.leftBound("myKey");
+    result = evalAndLog("event.source.openCursor(keyRange)");
+    verifyResult(result);
+    result.onsuccess = cursorSuccess;
+    result.onerror = unexpectedErrorCallback;
+}
+
+function createAndPopulateObjectStore() 
+{
+    var objectStore = evalAndLog("objectStore = db.createObjectStore('test')");
+    result = evalAndLog("objectStore.add('myValue', 'myKey')");
+    verifyResult(result);
+    result.onsuccess = openCursor;
+    result.onerror = unexpectedErrorCallback;
+}
+
+function setVersionSuccess()
+{
+    debug("setVersionSuccess():");
+    verifySuccessEvent(event);
+    window.trans = evalAndLog("trans = event.result");
+    shouldBeTrue("trans !== null");
+    trans.onabort = unexpectedAbortCallback;
+
+    deleteAllObjectStores(db, createAndPopulateObjectStore);
+}
+
+function openSuccess()
+{
+    verifySuccessEvent(event);
+    var db = evalAndLog("db = event.result");
+
+    result = evalAndLog("db.setVersion('new version')");
+    verifyResult(result);
+    result.onsuccess = setVersionSuccess;
+    result.onerror = unexpectedErrorCallback;
+}
+
+function test()
+{
+    result = evalAndLog("webkitIndexedDB.open('name', 'description')");
+    verifyResult(result);
+    result.onsuccess = openSuccess;
+    result.onerror = unexpectedErrorCallback;
+}
+
+test();
+
+var successfullyParsed = true;
+
+</script>
+</body>
+</html>

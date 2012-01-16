@@ -1,0 +1,100 @@
+INCLUDE(CMakeForceCompiler)
+
+# Set syntax for setting library search paths
+SET(CMAKE_SYSTEM_NAME RVCT)
+SET(CMAKE_SYSTEM_VERSION 1)
+SET(RVCT 1)
+
+IF (NOT RVCT_DIR)
+    MESSAGE(FATAL_ERROR "Please set RVCT_DIR to the base installation directory of RVCT")
+ENDIF(NOT RVCT_DIR)
+
+SET(CMAKE_FIND_ROOT_PATH "${CMAKE_FIND_ROOT_PATH} ${RVCT_DIR}")
+
+# This is a hack because RVCT only exports symbols already defined in the symdefs
+# file if the file already exists
+SET(CMAKE_IMPORT_LIBRARY_SUFFIX ".symdefs")
+SET(SYMDEFS_RAW_SUFFIX ".raw")
+SET(SYMDEFS_POST_BUILD
+        "rm -f <TARGET_IMPLIB>"
+        "mv <TARGET_IMPLIB>${SYMDEFS_RAW_SUFFIX} <TARGET_IMPLIB>")
+
+# Set the C/C++ compiler to use armcc
+FIND_PROGRAM(ARMCC armcc)
+
+CMAKE_FORCE_C_COMPILER(${ARMCC} RVCT)
+CMAKE_FORCE_CXX_COMPILER(${ARMCC} RVCT)
+
+# Set the archiver to armar
+FIND_PROGRAM(CMAKE_AR armar)
+
+# Set the ASM compiler to be armasm
+FIND_PROGRAM(CMAKE_ASM_RVCT_COMPILER armasm)
+
+# Set the dynamic linker to armlink
+FIND_PROGRAM(CMAKE_LINKER armlink)
+
+# Find the fromelf program
+FIND_PROGRAM(FROMELF fromelf)
+
+# Set up include flags
+SET(CMAKE_INCLUDE_FLAG_C "-I")
+SET(CMAKE_INCLUDE_FLAG_CXX "-I")
+SET(CMAKE_INCLUDE_SYSTEM_FLAG_C "-I")
+SET(CMAKE_INCLUDE_SYSTEM_FLAG_CXX "-I")
+
+# Default C flags
+SET(CMAKE_C_FLAGS "-c --diag_suppress=111,185,1201,1293,1300,1294" CACHE INTERNAL "Thumb debug C flags" FORCE)
+SET(CMAKE_CXX_FLAGS "${CMAKE_C_FLAGS} --cpp" CACHE INTERNAL "Thumb generic C++ flags" FORCE)
+
+SET(CMAKE_C_FLAGS_DEBUG "-O0 --dwarf2 --debug" CACHE INTERNAL "Thumb debug C flags" FORCE)
+SET(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_C_FLAGS_DEBUG} --cpp" CACHE INTERNAL "Thumb generic C++ flags" FORCE)
+
+SET(CMAKE_C_FLAGS_RELEASE "-O2" CACHE INTERNAL "Thumb debug C flags" FORCE)
+SET(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_C_FLAGS_RELEASE} --cpp" CACHE INTERNAL "Thumb generic C++ flags" FORCE)
+
+SET(CMAKE_LIBRARY_PATH_FLAG "--userlibpath=")
+
+# Set up the linker command line for linking executables and shared lib
+SET(LINK_EXECUTABLE_FLAGS       "--diag_suppress=6314W,6304,6385,6632,1294-D --libpath=${RVCT_DIR}/lib")
+SET(CREATE_SHARED_LIBRARY_FLAGS                                             "--libpath=${RVCT_DIR}/lib")
+
+SET(CMAKE_C_LINK_EXECUTABLE
+    "${CMAKE_LINKER} ${LINK_EXECUTABLE_FLAGS} <LINK_FLAGS> --output=<TARGET> <OBJECTS> <LINK_LIBRARIES>")
+
+SET(CMAKE_CXX_LINK_EXECUTABLE
+    "${CMAKE_LINKER} ${LINK_EXECUTABLE_FLAGS} <LINK_FLAGS> --output=<TARGET> <OBJECTS> <LINK_LIBRARIES>")
+
+SET(CMAKE_C_CREATE_SHARED_LIBRARY
+    "${CMAKE_LINKER} ${CREATE_SHARED_LIBRARY_FLAGS} <LINK_FLAGS> <LINK_LIBRARIES> --output=<TARGET> --symdefs=<TARGET_IMPLIB>${SYMDEFS_RAW_SUFFIX} <OBJECTS>"
+    ${SYMDEFS_POST_BUILD})
+
+SET(CMAKE_CXX_CREATE_SHARED_LIBRARY
+    "${CMAKE_LINKER} ${CREATE_SHARED_LIBRARY_FLAGS} <LINK_FLAGS> <LINK_LIBRARIES> --output=<TARGET> --symdefs=<TARGET_IMPLIB>${SYMDEFS_RAW_SUFFIX} <OBJECTS>"
+    ${SYMDEFS_POST_BUILD})
+
+SET(CMAKE_ASM_RVCT_CREATE_SHARED_LIBRARY
+    "${CMAKE_LINKER} ${CREATE_SHARED_LIBRARY_FLAGS} <LINK_FLAGS> <LINK_LIBRARIES> --output=<TARGET> --symdefs=<TARGET_IMPLIB>${SYMDEFS_RAW_SUFFIX} <OBJECTS>"
+    ${SYMDEFS_POST_BUILD})
+
+# Set up the linker command line for static lib
+
+# TODO: Add more linker flags here - for example, debug/release?
+SET(CMAKE_C_ARCHIVE_CREATE
+    "<CMAKE_AR> --create -r <TARGET> <OBJECTS>")
+
+SET(CMAKE_C_ARCHIVE_APPEND
+    "<CMAKE_AR> -r <TARGET> <OBJECTS>")
+
+SET(CMAKE_C_ARCHIVE_FINISH
+    "true")
+
+SET(CMAKE_CXX_ARCHIVE_CREATE ${CMAKE_C_ARCHIVE_CREATE})
+SET(CMAKE_CXX_ARCHIVE_APPEND ${CMAKE_C_ARCHIVE_APPEND})
+SET(CMAKE_CXX_ARCHIVE_FINISH ${CMAKE_C_ARCHIVE_FINISH})
+
+    
+# Don't let CMake override the parameters we've set, e.g. CMAKE_LIBRARY_PATH_FLAG
+SET(CMAKE_SYSTEM_SPECIFIC_INFORMATION_LOADED TRUE)
+
+INCLUDE_DIRECTORIES(SYSTEM "${RVCT_DIR}/include")

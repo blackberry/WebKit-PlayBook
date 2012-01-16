@@ -1,0 +1,17 @@
+LIST(APPEND JSC_LIBRARIES
+    ${Skia_LIBRARY}
+    ${Skia_QNX_LIBRARY}
+    ${M_LIBRARY}
+    ${NBUTIL_LIBRARY}
+    ${ICUData_LIBRARY}
+    ${ICUI18N_LIBRARY}
+    ${ICUUC_LIBRARY}
+    ${INTL_LIBRARY}
+    ${WebKitPlatform_LIBRARY}
+    ${Screen_LIBRARY}
+    ${GLESv2_LIBRARY}
+    ${EGL_LIBRARY}
+)
+
+SET(JSC_INSTALL_DIR ${CMAKE_SYSTEM_PROCESSOR}/usr/bin)
+

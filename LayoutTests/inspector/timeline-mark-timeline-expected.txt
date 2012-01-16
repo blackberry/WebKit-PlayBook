@@ -1,0 +1,13 @@
+Tests the Timeline API mark feature
+
+MarkTimeline Properties:
+{
+    startTime : <number>
+    data : {
+        message : "MARK TIMELINE"
+    }
+    type : 11
+    usedHeapSize : <number>
+    totalHeapSize : <number>
+}
+

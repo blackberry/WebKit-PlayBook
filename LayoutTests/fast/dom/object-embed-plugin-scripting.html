@@ -1,0 +1,132 @@
+<html>
+<head>
+<script>
+function print(message)
+{
+    var paragraph = document.createElement("p");
+    paragraph.appendChild(document.createTextNode(message));
+    document.getElementById("console").appendChild(paragraph);
+}
+
+function test() 
+{ 
+    if (window.layoutTestController) {
+        layoutTestController.dumpAsText();
+    }
+
+    print("plugin <object> with nested plugin <embed>: should have a plugin and does " + (document.getElementById('myO').Play ? "" : "not"));
+    print("plugin <embed> netsted in plugin <object>: should have a plugin and does " + (document.getElementById('myE').Play ? "" : "not"));
+    print("empty <object> with nested plugin <embed>: should not have a plugin and does " + (document.getElementById('myO2').Play ? "" : "not"));
+    print("plugin <embed> nested in empty <object>: should have a plugin and does " + (document.getElementById('myE2').Play ? "" : "not"));
+    print("plugin <embed> nested in image <object>: should not have a plugin and does " + (document.getElementById('myE3').Play ? "" : "not"));
+    print("plugin <embed> nested in empty <object> nested in plugin <object>: should not have a plugin and does " + (document.getElementById('myE4').Play ? "" : "not"));
+    print("standalone plugin <embed>: should have a plugin and does " + (document.getElementById('myE5').Play ? "" : "not"));
+    print("plugin <object> with nested plugin <embed> of the same name should have a plugin and does " + (document.Plugin.Play ? "" : "not"));
+    print("empty <object> with nested plugin <embed> of the same name should have a plugin and does " + (document.Plugin2.Play ? "" : "not"));
+}
+</script>
+</head>
+<body onload="test()">
+<p>This test checks for a regression against <i>rdar://problem/4214080 document.embeds: embeds[0].Play() undefined at languageguide.org</i>.</p>
+<p>Each test below states its expected outcome.</p>
+<hr>
+<div id="console"></div>
+
+<OBJECT 
+    id="myO"
+    classid="clsid:02BF25D5-8C17-4B23-BC80-D3488ABDDC6B"
+    width = 0 height = 0
+    >
+    <PARAM name="src" value="resources/articles.m4a">
+    <PARAM name="autostart" value="false">
+    
+    <EMBED 
+        id="myE"
+        src="resources/articles.m4a"
+        autostart="false"
+        enablejavascript="true"
+        width = 0 height = 0
+    >
+    </EMBED>
+</OBJECT>
+
+<object id="myO2">
+    <embed 
+        id="myE2"
+        src="resources/articles.m4a"
+        autostart="false"
+        enablejavascript="true"
+        width = 0 height = 0
+    >
+</object>
+
+<object 
+    data="resources/apple.gif" 
+    type="image/gif"
+    width = 0 height = 0
+>
+    <embed 
+        id="myE3"
+        src="resources/articles.m4a"
+        autostart="false"
+        enablejavascript="true"
+        width = 0 height = 0
+    >
+</object>
+
+<object 
+    data="resources/apple.gif" 
+    type="image/gif"
+    width = 0 height = 0
+>
+    <object>
+        <embed 
+            id="myE4"
+            src="resources/articles.m4a"
+            autostart="false"
+            enablejavascript="true"
+            width = 0 height = 0
+        >
+    </object>
+</object>
+
+<embed 
+    id="myE5"
+    src="resources/articles.m4a"
+    autostart="false"
+    enablejavascript="true"
+    width = 0 height = 0
+>
+
+<object
+    name="Plugin"
+    classid="clsid:02BF25D5-8C17-4B23-BC80-D3488ABDDC6B"
+    width = 0 height = 0
+    >
+    <param name="src" value="resources/articles.m4a">
+    <param name="autostart" value="false">
+    <param name="enablejavascript" value="true">
+    
+    <embed
+        name="Plugin"
+        src="resources/articles.m4a"
+        autostart="false"
+        enablejavascript="true"
+        width = 0 height = 0
+    >
+    </embed>
+</object>
+
+<object name="Plugin2">
+    <embed
+        name="Plugin2"
+        src="resources/articles.m4a"
+        autostart="false"
+        enablejavascript="true"
+        width = 0 height = 0
+    >
+    </embed>
+</object>
+
+</body>
+</html>

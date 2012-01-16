@@ -1,0 +1,20 @@
+IF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+    LIST(APPEND JavaScriptCore_SOURCES
+        runtime/MarkStackBlackBerry.cpp
+    )
+ELSEIF (CMAKE_SYSTEM_NAME MATCHES QNX)
+    LIST(APPEND JavaScriptCore_SOURCES
+        runtime/MarkStackPosix.cpp
+        DisassemblerARM.cpp
+    )
+    ADD_DEFINITIONS(-DINST_CMN=1)
+    ADD_DEFINITIONS(-DINST_STRD=1)
+    ADD_DEFINITIONS(-DINST_LDRD=1)
+    ADD_DEFINITIONS(-DINST_VMOVD=1)
+    #ADD_DEFINITIONS(-DOPT_DEAD_CODE=1)
+    ADD_DEFINITIONS(-DOPT_SCHED=1)
+    #ADD_DEFINITIONS(-DOPT_FASTACCESS=1)
+ENDIF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+
+INSTALL(FILES "wtf/Forward.h"
+        DESTINATION usr/include/browser/webkit/wtf)

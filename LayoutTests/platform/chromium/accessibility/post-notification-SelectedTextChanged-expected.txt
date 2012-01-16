@@ -1,0 +1,4 @@
+AccessibilityNotification - FocusedUIElementChanged - id:text-for-SelectedTextChanged
+AccessibilityNotification - SelectedTextChanged - id:text-for-SelectedTextChanged
+AccessibilityNotification - LoadComplete
+This tests that chromium correctly recieves the SelectedTextChanged notification.  

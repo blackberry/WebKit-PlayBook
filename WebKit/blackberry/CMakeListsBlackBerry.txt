@@ -1,0 +1,164 @@
+IF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+    LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/graphics/blackberry/openvg"
+        "${WEBCORE_DIR}/platform/graphics/openvg"
+        "${WEBCORE_DIR}/platform/network/blackberry"
+    )
+ELSEIF (CMAKE_SYSTEM_NAME MATCHES QNX)
+    LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/html/canvas"
+        "${WEBCORE_DIR}/platform/graphics/blackberry/skia"
+        "${WEBCORE_DIR}/platform/graphics/skia"
+    )
+
+LIST(APPEND WebKit_INCLUDE_DIRECTORIES "${WEBCORE_DIR}/history/blackberry")
+
+LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+    "${WEBCORE_DIR}/platform/network/blackberry"
+)
+
+ENDIF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+
+LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+    "${JAVASCRIPTCORE_DIR}/wtf/text"
+    "${WEBCORE_DIR}/loader/appcache"
+    "${WEBCORE_DIR}/platform/graphics/blackberry"
+    "${WEBCORE_DIR}/platform/blackberry"
+    "${WEBCORE_DIR}/notifications"
+    "${WEBCORE_DIR}/websockets"
+    "${WEBKIT_DIR}/blackberry/WebCoreSupport"
+    "${WEBKIT_DIR}/blackberry/WebKitSupport"
+    "${WEBKIT_DIR}/blackberry/Api"
+)
+IF (ENABLE_DRT)
+    LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+    # needed for DRT for now
+        "${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry"
+        "${WEBKITTOOLS_DIR}/DumpRenderTree"
+        "${WEBCORE_DIR}/svg/animation"
+        "${WEBCORE_DIR}/workers"
+    )
+ENDIF (ENABLE_DRT)
+
+ADD_DEFINITIONS(-DUSER_PROCESSES)
+
+LIST(APPEND WebKit_SOURCES
+    blackberry/Api/BackingStore.cpp
+    blackberry/Api/BlackBerryGlobal.cpp
+    blackberry/Api/WebString.cpp
+    blackberry/Api/ResourceHolderImpl.cpp
+#    blackberry/Api/Version.cpp
+    blackberry/Api/WebKitTextCodec.cpp
+    blackberry/Api/WebPage.cpp
+    blackberry/Api/WebPageGroupLoadDeferrer.cpp
+    blackberry/Api/WebSettings.cpp
+    blackberry/BlackBerryLauncher/main.cpp
+    blackberry/WebCoreSupport/CacheClientBlackBerry.cpp
+    blackberry/WebCoreSupport/ChromeClientBlackBerry.cpp
+    blackberry/WebCoreSupport/ClientExtension.cpp
+    blackberry/WebCoreSupport/CollectableObjects.cpp
+    blackberry/WebCoreSupport/ContextMenuClientBlackBerry.cpp
+    blackberry/WebCoreSupport/DeviceMotionClientBlackBerry.cpp
+    blackberry/WebCoreSupport/DeviceOrientationClientBlackBerry.cpp
+    blackberry/WebCoreSupport/DragClientBlackBerry.cpp
+    blackberry/WebCoreSupport/EditCommandBlackBerry.cpp
+    blackberry/WebCoreSupport/EditorClientBlackBerry.cpp
+    blackberry/WebCoreSupport/FrameLoaderClientBlackBerry.cpp
+    blackberry/WebCoreSupport/FrameNetworkingContextBlackBerry.cpp
+    blackberry/WebCoreSupport/GeolocationControllerClientBlackBerry.cpp
+    blackberry/WebCoreSupport/IconDatabaseClientBlackBerry.cpp
+    blackberry/WebCoreSupport/InspectorClientBlackBerry.cpp
+    blackberry/WebCoreSupport/JavaScriptDebuggerBlackBerry.cpp
+    blackberry/WebCoreSupport/NotificationPresenterImpl.cpp
+    blackberry/WebCoreSupport/PluginWidget.cpp
+    blackberry/WebKitSupport/BackingStoreCompositingSurface.cpp
+    blackberry/WebKitSupport/BackingStoreTile.cpp
+    blackberry/WebKitSupport/BackingStoreClient.cpp
+    blackberry/WebKitSupport/InputHandler.cpp
+    blackberry/WebKitSupport/OutOfMemoryHandler.cpp
+    blackberry/WebKitSupport/RenderQueue.cpp
+    blackberry/WebKitSupport/SelectionHandler.cpp
+    blackberry/WebKitSupport/SurfacePool.cpp
+    blackberry/WebKitSupport/SwapGroup.cpp
+    blackberry/WebKitSupport/TouchEventHandler.cpp
+    blackberry/WebKitSupport/FatFingers.cpp
+    blackberry/WebKitSupport/WebPlugin.cpp
+)
+
+IF (ENABLE_DRT)
+    # DumpRenderTree sources
+    LIST(APPEND WebKit_SOURCES
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/AccessibilityControllerBlackBerry.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/AccessibilityUIElementBlackBerry.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/DumpRenderTree.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/EventSender.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/GCControllerBlackBerry.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/LayoutTestControllerBlackBerry.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/WorkQueueItemBlackBerry.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/AccessibilityController.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/AccessibilityUIElement.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/AccessibilityTextMarker.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/LayoutTestController.cpp
+        ${WEBKITTOOLS_DIR}/DumpRenderTree/WorkQueue.cpp
+    )
+ENDIF (ENABLE_DRT)
+
+SET(WebKit_LINK_FLAGS ${BLACKBERRY_LINK_FLAGS})
+
+LIST(APPEND WebKit_LIBRARIES
+    ${Skia_LIBRARY}
+    ${Skia_QNX_LIBRARY}
+    ${IMG_LIBRARY}
+    ${PNG_LIBRARY}
+    ${XML2_LIBRARY}
+    ${XSLT_LIBRARY}
+    ${SQLITE3_LIBRARY}
+    ${M_LIBRARY}
+    ${NBUTIL_LIBRARY}
+    ${FREETYPE_LIBRARY}
+    ${ICUData_LIBRARY}
+    ${ICUI18N_LIBRARY}
+    ${ICUUC_LIBRARY}
+    ${Iconv_LIBRARY}
+    ${INTL_LIBRARY}
+    ${Z_LIBRARY}
+    ${Socket_LIBRARY}
+    ${CURL_LIBRARY}
+    ${SSL_LIBRARY}
+    ${Crypto_LIBRARY}
+    ${WebKitPlatform_LIBRARY}
+    ${UUID_LIBRARY}
+    ${Screen_LIBRARY}
+    ${MMR_LIBRARY}
+    ${PPSCache_LIBRARY}
+    ${MD_LIBRARY}
+    ${AOI_LIBRARY}
+    ${CLIPBOARD_LIBRARY}
+    ${STRM_LIBRARY}
+    ${HARFBUZZ_LIBRARY}
+    ${FONTCONFIG_LIBRARY}
+)
+
+IF(WTF_USE_ACCELERATED_COMPOSITING)
+    LIST(APPEND WebKit_SOURCES
+        blackberry/WebCoreSupport/GLES2Context.cpp
+    )
+    LIST(APPEND WebKit_INCLUDE_DIRECTORIES
+        "${WEBCORE_DIR}/platform/graphics/gles2"
+    )
+    LIST(APPEND WebKit_LIBRARIES
+        ${GLESv2_LIBRARY}
+    )
+ENDIF(WTF_USE_ACCELERATED_COMPOSITING)
+
+FILE(GLOB BBWebKit_HEADERS "${CMAKE_CURRENT_SOURCE_DIR}/blackberry/Api/*.h")
+
+INSTALL(FILES ${BBWebKit_HEADERS}
+        DESTINATION usr/include/browser/webkit)
+
+IF (ENABLE_DRT)
+    INSTALL(FILES ${WEBKITTOOLS_DIR}/DumpRenderTree/blackberry/DumpRenderTreeBlackBerry.h
+            DESTINATION usr/include/browser/webkit)
+ENDIF (ENABLE_DRT)
+
+SET(WebKit_INSTALL_DIR "${CMAKE_SYSTEM_PROCESSOR}/usr/lib/torch-webkit")

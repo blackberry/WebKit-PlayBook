@@ -1,0 +1,35 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 3 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 0 of DIV > DIV > BODY > HTML > #document to 0 of DIV > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x90 [border: (2px solid #0000FF)]
+        RenderText {#text} at (14,14) size 703x63
+          text run at (14,14) width 703: "Should see \"foo\" and \"bar\" each in a separate red box. Note that the"
+          text run at (14,45) width 273: "\"foo\" text is really \"foo \". "
+          text run at (287,45) width 68: "There "
+        RenderInline {B} at (0,0) size 50x32
+          RenderText {#text} at (355,45) size 50x32
+            text run at (355,45) width 50: "must"
+        RenderText {#text} at (405,45) size 331x32
+          text run at (405,45) width 331: " be a space at the end of the line."
+      RenderBlock {DIV} at (0,114) size 784x118
+        RenderBlock {DIV} at (0,0) size 784x59 [border: (2px solid #FF0000)]
+          RenderText {#text} at (14,14) size 38x32
+            text run at (14,14) width 32: "foo"
+            text run at (46,14) width 6: " "
+        RenderBlock {DIV} at (0,59) size 784x59 [border: (2px solid #FF0000)]
+          RenderText {#text} at (14,14) size 36x32
+            text run at (14,14) width 36: "bar"
+caret: position 0 of child 0 {#text} of child 2 {DIV} of child 3 {DIV} of body

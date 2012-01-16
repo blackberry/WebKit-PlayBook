@@ -1,0 +1,57 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 3 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldDeleteDOMRange:range from 1 of DIV > DIV > BODY > HTML > #document to 6 of #text > DIV > DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 0 of DIV > DIV > BODY > HTML > #document to 0 of DIV > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+EDITING DELEGATE: shouldInsertNode:#document-fragment replacingDOMRange:range from 0 of DIV > DIV > BODY > HTML > #document to 0 of DIV > DIV > BODY > HTML > #document givenAction:WebViewInsertActionPasted
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 5 of #text > DIV > DIV > BODY > HTML > #document to 5 of #text > DIV > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x261 [border: (2px solid #0000FF)]
+        RenderBlock {DIV} at (14,14) size 756x93
+          RenderText {#text} at (0,0) size 67x32
+            text run at (0,0) width 67: "Tests: "
+          RenderBR {BR} at (0,0) size 0x0
+          RenderText {#text} at (0,31) size 117x32
+            text run at (0,31) width 117: "Bug fix for "
+          RenderInline {A} at (0,0) size 275x32 [color=#0000EE]
+            RenderText {#text} at (117,31) size 275x32
+              text run at (117,31) width 275: "<rdar://problem/4035648>"
+          RenderText {#text} at (392,31) size 752x63
+            text run at (392,31) width 360: " REGRESSION (Mail): line feed in"
+            text run at (0,62) width 512: "source HTML file causes bad copy/paste behavior"
+        RenderBlock {DIV} at (14,123) size 756x124
+          RenderText {#text} at (0,0) size 189x32
+            text run at (0,0) width 189: "Expected Results: "
+          RenderBR {BR} at (189,24) size 0x0
+          RenderText {#text} at (0,31) size 543x32
+            text run at (0,31) width 543: "Should see the text self-documenting itself correctly: "
+          RenderBR {BR} at (543,55) size 0x0
+          RenderInline {B} at (0,0) size 45x32
+            RenderText {#text} at (0,62) size 45x32
+              text run at (0,62) width 45: "bold"
+            RenderBR {BR} at (45,86) size 0x0
+          RenderText {#text} at (0,93) size 52x32
+            text run at (0,93) width 52: "plain"
+      RenderBlock {DIV} at (0,285) size 784x97
+        RenderBlock {DIV} at (0,0) size 784x97 [border: (2px solid #FF0000)]
+          RenderBR {BR} at (2,2) size 0x32
+          RenderInline {B} at (0,0) size 45x32
+            RenderText {#text} at (2,33) size 45x32
+              text run at (2,33) width 45: "bold"
+            RenderBR {BR} at (47,57) size 0x0
+          RenderText {#text} at (2,64) size 52x32
+            text run at (2,64) width 52: "plain"
+caret: position 5 of child 2 {#text} of child 1 {DIV} of child 3 {DIV} of body

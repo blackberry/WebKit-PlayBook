@@ -1,0 +1,276 @@
+IF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+  LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+    "${WEBCORE_DIR}/platform/image-decoders/rxi"
+    "${WEBCORE_DIR}/platform/graphics/blackberry/openvg"
+    "${WEBCORE_DIR}/platform/graphics/openvg"
+  )
+
+  # OpenVG sources
+  LIST(APPEND WebCore_SOURCES
+    platform/image-decoders/openvg/ImageDecoderOpenVG.cpp
+    platform/graphics/openvg/EGLDisplayOpenVG.cpp
+    platform/graphics/openvg/GradientOpenVG.cpp
+    platform/graphics/openvg/ImageBufferOpenVG.cpp
+    platform/graphics/openvg/ImageOpenVG.cpp
+    platform/graphics/openvg/GraphicsContextOpenVG.cpp
+    platform/graphics/openvg/PathOpenVG.cpp
+    platform/graphics/openvg/PainterOpenVG.cpp
+    platform/graphics/openvg/PaintOpenVG.cpp
+    platform/graphics/openvg/PatternOpenVG.cpp
+    platform/graphics/openvg/SharedResourceOpenVG.cpp
+    platform/graphics/openvg/SurfaceOpenVG.cpp
+    platform/graphics/openvg/TiledImageOpenVG.cpp
+    platform/graphics/openvg/VGUtils.cpp
+  )
+
+  # BlackBerry graphics
+  LIST(APPEND WebCore_SOURCES
+    platform/graphics/blackberry/FontBlackBerry.cpp
+    platform/graphics/blackberry/FontCacheBlackBerry.cpp
+    platform/graphics/blackberry/FontCustomPlatformDataBlackBerry.cpp
+    platform/graphics/blackberry/FontPlatformDataBlackBerry.cpp
+    platform/graphics/blackberry/GlyphPageTreeNodeBlackBerry.cpp
+    platform/graphics/blackberry/SimpleFontDataBlackBerry.cpp
+    platform/graphics/blackberry/PatternBlackBerry.cpp
+  )
+
+  # Other sources
+  LIST(APPEND WebCore_SOURCES
+    platform/graphics/WOFFFileFormat.cpp
+    platform/image-decoders/rxi/RxIImageDecoder.cpp
+    platform/image-encoders/PNGImageEncoder.cpp
+    platform/network/blackberry/ResourceHandleBlackBerry.cpp
+    platform/blackberry/FileSystemBlackBerry.cpp
+    platform/blackberry/SharedBufferBlackBerry.cpp
+    platform/text/blackberry/TextBreakIteratorBlackBerry.cpp
+    platform/text/blackberry/TextCodecBlackBerry.cpp
+  )
+ELSEIF (CMAKE_SYSTEM_NAME MATCHES QNX)
+  LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+    "${WEBCORE_DIR}/platform/image-decoders/skia"
+    "${WEBCORE_DIR}/platform/image-encoders/skia"
+    "${WEBCORE_DIR}/platform/graphics/blackberry/skia"
+    "${WEBCORE_DIR}/platform/graphics/skia"
+    "${WEBCORE_DIR}/platform/blackberry/CookieDatabaseBackingStore"
+  )
+
+  LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+    "${WEBCORE_DIR}/platform/network/blackberry"
+  )
+
+  # Skia sources
+  LIST(APPEND WebCore_SOURCES
+    platform/image-decoders/skia/ImageDecoderSkia.cpp
+    platform/image-encoders/skia/PNGImageEncoder.cpp
+    platform/graphics/skia/TransformationMatrixSkia.cpp
+    platform/graphics/skia/IntRectSkia.cpp
+    platform/graphics/skia/PathSkia.cpp
+    platform/graphics/skia/IntPointSkia.cpp
+    platform/graphics/skia/FloatRectSkia.cpp
+    platform/graphics/skia/FontCustomPlatformData.cpp
+    platform/graphics/skia/ImageSkia.cpp
+    platform/graphics/skia/PatternSkia.cpp
+    platform/graphics/skia/ImageBufferSkia.cpp
+    platform/graphics/skia/NativeImageSkia.cpp
+    platform/graphics/skia/PlatformContextSkia.cpp
+    platform/graphics/skia/GradientSkia.cpp
+    platform/graphics/skia/FloatPointSkia.cpp
+    platform/graphics/skia/HarfbuzzSkia.cpp
+    platform/graphics/skia/SkiaUtils.cpp
+    platform/graphics/skia/GraphicsContextSkia.cpp
+    platform/graphics/skia/GraphicsContext3DSkia.cpp
+    platform/graphics/skia/VDMXParser.cpp
+  )
+
+  # Skia font backend
+  LIST(APPEND WebCore_SOURCES
+    platform/graphics/blackberry/skia/FontBlackBerry.cpp
+    platform/graphics/blackberry/skia/FontCacheBlackBerry.cpp
+    platform/graphics/blackberry/skia/FontPlatformDataBlackBerry.cpp
+    platform/graphics/blackberry/skia/GlyphPageTreeNodeBlackBerry.cpp
+    platform/graphics/blackberry/skia/SimpleFontDataBlackBerry.cpp
+  )
+
+  # Other sources
+  LIST(APPEND WebCore_SOURCES
+    platform/graphics/WOFFFileFormat.cpp
+    platform/posix/FileSystemPOSIX.cpp
+    platform/posix/SharedBufferPOSIX.cpp
+    platform/blackberry/FileSystemBlackBerry.cpp
+    platform/text/TextBreakIteratorICU.cpp
+    platform/text/TextCodecICU.cpp
+    platform/text/TextEncodingDetectorICU.cpp
+    platform/text/blackberry/TextBreakIteratorInternalICUBlackBerry.cpp
+    platform/blackberry/CookieManager.cpp
+    platform/blackberry/CookieMap.cpp
+    platform/blackberry/CookieParser.cpp
+    platform/blackberry/ParsedCookie.cpp
+    platform/blackberry/CookieDatabaseBackingStore/CookieDatabaseBackingStore.cpp
+  )
+
+  # BlackBerry Networking
+  LIST(APPEND WebCore_SOURCES
+    platform/network/blackberry/AboutData.cpp
+    platform/network/blackberry/NetworkManager.cpp
+    platform/network/blackberry/NetworkStateNotifierBlackBerry.cpp
+    platform/network/blackberry/ProxyServerBlackBerry.cpp
+    platform/network/blackberry/ResourceErrorBlackBerry.cpp
+    platform/network/blackberry/ResourceHandleBlackBerry.cpp
+    platform/network/blackberry/ResourceRequestBlackBerry.cpp
+    platform/network/blackberry/ResourceResponseBlackBerry.cpp
+    platform/network/blackberry/SocketStreamHandleBlackBerry.cpp
+    platform/network/ProxyServer.cpp
+  )
+
+ENDIF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+
+LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+  "${WEBCORE_DIR}/bridge/blackberry"
+  "${WEBCORE_DIR}/history/blackberry"
+  "${WEBCORE_DIR}/page/blackberry"
+  "${WEBCORE_DIR}/platform/image-decoders/bmp"
+  "${WEBCORE_DIR}/platform/image-decoders/gif"
+  "${WEBCORE_DIR}/platform/image-decoders/ico"
+  "${WEBCORE_DIR}/platform/image-decoders/blackberry/jpeg"
+  "${WEBCORE_DIR}/platform/image-decoders/png"
+  "${WEBCORE_DIR}/platform/image-encoders"
+  "${WEBCORE_DIR}/platform/graphics/blackberry"
+  "${WEBCORE_DIR}/platform/network/blackberry"
+  "${WEBCORE_DIR}/platform/blackberry"
+  "${WEBCORE_DIR}/platform/text/blackberry"
+  "${WEBKIT_DIR}/blackberry/Api"
+  "${WEBKIT_DIR}/blackberry/WebCoreSupport"
+  "${WEBKIT_DIR}/blackberry/WebKitSupport"
+)
+
+# BlackBerry sources
+LIST(APPEND WebCore_SOURCES
+  bindings/js/ScriptControllerBlackBerry.cpp
+  editing/blackberry/EditorBlackBerry.cpp
+  editing/blackberry/SmartReplaceBlackBerry.cpp
+  page/blackberry/AccessibilityObjectBlackBerry.cpp
+  page/blackberry/DragControllerBlackBerry.cpp
+  page/blackberry/EventHandlerBlackBerry.cpp
+  page/blackberry/FrameBlackBerry.cpp
+  platform/image-decoders/bmp/BMPImageDecoder.cpp
+  platform/image-decoders/gif/GIFImageDecoder.cpp
+  platform/image-decoders/ico/ICOImageDecoder.cpp
+  platform/image-decoders/blackberry/JPEGImageDecoder.cpp
+  platform/image-decoders/png/PNGImageDecoder.cpp
+  platform/image-encoders/JPEGImageEncoder.cpp
+  platform/graphics/blackberry/FloatPointBlackBerry.cpp
+  platform/graphics/blackberry/FloatRectBlackBerry.cpp
+  platform/graphics/blackberry/FloatSizeBlackBerry.cpp
+  platform/graphics/blackberry/IconBlackBerry.cpp
+  platform/graphics/blackberry/IntPointBlackBerry.cpp
+  platform/graphics/blackberry/IntRectBlackBerry.cpp
+  platform/graphics/blackberry/IntRectRegionBlackBerry.cpp
+  platform/graphics/blackberry/IntSizeBlackBerry.cpp
+  platform/graphics/blackberry/ResourceBlackBerry.cpp
+  platform/graphics/blackberry/MediaPlayerPrivateMMrenderer.cpp
+  platform/graphics/blackberry/MMrenderer.cpp
+  platform/network/blackberry/AboutData.cpp
+  platform/network/blackberry/NetworkManager.cpp
+  platform/network/blackberry/NetworkStateNotifierBlackBerry.cpp
+  platform/network/blackberry/ResourceErrorBlackBerry.cpp
+  platform/network/blackberry/ResourceRequestBlackBerry.cpp
+  platform/blackberry/ClipboardBlackBerry.cpp
+  platform/blackberry/ContextMenuItemBlackBerry.cpp
+  platform/blackberry/ContextMenuBlackBerry.cpp
+  platform/blackberry/CookieJarBlackBerry.cpp
+  platform/blackberry/BlackBerryCookieCache.cpp
+  platform/blackberry/CursorBlackBerry.cpp
+  platform/blackberry/DragDataBlackBerry.cpp
+  platform/blackberry/DragImageBlackBerry.cpp
+  platform/blackberry/EventLoopBlackBerry.cpp
+  platform/blackberry/FileChooserBlackBerry.cpp
+  platform/blackberry/SSLKeyGeneratorBlackBerry.cpp
+  platform/blackberry/SystemTimeBlackBerry.cpp
+  platform/blackberry/KURLBlackBerry.cpp
+  platform/blackberry/Localizations.cpp
+  platform/blackberry/MIMETypeRegistryBlackBerry.cpp
+  platform/blackberry/PasteboardBlackBerry.cpp
+  platform/blackberry/PlatformKeyboardEventBlackBerry.cpp
+  platform/blackberry/PlatformMouseEventBlackBerry.cpp
+  platform/blackberry/PlatformScreenBlackBerry.cpp
+  platform/blackberry/PlatformTouchEventBlackBerry.cpp
+  platform/blackberry/PlatformTouchPointBlackBerry.cpp
+  platform/blackberry/PopupMenuBlackBerry.cpp
+  platform/blackberry/RenderThemeBlackBerry.cpp
+  platform/blackberry/ScrollbarBlackBerry.cpp
+  platform/blackberry/ScrollbarThemeBlackBerry.cpp
+  platform/blackberry/ScrollViewBlackBerry.cpp
+  platform/blackberry/SearchPopupMenuBlackBerry.cpp
+  platform/blackberry/SharedTimerBlackBerry.cpp
+  platform/blackberry/SoundBlackBerry.cpp
+  platform/blackberry/LoggingBlackBerry.cpp
+  platform/text/blackberry/StringBlackBerry.cpp
+  platform/blackberry/TemporaryLinkStubs.cpp
+  platform/blackberry/WheelEventBlackBerry.cpp
+  platform/blackberry/WidgetBlackBerry.cpp
+  plugins/blackberry/PluginDataBlackBerry.cpp
+  plugins/blackberry/PluginPackageBlackBerry.cpp
+  plugins/blackberry/PluginViewBlackBerry.cpp
+)
+
+# Touch Sources
+LIST(APPEND WebCore_SOURCES
+  dom/Touch.cpp
+  dom/TouchEvent.cpp
+  dom/TouchList.cpp
+)
+
+LIST(APPEND WebCore_LIBRARIES
+)
+
+IF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+  LIST(APPEND WEBDOM_IDL_HEADERS
+    bindings/cpp/WebDOMCString.h
+    bindings/cpp/WebDOMEventTarget.h
+    bindings/cpp/WebDOMObject.h
+    bindings/cpp/WebDOMString.h
+  )
+ENDIF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+
+IF (WTF_USE_ACCELERATED_COMPOSITING)
+  LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+    "${WEBCORE_DIR}/platform/graphics/gles2"
+  )
+
+  LIST(APPEND WebCore_SOURCES
+    platform/graphics/GraphicsLayer.cpp
+    rendering/RenderLayerBacking.cpp
+    rendering/RenderLayerCompositor.cpp
+    platform/graphics/gles2/GraphicsLayerGLES2.cpp
+    platform/graphics/gles2/LayerGLES2.cpp
+    platform/graphics/gles2/LayerProxyGLES2.cpp
+    platform/graphics/gles2/LayerRendererGLES2.cpp
+  )
+ENDIF(WTF_USE_ACCELERATED_COMPOSITING)
+
+IF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+  INSTALL(FILES ${WEBDOM_IDL_HEADERS}
+          DESTINATION usr/include/browser/webkit/dom)
+ENDIF (CMAKE_SYSTEM_NAME MATCHES Nessus)
+
+set(ENV{WEBKITDIR} ${CMAKE_SOURCE_DIR})
+set(ENV{PLATFORMNAME} ${CMAKE_SYSTEM_NAME})
+execute_process(
+  COMMAND hostname
+  OUTPUT_VARIABLE host
+)
+string(REPLACE "\n" "" host1 "${host}")
+set(ENV{COMPUTERNAME} ${host1})
+
+IF (CMAKE_SYSTEM_NAME MATCHES QNX)
+  IF ($ENV{PUBLIC_BUILD})
+    ADD_DEFINITIONS(-DPUBLIC_BUILD=$ENV{PUBLIC_BUILD})
+  ENDIF ($ENV{PUBLIC_BUILD})
+  execute_process(
+    COMMAND ${WEBKIT_BUILDINFO_GENERATOR} ${DERIVED_SOURCES_DIR}/BuildInformation.cpp
+    OUTPUT ${DERIVED_SOURCES_DIR}/BuildInformation.cpp
+  )
+  LIST(APPEND WebCore_SOURCES
+    ${DERIVED_SOURCES_DIR}/BuildInformation.cpp
+  )
+ENDIF (CMAKE_SYSTEM_NAME MATCHES QNX)

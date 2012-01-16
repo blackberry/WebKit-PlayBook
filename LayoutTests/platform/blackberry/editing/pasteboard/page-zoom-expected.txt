@@ -1,0 +1,13 @@
+CONSOLE MESSAGE: line 0: relative font size not preserved
+Copy this 16px text.
+Paste it here.
+The pasted text should have a font size of 16px.
+
+
+Copy this x-small text.
+Paste it here.
+The pasted text should have a font size of x-small.
+
+
+FAIL (this test requires DRT)
+

@@ -1,0 +1,13 @@
+LIST(APPEND WTF_SOURCES
+    blackberry/MainThreadBlackBerry.cpp
+    ThreadIdentifierDataPthreads.cpp
+    ThreadingPthreads.cpp
+    TCSystemAlloc.cpp
+)
+
+IF (CMAKE_SYSTEM_NAME MATCHES QNX)
+    LIST(APPEND WTF_SOURCES
+        unicode/icu/CollatorICU.cpp
+    )
+ENDIF (CMAKE_SYSTEM_NAME MATCHES QNX)
+

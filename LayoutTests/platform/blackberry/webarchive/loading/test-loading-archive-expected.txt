@@ -1,0 +1,2 @@
+FAIL: Timed out waiting for notifyDone to be called
+ This tests that doing a "normal load" of a webarchive (not using loadArchive) does not cause a cancelled error to be called.

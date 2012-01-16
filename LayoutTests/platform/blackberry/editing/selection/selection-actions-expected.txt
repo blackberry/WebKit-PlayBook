@@ -1,0 +1,36 @@
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 135 of #text > BODY > HTML > #document to 135 of #text > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 135 of #text > BODY > HTML > #document to 135 of #text > BODY > HTML > #document toDOMRange:range from 135 of #text > BODY > HTML > #document to 135 of #text > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderText {#text} at (0,0) size 772x39
+        text run at (0,0) width 772: "This tests whether certain NSResponder methods that should only operate on editable regions modify a selection that is not"
+        text run at (0,20) width 132: "in an editable region."
+      RenderBR {BR} at (132,35) size 0x0
+      RenderText {#text} at (0,40) size 84x19
+        text run at (0,40) width 84: "This is a para"
+      RenderInline {SPAN} at (0,0) size 8x19 [color=#0000FF]
+        RenderText {#text} at (84,40) size 8x19
+          text run at (84,40) width 8: "g"
+      RenderText {#text} at (92,40) size 32x19
+        text run at (92,40) width 32: "raph."
+      RenderBR {BR} at (124,55) size 0x0
+      RenderText {#text} at (0,60) size 63x19
+        text run at (0,60) width 63: "Some text"
+      RenderBR {BR} at (63,75) size 0x0
+      RenderText {#text} at (0,80) size 63x19
+        text run at (0,80) width 63: "Some text"
+      RenderBR {BR} at (63,95) size 0x0
+      RenderText {#text} at (0,100) size 63x19
+        text run at (0,100) width 63: "Some text"
+      RenderBR {BR} at (63,115) size 0x0
+      RenderText {#text} at (0,120) size 63x19
+        text run at (0,120) width 63: "Some text"
+      RenderBR {BR} at (63,135) size 0x0
+      RenderText {#text} at (0,140) size 124x19
+        text run at (0,140) width 124: "This is a paragraph."
+      RenderText {#text} at (0,0) size 0x0
+caret: position 135 of child 0 {#text} of body

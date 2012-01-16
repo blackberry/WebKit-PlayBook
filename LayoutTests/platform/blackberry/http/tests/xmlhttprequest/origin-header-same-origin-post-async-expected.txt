@@ -1,0 +1,4 @@
+PASS: Cross-domain access allowed.
+HTTP_ORIGIN: http://localhost:8000
+
+

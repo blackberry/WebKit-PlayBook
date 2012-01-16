@@ -1,0 +1,20 @@
+CONSOLE MESSAGE: line 16: ReferenceError: Can't find variable: Markup
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x20
+        RenderText {#text} at (719,0) size 65x19
+          text run at (719,0) width 33 RTL: "\x{5E9}\x{5D3}\x{5D2}\x{5DB}:"
+          text run at (752,0) width 32: "1234"
+      RenderBlock {DIV} at (0,20) size 784x40
+        RenderBlock {DIV} at (0,0) size 784x20
+          RenderText {#text} at (0,0) size 65x19
+            text run at (0,0) width 32: "1234"
+            text run at (32,0) width 29 RTL: "\x{5E9}\x{5D3}\x{5D2}\x{5DB}"
+            text run at (61,0) width 4: ":"
+        RenderBlock {DIV} at (0,20) size 784x20
+          RenderText {#text} at (719,0) size 65x19
+            text run at (719,0) width 33 RTL: "\x{5E9}\x{5D3}\x{5D2}\x{5DB}:"
+            text run at (752,0) width 32: "1234"
