@@ -1,0 +1,25 @@
+layer at (0,0) size 1024x600
+  RenderView at (0,0) size 1024x600
+layer at (0,0) size 1024x600
+  RenderBlock {HTML} at (0,0) size 1024x600
+    RenderBody {BODY} at (8,16) size 1008x568
+      RenderTable {TABLE} at (16,0) size 303x97
+        RenderTableSection {TBODY} at (0,0) size 303x97
+          RenderTableRow {TR} at (0,2) size 303x93
+            RenderTableCell {TD} at (2,2) size 57x56 [r=0 c=0 rs=1 cs=1]
+              RenderImage {IMG} at (1,1) size 55x54
+            RenderTableCell {TD} at (61,2) size 240x93 [color=#333333] [r=0 c=1 rs=1 cs=1]
+              RenderBlock {P} at (15,1) size 224x21
+                RenderText {#text} at (0,0) size 182x20
+                  text run at (0,0) width 182: "Unknown Network Error"
+              RenderBlock {P} at (15,28) size 224x0
+              RenderBlock {PRE} at (15,35) size 224x16
+                RenderText {#text} at (0,0) size 224x16
+                  text run at (0,0) width 224: "Couldn't read a file:// file"
+              RenderBlock {P} at (15,64) size 224x0
+              RenderBlock (anonymous) at (15,64) size 224x28
+                RenderInline {A} at (0,0) size 76x17 [color=#0000EE]
+                  RenderButton {BUTTON} at (2,2) size 72x24 [color=#000000] [bgcolor=#C0C0C0] [border: (2px outset #C0C0C0)]
+                    RenderBlock (anonymous) at (8,4) size 56x16
+                      RenderText {#text} at (0,0) size 56x16
+                        text run at (0,0) width 56: "Try Again"

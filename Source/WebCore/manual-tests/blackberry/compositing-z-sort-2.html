@@ -1,0 +1,204 @@
+<html>
+<head>
+    <style>
+
+    #container {
+        width: 1030px;
+        margin:0 auto;
+        height: 100%;
+        -webkit-perspective: 2500;
+        -webkit-perspective-origin:center center;
+    }
+
+    #stage {
+        width: 100%;
+        height: 100%;
+        -webkit-transition: -webkit-transform 2s;
+        -webkit-transform-style: preserve-3d;
+        -webkit-transform:translateZ(-300px);
+
+    }
+
+    .wheel {
+        height: 150px;
+        width: 150px;
+        -webkit-transform-style: preserve-3d;
+        -webkit-transition: -webkit-transform 1s;
+    }
+
+    .plane {
+        color: #fff;
+        position: absolute;
+        height: 150px;
+        width: 150px;
+        text-align: center;
+        font-size: 140px;
+        line-height:1;
+        background: rgba(0, 0, 0, 0.8);
+        border:2px solid rgba(255,0,0,1);
+        -webkit-transition: -webkit-transform 2s;
+        -webkit-backface-visibility: visible;
+    }
+
+    #hours1 {
+        position:absolute;
+        top:250px;
+        left:0;
+    }
+
+    #hours2 {
+        position:absolute;
+        top:250px;
+        left:160px;
+    }
+
+    #minutes1 {
+        position:absolute;
+        top:250px;
+        left:360px;
+    }
+    #minutes2 {
+        position:absolute;
+        top:250px;
+        left:520px;
+    }
+    #seconds1 {
+        position:absolute;
+        top:250px;
+        left:720px;
+    }
+    #seconds2 {
+        position:absolute;
+        top:250px;
+        left:880px;
+    }
+
+    .one {
+        -webkit-transform: translateZ(240px);
+    }
+
+    .two {
+        -webkit-transform: rotateX(36deg) translateZ(240px);
+    }
+
+    .three {
+        -webkit-transform: rotateX(72deg) translateZ(240px);
+    }
+
+    .four {
+        -webkit-transform: rotateX(108deg) translateZ(240px);
+    }
+
+    .five {
+        -webkit-transform: rotateX(144deg) translateZ(240px);
+    }
+
+    .six {
+        -webkit-transform: rotateX(180deg) translateZ(240px);
+    }
+
+    .seven {
+        -webkit-transform: rotateX(216deg) translateZ(240px);
+    }
+
+    .eight {
+        -webkit-transform: rotateX(252deg) translateZ(240px);
+    }
+
+    .nine {
+        -webkit-transform: rotateX(288deg) translateZ(240px);
+    }
+
+    .ten {
+        -webkit-transform: rotateX(324deg) translateZ(240px);
+    }
+    </style>
+    <meta name="viewport" content="width=1050" />
+</head>
+<body>
+If the tubes appear in a plausible z order, this test PASSED. Otherwise, it FAILED.
+    <div id="container">
+        <div id="stage">
+
+            <div id="hours1" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+            <div id="hours2" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+            <div id="minutes1" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+            <div id="minutes2" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+            <div id="seconds1" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+            <div id="seconds2" class="wheel">
+                <div class="plane one">0</div>
+                <div class="plane two">1</div>
+                <div class="plane three">2</div>
+                <div class="plane four">3</div>
+                <div class="plane five">4</div>
+                <div class="plane six">5</div>
+                <div class="plane seven">6</div>
+                <div class="plane eight">7</div>
+                <div class="plane nine">8</div>
+                <div class="plane ten">9</div>
+            </div>
+
+        </div>
+    </div>
+</body>
+</html>

@@ -1,0 +1,12 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of BODY > HTML > #document to 5 of BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:(null) toDOMRange:range from 7 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document to 7 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 7 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document to 7 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document toDOMRange:range from 6 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document to 6 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 6 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document to 6 of #text > TD > TR > TBODY > TABLE > BODY > HTML > #document toDOMRange:range from 0 of BODY > HTML > #document to 0 of BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 0 of BODY > HTML > #document to 0 of BODY > HTML > #document toDOMRange:range from 0 of BODY > HTML > #document to 0 of BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+cell one	cell two
+Failure: Clicking @ 192, 68 after the table didn't put the caret after it. Instead: [object Text], 7
+Failure: Clicking @ 39, 68 inside the table put the caret before or after it. Instead: [object HTMLBodyElement], 0

@@ -1,0 +1,34 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderFrameSet {FRAMESET} at (0,0) size 800x600
+      RenderFrame {FRAME} at (0,0) size 800x534
+        layer at (0,0) size 800x534
+          RenderView at (0,0) size 800x534
+        layer at (0,0) size 800x534
+          RenderBlock {HTML} at (0,0) size 800x534
+            RenderBody {BODY} at (8,8) size 784x518
+              RenderInline {A} at (0,0) size 181x36 [color=#0000EE]
+                RenderText {#text} at (0,0) size 181x36
+                  text run at (0,0) width 181: "Click this link"
+              RenderText {#text} at (181,0) size 8x36
+                text run at (181,0) width 8: " "
+              RenderBR {BR} at (189,28) size 0x0
+              RenderText {#text} at (0,37) size 775x221
+                text run at (0,37) width 707: "Test failed - This page uses javascript to implement the"
+                text run at (0,74) width 775: "navigation to another page that happens when the user clicks"
+                text run at (0,111) width 88: "a link. "
+                text run at (88,111) width 632: "The key aspect of this test is that this page should"
+                text run at (0,148) width 764: "appear in the back/forward list, since it is a (simulated) user"
+                text run at (0,185) width 766: "action that causes the navigation from this page to occur (vs"
+                text run at (0,222) width 775: "a timer that did the same thing, but not initiated by the user)."
+      RenderFrame {FRAME} at (0,540) size 800x60
+        layer at (0,0) size 800x90
+          RenderView at (0,0) size 800x60
+        layer at (0,0) size 800x90
+          RenderBlock {HTML} at (0,0) size 800x90
+            RenderBody {BODY} at (8,8) size 784x74
+              RenderText {#text} at (0,0) size 722x73
+                text run at (0,0) width 722: "This is just a minimal page that we navigate to as part of"
+                text run at (0,37) width 272: "testing back/forward."

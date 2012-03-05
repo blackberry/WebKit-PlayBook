@@ -1,0 +1,39 @@
+<html>
+  <head>
+    <title>Visible Position Test</title>
+  </head>
+  <body>
+    <table border="1">
+      <tr>
+        <td colspan="2">The table structure we are testing is a single top row followed by two columns. This is the top row.</td>
+      </tr>
+      <tr>
+        <td>This is the left-hand column.</td>
+        <td>
+          <p>This is the right-hand column.</p>
+          <p>It contains enough text that it will fill more than one screen.</p>
+          <hr>
+          <p>INSTRUCTIONS:</p>
+          <p>1. Select several lines of text in the right-hand column (using touch selection so the selection handles are visible.</p>
+          <p>2. Scroll down so that the top handle is offscreen and the bottom handle is onscreen.</p>
+          <p>3. Touch the bottom handle and drag it downwards.</p>
+          <p>The test is PASSED if the selection expands so that it ends at the new position of the bottom handle, and still starts at the top handle (which is still offscreen).</p>
+          <p>The test is FAILED if anything else happens.</p>
+          <p>One failure that has been seen in the past is that the bottom handle jumps to the bottom of the left-hand column, so that the selection will go from the top handle and end without a handle in the middle of the right-hand column, then begin again at the top of the left-hand column and end with the bottom handle at the bottom of the left-hand column.<p>
+          <hr>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+          <p>The rest of this column is filler to make sure there is more than one screen of text.</p>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>

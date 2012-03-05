@@ -1,0 +1,6 @@
+Starting worker: ../resources/simple-temporary-sync.js
+[Worker] This test requires FileSystem API.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

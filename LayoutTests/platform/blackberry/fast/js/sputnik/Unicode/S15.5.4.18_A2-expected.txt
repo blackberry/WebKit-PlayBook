@@ -1,0 +1,85 @@
+S15.5.4.18_A2
+
+PASS 
+
+TEST COMPLETE
+
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread erpthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread error [1] unknown
+pthread error [22] EINVAL
+pthread er

@@ -1,0 +1,10 @@
+ALERT: TypeError: Result of expression 'document.styleSheets[1].cssRules[0].style' [undefined] is not an object.
+Test for bug 11011: External CSS is parsed as iso-8859-1 even though the main document is utf-8.
+
+Stylesheet 1 (inherit document charset using xml-stylesheet processing instruction): SUССЕSS
+
+Stylesheet 2 (inherit document charset using link):
+
+Stylesheet 3 (inherit referring stylesheet charset):
+
+Stylesheet 4 (inherit referring inline stylesheet charset):

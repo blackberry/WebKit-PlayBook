@@ -1,0 +1,6 @@
+Starting worker: ../resources/file-writer-sync-truncate-extend.js
+[Worker] This test requires FileSystem API.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

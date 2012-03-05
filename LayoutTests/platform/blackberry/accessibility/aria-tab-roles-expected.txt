@@ -1,0 +1,21 @@
+Crust
+Veges
+Select Crust
+
+This tests that the aria roles for tab, tabpanel and tablist work as expected correctly.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL tabList.role should be AXRole: AXTabGroup. Was .
+FAIL tab1.role should be AXRole: AXRadioButton. Was .
+FAIL tab1.title should be AXTitle: Crust. Was .
+PASS tab1.childrenCount is 0
+FAIL tab2.role should be AXRole: AXRadioButton. Was .
+FAIL tab2.title should be AXTitle: Veges. Was .
+FAIL tabPanel.role should be AXRole: AXGroup. Was .
+FAIL tabPanel.subrole should be AXSubrole: AXTabPanel. Was .
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

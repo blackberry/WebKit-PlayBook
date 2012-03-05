@@ -1,0 +1,4 @@
+FAIL: Timed out waiting for notifyDone to be called
+This test checks whether one (and only one) HEAD element is created for various HTML documents. See Bug 7321 REGRESSION: style tag in body causes two head elements to appear in the DOM.
+
+

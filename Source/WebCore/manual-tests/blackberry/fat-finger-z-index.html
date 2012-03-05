@@ -1,0 +1,45 @@
+<head>
+    <style>
+        #div1 {
+          position: absolute;
+          border: 3px solid black;
+          top: 130px;
+          width: 210px;
+          height: 100px;
+          background-color: pink;
+          opacity:.5;
+        }
+
+        #div2 {
+          position: fixed;
+          border: 3px solid black;
+          top: 230px;
+          width: 210px;
+          height: 100px;
+          background-color: blue;
+          opacity:.5;
+        }
+
+        img {
+          cursor: pointer;
+        }
+
+        a:focus {
+          outline: 3px solid red;
+      }
+    </style>
+</head>
+<body>
+    <p> This test ensures that a clickable element in a lower zorder should not be picked by Fat Finger, nor by tap highlight as a consequence.</p>
+    <p> To reproduce the bug, click between the colored two boxes. Positioned below them, there is a clickable element (an anchor with a child image). </p>
+    <p> <b>BUG: There should be no tap highlight.</b></p><br><br>
+    <a id="a1" href=#> <img id="img1" width="200px" src="http://mondaybynoon.com/images/webkit/webkit-icon.png"/></a><br><br><br><br>
+    <a id="a2" href=#> <img id="img2" width="200px" src="http://mondaybynoon.com/images/webkit/webkit-icon.png"/></a><br><br><br><br>
+    <a id="a3" href=#> <img id="img3" width="200px" src="http://mondaybynoon.com/images/webkit/webkit-icon.png"/></a><br><br><br><br>
+    <a id="a4" href=#> <img id="img4" width="200px" src="http://mondaybynoon.com/images/webkit/webkit-icon.png"/></a><br><br><br><br>
+
+    <!-- position elements -->
+    <a href=# style="position: relative; top:-700px">This is a relative positioned link: <span >xyz</span> is "xyz".</a><br/>
+    <div id="div1"> </div>
+    <div id="div2"> </div>
+</body>

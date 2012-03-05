@@ -1,0 +1,3 @@
+CONSOLE MESSAGE: line 7: TypeError: Result of expression 't' [null] is not an object.
+This tests that attributes will have the correct namespace, prefix and local name set.
+

@@ -1,0 +1,15 @@
+<html>
+<head></head>
+<body>
+<script>
+document.cookie="sessionCookie=true;";
+document.cookie="cookieWithExpiry=true; expires=Monday, 04-Apr-2020 05:00:00 GMT";
+document.cookie="invalidDomainCookie=true; domain='donotexist.com' expires=Monday, 04-Apr-2020 05:00:00 GMT";
+document.write(document.cookie);
+</script>
+<p>
+<a href="path1">Link to path 1</a>
+</p>
+</body>
+</html>
+

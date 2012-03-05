@@ -1,0 +1,8 @@
+FAIL: Timed out waiting for notifyDone to be called
+This test ensures that multiple form submission protection is correctly reset on mouse events. To test manually:
+
+Click on "Click 1" to submit form to a new window. The window will close immediately.
+Click on "Click 2" to submit form to this window. Single word "SUCCESS" should replace the contents of this document.
+If either event doesn't occur, the test has failed.
+
+ 

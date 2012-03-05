@@ -1,0 +1,10 @@
+<RCC>
+    <qresource prefix="/">
+        <file>icons/next.png</file>
+        <file>icons/previous.png</file>
+        <file>icons/refresh.png</file>
+        <file>icons/stop.png</file>
+        <file>qml/BrowserWindow.qml</file>
+        <file>useragentlist.txt</file>
+    </qresource>
+</RCC>

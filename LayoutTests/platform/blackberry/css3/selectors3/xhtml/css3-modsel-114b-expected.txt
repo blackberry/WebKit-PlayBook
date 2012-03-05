@@ -1,0 +1,30 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {P} at (0,0) size 784x20 [bgcolor=#00FF00]
+        RenderText {#text} at (0,0) size 308x19
+          text run at (0,0) width 308: "This paragraph should have a green background."
+      RenderBlock {ADDRESS} at (0,36) size 784x20
+        RenderText {#text} at (0,0) size 205x19
+          text run at (0,0) width 205: "This address should be unstyled."
+      RenderBlock {ADDRESS} at (0,56) size 784x20
+        RenderText {#text} at (0,0) size 205x19
+          text run at (0,0) width 205: "This address should be unstyled."
+      RenderBlock (anonymous) at (0,76) size 784x20
+        RenderInline {Q} at (0,0) size 322x19 [bgcolor=#00FF00]
+          RenderInline (generated) at (0,0) size 7x19
+            RenderQuote at (0,0) size 7x19
+              text run at (0,0) width 7: "\""
+          RenderText {#text} at (7,0) size 308x19
+            text run at (7,0) width 308: "This paragraph should have a green background."
+          RenderInline (generated) at (0,0) size 7x19
+            RenderQuote at (315,0) size 7x19
+              text run at (315,0) width 7: "\""
+        RenderText {#text} at (322,0) size 4x19
+          text run at (322,0) width 4: " "
+        RenderInline {R} at (0,0) size 221x19
+          RenderText {#text} at (326,0) size 221x19
+            text run at (326,0) width 221: "This paragraph should be unstyled."
+        RenderText {#text} at (0,0) size 0x0

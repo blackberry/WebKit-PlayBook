@@ -1,0 +1,67 @@
+<!DOCTYPE HTML PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN">
+<html>
+    <head>
+        <script src="../../../../../fast/js/resources/js-test-pre.js"></script>
+        <script src="../../../../../fast/js/resources/js-test-post-function.js"></script>
+        <script type="application/javascript">
+            var clickPosition = {x : 0, y: 0}
+
+            function getCenterFor(element)
+            {
+                var rect = element.getBoundingClientRect();
+                clickPosition.x = parseInt((rect.left + rect.right) / 2);
+                clickPosition.y = parseInt((rect.top + rect.bottom) / 2);
+                return clickPosition;
+            }
+
+            function testComplete()
+            {
+                if (window.layoutTestController) {
+                    isSuccessfullyParsed();
+                    description('PASS');
+                    layoutTestController.notifyDone();
+                }
+            }
+
+            function crashIt()
+            {
+                // Try a few touch event right after clicking the link.
+                for (var i = 0; i < 4; i++) {
+                    eventSender.addTouchPoint(clickPosition.x, clickPosition.y + 20 + i + 1);
+                    eventSender.touchStart();
+                }
+                testComplete();
+            }
+
+            function runTest()
+            {
+                if (window.layoutTestController) {
+                    layoutTestController.dumpAsText();
+                    layoutTestController.waitUntilDone();
+                }
+
+                var innerDocument = window.frames[0].document;
+                var a = innerDocument.getElementsByTagName('a')[0];
+                var aCenter = getCenterFor(a);
+
+                if (window.eventSender) {
+                    eventSender.mouseMoveTo(aCenter.x, aCenter.y);
+                    eventSender.mouseDown();
+                    eventSender.mouseUp();
+                }
+
+                setTimeout(crashIt, 0);
+            }
+            var successfullyParsed = true;
+        </script>
+    </head>
+    <body style='margin:0px;'>
+        <div style='position:relative; top:0px; left:0px; margin:0px;'>
+            <iframe frameborder=0 width="200" height="200" scrolling=yes src="./resources/crash-on-hit-test-nothing-while-loading-long-xml-iframe.html">
+                <p>Your browser does not support iframes.</p>
+            </iframe>
+        </div>
+        <p id="description"></p>
+        <div id="console"></div>
+    </body>
+</html>

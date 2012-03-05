@@ -1,0 +1,21 @@
+Crust
+Veges
+Test
+
+Select Crust
+
+Select Crust
+
+This tests that the aria tab item becomes selected if either aria-selected is used, or if aria-controls points to an item that contains KB focus.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL tab2.isSelected should be true. Was false.
+PASS tab1.isSelected is false
+PASS tab2.isSelected is false
+FAIL tab1.isSelected should be true. Was false.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

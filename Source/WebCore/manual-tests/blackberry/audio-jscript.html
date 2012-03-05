@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>HTML5 Audio with JavaScript</title>
+    <style type="text/css">
+    #content
+    {
+        clear:both;
+        width:60%;
+    }
+    .player_control
+    {
+        float:left;
+        margin-right:5px;
+    }
+    #player
+    {
+        height:60px;
+    }
+    #volume_control
+    {
+        width:10px;
+        height:50px;
+        border: 2px solid #0a0;
+        display:none;
+        position:relative;
+    }
+    #volume_background
+    {
+        width:10px;
+        height:50px;
+        background-color:#ddd;
+    }
+    #volume_bar
+    {
+        width:10px;
+        height:0px;
+        background-color:#aca;
+        position:absolute;
+    }
+    #duration
+    {
+        width:400px;
+        height:15px;
+        border: 2px solid #50b;
+    }
+    #duration_background
+    {
+        width:400px;
+        height:15px;
+        background-color:#ddd;
+    }
+    #duration_bar
+    {
+        width:0px;
+        height:15px;
+        background-color:#bbd;
+    }
+    </style>
+    <script type="text/javascript">
+    var audio_duration;
+    var audio_player;
+    var volume_button;
+    var volume_control;
+    function pageLoaded()
+    {
+        audio_player = document.getElementById("aplayer");
+        volume_button = document.getElementById('volume_button');
+        volume_control = document.getElementById('volume_control');
+        //get the duration
+        audio_duration = audio_player.duration;
+        //set the volume
+        set_volume(0.7);
+    }
+    function set_volume(new_volume)
+    {
+        audio_player.volume = new_volume;
+        update_volume_bar();
+        volume_button.value = "Volume: "+parseInt(new_volume*100);
+    }
+    function update_volume_bar()
+    {
+        new_top = volume_button.offsetHeight  - volume_control.offsetHeight;
+        volume_control.style.top = new_top+"px";
+        volume = audio_player.volume;
+        //change the size of the volume  bar
+        wrapper = document.getElementById("volume_background");
+        wrapper_height = wrapper.offsetHeight;
+        wrapper_top = wrapper.offsetTop;
+        new_height= wrapper_height*volume;
+        volume_bar = document.getElementById("volume_bar");
+        volume_bar.style.height=new_height+"px";
+        new_top =  wrapper_top + (  wrapper_height - new_height  );
+        volume_bar.style.top=new_top+"px";
+    }
+    function update()
+    {
+        //get the duration of the player
+        dur = audio_player.duration;
+        time = audio_player.currentTime;
+        fraction = time/dur;
+        percent = (fraction*100);
+        wrapper = document.getElementById("duration_background");
+        new_width = wrapper.offsetWidth*fraction;
+        document.getElementById("duration_bar").style.width=new_width+"px";
+    }
+    function playClicked(element)
+    {
+        //get the state of the player
+        if(audio_player.paused)
+        {
+            audio_player.play();
+            newdisplay = "| |";
+        }else{
+            audio_player.pause();
+            newdisplay = ">";
+        }
+        element.value=newdisplay;
+    }
+    function trackEnded()
+    {
+        //reset the playControl to 'play'
+        document.getElementById("playButton").value=">";
+    }
+    function volumeClicked(event)
+    {
+        control = document.getElementById('volume_control');
+        if(control.style.display=="block")
+        {
+            control.style.display="None";
+        }else{
+            control.style.display="Block";
+            update_volume_bar();
+        }
+    }
+    function volumeChangeClicked(event)
+    {
+        //get the position of the event
+        clientY = event.clientY;
+        offset =  event.currentTarget.offsetTop + event.currentTarget.offsetHeight  - clientY;
+        volume = offset/event.currentTarget.offsetHeight;
+        set_volume(volume);
+        update_volume_bar();
+    }
+    function durationClicked(event)
+    {
+        //get the position of the event
+        clientX = event.clientX;
+        left = event.currentTarget.offsetLeft;
+        clickoffset = clientX - left;
+        percent = clickoffset/event.currentTarget.offsetWidth;
+        duration_seek = percent*audio_duration;
+        document.getElementById("aplayer").currentTime=duration_seek;
+    }
+    </script>
+</head>
+<body onload="pageLoaded();">
+<h1>Simple HTML 5 audio player example</h1>
+<div id='player'>
+    <input id="playButton" class='player_control' type="button" onClick="playClicked(this);" value=">"/>
+        <div id="duration" class='player_control' >
+            <div id="duration_background"  onClick="durationClicked(event);">
+                <div id="duration_bar" class="duration_bar"></div>
+            </div>
+        </div>
+
+        <div id="volume_control" class='player_control' onClick="volumeChangeClicked(event);">
+            <div id="volume_background"  >
+                <div id="volume_bar"></div>
+            </div>
+        </div>
+        <input type="button" class='player_control'  id='volume_button' onClick="volumeClicked();" value="Vol"/>
+</div>
+<audio id='aplayer' src="./resources/BlueEyes.mp3" type="audio/ogg; codecs=vorbis" onTimeUpdate="update();" onended="trackEnded();" >
+Your browser does not support the <code>audio</code> element.
+</audio>
+<div id="msg" class='output'></div>
+<div id="content">
+<h2>Expected Results:</h2>
+<ol>
+<li>Pressing the ">" button would start the playback</li>
+<li>Pressing "| |" button would pause the playback</li>
+<li>Clicking in the progress bar area will seek the playback to the point of the click</li>
+<li>Volume can be adjusted by clicking the volume button and moving the slider vertically</li>
+</ol>
+</div>
+</body>
+</html>

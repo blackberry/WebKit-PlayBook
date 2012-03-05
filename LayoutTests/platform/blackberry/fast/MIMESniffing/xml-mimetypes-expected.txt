@@ -1,0 +1,3 @@
+text_xml has MIME type text/xml
+Using an image element to load resources, this test makes sure that MIME types are being sniffed correctly with no file extension
+

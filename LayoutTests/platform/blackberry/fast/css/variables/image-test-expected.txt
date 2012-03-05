@@ -1,0 +1,22 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x120
+  RenderBlock {HTML} at (0,0) size 800x120
+    RenderBody {BODY} at (8,8) size 784x96
+      RenderBlock (anonymous) at (0,0) size 784x20
+        RenderText {#text} at (0,0) size 645x19
+          text run at (0,0) width 367: "The list below should use red diamond images for bullets. "
+          text run at (367,0) width 278: "If you see circular bullets, the test has failed."
+      RenderBlock {UL} at (0,36) size 784x60
+        RenderListItem {LI} at (40,0) size 744x20
+          RenderListMarker at (-18,0) size 7x19: bullet
+          RenderText {#text} at (0,0) size 27x19
+            text run at (0,0) width 27: "One"
+        RenderListItem {LI} at (40,20) size 744x20
+          RenderListMarker at (-18,0) size 7x19: bullet
+          RenderText {#text} at (0,0) size 30x19
+            text run at (0,0) width 30: "Two"
+        RenderListItem {LI} at (40,40) size 744x20
+          RenderListMarker at (-18,0) size 7x19: bullet
+          RenderText {#text} at (0,0) size 37x19
+            text run at (0,0) width 37: "Three"

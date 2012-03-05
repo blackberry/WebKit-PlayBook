@@ -1,0 +1,12 @@
+
+This tests that you can set an ARIA role on image map elements.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL group.childAtIndex(0).role should be AXRole: AXButton. Was .
+FAIL group.childAtIndex(1).role should be AXRole: AXButton. Was .
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

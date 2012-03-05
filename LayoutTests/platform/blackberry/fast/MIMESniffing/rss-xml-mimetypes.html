@@ -1,0 +1,15 @@
+<html>
+<head>
+<script src = "resources/mimeTypeTester.js"></script>
+<script>
+
+var resourcePath = "./resources/application_rss+xml";
+
+</script>
+</head>
+<body onload="startTest(resourcePath);">
+Using an image element to load resources, this test makes sure that MIME types are being sniffed correctly with no file extension<br>
+<img id="testImage" onload="imageLoaded();" onerror="imageLoaded();">
+</body>
+</html>
+

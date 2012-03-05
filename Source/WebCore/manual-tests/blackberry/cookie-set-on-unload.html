@@ -1,0 +1,32 @@
+<html>
+<head>
+<script type="text/javascript">
+function setCookie(name, value, expires) {
+    document.cookie = name + "=" + escape(value) + "; path=/" + ((expires == null) ? "" : "; expires=" + expires.toGMTString()); 
+}
+
+var value;
+
+function saveCookie() {
+    var expires = new Date();
+    expires.setDate(expires.getDate() + 1); 
+    setCookie("value", value + 1, expires);
+}
+
+try {
+    value = parseInt(document.cookie.split("=")[1].split(";")[0], 10);
+} catch(e) {
+    value = 0;
+}
+</script>
+</head>
+<body onunload="saveCookie()">
+<p>
+Note the value of the cookie, as printed below. Close the browser and re-open the browser. Load this page. If the cookie value is now one greater than the value you noted, this test SUCCEEDED. Otherwise it FAILED.
+</p>
+<p>
+The cookie is <script type="text/javascript">document.write(value)</script>.
+</p>
+</body>
+</html>
+

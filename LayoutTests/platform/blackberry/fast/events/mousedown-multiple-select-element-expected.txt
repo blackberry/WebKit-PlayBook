@@ -1,0 +1,12 @@
+This tests that a <select> element can receive a DOM Mouse Event and that such an event can change its selection state.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+Tests that a <select> receives mousedown events:
+PASS Received mousedown event.
+Tests that a mousedown event can change the selection in <select>:
+PASS select2.options[select2.selectedIndex].value is "PASS"
+
+TEST COMPLETE
+

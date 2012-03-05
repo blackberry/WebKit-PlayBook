@@ -1,0 +1,97 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x368
+  RenderBlock {HTML} at (0,0) size 800x368
+    RenderBody {BODY} at (8,16) size 784x336
+      RenderBlock {P} at (0,0) size 784x28
+        RenderTextControl {INPUT} at (625,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,44) size 784x28
+        RenderTextControl {INPUT} at (625,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,88) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,132) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,176) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,220) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,264) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,308) size 784x28
+        RenderTextControl {INPUT} at (2,2) size 157x24 [bgcolor=#FFFFFF] [border: (2px solid #0000FF)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,4) size 151x16
+            RenderBlock {DIV} at (0,0) size 151x16
+        RenderText {#text} at (0,0) size 0x0
+        RenderText {#text} at (0,0) size 0x0
+layer at (636,22) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (143,0) size 7x16
+      text run at (143,0) width 7: "1"
+layer at (636,66) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (143,0) size 7x16
+      text run at (143,0) width 7: "2"
+layer at (13,110) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (143,0) size 7x16
+      text run at (143,0) width 7: "3"
+layer at (13,154) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (122,0) size 28x16
+      text run at (122,0) width 28: "1234"
+layer at (13,198) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (1,0) size 7x16
+      text run at (1,0) width 7: "5"
+layer at (13,242) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (1,0) size 7x16
+      text run at (1,0) width 7: "6"
+layer at (13,286) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (143,0) size 7x16
+      text run at (143,0) width 7: "7"
+layer at (13,330) size 151x16
+  RenderBlock {DIV} at (0,0) size 151x16
+    RenderText {#text} at (143,0) size 7x16
+      text run at (143,0) width 7: "8"
+layer at (635,20) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+layer at (635,64) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+layer at (12,108) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+layer at (12,152) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+layer at (165,196) size 0x20
+  RenderBlock (relative positioned) {DIV} at (152,-2) size 0x20
+layer at (165,240) size 0x20
+  RenderBlock (relative positioned) {DIV} at (152,-2) size 0x20
+layer at (12,284) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+layer at (12,328) size 0x20
+  RenderBlock (relative positioned) {DIV} at (-1,-2) size 0x20
+caret: position 4 of child 0 {#text} of child 0 {DIV} of child 0 {DIV} of child 0 {DIV} of {#shadow-root} of child 0 {INPUT} of child 6 {P} of body

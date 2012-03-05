@@ -1,0 +1,12 @@
+<h3> Text selecting transformed content should be in transformed coords. </h3>
+<p> To test it, make a selection on the block below, and selection highlight should simply appear in accordance
+    with where the selected content is.</p>
+<pre style="width: 33em; border: medium solid red; -webkit-transform: translate3d(100px, 150px, 0px)">pre {
+
+     width: 33em;
+     border: solid red;
+
+    -webkit-transform: translate3d(100px, 150px, 0px);
+    -webkit-transform-origin: 60% 100%;
+}
+</pre>

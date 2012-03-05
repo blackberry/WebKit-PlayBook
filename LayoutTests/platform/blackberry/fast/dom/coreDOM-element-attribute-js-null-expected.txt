@@ -1,0 +1,4 @@
+CONSOLE MESSAGE: line 58: NOT_SUPPORTED_ERR: DOM Exception 9: The implementation did not support the requested type of object or operation.
+This test setting various attributes of a elements to JavaScript null.
+
+

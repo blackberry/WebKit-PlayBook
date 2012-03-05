@@ -1,0 +1,14 @@
+Checks that pressing arrow keys does not input text into input fields.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+
+Press an arrow key in an empty text field.
+PASS _field.value is ""
+Insert 'foo' into a text field and press arrow key several times.
+PASS _field.value is "foo"
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

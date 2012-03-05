@@ -1,0 +1,18 @@
+scroll down
+
+scroll down
+
+1
+2
+3
+4
+5
+6
+7
+8
+9
+0
+-webkit-overflow-scrolling of 'outer': auto;
+-webkit-overflow-scrolling of 'middle': touch;
+-webkit-overflow-scrolling of 'inner': touch;
+

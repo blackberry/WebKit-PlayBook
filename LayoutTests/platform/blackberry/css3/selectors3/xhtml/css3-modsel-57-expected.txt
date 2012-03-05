@@ -1,0 +1,25 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x92
+        RenderBlock (anonymous) at (0,0) size 784x20
+          RenderInline {Q} at (0,0) size 244x19 [bgcolor=#00FF00]
+            RenderInline (generated) at (0,0) size 7x19
+              RenderQuote at (0,0) size 7x19
+                text run at (0,0) width 7: "\""
+            RenderText {#text} at (7,0) size 230x19
+              text run at (7,0) width 230: "This a:q element should be unstyled."
+            RenderInline (generated) at (0,0) size 7x19
+              RenderQuote at (237,0) size 7x19
+                text run at (237,0) width 7: "\""
+          RenderText {#text} at (0,0) size 0x0
+        RenderBlock {P} at (0,36) size 784x20 [bgcolor=#FF0000]
+          RenderText {#text} at (0,0) size 308x19
+            text run at (0,0) width 308: "This paragraph should have a green background."
+        RenderBlock (anonymous) at (0,72) size 784x20
+          RenderInline {R} at (0,0) size 315x19 [bgcolor=#00FF00]
+            RenderText {#text} at (0,0) size 315x19
+              text run at (0,0) width 315: "This b:r element should have a green background."
+          RenderText {#text} at (0,0) size 0x0

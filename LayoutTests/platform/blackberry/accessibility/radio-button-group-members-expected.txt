@@ -1,0 +1,34 @@
+Radio group in a form
+----------------------
+
+
+Radio group without a form
+----------------------
+
+
+Radio group with labels
+----------------------
+
+
+Radio button without a group
+----------------------
+
+
+Yes
+No
+Maybe
+
+
+Yes
+No
+
+
+Yes
+No
+
+
+Yes
+No
+
+
+

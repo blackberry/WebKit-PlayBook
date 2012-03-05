@@ -1,0 +1,3 @@
+image_webp has MIME type image/webp
+Using an image element to load resources, this test makes sure that MIME types are being sniffed correctly with no file extension
+

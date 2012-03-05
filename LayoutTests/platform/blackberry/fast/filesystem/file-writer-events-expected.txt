@@ -1,0 +1,7 @@
+CONSOLE MESSAGE: line 163: ReferenceError: Can't find variable: webkitRequestFileSystem
+FAIL: Timed out waiting for notifyDone to be called
+Test that FileWriter produces proper progress events.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+

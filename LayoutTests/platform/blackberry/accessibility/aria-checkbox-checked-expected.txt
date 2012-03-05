@@ -1,0 +1,21 @@
+ 
+X
+X
+   
+This tests that ARIA checkboxes correctly handle the aria-checked attribute.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS checkbox.isChecked is false
+FAIL checkbox.isChecked should be true. Was false.
+PASS checkbox.isChecked is false
+FAIL checkbox.isChecked should be true. Was false.
+PASS checkbox.isChecked is false
+FAIL checkbox.isChecked should be true. Was false.
+PASS checkbox.isChecked is false
+FAIL checkbox.isChecked should be true. Was false.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

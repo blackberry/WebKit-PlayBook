@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+<title>Sized Video #3</title>
+</head>
+<body>
+<h1>Sized Video #3</h1>
+<p>This is a video element with explicit width=400 and height=150 attributes.
+The intrinsic size of the media file is smaller (320x240).</p>
+<p>The aspect ratio of the video element and of the video are different:
+the window is short and wide compared to the video.</p>
+<p>When you start the video, verify that the height of the video is reduced
+to match the height of the containing rectangle, and that the width of the video
+is reduced in proportion (to keep the right aspect ratio) to less than
+the width of the video element.</p>
+
+<fieldset>
+<video width="400" height="150" controls src="./resources/320x240.wmv">
+</video>
+</fieldset>
+
+</body>
+</html>

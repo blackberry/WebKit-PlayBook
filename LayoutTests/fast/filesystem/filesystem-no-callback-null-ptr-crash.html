@@ -1,0 +1,15 @@
+<!--
+  http://code.google.com/p/chromium/issues/detail?id=63204
+  https://bugs.webkit.org/show_bug.cgi?id=49539
+-->
+<div id="log">FAIL</div>
+<script>
+  if (window.layoutTestController)
+      layoutTestController.dumpAsText();
+  if (window.webkitRequestFileSystem) {
+      // These two calls should not cause a NULL pointer crash:
+      webkitRequestFileSystem(TEMPORARY, 100);
+      webkitResolveLocalFileSystemURL('');
+      document.getElementById('log').innerHTML = "PASS";
+  }
+</script>

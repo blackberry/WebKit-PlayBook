@@ -1,0 +1,8 @@
+CONSOLE MESSAGE: line 41: ReferenceError: Can't find variable: webkitRequestFileSystem
+FAIL: Timed out waiting for notifyDone to be called
+Obtaining File from FileEntry.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+
