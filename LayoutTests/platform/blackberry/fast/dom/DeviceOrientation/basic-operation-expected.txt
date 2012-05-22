@@ -1,0 +1,7 @@
+FAIL: Timed out waiting for notifyDone to be called
+Tests the basic operation of DeviceOrientation using the mock.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+

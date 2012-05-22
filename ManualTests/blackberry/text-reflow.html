@@ -1,0 +1,58 @@
+<html>
+<head>
+<title>Text reflow tests</title>
+<style type="text/css">
+.page {
+    width: 800px;
+    line-height: 2.0em;
+}
+.floatingDiv {
+    float: left;
+    padding-bottom: 4px;
+    background-color: #00ff00;
+    width: 624px;
+}
+.nonFloatingP {
+    width: 640px;
+}
+</style>
+</head>
+<body>
+<h3>
+a. Double tap on "This Area" in order to do block zoom; <br>
+b. Look at the expected and actual results of every test below "This Area". <br>
+</h3>
+
+<!-- FIXME: more test cases need to be added to this file to cover the text reflow functionality. -->
+<img src="" width="500px" height="500px" border="5" alt="This Area"><br>
+
+<div class="page">
+<h3>Test case 1: Simple case of text reflow<br>
+If the text below reflows(the text is not beyond the device screen), then PASS, otherwise FAIL.
+</h3>
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X<br>
+</div>
+
+<div>
+<h3>Test case 2: Text reflow for fit beflow floats<br>
+If the text in the first line reflows(the text is not beyond the device screen), then PASS, otherwise FAIL.
+</h3>
+<div class="floatingDiv"></div>
+<p class="nonFloatingP">XXXXX X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X</p>
+</div>
+
+<h3>Test case 3: Table cell text reflow<br>
+If the text in the table cell reflows(the text is not beyond the device screen), then PASS, otherwise FAIL.
+</h3>
+<table>
+<tr><td>Table Cell
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X
+X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X X
+</td></tr>
+</table>
+
+</body>
+</html>

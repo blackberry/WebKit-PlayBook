@@ -1,0 +1,19 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x576
+      RenderBlock {P} at (0,0) size 784x20
+        RenderText {#text} at (0,0) size 177x19
+          text run at (0,0) width 177: "This tests that accessing the "
+        RenderInline {TT} at (0,0) size 24x16
+          RenderText {#text} at (177,3) size 24x16
+            text run at (177,3) width 24: "src"
+        RenderText {#text} at (201,0) size 87x19
+          text run at (201,0) width 87: " attribute of a "
+        RenderInline {TT} at (0,0) size 48x16
+          RenderText {#text} at (288,3) size 48x16
+            text run at (288,3) width 48: "script"
+        RenderText {#text} at (336,0) size 271x19
+          text run at (336,0) width 114: " element does not "
+          text run at (450,0) width 157: "cause an assertion to fail."

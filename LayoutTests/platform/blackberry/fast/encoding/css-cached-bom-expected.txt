@@ -1,0 +1,5 @@
+CONSOLE MESSAGE: line 7: TypeError: Result of expression 'document.getElementById('f').contentDocument.styleSheets[0]' [undefined] is not an object.
+FAIL: Timed out waiting for notifyDone to be called
+Test that stylesheet with BOM is correctly parsed when loaded from cache. You should see word SUCCESS below.
+
+FAIL

@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head>
+<title>Two Audios</title>
+</head>
+<body>
+<h1>Two Audios</h1>
+<p>This file exists to test the interaction between two audio players.
+</p>
+<ul>
+<li>Start one of the media players:
+verify that you can pause and restart it multiple times.
+</li>
+<li>
+Let it play to the end:
+verify that you can restart it.
+</li>
+<li>
+Start the second player while the first is already playing:
+verify that the second player starts and that the first is stopped automatically.
+</li>
+<li>
+Restart the first, then restart the second, then restart the first, etc., in quick succession
+(i.e. with less than a second between them):
+verify that the next player restarts when told to, and that the currently-playing player always
+stops (so that there's never a time when both players are playing simultaneously).
+</li>
+</ul>
+<br>
+<audio src="./resources/beach.wav" controls width="100" height="50">
+Your browser doesn't support the <code>Audio</code> element</audio>
+<br>&nbsp;
+<br>&nbsp;
+<br>&nbsp;
+<br>
+<audio src="./resources/10277-m-001.mp3" controls width="100" height="50">
+Your browser doesn't support the <code>Audio</code> element</audio>
+</body>
+</html>

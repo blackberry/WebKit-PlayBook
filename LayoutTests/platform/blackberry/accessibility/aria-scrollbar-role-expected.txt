@@ -1,0 +1,14 @@
+scrollbar
+This tests that the ARIA scrollbar role works correctly
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL scroller.role should be AXRole: AXScrollBar. Was .
+FAIL scroller.intValue should be 55. Was 0.
+FAIL scroller.orientation should be AXOrientation: AXVerticalOrientation. Was .
+FAIL scroller.orientation should be AXOrientation: AXHorizontalOrientation. Was .
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

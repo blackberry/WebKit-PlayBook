@@ -1,0 +1,2 @@
+CONSOLE MESSAGE: line 35: NOT_SUPPORTED_ERR: DOM Exception 9: The implementation did not support the requested type of object or operation.
+PASS

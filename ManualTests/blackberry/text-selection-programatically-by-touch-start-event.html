@@ -1,0 +1,100 @@
+<!DOCTYPE HTML>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta HTTP-EQUIV="Pragma" CONTENT="no-cache">
+    <meta name="viewport" content="initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Copy/Paste</title>
+</head>
+<body>
+    <div id="normal" style="float:left; background:#0FF; height:300px; width:400px">
+        <p>NORMAL TEXT</p>
+        <p>Curabitur http://www.google.com/test.html tellus felis, vulputate in semper sit amet,
+           dignissim sit amet ligula. Nam posuere dictum eros, nec faucibus enim lacinia vitae.
+           Nulla neque lacus, porta ut laoreet non, venenatis non libero. Nam nec augue enim, ut
+           condimentum leo. Integer elementum sem vitae purus aliquet pellentesque. Mauris tempor
+           blandit quam, non semper magna malesuada vel. Nam nec augue enim, ut condimentum leo.
+           Integer elementum sem vitae purus aliquet pellentesque. Mauris tempor blandit quam, non
+           semper magna malesuada vel. </p>
+    </div>
+    <iframe id="iframe" width="400" style="float:leftl width:400px; border: 0" height="300" src="text-selection-programatically-by-touch-start-event-iframe.html"></iframe>
+
+    <div id="output"></div>
+
+    <script type="text/javascript">
+        var $,
+        consume,
+        bindHandlers,
+        initialize,
+        output;
+
+        $ = function(desiredID)
+        {
+            return document.getElementById(desiredID);
+        };
+
+        consume = function(e)
+        {
+            e.preventDefault();
+        };
+
+        bindHandlers = function()
+        {
+            var normalText = $('normal'),
+                iframe = $('iframe'),
+                iframeText = iframe.contentDocument.body;
+
+            // Prevent Default on touchstart - this prevents selection from happening like it normally would
+            normalText.addEventListener('touchstart', consume, false);
+            iframeText.addEventListener('touchstart', consume, false);
+
+            // Listen for touchstarts and convert them to selections ourself
+            normalText.addEventListener('touchstart', function(e)
+            {
+                var point = e.changedTouches[0],
+                sel = window.getSelection();
+
+                sel.removeAllRanges();
+                sel.addRange(document.caretRangeFromPoint(point.pageX, point.pageY));
+                setTimeout(function() {
+                    sel.modify('move', 'backward', 'word');
+                    sel.modify('extend', 'forward', 'word');
+                    output.innerHTML = "Normal: " + sel.toString() + "<br/>" + output.innerHTML;
+                    }, 20);
+            }, false);
+
+            // Listen for touchstarts on the iFrame and convert them to selections ourself
+            iframeText.addEventListener('touchstart', function( e )
+            {
+                var point = e.changedTouches[0],
+
+                // Use the appropriate Document and Window Selection object
+                doc = iframe.contentDocument,
+                sel = iframe.contentWindow.getSelection();
+
+                sel.removeAllRanges();
+                sel.addRange(doc.caretRangeFromPoint(point.pageX, point.pageY ) );
+                setTimeout(function() {
+                    sel.modify('move', 'backward', 'word');
+                    sel.modify('extend', 'forward', 'word');
+
+                    // Output the results of the selection.
+                    // This leads me to think the selection is working, but the display isn't being rendered properly
+                    output.innerHTML = "iFrame: " + sel.toString() + "<br/>" + output.innerHTML;
+
+                    }, 20);
+            }, false);
+        };
+
+        initialize = function()
+        {
+            output = $('output');
+            setTimeout(function() {
+                bindHandlers();
+            }, 500);
+        };
+
+        window.addEventListener("DOMContentLoaded", initialize, true);
+    </script>
+</body>
+</html>

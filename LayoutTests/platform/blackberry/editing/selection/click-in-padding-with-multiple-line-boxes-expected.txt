@@ -1,0 +1,13 @@
+Click above/beneath the word FOO. Notice how the cursor goes in the right place (after the letter F).
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL Selection is [anchorNode: [object Text](12345) anchorOffset: 4 focusNode: [object Text](12345) focusOffset: 4 isCollapsed: true] should be at anchorNode: [object Text] anchorOffset: 0 focusNode: [object Text] focusOffset: 0
+FAIL Selection is [anchorNode: [object Text](12345) anchorOffset: 4 focusNode: [object Text](12345) focusOffset: 4 isCollapsed: true] should be at anchorNode: [object Text] anchorOffset: 3 focusNode: [object Text] focusOffset: 3
+FAIL Selection is [anchorNode: [object Text](12345) anchorOffset: 4 focusNode: [object Text](12345) focusOffset: 4 isCollapsed: true] should be at anchorNode: [object Text] anchorOffset: 1 focusNode: [object Text] focusOffset: 1
+FAIL Selection is [anchorNode: [object Text](12345) anchorOffset: 4 focusNode: [object Text](12345) focusOffset: 4 isCollapsed: true] should be at anchorNode: [object Text] anchorOffset: 1 focusNode: [object Text] focusOffset: 1
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

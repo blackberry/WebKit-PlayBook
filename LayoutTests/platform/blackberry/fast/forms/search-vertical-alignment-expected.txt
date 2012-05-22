@@ -1,0 +1,66 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x576
+      RenderBlock {P} at (0,0) size 784x40
+        RenderText {#text} at (0,0) size 753x39
+          text run at (0,0) width 420: "Test that search field text is vertically centered if the search field is "
+          text run at (420,0) width 333: "taller than the text. In each of the following pairs of a"
+          text run at (0,20) width 103: "search field and "
+          text run at (103,20) width 356: "a text field, the vertical position of the text should be the "
+          text run at (459,20) width 122: "same in both fields."
+      RenderBlock {P} at (0,56) size 784x46
+        RenderTextControl {INPUT} at (2,1) size 157x45 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,3) size 151x39
+            RenderBlock {DIV} at (0,19) size 0x0
+            RenderBlock {DIV} at (0,11) size 142x16
+            RenderBlock {DIV} at (142,15) size 9x9
+        RenderText {#text} at (161,13) size 4x19
+          text run at (161,13) width 4: " "
+        RenderTextControl {INPUT} at (167,0) size 157x45 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,118) size 784x20
+        RenderTextControl {INPUT} at (2,2) size 157x16 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,0) size 151x16
+            RenderBlock {DIV} at (0,8) size 0x0
+            RenderBlock {DIV} at (0,0) size 142x16
+            RenderBlock {DIV} at (142,3) size 9x9
+        RenderText {#text} at (161,0) size 4x19
+          text run at (161,0) width 4: " "
+        RenderTextControl {INPUT} at (167,2) size 157x16 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {P} at (0,154) size 784x20
+        RenderTextControl {INPUT} at (2,3) size 157x12 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+          RenderDeprecatedFlexibleBox {DIV} at (3,0) size 151x12
+            RenderBlock {DIV} at (0,6) size 0x0
+            RenderBlock {DIV} at (0,0) size 142x16
+            RenderBlock {DIV} at (142,1) size 9x9
+        RenderText {#text} at (161,0) size 4x19
+          text run at (161,0) width 4: " "
+        RenderTextControl {INPUT} at (167,3) size 157x12 [bgcolor=#FFFFFF] [border: (2px inset #000000)]
+        RenderText {#text} at (0,0) size 0x0
+layer at (13,79) size 142x16
+  RenderBlock {DIV} at (0,0) size 142x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"
+layer at (178,79) size 151x16
+  RenderBlock {DIV} at (3,15) size 151x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"
+layer at (13,128) size 142x16
+  RenderBlock {DIV} at (0,0) size 142x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"
+layer at (178,128) size 151x16
+  RenderBlock {DIV} at (3,0) size 151x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"
+layer at (13,165) size 142x16
+  RenderBlock {DIV} at (0,0) size 142x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"
+layer at (178,163) size 151x16
+  RenderBlock {DIV} at (3,-2) size 151x16
+    RenderText {#text} at (1,0) size 26x16
+      text run at (1,0) width 26: "Text"

@@ -1,0 +1,3 @@
+wml.wml has MIME type text/vnd.wap.wml
+Using an image element to load resources, this test makes sure that files loaded from the file system are not sniffed if there is a known extension. This test should load a non sniffed file type. 
+

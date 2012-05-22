@@ -1,0 +1,5 @@
+CONSOLE MESSAGE: line 105: TypeError: 'null' is not an object (evaluating 'savedDataTransferItems.length')
+FAIL: Timed out waiting for notifyDone to be called
+This file tests the basic functionality and properties of DataTransferItems. This test requires DRT.
+Testing if DataTransferItems can be accessed outside an event handler...
+

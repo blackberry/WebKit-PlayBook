@@ -1,0 +1,7 @@
+FAIL: Timed out waiting for notifyDone to be called
+Tests that events are never fired sycnhronously from a call to window.addEventListener().
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+

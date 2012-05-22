@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="../../../../fast/js/resources/js-test-style.css">
+<script src="../../../../fast/js/resources/js-test-pre.js"></script>
+<script>
+
+var select1;
+var select2;
+
+window.onload = function()
+{
+    select1 = document.getElementById("select1");
+    select2 = document.getElementById("select2");
+    runTests();
+}
+
+function runTests()
+{
+    testReceivesMouseEvent();
+    testChangeSelection();
+
+    var testContainer = document.getElementById("test-container");
+    if (testContainer)
+        document.body.removeChild(testContainer);
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
+}
+
+function testReceivesMouseEvent()
+{
+    debug("Tests that a &lt;select&gt; receives mousedown events:");
+    select1.onmousedown = function(e) { testPassed("Received mousedown event.") };
+    fireMouseEvent(select1);
+}
+
+function testChangeSelection()
+{
+    debug("Tests that a mousedown event can change the selection in &lt;select&gt;:");
+    fireMouseEvent(select2);
+    shouldBeEqualToString('select2.options[select2.selectedIndex].value', "PASS");
+}
+
+function fireMouseEvent(targetElement)
+{
+    // We add 10 pixels to both the offsetLeft and offsetTop so as to have the
+    // mouse pointer be inside the bounding box of the target element. This offset
+    // seems to reasonably account for platform-specific differences in appearance.
+    var x = targetElement.offsetLeft + 10;
+    var y = targetElement.offsetTop + 10;
+
+    var mouseDownEvent = document.createEvent("MouseEvent");
+    mouseDownEvent.initMouseEvent("mousedown", true, true, window, 1, 0, 0, x, y, false, false, false, false, 0 /* primary button */, null);
+    targetElement.focus();
+    targetElement.dispatchEvent(mouseDownEvent);
+}
+</script>
+</head>
+<body>
+<p id="description"></p>
+<div id="test-container">
+    <select id="select1" multiple="multiple">
+        <option value="PASS">Item 1</option>
+        <option value="FAIL" selected>Item 2</option>
+        <option value="FAIL">Item 3</option>
+    </select>
+    <select id="select2" multiple="multiple">
+        <option value="PASS">Item 1</option>
+        <option value="FAIL" selected>Item 2</option>
+        <option value="FAIL">Item 3</option>
+    </select>
+</div>
+<div id="console"></div>
+<script>
+    description("This tests that a &lt;select&gt; element can receive a DOM Mouse Event and that such an event can change its selection state.");
+    var successfullyParsed = true;
+</script>
+</body>
+</html>

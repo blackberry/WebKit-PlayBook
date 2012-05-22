@@ -1,0 +1,35 @@
+EDITING DELEGATE: shouldBeginEditingInDOMRange:range from 0 of DIV > BODY > HTML > #document to 3 of DIV > BODY > HTML > #document
+EDITING DELEGATE: webViewDidBeginEditing:WebViewDidBeginEditingNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: shouldChangeSelectedDOMRange:range from 9 of #text > DIV > DIV > BODY > HTML > #document to 9 of #text > DIV > DIV > BODY > HTML > #document toDOMRange:range from 10 of #text > DIV > DIV > BODY > HTML > #document to 10 of #text > DIV > DIV > BODY > HTML > #document affinity:NSSelectionAffinityDownstream stillSelecting:FALSE
+EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification
+EDITING DELEGATE: webViewDidChange:WebViewDidChangeNotification
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x584
+      RenderBlock {DIV} at (0,0) size 784x154
+        RenderBlock {DIV} at (0,0) size 784x55
+          RenderText {#text} at (0,0) size 61x26
+            text run at (0,0) width 61: "Tests:"
+          RenderBR {BR} at (61,21) size 0x0
+          RenderText {#text} at (0,27) size 254x27
+            text run at (0,27) width 254: "Key binding for control-O"
+        RenderBlock {DIV} at (0,71) size 784x83
+          RenderText {#text} at (0,0) size 177x26
+            text run at (0,0) width 177: "Expected results:"
+          RenderBR {BR} at (177,21) size 0x0
+          RenderText {#text} at (0,27) size 90x27
+            text run at (0,27) width 90: "one five |"
+          RenderBR {BR} at (90,48) size 0x0
+          RenderText {#text} at (0,55) size 137x27
+            text run at (0,55) width 137: "two three four"
+      RenderBlock {DIV} at (0,178) size 784x28
+        RenderBlock {DIV} at (0,0) size 784x28
+          RenderText {#text} at (0,0) size 234x27
+            text run at (0,0) width 234: "one five otwo three four"
+caret: position 10 of child 0 {#text} of child 1 {DIV} of child 3 {DIV} of body

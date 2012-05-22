@@ -1,0 +1,10 @@
+DirectoryReader.readEntries() test.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+This test requires FileSystem API support.
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

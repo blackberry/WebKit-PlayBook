@@ -1,0 +1,4 @@
+main frame "[object HTMLIFrameElement]" - has 1 onunload handler(s)
+CONSOLE MESSAGE: line 15: TypeError: 'undefined' is not a function (evaluating 'window.opener.log("page-1, about to navigate to page-2.")')
+FAIL: Timed out waiting for notifyDone to be called
+

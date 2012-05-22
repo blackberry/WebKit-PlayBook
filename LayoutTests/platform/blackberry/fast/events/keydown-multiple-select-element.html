@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html>
+<head>
+<link rel="stylesheet" href="../../../../fast/js/resources/js-test-style.css">
+<script src="../../../../fast/js/resources/js-test-pre.js"></script>
+<script>
+
+var select1;
+var select2;
+
+window.onload = function()
+{
+    select1 = document.getElementById("select1");
+    select2 = document.getElementById("select2");
+    runTests();
+}
+
+function runTests()
+{
+    testReceivesKeyDownEvent();
+    testChangeSelection();
+
+    var testContainer = document.getElementById("test-container");
+    if (testContainer)
+        document.body.removeChild(testContainer);
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
+}
+
+function testReceivesKeyDownEvent()
+{
+    debug("Tests that a &lt;select&gt; receives keydown events:");
+    select1.onkeydown = function(e) { testPassed("Received keydown event.") };
+    fireKeyboardEvent(select1);
+}
+
+function testChangeSelection()
+{
+    debug("Tests that a keydown events can change the selection in &lt;select&gt;:");
+    fireKeyboardEvent(select2);
+    shouldBeEqualToString('select2.options[select2.selectedIndex].value', "PASS");
+}
+
+function fireKeyboardEvent(targetElement)
+{
+    // We add 10 pixels to both the offsetLeft and offsetTop so as to have the
+    // mouse pointer be inside the bounding box of the target element. This offset
+    // seems to reasonably account for platform-specific differences in appearance.
+    var x = targetElement.offsetLeft + 10;
+    var y = targetElement.offsetTop + 10;
+
+    var keyDownEvent = document.createEvent("KeyboardEvent");
+    if (keyDownEvent.initKeyEvent) {
+        // This is the Mozilla/Firefox API, see <https://developer.mozilla.org/en/DOM/event.initKeyEvent>.
+        const DOM_VK_DOWN = 40; // See <http://mxr.mozilla.org/mozilla-central/source/dom/interfaces/events/nsIDOMKeyEvent.idl>.
+        keyDownEvent.initKeyEvent("keydown", true, true, document.defaultView, false, false, false, false, DOM_VK_DOWN, 0);
+    } else if (keyDownEvent.initKeyboardEvent)
+        keyDownEvent.initKeyboardEvent("keydown", true, true, document.defaultView, "Down", 0, false, false, false, false, false);
+    targetElement.focus();
+    targetElement.dispatchEvent(keyDownEvent);
+}
+</script>
+</head>
+<body>
+<p id="description"></p>
+<div id="test-container">
+    <select id="select1" multiple="multiple">
+        <option value="FAIL">Item 1</option>
+        <option value="FAIL" selected>Item 2</option>
+        <option value="PASS">Item 3</option>
+    </select>
+    <select id="select2" multiple="multiple">
+        <option value="FAIL">Item 1</option>
+        <option value="FAIL" selected>Item 2</option>
+        <option value="PASS">Item 3</option>
+    </select>
+</div>
+<div id="console"></div>
+<script>
+    description("This tests that a &lt;select&gt; element can receive a DOM Keyboard Event and that such an event can change its selection state.");
+    var successfullyParsed = true;
+</script>
+</body>
+</html>

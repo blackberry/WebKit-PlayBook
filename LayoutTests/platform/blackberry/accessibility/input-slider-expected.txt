@@ -1,0 +1,46 @@
+ 50 
+
+
+
+** Test slider accessibility attributes
+RUN(sliderAXObject = accessibilityController.focusedElement)
+EXPECTED (sliderAXObject.minValue == '0') OK
+EXPECTED (sliderAXObject.maxValue == '100'), OBSERVED '0' FAIL
+EXPECTED (sliderAXObject.childrenCount == '1'), OBSERVED '0' FAIL
+EXPECTED (sliderAXObject.role == 'AXRole: AXSlider'), OBSERVED '' FAIL
+
+** Test thumb accessibility attributes
+RUN(thumbAXObject = sliderAXObject.childAtIndex(0))
+EXPECTED (thumbAXObject.childrenCount == '0') OK
+thumbAXObject.role = 
+EXPECTED (thumbAXObject.role == 'AXRole: AXValueIndicator'), OBSERVED '' FAIL
+
+** Increment the slider, test slider value and div set on 'update' event
+RUN(sliderAXObject.increment())
+EXPECTED (sliderInput.value == '55'), OBSERVED '50' FAIL
+EXPECTED (valueDiv.innerText == '55'), OBSERVED '50' FAIL
+
+** Decrement the slider, test slider value and div set on 'update' event
+RUN(sliderInput.value = 22)
+RUN(sliderAXObject.decrement())
+EXPECTED (sliderInput.value == '17'), OBSERVED '22' FAIL
+EXPECTED (valueDiv.innerText == '17'), OBSERVED '50' FAIL
+
+** Change slider range
+RUN(sliderInput.setAttribute('max', 1000))
+RUN(sliderInput.setAttribute('min', 500))
+EXPECTED (sliderAXObject.minValue == '500'), OBSERVED '0' FAIL
+EXPECTED (sliderAXObject.maxValue == '1000'), OBSERVED '0' FAIL
+
+** Re-test incrementing the slider
+RUN(sliderInput.value = 600)
+RUN(sliderAXObject.increment())
+EXPECTED (sliderInput.value == '625'), OBSERVED '600' FAIL
+EXPECTED (valueDiv.innerText == '625'), OBSERVED '50' FAIL
+
+** Re-test decrementing the slider
+RUN(sliderInput.value = 850)
+RUN(sliderAXObject.decrement())
+EXPECTED (sliderInput.value == '825'), OBSERVED '850' FAIL
+EXPECTED (valueDiv.innerText == '825'), OBSERVED '50' FAIL
+

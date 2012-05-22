@@ -1,0 +1,12 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
+<title>Compositing image scale</title>
+</head>
+<body>
+If this page looks pixelated when you zoom in, this test FAILED. Otherwise, it PASSED.
+<br />
+We really want to check if the page gets to be composited, which is not detectable from within the web page. In this version of BlackBerry WebKit, you can check if it's composited by pinch zooming in. If it looks pixelated, it's composited.
+<div style="position:fixed;z-index:-100;">Fixed positioned layer at z-index -100</div>
+</body>
+</html>

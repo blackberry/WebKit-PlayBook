@@ -1,0 +1,66 @@
+<html>
+<head>
+<style type="text/css">
+
+.stage {
+  margin: 1em auto;
+  -webkit-perspective: 1200px;
+  -moz-perspective: 1200px;
+}
+
+@-webkit-keyframes spincube {
+  from,to  { }
+  16%      { -webkit-transform: rotateY(-90deg);  }
+  33%      { -webkit-transform: rotateY(-90deg) rotateZ(90deg); }
+  50%      { -webkit-transform: rotateY(180deg) rotateZ(90deg); }
+  66%      { -webkit-transform: rotateY(90deg) rotateX(90deg);  }
+  83%      { -webkit-transform: rotateX(90deg); }
+}
+
+.cubespinner {
+  -webkit-animation-name: spincube;
+  -webkit-animation-timing-function: ease-in-out;
+  -webkit-animation-iteration-count: infinite;
+  -webkit-animation-duration: 12s;
+  -webkit-transform-style: preserve-3d;
+  -webkit-transform-origin: 60px 60px 0;
+}
+
+.cubespinner div {
+  position: absolute;
+  width: 120px;
+  height: 120px;
+  border: 1px solid #ccc;
+  background: rgba(255,255,255,0.8);
+  text-align: center;
+  line-height: 120px;
+  font-size: 100px;
+  -webkit-box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+  -moz-box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+  box-shadow: inset 0 0 20px rgba(0,0,0,0.2);
+}
+
+.cubespinner .face1 { background: rgba(255,0,0,0.8); -webkit-transform: translateZ(60px); }
+.cubespinner .face2 { background: rgba(0,255,0,0.8); -webkit-transform: rotateY(90deg) translateZ(60px); }
+.cubespinner .face3 { background: rgba(0,0,255,0.8); -webkit-transform: rotateY(90deg) rotateX(90deg) translateZ(60px); }
+.cubespinner .face4 { background: rgba(0,255,255,0.8); -webkit-transform: rotateY(180deg) rotateZ(90deg) translateZ(60px); }
+.cubespinner .face5 { background: rgba(255,0,255,0.8); -webkit-transform: rotateY(-90deg) rotateZ(90deg) translateZ(60px); }
+.cubespinner .face6 { background: rgba(255,255,0,0.8); -webkit-transform: rotateX(-90deg) translateZ(60px); }
+
+</style></head>
+
+<body>
+This test SUCCEEDED if the cube animates from showing face 1 through 6 in six steps, without discontinuities, rotating no more than 90 degrees in any step. Otherwise it FAILED.
+<div class="stage" style="width: 120px; height: 120px;">
+<div class="cubespinner">
+<div class="face1">1</div>
+<div class="face2">2</div>
+<div class="face3">3</div>
+<div class="face4">4</div>
+<div class="face5">5</div>
+<div class="face6">6</div>
+</div>
+</div>
+
+</body>
+</html>

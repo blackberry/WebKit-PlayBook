@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta name="viewport" id="viewport" content="initial-scale=1.0,user-scalable=yes" />
+    <title>Test Clipping a Video Media Player</title>
+    </head>
+
+    <body>
+<p>Lots of vertical whitespace here, enough to make the page scroll:
+<br/> <br/> <br/> <br/> <br/> <br/> <br/> <br/> <br/> <br/>
+</p>
+    <p>The following content is contained within an &lt;iframe&gt;.</p>
+    <ul>
+    <li>Verify that content (including video media players) is clipped by the border of the &lt;iframe&gt; which contains it.</li>
+    <li>Verify that video media players are also still clipped properly if/when you scroll the contents of the &lt;iframe&gt;.</li>
+    <li>Repeat the above tests (i.e. verify that clipping still works) when the screen is pinch-zoomed, and when the outermost document layer is scrolled.</li>
+    <li>Repeat the above tests (i.e. verify that clipping still works) when a video media player is actually playing a video.</li>
+    </ul>
+    <iframe src="./video-iframe-content.html" width="100%" height="300">
+    <p>Your browser does not support iframes.</p>
+    </iframe>
+    <p><a href="index.htm">Back to Index</a></p>
+    </body>
+
+</html>

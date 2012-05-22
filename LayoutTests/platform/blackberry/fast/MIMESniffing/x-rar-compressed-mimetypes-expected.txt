@@ -1,0 +1,3 @@
+application_x-rar-compressed has MIME type application/x-rar-compressed
+Using an image element to load resources, this test makes sure that MIME types are being sniffed correctly with no file extension
+

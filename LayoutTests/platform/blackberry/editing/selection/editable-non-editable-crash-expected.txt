@@ -1,0 +1,201 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x436
+  RenderBlock {HTML} at (0,0) size 800x436
+    RenderBody {BODY} at (0,0) size 800x426 [bgcolor=#FFFFFF]
+      RenderBlock {DIV} at (0,0) size 800x30
+        RenderBlock {DIV} at (0,0) size 800x30
+          RenderBlock {DIV} at (0,0) size 800x0
+      RenderBlock {CENTER} at (0,30) size 800x396
+        RenderBlock (anonymous) at (0,0) size 800x19
+          RenderBR {BR} at (400,0) size 0x18
+        RenderBlock {DIV} at (0,19) size 800x160
+          RenderBlock {DIV} at (0,0) size 800x141
+            RenderBlock {DIV} at (262,28) size 276x110
+          RenderBlock (anonymous) at (0,141) size 800x19
+            RenderBR {BR} at (400,0) size 0x18
+        RenderBlock {FORM} at (0,179) size 800x81
+          RenderTable {TABLE} at (0,0) size 800x81
+            RenderTableSection {TBODY} at (0,0) size 800x81
+              RenderTableRow {TR} at (0,0) size 800x81
+                RenderTableCell {TD} at (0,0) size 125x12 [r=0 c=0 rs=1 cs=1]
+                  RenderText {#text} at (0,-3) size 4x18
+                    text run at (0,-3) width 4: " "
+                RenderTableCell {TD} at (125,0) size 513x81 [r=0 c=1 rs=1 cs=1]
+                  RenderBlock {DIV} at (0,4) size 513x33 [border: (1px solid #E7E7E7) none]
+                    RenderTextControl {INPUT} at (0,0) size 512x32 [bgcolor=#FFFFFF] [border: (1px solid #CCCCCC) (1px solid #999999) (1px solid #CCCCCC)]
+                  RenderBR {BR} at (513,1) size 0x18
+                  RenderBlock {SPAN} at (135,44) size 113x33 [border: (1px solid #E7E7E7) none]
+                    RenderBlock {SPAN} at (0,0) size 112x32 [bgcolor=#EEEEEE] [border: (1px solid #CCCCCC) (1px solid #999999) (1px solid #CCCCCC)]
+                      RenderButton {INPUT} at (1,1) size 110x30
+                        RenderBlock (anonymous) at (6,6) size 98x17
+                          RenderText at (0,0) size 98x17
+                            text run at (0,0) width 98: "Google Search"
+                  RenderBlock {SPAN} at (252,44) size 130x33 [border: (1px solid #E7E7E7) none]
+                    RenderBlock {SPAN} at (0,0) size 129x32 [bgcolor=#EEEEEE] [border: (1px solid #CCCCCC) (1px solid #999999) (1px solid #CCCCCC)]
+                      RenderButton {INPUT} at (1,1) size 127x30
+                        RenderBlock (anonymous) at (6,6) size 115x17
+                          RenderText at (0,0) size 115x17
+                            text run at (0,0) width 115: "I'm Feeling Lucky"
+                RenderTableCell {TD} at (638,0) size 162x35 [r=0 c=2 rs=1 cs=1]
+                  RenderBlock {A} at (13,7) size 149x12 [color=#3366CC]
+                    RenderText {#text} at (0,-1) size 86x14
+                      text run at (0,-1) width 86: "Advanced search"
+                  RenderBlock {A} at (13,21) size 149x12 [color=#3366CC]
+                    RenderText {#text} at (0,-1) size 74x14
+                      text run at (0,-1) width 74: "Language tools"
+        RenderBlock {DIV} at (0,280) size 800x48
+          RenderBlock (anonymous) at (0,0) size 800x16
+            RenderBR {BR} at (400,0) size 0x16
+          RenderBlock {DIV} at (0,16) size 800x32
+            RenderInline {FONT} at (0,0) size 177x16
+              RenderText {#text} at (311,0) size 125x16
+                text run at (311,0) width 125: "Google.ca offered in: "
+              RenderInline {A} at (0,0) size 52x16 [color=#1111CC]
+                RenderText {#text} at (439,0) size 46x16
+                  text run at (439,0) width 46: "fran\x{E7}ais"
+            RenderBR {BR} at (488,0) size 0x16
+            RenderBR {BR} at (400,16) size 0x16
+        RenderBlock {DIV} at (0,328) size 800x0
+        RenderBlock (anonymous) at (0,328) size 800x0
+          RenderInline {SPAN} at (0,0) size 0x0
+        RenderBlock (anonymous) at (0,347) size 800x49
+          RenderBlock {CENTER} at (0,0) size 800x49
+            RenderBlock {DIV} at (0,0) size 800x16
+              RenderBlock {DIV} at (0,0) size 800x16
+                RenderBlock {A} at (153,0) size 125x16 [color=#1111CC]
+                  RenderText {#text} at (0,0) size 125x16
+                    text run at (0,0) width 125: "Advertising Programs"
+                RenderBlock {A} at (302,0) size 112x16 [color=#1111CC]
+                  RenderText {#text} at (0,0) size 112x16
+                    text run at (0,0) width 112: "Business Solutions"
+                RenderBlock {A} at (438,0) size 79x16 [color=#1111CC]
+                  RenderText {#text} at (0,0) size 79x16
+                    text run at (0,0) width 79: "About Google"
+                RenderBlock {A} at (541,0) size 106x16 [color=#1111CC]
+                  RenderText {#text} at (0,0) size 106x16
+                    text run at (0,0) width 106: "Go to Google.com"
+            RenderBlock {P} at (0,35) size 800x14 [color=#767676]
+              RenderText {#text} at (359,0) size 45x14
+                text run at (359,0) width 45: "\x{A9} 2011 - "
+              RenderInline {A} at (0,0) size 37x14 [color=#1111CC]
+                RenderText {#text} at (404,0) size 37x14
+                  text run at (404,0) width 37: "Privacy"
+        RenderBlock (anonymous) at (0,406) size 800x0
+          RenderInline {SPAN} at (0,0) size 0x0
+          RenderText {#text} at (0,0) size 0x0
+        RenderBlock {DIV} at (0,406) size 800x0
+        RenderBlock {DIV} at (0,406) size 800x0
+layer at (132,218) size 496x22
+  RenderBlock {DIV} at (7,5) size 496x22
+layer at (476,147) size 276x20
+  RenderBlock (relative positioned) {DIV} at (0,0) size 276x20 [color=#777777]
+    RenderText {#text} at (0,0) size 58x19
+      text run at (0,0) width 58: "Canada"
+layer at (0,0) size 800x2
+  RenderBlock (positioned) zI: 990 {DIV} at (0,0) size 800x2 [bgcolor=#FFFFFF] [border: (2px solid #BAD3EA) none]
+layer at (0,0) size 800x2
+  RenderBlock (positioned) zI: 990 {DIV} at (0,0) size 800x2 [bgcolor=#FFFFFF] [border: (2px solid #BAD3EA) none]
+layer at (0,2) size 800x28
+  RenderBlock (positioned) zI: 990 {DIV} at (0,2) size 800x28 [bgcolor=#FFFFFF] [border: (1px solid #F5F5F5) none]
+layer at (0,2) size 800x28
+  RenderBlock (positioned) zI: 990 {DIV} at (0,2) size 800x28 [bgcolor=#FFFFFF] [border: (1px solid #F5F5F5) none]
+layer at (0,0) size 420x30 layerType: background only
+layer at (5,0) size 415x2
+  RenderBlock (positioned) zI: -1 {SPAN} at (5,0) size 415x2 [border: (2px solid #FFFFFF) none]
+layer at (0,0) size 420x30 layerType: foreground only
+  RenderBlock (positioned) zI: 1000 {DIV} at (0,0) size 420x30
+    RenderBlock {OL} at (5,0) size 415x29
+layer at (5,0) size 43x29
+  RenderBlock (relative positioned) {LI} at (0,0) size 43x29
+    RenderBlock {A} at (1,0) size 41x29 [color=#3366CC] [border: (2px solid #1A54E1) none]
+      RenderBlock {SPAN} at (0,2) size 41x1 [border: (1px solid #1A54E1) none]
+layer at (48,0) size 57x29
+  RenderBlock (relative positioned) {LI} at (43,0) size 57x29
+    RenderBlock {A} at (0,0) size 57x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 57x1 [border: (1px solid #00000000) none]
+layer at (105,0) size 54x29
+  RenderBlock (relative positioned) {LI} at (100,0) size 54x29
+    RenderBlock {A} at (0,0) size 54x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 54x1 [border: (1px solid #00000000) none]
+layer at (159,0) size 46x29
+  RenderBlock (relative positioned) {LI} at (154,0) size 46x29
+    RenderBlock {A} at (0,0) size 46x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 46x1 [border: (1px solid #00000000) none]
+layer at (205,0) size 46x29
+  RenderBlock (relative positioned) {LI} at (200,0) size 46x29
+    RenderBlock {A} at (0,0) size 46x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 46x1 [border: (1px solid #00000000) none]
+layer at (251,0) size 68x29
+  RenderBlock (relative positioned) {LI} at (246,0) size 68x29
+    RenderBlock {A} at (0,0) size 68x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 68x1 [border: (1px solid #00000000) none]
+layer at (319,0) size 48x29
+  RenderBlock (relative positioned) {LI} at (314,0) size 48x29
+    RenderBlock {A} at (0,0) size 48x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 48x1 [border: (1px solid #00000000) none]
+layer at (367,0) size 53x29
+  RenderBlock (relative positioned) {LI} at (362,0) size 53x29
+    RenderBlock {A} at (0,0) size 53x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 53x1 [border: (1px solid #00000000) none]
+layer at (6,3) size 41x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 41x26 [color=#363636] [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 27x16
+      text run at (7,5) width 27: "Web"
+layer at (48,3) size 57x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 57x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 43x16
+      text run at (7,5) width 43: "Images"
+layer at (105,3) size 54x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 54x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 40x16
+      text run at (7,5) width 40: "Videos"
+layer at (159,3) size 46x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 46x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 32x16
+      text run at (7,5) width 32: "Maps"
+layer at (205,3) size 46x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 46x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 32x16
+      text run at (7,5) width 32: "News"
+layer at (251,3) size 68x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 68x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 54x16
+      text run at (7,5) width 54: "Translate"
+layer at (319,3) size 48x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 48x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderText zI: 1000 {#text} at (7,5) size 34x16
+      text run at (7,5) width 34: "Gmail"
+layer at (367,3) size 53x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 53x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderInline {SPAN} at (0,0) size 29x16
+      RenderText {#text} at (7,5) size 29x16
+        text run at (7,5) width 29: "more"
+layer at (407,16) size 6x4
+  RenderBlock (relative positioned) {SPAN} at (36,14) size 6x4 [border: (3px solid #3366CC) (3px dashed #00000000) none (3px dashed #00000000)]
+layer at (707,0) size 93x30 layerType: background only
+layer at (706,0) size 83x2
+  RenderBlock (positioned) zI: -1 {SPAN} at (-1,0) size 83x2 [border: (2px solid #FFFFFF) none]
+layer at (707,0) size 93x30 layerType: foreground only
+  RenderBlock (positioned) zI: 1000 {DIV} at (707,0) size 93x30
+    RenderBlock {OL} at (0,0) size 88x30
+layer at (707,0) size 59x29
+  RenderBlock (relative positioned) {LI} at (0,0) size 59x29
+    RenderBlock {A} at (0,0) size 59x29 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 59x1 [border: (1px solid #00000000) none]
+layer at (766,0) size 1x29
+  RenderBlock (relative positioned) {LI} at (59,0) size 1x29
+layer at (767,0) size 28x30
+  RenderBlock (relative positioned) {LI} at (60,0) size 28x30
+    RenderBlock {A} at (0,0) size 28x30 [color=#3366CC] [border: (2px solid #BAD3EA) none]
+      RenderBlock {SPAN} at (0,2) size 28x1 [border: (1px solid #00000000) none]
+layer at (707,3) size 59x26
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 59x26 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderInline {SPAN} at (0,0) size 45x16
+      RenderText {#text} at (7,5) size 45x16
+        text run at (7,5) width 45: "Sign in"
+layer at (766,2) size 1x27
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,2) size 1x27 [bgcolor=#E6E6E6]
+layer at (767,3) size 28x27
+  RenderBlock (relative positioned) zI: 1000 {SPAN} at (0,3) size 28x27 [border: (1px solid #00000000) none (1px solid #00000000)]
+    RenderBlock {SPAN} at (7,6) size 14x15

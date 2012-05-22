@@ -1,0 +1,3 @@
+application_zip has MIME type application/zip
+Using an image element to load resources, this test makes sure that MIME types are being sniffed correctly with no file extension
+

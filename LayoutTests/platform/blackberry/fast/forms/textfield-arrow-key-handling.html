@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <link rel="stylesheet" href="../../../../fast/js/resources/js-test-style.css">
+    <script src="../../../../fast/js/resources/js-test-pre.js"></script>
+</head>
+<body>
+<p id="description"></p>
+<input type="text" id="input">
+<div id="console"></div>
+<script>
+description('Checks that pressing arrow keys does not input text into input fields.');
+
+var _field = document.getElementById("input");
+
+function testPressArrowKeyInEmptyTextField() {
+    _field.value = "";
+    _field.focus();
+
+    eventSender.keyDown("rightArrow");
+
+    shouldBeEqualToString("_field.value", "");
+}
+
+function testPressArrowKeyInNonEmptyTextField() {
+    _field.value = "foo";
+    _field.focus();
+
+    for (var i = 0; i < 5; ++i)
+        eventSender.keyDown("rightArrow");
+
+    shouldBeEqualToString("_field.value", "foo");
+}
+
+function runTests() {
+    if (!window.layoutTestController)
+        return;
+
+    if (!window.eventSender)
+        return;
+
+    debug("Press an arrow key in an empty text field.");
+    testPressArrowKeyInEmptyTextField();
+
+    debug("Insert 'foo' into a text field and press arrow key several times.");
+    testPressArrowKeyInNonEmptyTextField();
+}
+
+var successfullyParsed = true;
+
+runTests();
+</script>
+<script src="../../../../fast/js/resources/js-test-post.js"></script>
+</body>
+</html>

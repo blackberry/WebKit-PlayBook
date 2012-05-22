@@ -1,0 +1,3 @@
+Original iconURL is: http://test.com/oldfavicon.ico
+Setting new icon URL to: http://test.com/newfavion.ico
+New iconURL is: http://test.com/newfavion.ico

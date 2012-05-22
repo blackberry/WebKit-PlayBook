@@ -1,0 +1,10 @@
+Tests that dragging a file into an editable area does not insert a filename.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+FAIL The test should have resulted in navigation
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

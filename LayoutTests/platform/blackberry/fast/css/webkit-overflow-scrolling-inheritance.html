@@ -1,0 +1,41 @@
+<script>
+function test()
+{
+    if (window.layoutTestController)
+        layoutTestController.dumpAsText();
+
+    dumpOverflowScrollingValues(["outer", "middle", "inner"]);
+}
+
+function dumpOverflowScrollingValues(values)
+{
+    for (var i = 0; i < values.length; i++) {
+        var style = document.defaultView.getComputedStyle(document.getElementById(values[i]), "");
+        var value = style.getPropertyValue("-webkit-overflow-scrolling");
+        var text = "-webkit-overflow-scrolling of '" + values[i] + "'" + ": " + value + ";\n";
+        document.getElementById("exposed").textContent += text;
+    }
+}
+</script>
+
+<body onload="test()">
+<div id="outer" style="border: solid 2px #ff0000; background: #000000; color: #ffffff; padding: 4px; width: 300px; height: 400px; overflow: scroll;">
+    <p>scroll down</p>
+    <div id="middle" style="border: solid 2px #ff0000; background: pink; color: black; padding: 4px; width: 250px; height: 200px; position: relative; top:550px; overflow: auto; -webkit-overflow-scrolling: touch; ">
+        <p>scroll down</p>
+        <div id="inner" style="border: solid 2px #ff0000; background: green; color: black; padding: 4px; width: 200px; height: 150px; position: relative; top:550px; overflow: scroll; ">
+            1<br/>
+            2<br/>
+            3<br/>
+            4<br/>
+            5<br/>
+            6<br/>
+            7<br/>
+            8<br/>
+            9<br/>
+            0<br/>
+        </div>
+    </div>
+</div>
+<p id="exposed" style="white-space: pre"></p>
+</body>

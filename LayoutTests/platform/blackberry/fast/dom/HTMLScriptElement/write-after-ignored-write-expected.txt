@@ -1,0 +1,60 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x600
+  RenderBlock {HTML} at (0,0) size 800x600
+    RenderBody {BODY} at (8,8) size 784x576
+      RenderBlock {P} at (0,0) size 784x20
+        RenderText {#text} at (0,0) size 190x19
+          text run at (0,0) width 190: "Parser-created script elements:"
+      RenderBlock {P} at (0,36) size 784x20
+        RenderText {#text} at (0,0) size 156x19
+          text run at (0,0) width 156: "Already containing text: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (156,0) size 39x19
+            text run at (156,0) width 39: "PASS"
+      RenderBlock {P} at (0,72) size 784x20
+        RenderText {#text} at (0,0) size 225x19
+          text run at (0,0) width 225: "Already specifying missing source: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (225,0) size 39x19
+            text run at (225,0) width 39: "PASS"
+      RenderBlock {P} at (0,108) size 784x20
+        RenderText {#text} at (0,0) size 208x19
+          text run at (0,0) width 208: "Already specifying valid source: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (208,0) size 39x19
+            text run at (208,0) width 39: "PASS"
+      RenderBlock {P} at (0,144) size 784x20
+        RenderText {#text} at (0,0) size 147x19
+          text run at (0,0) width 147: "No text and no source: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (147,0) size 39x19
+            text run at (147,0) width 39: "PASS"
+      RenderBlock {P} at (0,180) size 784x20
+        RenderText {#text} at (0,0) size 123x19
+          text run at (0,0) width 123: "Using setAttribute: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (123,0) size 39x19
+            text run at (123,0) width 39: "PASS"
+      RenderBlock {HR} at (0,216) size 784x2 [border: (1px inset #000000)]
+      RenderBlock {P} at (0,234) size 784x20
+        RenderText {#text} at (0,0) size 236x19
+          text run at (0,0) width 236: "Dynamically-inserted script elements:"
+      RenderBlock {P} at (0,270) size 784x20
+        RenderText {#text} at (0,0) size 130x19
+          text run at (0,0) width 130: "Set before insertion: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (130,0) size 39x19
+            text run at (130,0) width 39: "PASS"
+      RenderBlock {P} at (0,306) size 784x20
+        RenderText {#text} at (0,0) size 118x19
+          text run at (0,0) width 118: "Set after insertion: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (118,0) size 39x19
+            text run at (118,0) width 39: "PASS"
+      RenderBlock {P} at (0,342) size 784x20
+        RenderText {#text} at (0,0) size 261x19
+          text run at (0,0) width 261: "Set twice before and once after insertion: "
+        RenderInline {SPAN} at (0,0) size 39x19
+          RenderText {#text} at (261,0) size 39x19
+            text run at (261,0) width 39: "PASS"

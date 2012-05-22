@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+<head>
+<title>Video embed within a object element</title>
+</head>
+<body>
+<h1>Video embed within a object element</h1>
+<p>This is a test of
+a video player rendered by an &lt;object&gt; element whose fallback content
+includes an &lt;embed&gt; element and some text.</p>
+<ul>
+<li>Press the play button to start the video</li>
+<li>While the video is playing, verify that the time display
+slider is updating automatically, that the fullscreen button
+is displayed, and that you can press the fullscreen button.</li>
+<li>Verify that you do not see fallback content, which
+includes text which says, "File cannot be played".</li>
+</ul>
+<OBJECT id="Video5"
+    DATA="./resources/counting-captioned.mov" TYPE="video/3gpp"  width="200" height="200" >
+    <param name="AutoStart" value="false">
+    <param name="src" value="./resources/counting-captioned.mov">
+
+    <EMBED type="video/3gpp"
+        name="video6"
+        width="200"
+        height="200"
+        src="./resources/counting-captioned.mov"
+        AutoStart="false"
+    >
+    </EMBED>
+
+    <a href ="./counting-captioned.mov">File cannot be played</a>
+</OBJECT>
+</body>
+</html>

@@ -1,0 +1,64 @@
+
+Tests for multi-file drag onto file input elements for https://bugs.webkit.org/show_bug.cgi?id=25862
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+Dragging a single (non-existant) file to a file input control:
+FAIL fileInput.value should be C:\fakepath\DRTFakeFile. Was .
+FAIL fileInput.files.length should be 1. Was 0.
+FAIL fileInput.files[0].name should be DRTFakeFile. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].type should be . Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].size should be 0. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileName should be DRTFakeFile. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileSize should be 0. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+Dragging a real file to a file input control:
+FAIL fileInput.value should be C:\fakepath\apple.gif. Was .
+FAIL fileInput.files.length should be 1. Was 0.
+FAIL fileInput.files[0].name should be apple.gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].type should be image/gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].size should be 1476. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileName should be apple.gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileSize should be 1476. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+Dragging a directory onto an file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+FIXME: Single-file input elements should refuse multi-file drags.  See https://bugs.webkit.org/show_bug.cgi?id=25913
+Dragging two files to a single-file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+Dragging a file and a directory onto a single-file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+FIXME:  elements should refuse drags including directories: https://bugs.webkit.org/show_bug.cgi?id=25879.  The page is given File objects corresponding to directories, but form submission will fail.
+Dragging a directory and a file onto a single-file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+Dragging two files to a multi-file input control:
+FAIL fileInput.value should be C:\fakepath\apple.gif. Was .
+FAIL fileInput.files.length should be 2. Was 0.
+FAIL fileInput.files[0].name should be apple.gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].type should be image/gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].size should be 1476. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileName should be apple.gif. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[0].fileSize should be 1476. Threw exception TypeError: Result of expression 'fileInput.files[0]' [undefined] is not an object.
+FAIL fileInput.files[1].name should be mozilla.gif. Threw exception TypeError: Result of expression 'fileInput.files[1]' [undefined] is not an object.
+FAIL fileInput.files[1].type should be image/gif. Threw exception TypeError: Result of expression 'fileInput.files[1]' [undefined] is not an object.
+FAIL fileInput.files[1].size should be 2593. Threw exception TypeError: Result of expression 'fileInput.files[1]' [undefined] is not an object.
+FAIL fileInput.files[1].fileName should be mozilla.gif. Threw exception TypeError: Result of expression 'fileInput.files[1]' [undefined] is not an object.
+FAIL fileInput.files[1].fileSize should be 2593. Threw exception TypeError: Result of expression 'fileInput.files[1]' [undefined] is not an object.
+Dragging a file and a directory onto a mutli-file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+FIXME:  elements should refuse drags including directories: https://bugs.webkit.org/show_bug.cgi?id=25879.  The page is given File objects corresponding to directories, but form submission will fail.
+Dragging a directory and a file onto a mutli-file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+Dragging to a disabled file input control:
+PASS fileInput.value is ""
+PASS fileInput.files.length is 0
+FAIL The final test case should have resulted in navigation
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

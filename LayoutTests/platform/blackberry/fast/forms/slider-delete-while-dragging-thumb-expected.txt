@@ -1,0 +1,8 @@
+This tests that events don't continue to target a slider thumb if it is deleted while dragging. 
+ 
+dragging slider
+
+deleting slider
+
+clicking button
+

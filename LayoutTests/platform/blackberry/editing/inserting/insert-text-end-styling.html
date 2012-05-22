@@ -1,0 +1,56 @@
+
+<html>
+<head>
+
+<style>
+.editing {
+    border: 2px solid red;
+    padding: 12px;
+    font-size: 24px;
+}
+</style>
+<script src=../editing.js language="JavaScript" type="text/JavaScript" ></script>
+
+<script>
+
+function moveNSpaces(n) {
+    for (i = 0; i < n; i++) {
+        moveSelectionForwardByCharacterCommand();
+    }
+}
+
+function editingTest() {
+    moveNSpaces(9);
+    extendSelectionForwardByWordCommand();
+    insertText("! bold");
+    moveNSpaces(6);
+    extendSelectionForwardByWordCommand();
+    insertText("!bold ");
+    moveNSpaces(6);
+    extendSelectionForwardByWordCommand();
+    insertText(" !bold");
+    moveNSpaces(6);
+    extendSelectionForwardByWordCommand();
+    insertText("!bold");
+
+}
+
+</script>
+
+<title>Editing Test</title>
+</head>
+<body>
+<p>This tests inserting a string adjacent to an ending style marker (bold).  The styling should not be lost. All text !notbold! should not be bold</p>
+<div contenteditable id="root" class="editing">
+<span id="test">Foo <b>bold </b> word <b> bold </b> word2 <b> bold </b> word3 <b> bold </b> word4 </span>
+</div>
+
+
+
+
+<script>
+runEditingTest();
+</script>
+
+</body>
+</html>

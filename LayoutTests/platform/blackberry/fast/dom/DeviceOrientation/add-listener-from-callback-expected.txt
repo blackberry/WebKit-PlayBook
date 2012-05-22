@@ -1,0 +1,7 @@
+FAIL: Timed out waiting for notifyDone to be called
+Tests that adding a new event listener from a callback works as expected.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+

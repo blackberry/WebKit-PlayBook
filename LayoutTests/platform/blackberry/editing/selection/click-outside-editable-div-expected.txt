@@ -1,0 +1,20 @@
+Ensure that clicking in the margins around editable divs does not grant focus.
+
+On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
+
+
+PASS Click @ 8, 8 did not cause focus.
+PASS Click @ 133, 8 did not cause focus.
+PASS Click @ 8, 133 did not cause focus.
+PASS Click @ 55, 55 did not cause focus.
+PASS Click @ 133, 55 did not cause focus.
+PASS Click @ 211, 55 did not cause focus.
+PASS Click @ 55, 133 did not cause focus.
+FAIL Click @ 211, 133 caused innerdiv to focus!
+PASS Click @ 55, 211 did not cause focus.
+FAIL Click @ 133, 211 caused innerdiv to focus!
+FAIL Click @ 211, 211 caused innerdiv to focus!
+PASS successfullyParsed is true
+
+TEST COMPLETE
+

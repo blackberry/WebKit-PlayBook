@@ -1,0 +1,46 @@
+<html>
+    <head>
+        <style type="text/css">
+            a:hover
+            {
+                color:red;
+            }
+            body{
+                border-width: 50px;
+                border-style: solid;
+                border-color: white;
+            }
+        </style>
+    </head>
+    <body>
+        <p>Start scrolling from one of the clickable elements below.</p>
+        <p>They should be shown in hovered while user finger is down, but get back to an unhovered state once the finger is released.</p>
+
+        <h3> Link </h3>
+            <p> A link is <a href="#">HERE</a> and it should not be RED after finger is released. </p>
+
+        <h3> Forms (1) </h3>
+        <form action="form_action.asp">
+            First name: <input type="text" name="FirstName" value="Mickey" /><br/>
+            Last name: <input type="text" name="LastName" value="Mouse" /><br/>
+            <input type="submit" value="Submit"/>
+        </form>
+
+        <h3> Forms (2) </h3>
+        <form>
+            <input type="checkbox" name="sex" id="male"/>
+            <label for="male">Male</label>
+            <br/><br/>
+            <input type="radio" name="sex" id="female"/>
+            <label for="female">Female</label>
+        </form>
+
+        <select id="numsel">
+            <option value="10">10</option>
+            <option value="20">20</option>
+            <option value="30">30</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+        </select>
+    </body>
+</html>

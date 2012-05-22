@@ -1,0 +1,325 @@
+2012-02-24  James Robinson  <jamesr@chromium.org>
+
+        [chromium] WebKit::setColorNames is a client API
+        https://bugs.webkit.org/show_bug.cgi?id=79539
+
+        Reviewed by Darin Fisher.
+
+        * Platform.gypi:
+        * chromium/public/WebColor.h:
+        (WebKit):
+
+2012-02-24  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r108860.
+        http://trac.webkit.org/changeset/108860
+        https://bugs.webkit.org/show_bug.cgi?id=79544
+
+        "Breaks Linux compile" (Requested by enne on #webkit).
+
+        * Platform.gypi:
+        * chromium/public/WebColor.h:
+        (WebKit):
+        * chromium/public/WebColorName.h: Renamed from Source/WebKit/chromium/public/WebColorName.h.
+        (WebKit):
+
+2012-02-24  James Robinson  <jamesr@chromium.org>
+
+        [chromium] WebKit::setColorNames is a client API
+        https://bugs.webkit.org/show_bug.cgi?id=79539
+
+        Reviewed by Darin Fisher.
+
+        * Platform.gypi:
+        * chromium/public/WebColor.h:
+        (WebKit):
+
+2012-02-22  James Robinson  <jamesr@chromium.org>
+
+        [chromium] Move WebGraphicsContext3D header into the Platform directory
+        https://bugs.webkit.org/show_bug.cgi?id=79301
+
+        Reviewed by Adam Barth.
+
+        Moves WebGraphicsContext3D and WebNonCopyable (which WGC3D depends on).
+
+        * Platform.gypi:
+        * chromium/public/WebGraphicsContext3D.h: Copied from Source/WebKit/chromium/public/platform/WebGraphicsContext3D.h.
+        (WebKit):
+        (WebGraphicsContext3D):
+        (ActiveInfo):
+        (WebKit::WebGraphicsContext3D::Attributes::Attributes):
+        (Attributes):
+        (WebGraphicsContextLostCallback):
+        (WebKit::WebGraphicsContext3D::WebGraphicsContextLostCallback::~WebGraphicsContextLostCallback):
+        (WebGraphicsErrorMessageCallback):
+        (WebKit::WebGraphicsContext3D::WebGraphicsErrorMessageCallback::~WebGraphicsErrorMessageCallback):
+        (WebGraphicsSwapBuffersCompleteCallbackCHROMIUM):
+        (WebKit::WebGraphicsContext3D::WebGraphicsSwapBuffersCompleteCallbackCHROMIUM::~WebGraphicsSwapBuffersCompleteCallbackCHROMIUM):
+        (WebGraphicsMemoryAllocationChangedCallbackCHROMIUM):
+        (WebKit::WebGraphicsContext3D::WebGraphicsMemoryAllocationChangedCallbackCHROMIUM::~WebGraphicsMemoryAllocationChangedCallbackCHROMIUM):
+        (WebKit::WebGraphicsContext3D::~WebGraphicsContext3D):
+        (WebKit::WebGraphicsContext3D::setMemoryAllocationChangedCallbackCHROMIUM):
+        (WebKit::WebGraphicsContext3D::setParentContext):
+        (WebKit::WebGraphicsContext3D::setSwapBuffersCompleteCallbackCHROMIUM):
+        (WebKit::WebGraphicsContext3D::rateLimitOffscreenContextCHROMIUM):
+        (WebKit::WebGraphicsContext3D::setContextLostCallback):
+        (WebKit::WebGraphicsContext3D::setErrorMessageCallback):
+        (WebKit::WebGraphicsContext3D::getGraphicsResetStatusARB):
+        (WebKit::WebGraphicsContext3D::getTranslatedShaderSourceANGLE):
+        (WebKit::WebGraphicsContext3D::texImageIOSurface2DCHROMIUM):
+        (WebKit::WebGraphicsContext3D::texStorage2DEXT):
+        (WebKit::WebGraphicsContext3D::onCreateGrGLInterface):
+        * chromium/public/WebNonCopyable.h: Copied from Source/WebKit/chromium/public/platform/WebNonCopyable.h.
+        (WebKit):
+        (WebNonCopyable):
+        (WebKit::WebNonCopyable::WebNonCopyable):
+        (WebKit::WebNonCopyable::~WebNonCopyable):
+
+2012-02-23  James Robinson  <jamesr@chromium.org>
+
+        [chromium] Move Web*Layer* headers into Platform
+        https://bugs.webkit.org/show_bug.cgi?id=79425
+
+        Reviewed by Adam Barth.
+
+        This moves the Web*Layer* headers and their dependencies from WebKit/chromium/public/platform/ into
+        Platform/chromium/public.
+
+        * Platform.gypi:
+        * chromium/public/WebCanvas.h: Copied from Source/WebKit/chromium/public/platform/WebCanvas.h.
+        (WebKit):
+        * chromium/public/WebColor.h: Copied from Source/WebKit/chromium/public/platform/WebColor.h.
+        (WebKit):
+        * chromium/public/WebColorName.h: Copied from Source/WebKit/chromium/public/platform/WebColorName.h.
+        (WebKit):
+        * chromium/public/WebContentLayer.h: Copied from Source/WebKit/chromium/public/platform/WebContentLayer.h.
+        (WebKit):
+        (WebContentLayer):
+        (WebKit::WebContentLayer::WebContentLayer):
+        (WebKit::WebContentLayer::~WebContentLayer):
+        (WebKit::WebContentLayer::operator=):
+        * chromium/public/WebContentLayerClient.h: Copied from Source/WebKit/chromium/public/platform/WebContentLayerClient.h.
+        (WebKit):
+        (WebContentLayerClient):
+        (WebKit::WebContentLayerClient::~WebContentLayerClient):
+        * chromium/public/WebExternalTextureLayer.h: Copied from Source/WebKit/chromium/public/platform/WebExternalTextureLayer.h.
+        (WebKit):
+        (WebExternalTextureLayer):
+        (WebKit::WebExternalTextureLayer::WebExternalTextureLayer):
+        (WebKit::WebExternalTextureLayer::~WebExternalTextureLayer):
+        (WebKit::WebExternalTextureLayer::operator=):
+        * chromium/public/WebLayer.h: Copied from Source/WebKit/chromium/public/platform/WebLayer.h.
+        (WebKit):
+        (WebLayer):
+        (WebKit::WebLayer::WebLayer):
+        (WebKit::WebLayer::~WebLayer):
+        (WebKit::WebLayer::operator=):
+        (WebKit::WebLayer::isNull):
+        (WebKit::WebLayer::to):
+        (WebKit::WebLayer::toConst):
+        (WebKit::WebLayer::unwrap):
+        (WebKit::WebLayer::constUnwrap):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebLayerTreeView.h: Copied from Source/WebKit/chromium/public/platform/WebLayerTreeView.h.
+        (WebCore):
+        (WebKit):
+        (WebLayerTreeView):
+        (WebKit::WebLayerTreeView::Settings::Settings):
+        (Settings):
+        (WebKit::WebLayerTreeView::WebLayerTreeView):
+        (WebKit::WebLayerTreeView::~WebLayerTreeView):
+        (WebKit::WebLayerTreeView::operator=):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebLayerTreeViewClient.h: Copied from Source/WebKit/chromium/public/platform/WebLayerTreeViewClient.h.
+        (WebKit):
+        (WebLayerTreeViewClient):
+        (WebKit::WebLayerTreeViewClient::~WebLayerTreeViewClient):
+        * chromium/public/WebPrivatePtr.h: Copied from Source/WebKit/chromium/public/platform/WebPrivatePtr.h.
+        (WebKit):
+        (WebPrivatePtr):
+        (WebKit::WebPrivatePtr::WebPrivatePtr):
+        (WebKit::WebPrivatePtr::~WebPrivatePtr):
+        (WebKit::WebPrivatePtr::isNull):
+        (WebKit::WebPrivatePtr::reset):
+        (WebKit::WebPrivatePtr::operator=):
+        (WebKit::WebPrivatePtr::get):
+        (WebKit::WebPrivatePtr::operator->):
+        (WebKit::WebPrivatePtr::assign):
+        * chromium/public/WebSolidColorLayer.h: Copied from Source/WebKit/chromium/public/platform/WebSolidColorLayer.h.
+        (WebKit):
+        (WebSolidColorLayer):
+
+2012-02-08  James Robinson  <jamesr@chromium.org>
+
+        r107042 caused compile breakages on chromium try bots
+        https://bugs.webkit.org/show_bug.cgi?id=78125
+
+        Reviewed by Adam Barth.
+
+        Replace the copy script with a copies GYP action since the MSVS generator tracks dependencies on a per-file
+        basis.
+
+        * Platform.gyp/Platform.gyp:
+        * Platform.gyp/copy_webcore_headers.py: Removed.
+
+2012-02-07  James Robinson  <jamesr@chromium.org>
+
+        [chromium] Move geometry headers in Platform API to Platform directory
+        https://bugs.webkit.org/show_bug.cgi?id=78067
+
+        Reviewed by Adam Barth.
+
+        This moves several geometry-related headers in the chromium WebKit platform API to Platform/chromium/public.
+        These require a bit of extra work since when WEBKIT_IMPLEMENTATION is set they #include headers from
+        WebCore/platform such as IntPoint so that the implementations of several functions can be inlined. Since we do
+        not want to add anything in WebCore to the include path of projects that depend on the Platform API this poses a
+        bit of an issue. I've added an extra build step to copy the specific headers used into the
+        SHARED_INTERMEDIATE_DIR to preserve this inlining.
+        
+        Eventually we'll move the cross-platform code, including these headers, into somewhere under Platform/, but doing
+        that requires non-trivial modifications to every build system in WebKit.
+
+        * Platform.gyp/Platform.gyp:
+        * Platform.gyp/copy_webcore_headers.py: Added.
+        (CopyHeaders):
+        (Main):
+        * chromium/public/WebFloatPoint.h: Copied from Source/WebKit/chromium/public/platform/WebFloatPoint.h.
+        (WebKit):
+        (WebFloatPoint):
+        (WebKit::WebFloatPoint::WebFloatPoint):
+        (WebKit::WebFloatPoint::operator=):
+        (WebKit::WebFloatPoint::operator WebCore::FloatPoint):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebFloatQuad.h: Copied from Source/WebKit/chromium/public/platform/WebFloatQuad.h.
+        (WebKit):
+        (WebFloatQuad):
+        (WebKit::WebFloatQuad::WebFloatQuad):
+        (WebKit::WebFloatQuad::operator=):
+        * chromium/public/WebFloatRect.h: Copied from Source/WebKit/chromium/public/platform/WebFloatRect.h.
+        (WebKit):
+        (WebFloatRect):
+        (WebKit::WebFloatRect::isEmpty):
+        (WebKit::WebFloatRect::WebFloatRect):
+        (WebKit::WebFloatRect::operator=):
+        (WebKit::WebFloatRect::operator WebCore::FloatRect):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebPoint.h: Copied from Source/WebKit/chromium/public/platform/WebPoint.h.
+        (WebKit):
+        (WebPoint):
+        (WebKit::WebPoint::WebPoint):
+        (WebKit::WebPoint::operator=):
+        (WebKit::WebPoint::operator WebCore::IntPoint):
+        (WebKit::WebPoint::operator gfx::Point):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebRect.h: Copied from Source/WebKit/chromium/public/platform/WebRect.h.
+        (WebKit):
+        (WebRect):
+        (WebKit::WebRect::isEmpty):
+        (WebKit::WebRect::WebRect):
+        (WebKit::WebRect::operator=):
+        (WebKit::WebRect::operator WebCore::IntRect):
+        (WebKit::WebRect::operator gfx::Rect):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/public/WebSize.h: Copied from Source/WebKit/chromium/public/platform/WebSize.h.
+        (WebKit):
+        (WebSize):
+        (WebKit::WebSize::isEmpty):
+        (WebKit::WebSize::WebSize):
+        (WebKit::WebSize::operator=):
+        (WebKit::WebSize::operator WebCore::IntSize):
+        (WebKit::WebSize::operator gfx::Size):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+
+2012-01-19  Joi Sigurdsson  <joi@chromium.org>
+
+        Enable use of precompiled headers in Chromium port on Windows.
+
+        Bug 76381 - Use precompiled headers in Chromium port on Windows
+        https://bugs.webkit.org/show_bug.cgi?id=76381
+
+        Reviewed by Tony Chang.
+
+        * Platform.gyp/Platform.gyp: Include WinPrecompile.gypi.
+
+2012-01-04  James Robinson  <jamesr@chromium.org>
+
+        [chromium] Compile fix, rename libplatform.a to libwebkit_platform.a to avoid collision with nacl
+
+        * Platform.gyp/Platform.gyp:
+
+2012-01-04  James Robinson  <jamesr@chromium.org>
+
+        [chromium] Move WebMimeRegistry and dependencies to Source/Platform
+        https://bugs.webkit.org/show_bug.cgi?id=74583
+
+        Reviewed by Darin Fisher.
+
+        This creates a skeleton directory structure for the chromium WebKit platform API and moves WebMimeRegistry.h
+        along with its dependencies (WebString and WebCString) to their final location.
+
+        * Platform.gyp/Platform.gyp: Added.
+        * Platform.gypi: Added.
+        * chromium/platform/WebCString.h: Copied from Source/WebKit/chromium/public/platform/WebCString.h.
+        (WebKit::WebCString::~WebCString):
+        (WebKit::WebCString::WebCString):
+        (WebKit::WebCString::operator=):
+        (WebKit::WebCString::isEmpty):
+        (WebKit::WebCString::isNull):
+        (WebKit::WebCString::operator std::string):
+        (WebKit::WebCString::fromUTF16):
+        (WebKit::operator<):
+        * chromium/platform/WebCommon.h: Copied from Source/WebKit/chromium/public/platform/WebCommon.h.
+        * chromium/platform/WebMimeRegistry.h: Copied from Source/WebKit/chromium/public/platform/WebMimeRegistry.h.
+        (WebKit::WebMimeRegistry::~WebMimeRegistry):
+        * chromium/platform/WebString.h: Copied from Source/WebKit/chromium/public/platform/WebString.h.
+        (WebKit::WebString::~WebString):
+        (WebKit::WebString::WebString):
+        (WebKit::WebString::operator=):
+        (WebKit::WebString::isEmpty):
+        (WebKit::WebString::isNull):
+        (WebKit::WebString::operator string16):
+        (WebKit::WebString::operator NullableString16):
+        (WebKit::WebString::fromUTF8):
+        (WebKit::operator==):
+        (WebKit::operator!=):
+        * chromium/src/WebCString.cpp: Renamed from Source/WebKit/chromium/src/WebCString.cpp.
+        (WebKit::WebCString::compare):
+        (WebKit::WebCString::reset):
+        (WebKit::WebCString::assign):
+        (WebKit::WebCString::length):
+        (WebKit::WebCString::data):
+        (WebKit::WebCString::utf16):
+        (WebKit::WebCString::fromUTF16):
+        (WebKit::WebCString::WebCString):
+        (WebKit::WebCString::operator=):
+        (WebKit::WebCString::operator WTF::CString):
+        * chromium/src/WebString.cpp: Renamed from Source/WebKit/chromium/src/WebString.cpp.
+        (WebKit::WebString::reset):
+        (WebKit::WebString::assign):
+        (WebKit::WebString::length):
+        (WebKit::WebString::data):
+        (WebKit::WebString::utf8):
+        (WebKit::WebString::fromUTF8):
+        (WebKit::WebString::equals):
+        (WebKit::WebString::WebString):
+        (WebKit::WebString::operator=):
+        (WebKit::WebString::operator WTF::String):
+        (WebKit::WebString::operator WTF::AtomicString):
+
+2011-11-02  Adam Barth  <abarth@webkit.org>
+
+        Add stubs for WTF and Platform
+        https://bugs.webkit.org/show_bug.cgi?id=71492
+
+        Reviewed by Eric Seidel.
+
+        This patch creates the Platform directory, which begins the process of
+        moving Platform out of WebCore.

@@ -1,0 +1,72 @@
+<html>
+<head>
+<script type="text/javascript">
+
+Date.prototype.pattern = function(fmt) {
+    var o = {
+    "M+" : this.getMonth()+1,
+    "d+" : this.getDate(),
+    "h+" : this.getHours()%12 == 0 ? 12 : this.getHours()%12,
+    "H+" : this.getHours(),
+    "m+" : this.getMinutes(),
+    "s+" : this.getSeconds(),
+    "q+" : Math.floor((this.getMonth()+3)/3),
+    "S" : this.getMilliseconds()
+    };
+    if(/(y+)/.test(fmt)){
+        fmt=fmt.replace(RegExp.$1, (this.getFullYear()+"").substr(4 - RegExp.$1.length));
+    }
+    if(/(E+)/.test(fmt)){
+        fmt=fmt.replace(RegExp.$1, ((RegExp.$1.length>1) ? (RegExp.$1.length>2 ? "\u661f\u671f" : "\u5468") : ""));
+    }
+    for(var k in o){
+        if(new RegExp("("+ k +")").test(fmt)){
+            fmt = fmt.replace(RegExp.$1, (RegExp.$1.length==1) ? (o[k]) : (("00"+ o[k]).substr((""+ o[k]).length)));
+        }
+    }
+    return fmt;
+}
+function onLoad() {
+
+  var navigationStart = new Date(performance.timing.navigationStart);
+  var domainLookupStart = new Date(performance.timing.domainLookupStart);
+  var domainLookupEnd = new Date(performance.timing.domainLookupEnd);
+  var connectStart = new Date(performance.timing.connectStart);
+  var connectEnd = new Date(performance.timing.connectEnd);
+  var requestStart = new Date(performance.timing.requestStart);
+  var responseStart = new Date(performance.timing.responseStart);
+  var responseEnd = new Date(performance.timing.responseEnd);
+  var totalJSHeap = performance.memory.totalJSHeapSize;
+  var usedJSHeap = performance.memory.usedJSHeapSize;
+  var jsHeapLimit = performance.memory.jsHeapSizeLimit;
+  var navigationType = performance.navigation.type;
+  var redirectCount = performance.navigation.redirectCount;
+
+  var format = "yyyy-MM-dd hh:mm:ss:S";
+  a = "performance.timing.navigationStart = " + navigationStart.pattern(format) + "\n";
+  a += "performance.timing.domainLookupStart = " + domainLookupStart.pattern(format) + "\n";
+  a += "performance.timing.domainLookupEnd = " + domainLookupEnd.pattern(format) + "\n";
+  a += "performance.timing.connectStart = " + connectStart.pattern(format) + "\n";
+  a += "performance.timing.connectEnd = " + connectEnd.pattern(format) + "\n";
+  a += "performance.timing.requestStart = " + requestStart.pattern(format) + "\n";
+  a += "performance.timing.responseStart = " + responseStart.pattern(format) + "\n";
+  a += "performance.timing.responseEnd = " + responseEnd.pattern(format) + "\n";
+  a += "performance.memory.totalJSHeapSize = " + performance.memory.totalJSHeapSize + "\n";
+  a += "performance.memory.usedJSHeapSize = " + performance.memory.usedJSHeapSize + "\n";
+  a += "performance.memory.jsHeapSizeLimit = " + performance.memory.jsHeapSizeLimit + "\n";
+  a += "performance.navigation.type = " + performance.navigation.type + "\n";
+  a += "performance.navigation.redirectCount = " + performance.navigation.redirectCount + "\n";
+
+  place.innerText = a;
+}
+
+</script>
+
+<title> Web Timing </title>
+</head>
+<body onload="onLoad()">
+<h1> This is the test case for Web Timing. If you see the performance data below, the test case PASS, otherwise, it FAILS </h1>
+
+<div id="place"> </div>
+</body>
+</html>

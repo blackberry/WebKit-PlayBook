@@ -1,0 +1,47 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1"/>
+<meta name="viewport" content="width=1600"/>
+<script src="resources/meta-viewport-utilities.js"></script>
+<script>
+function updateDisplay() {
+    var square = document.getElementById("square");
+    var scale = getScale();
+
+    logStart(square);
+    log(square, "scale: " + scale);
+}
+
+window.onload = updateDisplay;
+window.onresize = updateDisplay;
+window.onorientationchange = updateDisplay;
+</script>
+<style>
+/* This looks silly, but it seems device-width is only available as a media
+   query, and not as a value I can use in CSS. */
+@media only screen and (device-width:1024px) {
+    #instr { width:1024px; }
+}
+@media only screen and (device-width:640px) {
+    #instr { width:640px; }
+}
+@media only screen and (device-width:480px) {
+    #instr { width:480px; }
+}
+@media only screen and (device-width:360px) {
+    #instr { width:360px; }
+}
+#instr { background-color:yellow }
+</style>
+<title>Compositing meta viewport texture scale</title>
+</head>
+<body style="-webkit-transform:translate3d(0,0,0);">
+<div id="instr">
+If this text appears pixelated when zoomed in to scale 1.0, this test FAILED. Otherwise, it PASSED.
+Double-tap the lorem ipsum to zoom to approximately 1.0 (if this page was loaded in an orientation where width==device-width).
+<br/>
+Lorem ipsum dolor sit amet, consectetur adipisicing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.
+</div>
+<div id="square"></div>
+</body>
+</html>

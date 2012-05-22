@@ -1,0 +1,41 @@
+layer at (0,0) size 800x600
+  RenderView at (0,0) size 800x600
+layer at (0,0) size 800x296
+  RenderBlock {HTML} at (0,0) size 800x296
+    RenderBody {BODY} at (8,8) size 784x280
+      RenderBlock {DIV} at (0,0) size 784x37
+        RenderSlider {INPUT} at (2,2) size 129x30 [bgcolor=#FFFFFF]
+          RenderDeprecatedFlexibleBox {DIV} at (0,0) size 129x30
+            RenderBlock {DIV} at (0,2) size 114x25
+            RenderBlock {DIV} at (114,2) size 15x25
+      RenderBlock {DIV} at (0,37) size 784x32
+        RenderSlider {INPUT} at (2,2) size 129x25 [bgcolor=#FFFFFF]
+          RenderDeprecatedFlexibleBox {DIV} at (0,0) size 129x25
+            RenderBlock {DIV} at (0,0) size 114x25
+            RenderBlock {DIV} at (114,0) size 15x25
+      RenderBlock {DIV} at (0,69) size 784x32
+        RenderSlider {INPUT} at (2,2) size 129x25 [bgcolor=#FFFFFF]
+          RenderDeprecatedFlexibleBox {DIV} at (0,0) size 129x25
+            RenderBlock {DIV} at (0,0) size 114x25
+            RenderBlock {DIV} at (114,0) size 15x25
+      RenderBlock {DIV} at (0,101) size 784x147
+        RenderSlider {INPUT} at (64,2) size 129x140 [bgcolor=#FFFFFF]
+          RenderDeprecatedFlexibleBox {DIV} at (0,0) size 129x140
+            RenderBlock {DIV} at (52,0) size 25x125
+            RenderBlock {DIV} at (52,125) size 25x15
+      RenderBlock {DIV} at (0,248) size 784x32
+layer at (67,12) size 15x25
+  RenderBlock (relative positioned) {DIV} at (0,0) size 15x25
+layer at (10,47) size 15x25
+  RenderBlock (relative positioned) {DIV} at (0,0) size 15x25
+layer at (124,79) size 15x25
+  RenderBlock (relative positioned) {DIV} at (0,0) size 15x25
+layer at (124,173) size 25x15
+  RenderBlock (relative positioned) {DIV} at (0,0) size 25x15
+layer at (10,258) size 129x25
+  RenderSlider {INPUT} at (2,2) size 129x25 [bgcolor=#FFFFFF]
+    RenderDeprecatedFlexibleBox {DIV} at (0,0) size 129x25
+      RenderBlock {DIV} at (0,0) size 114x25
+      RenderBlock {DIV} at (114,0) size 15x25
+layer at (95,258) size 15x25
+  RenderBlock (relative positioned) {DIV} at (0,0) size 15x25
