@@ -40,8 +40,8 @@
 #include "V8Proxy.h"
 #include "WebDevToolsFrontendClient.h"
 #include "WebDevToolsFrontendImpl.h"
-#include "WebFloatPoint.h"
-#include "WebString.h"
+#include "platform/WebFloatPoint.h"
+#include "platform/WebString.h"
 
 using namespace WebCore;
 
@@ -77,7 +77,6 @@ void InspectorFrontendClientImpl::windowObjectCleared()
 
 void InspectorFrontendClientImpl::frontendLoaded()
 {
-    m_frontend->frontendLoaded();
 }
 
 void InspectorFrontendClientImpl::moveWindowBy(float x, float y)
@@ -92,8 +91,6 @@ String InspectorFrontendClientImpl::localizedStringsURL()
 
 String InspectorFrontendClientImpl::hiddenPanels()
 {
-    if (m_client->shouldHideScriptsPanel())
-        return "scripts";
     return "";
 }
 
@@ -103,11 +100,6 @@ void InspectorFrontendClientImpl::bringToFront()
 }
 
 void InspectorFrontendClientImpl::closeWindow()
-{
-    m_client->closeWindow();
-}
-
-void InspectorFrontendClientImpl::disconnectFromBackend()
 {
     m_client->closeWindow();
 }
@@ -122,9 +114,24 @@ void InspectorFrontendClientImpl::requestDetachWindow()
     m_client->requestUndockWindow();
 }
 
+void InspectorFrontendClientImpl::requestSetDockSide(const String& side)
+{
+    m_client->requestSetDockSide(side);
+}
+
 void InspectorFrontendClientImpl::changeAttachedWindowHeight(unsigned)
 {
     // Do nothing;
+}
+
+void InspectorFrontendClientImpl::openInNewTab(const String& url)
+{
+    m_client->openInNewTab(url);
+}
+
+bool InspectorFrontendClientImpl::canSaveAs()
+{
+    return true;
 }
 
 void InspectorFrontendClientImpl::saveAs(const String& fileName, const String& content)

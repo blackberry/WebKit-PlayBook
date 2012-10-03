@@ -23,18 +23,13 @@
 #include "DeviceOrientation.h"
 #include "DeviceOrientationClient.h"
 
-#include <QObject>
-
-class QWebPage;
-
 namespace WebCore {
 
 class DeviceOrientationProviderQt;
 
-class DeviceOrientationClientQt : public QObject, public DeviceOrientationClient {
-    Q_OBJECT
+class DeviceOrientationClientQt : public DeviceOrientationClient {
 public:
-    DeviceOrientationClientQt(QWebPage*);
+    DeviceOrientationClientQt();
     virtual ~DeviceOrientationClientQt();
 
     virtual void setController(DeviceOrientationController*);
@@ -43,12 +38,7 @@ public:
     virtual DeviceOrientation* lastOrientation() const;
     virtual void deviceOrientationControllerDestroyed();
 
-public Q_SLOTS:
-    void changeDeviceOrientation(DeviceOrientation*);
-
 private:
-    QWebPage* m_page;
-    DeviceOrientationController* m_controller;
     DeviceOrientationProviderQt* m_provider;
 };
 

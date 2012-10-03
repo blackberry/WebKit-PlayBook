@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,7 +35,6 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "GraphicsContext.h"
 #include "GraphicsLayerBlackBerry.h"
 #include "LayerData.h"
 #include "LayerTiler.h"
@@ -44,7 +43,6 @@
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
-#include <wtf/text/StringHash.h>
 
 class SkBitmap;
 
@@ -97,7 +95,7 @@ public:
 
     void setOpacity(float opacity) { m_opacity = opacity; setNeedsCommit(); }
 
-    void setOpaque(bool opaque) { m_opaque = opaque; setNeedsCommit(); }
+    void setOpaque(bool isOpaque) { m_isOpaque = isOpaque; setNeedsCommit(); }
 
     void setPosition(const FloatPoint& position) { m_position = position; setNeedsCommit(); }
 
@@ -111,7 +109,7 @@ public:
 
     void setSublayerTransform(const TransformationMatrix& transform) { m_sublayerTransform = transform; setNeedsCommit(); }
 
-    LayerWebKitThread* superlayer() const;
+    LayerWebKitThread* superlayer() const { return m_superlayer; }
 
     void setTransform(const TransformationMatrix& transform) { m_transform = transform; setNeedsCommit(); }
 
@@ -128,11 +126,6 @@ public:
 
     bool drawsContent() const { return m_owner && m_owner->drawsContent(); }
     void setDrawable(bool);
-
-#if ENABLE(VIDEO)
-    void setMediaPlayer(MediaPlayer*);
-#endif
-    void setHolePunchRect(const IntRect&);
 
     void commitOnWebKitThread(double scale);
     void commitOnCompositingThread();
@@ -152,17 +145,21 @@ public:
     void setRunningAnimations(const Vector<RefPtr<LayerAnimation> >& animations) { m_runningAnimations = animations; setNeedsCommit(); }
     void setSuspendedAnimations(const Vector<RefPtr<LayerAnimation> >& animations) { m_suspendedAnimations = animations; setNeedsCommit(); }
 
+    static IntRect mapFromTransformed(const IntRect&, double scale);
+
 protected:
     LayerWebKitThread(LayerType, GraphicsLayerBlackBerry* owner);
 
     void setNeedsTexture(bool needsTexture) { m_needsTexture = needsTexture; }
     void setLayerProgramShader(LayerData::LayerProgramShader shader) { m_layerProgramShader = shader; }
     void createFrontBufferLock();
-    bool isDrawable() { return m_isDrawable; }
+    bool isDrawable() const { return m_isDrawable; }
 
     void startAnimations(double time);
     void updateVisibility();
     void updateTextureContents(double scale);
+
+    virtual void boundsChanged() { }
     virtual void updateTextureContentsIfNeeded();
 
 private:
@@ -192,10 +189,10 @@ private:
 
     RefPtr<LayerCompositingThread> m_layerCompositingThread;
     RefPtr<LayerTiler> m_tiler;
-    bool m_isDrawable;
-    bool m_isMask;
     FloatSize m_absoluteOffset;
     double m_scale; // Scale applies only to content layers
+    bool m_isDrawable;
+    bool m_isMask;
 };
 
 }

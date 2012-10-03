@@ -41,18 +41,9 @@
 namespace WebCore {
 
 History::History(Frame* frame)
-    : m_frame(frame)
+    : DOMWindowProperty(frame)
+    , m_lastStateObjectRequested(0)
 {
-}
-
-Frame* History::frame() const
-{
-    return m_frame;
-}
-
-void History::disconnectFrame()
-{
-    m_frame = 0;
 }
 
 unsigned History::length() const
@@ -62,6 +53,33 @@ unsigned History::length() const
     if (!m_frame->page())
         return 0;
     return m_frame->page()->backForward()->count();
+}
+
+SerializedScriptValue* History::state()
+{
+    m_lastStateObjectRequested = stateInternal();
+    return m_lastStateObjectRequested;
+}
+
+SerializedScriptValue* History::stateInternal() const
+{
+    if (!m_frame)
+        return 0;
+
+    if (HistoryItem* historyItem = m_frame->loader()->history()->currentItem())
+        return historyItem->stateObject();
+
+    return 0;
+}
+
+bool History::stateChanged() const
+{
+    return m_lastStateObjectRequested != stateInternal();
+}
+
+bool History::isSameAsCurrentState(SerializedScriptValue* state) const
+{
+    return state == stateInternal();
 }
 
 void History::back()

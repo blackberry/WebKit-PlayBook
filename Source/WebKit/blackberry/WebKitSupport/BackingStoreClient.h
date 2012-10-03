@@ -106,15 +106,6 @@ public:
     /* Called from within WebKit via ChromeClientBlackBerry */
     void checkOriginOfCurrentScrollOperation();
 
-    // FIXME: Leaving the below lines commented out as a reference for us to soon be sure if we need these
-    // methods and class variables be moved from WebPage to BackingStoreClient.
-    // Notification methods that deliver changes to the real geometry of the device as specified above.
-    // void notifyTransformChanged();
-    // void notifyTransformedContentsSizeChanged();
-    // void notifyTransformedScrollChanged();
-    // m_overflowExceedsContentsSize = true;
-    // haspendingscrollevent
-
 private:
     BackingStoreClient(WebCore::Frame*, WebCore::Frame* parentFrame, WebPage* parentPage);
 

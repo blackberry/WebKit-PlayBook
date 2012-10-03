@@ -123,7 +123,7 @@ public:
         // FIXME: deprecatedGetDOMStructure uses the prototype off of the wrong global object
         // We need to pass in the right global object for "i".
         Structure* domStructure = WebCore::deprecatedGetDOMStructure<JavaRuntimeMethod>(exec);
-        JavaRuntimeMethod* method = new (allocateCell<JavaRuntimeMethod>(*exec->heap())) JavaRuntimeMethod(globalObject, domStructure, list);
+        JavaRuntimeMethod* method = new (NotNull, allocateCell<JavaRuntimeMethod>(*exec->heap())) JavaRuntimeMethod(globalObject, domStructure, list);
         method->finishCreation(exec->globalData(), name);
         return method;
     }
@@ -194,7 +194,7 @@ JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod
     for (i = 0; i < count; i++) {
         CString javaClassName = jMethod->parameterAt(i).utf8();
         jArgs[i] = convertValueToJValue(exec, m_rootObject.get(), exec->argument(i), javaTypeFromClassName(javaClassName.data()), javaClassName.data());
-        LOG(LiveConnect, "JavaInstance::invokeMethod arg[%d] = %s", i, exec->argument(i).toString(exec).ascii().data());
+        LOG(LiveConnect, "JavaInstance::invokeMethod arg[%d] = %s", i, exec->argument(i).toString(exec)->value(exec).ascii().data());
     }
 
     jvalue result;
@@ -214,7 +214,7 @@ JSValue JavaInstance::invokeMethod(ExecState* exec, RuntimeMethod* runtimeMethod
         jmethodID methodId = getMethodID(obj, jMethod->name().utf8().data(), jMethod->signature());
         handled = dispatchJNICall(exec, rootObject->nativeHandle(), obj, jMethod->isStatic(), jMethod->returnType(), methodId, jArgs.data(), result, callingURL, exceptionDescription);
         if (exceptionDescription) {
-            throwError(exec, createError(exec, exceptionDescription.toString(exec)));
+            throwError(exec, createError(exec, exceptionDescription.toString(exec)->value(exec)));
             return jsUndefined();
         }
     }

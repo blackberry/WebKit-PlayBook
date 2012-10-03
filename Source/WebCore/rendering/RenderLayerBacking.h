@@ -99,7 +99,7 @@ public:
 
     void setContentsNeedDisplay();
     // r is in the coordinate space of the layer's render object
-    void setContentsNeedDisplayInRect(const LayoutRect&);
+    void setContentsNeedDisplayInRect(const IntRect&);
 
     // Notification from the renderer that its content changed.
     void contentChanged(RenderLayer::ContentChangeType);
@@ -116,29 +116,30 @@ public:
     void suspendAnimations(double time = 0);
     void resumeAnimations();
 
-    LayoutRect compositedBounds() const;
-    void setCompositedBounds(const LayoutRect&);
+    IntRect compositedBounds() const;
+    void setCompositedBounds(const IntRect&);
     void updateCompositedBounds();
     
     void updateAfterWidgetResize();
 
     // GraphicsLayerClient interface
+    virtual bool shouldUseTileCache(const GraphicsLayer*) const;
     virtual void notifyAnimationStarted(const GraphicsLayer*, double startTime);
     virtual void notifySyncRequired(const GraphicsLayer*);
 
-    virtual void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const LayoutRect& clip);
 #if PLATFORM(BLACKBERRY)
     virtual bool contentsVisible(const GraphicsLayer*, const IntRect& contentRect) const;
 #endif
+    virtual void paintContents(const GraphicsLayer*, GraphicsContext&, GraphicsLayerPaintingPhase, const IntRect& clip);
 
     virtual float deviceScaleFactor() const;
     virtual float pageScaleFactor() const;
     virtual void didCommitChangesForLayer(const GraphicsLayer*) const;
 
-    virtual bool showDebugBorders() const;
-    virtual bool showRepaintCounter() const;
+    virtual bool showDebugBorders(const GraphicsLayer*) const;
+    virtual bool showRepaintCounter(const GraphicsLayer*) const;
 
-    LayoutRect contentsBox() const;
+    IntRect contentsBox() const;
     
     // For informative purposes only.
     CompositingLayerType compositingLayerType() const;
@@ -147,6 +148,10 @@ public:
     GraphicsLayer* layerForVerticalScrollbar() const { return m_layerForVerticalScrollbar.get(); }
     GraphicsLayer* layerForScrollCorner() const { return m_layerForScrollCorner.get(); }
 
+#if ENABLE(CSS_FILTERS)
+    bool canCompositeFilters() const { return m_canCompositeFilters; }
+#endif
+    
 private:
     void createPrimaryGraphicsLayer();
     void destroyGraphicsLayers();
@@ -167,17 +172,22 @@ private:
 
     GraphicsLayerPaintingPhase paintingPhaseForPrimaryLayer() const;
     
-    LayoutSize contentOffsetInCompostingLayer() const;
+    IntSize contentOffsetInCompostingLayer() const;
     // Result is transform origin in pixels.
-    FloatPoint3D computeTransformOrigin(const LayoutRect& borderBox) const;
+    FloatPoint3D computeTransformOrigin(const IntRect& borderBox) const;
     // Result is perspective origin in pixels.
-    FloatPoint computePerspectiveOrigin(const LayoutRect& borderBox) const;
+    FloatPoint computePerspectiveOrigin(const IntRect& borderBox) const;
 
     void updateLayerOpacity(const RenderStyle*);
     void updateLayerTransform(const RenderStyle*);
+#if ENABLE(CSS_FILTERS)
+    void updateLayerFilters(const RenderStyle*);
+#endif
 
     // Return the opacity value that this layer should use for compositing.
     float compositingOpacity(float rendererOpacity) const;
+    
+    bool isMainFrameRenderViewLayer() const;
     
     // Returns true if this compositing layer has no visible content.
     bool isSimpleContainerCompositingLayer() const;
@@ -187,13 +197,13 @@ private:
     bool isDirectlyCompositedImage() const;
     void updateImageContents();
 
-    bool rendererHasBackground() const;
     Color rendererBackgroundColor() const;
     void updateBackgroundColor();
 
-    bool hasVisibleNonCompositingDescendants() const;
+    bool containsNonEmptyRenderers() const;
+    bool hasVisibleNonCompositingDescendantLayers() const;
     
-    void paintIntoLayer(RenderLayer* rootLayer, GraphicsContext*, const LayoutRect& paintDirtyRect, PaintBehavior, GraphicsLayerPaintingPhase, RenderObject* paintingRoot);
+    void paintIntoLayer(RenderLayer* rootLayer, GraphicsContext*, const IntRect& paintDirtyRect, PaintBehavior, GraphicsLayerPaintingPhase, RenderObject* paintingRoot);
 
     static int graphicsLayerToCSSProperty(AnimatedPropertyID);
     static AnimatedPropertyID cssToGraphicsLayerProperty(int);
@@ -214,9 +224,14 @@ private:
     OwnPtr<GraphicsLayer> m_layerForVerticalScrollbar;
     OwnPtr<GraphicsLayer> m_layerForScrollCorner;
 
-    LayoutRect m_compositedBounds;
+    IntRect m_compositedBounds;
 
     bool m_artificiallyInflatedBounds;      // bounds had to be made non-zero to make transform-origin work
+    bool m_isMainFrameRenderViewLayer;
+    bool m_usingTiledCacheLayer;
+#if ENABLE(CSS_FILTERS)
+    bool m_canCompositeFilters;
+#endif
 };
 
 } // namespace WebCore

@@ -33,6 +33,7 @@
 namespace WebCore {
 
 class RenderTableCol;
+class RenderTableCaption;
 class RenderTableCell;
 class RenderTableSection;
 class TableLayout;
@@ -44,7 +45,7 @@ public:
     explicit RenderTable(Node*);
     virtual ~RenderTable();
 
-    LayoutUnit getColumnPos(int col) const { return m_columnPos[col]; }
+    LayoutUnit getColumnPos(unsigned col) const { return m_columnPos[col]; }
 
     int hBorderSpacing() const { return m_hSpacing; }
     int vBorderSpacing() const { return m_vSpacing; }
@@ -146,10 +147,10 @@ public:
     // This function returns 0 if the table has no non-empty sections.
     RenderTableSection* topNonEmptySection() const;
 
-    void splitColumn(unsigned position, int firstSpan);
-    void appendColumn(int span);
+    void splitColumn(unsigned position, unsigned firstSpan);
+    void appendColumn(unsigned span);
     unsigned numEffCols() const { return m_columns.size(); }
-    int spanOfEffCol(int effCol) const { return m_columns[effCol].span; }
+    unsigned spanOfEffCol(unsigned effCol) const { return m_columns[effCol].span; }
     
     unsigned colToEffCol(unsigned column) const
     {
@@ -160,10 +161,10 @@ public:
         return effColumn;
     }
     
-    int effColToCol(int effCol) const
+    unsigned effColToCol(unsigned effCol) const
     {
-        int c = 0;
-        for (int i = 0; i < effCol; i++)
+        unsigned c = 0;
+        for (unsigned i = 0; i < effCol; i++)
             c += m_columns[i].span;
         return c;
     }
@@ -171,10 +172,10 @@ public:
     LayoutUnit bordersPaddingAndSpacingInRowDirection() const
     {
         return borderStart() + borderEnd() +
-               (collapseBorders() ? 0 : (paddingStart() + paddingEnd() + (numEffCols() + 1) * hBorderSpacing()));
+               (collapseBorders() ? zeroLayoutUnit : (paddingStart() + paddingEnd() + (numEffCols() + 1) * hBorderSpacing()));
     }
 
-    RenderTableCol* colElement(int col, bool* startEdge = 0, bool* endEdge = 0) const;
+    RenderTableCol* colElement(unsigned col, bool* startEdge = 0, bool* endEdge = 0) const;
     RenderTableCol* nextColElement(RenderTableCol* current) const;
 
     bool needsSectionRecalc() const { return m_needsSectionRecalc; }
@@ -239,6 +240,8 @@ private:
 
     virtual void computeLogicalWidth();
 
+    LayoutUnit convertStyleLogicalWidthToComputedWidth(const Length& styleLogicalWidth, LayoutUnit availableWidth);
+
     virtual LayoutRect overflowClipRect(const LayoutPoint& location, RenderRegion*, OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize);
 
     virtual void addOverflowFromChildren();
@@ -247,12 +250,12 @@ private:
 
     void recalcCollapsedBorders();
     void recalcSections() const;
-    void adjustLogicalHeightForCaption(RenderBlock*);
+    void layoutCaption(RenderTableCaption*);
 
     mutable Vector<LayoutUnit> m_columnPos;
     mutable Vector<ColumnStruct> m_columns;
+    mutable Vector<RenderTableCaption*> m_captions;
 
-    mutable Vector<RenderBlock*> m_captions;
     mutable RenderTableSection* m_head;
     mutable RenderTableSection* m_foot;
     mutable RenderTableSection* m_firstBody;
@@ -274,6 +277,7 @@ private:
 
 inline RenderTableSection* RenderTable::topSection() const
 {
+    ASSERT(!needsSectionRecalc());
     if (m_head)
         return m_head;
     if (m_firstBody)

@@ -29,13 +29,12 @@
 #include "NPRuntimeObjectMap.h"
 #include "Plugin.h"
 #include "PluginController.h"
-#include "RunLoop.h"
 #include "WebFrame.h"
-
 #include <WebCore/MediaCanStartListener.h>
+#include <WebCore/PluginViewBase.h>
 #include <WebCore/ResourceError.h>
 #include <WebCore/ResourceResponse.h>
-#include <WebCore/PluginViewBase.h>
+#include <WebCore/RunLoop.h>
 #include <wtf/Deque.h>
 
 // FIXME: Eventually this should move to WebCore.
@@ -66,6 +65,10 @@ public:
     void setDeviceScaleFactor(float);
     void windowAndViewFramesChanged(const WebCore::IntRect& windowFrameInScreenCoordinates, const WebCore::IntRect& viewFrameInWindowCoordinates);
     bool sendComplexTextInput(uint64_t pluginComplexTextInputIdentifier, const String& textInput);
+#endif
+
+#if USE(CG)
+    RetainPtr<CGPDFDocumentRef> pdfDocumentForPrinting() const { return m_plugin->pdfDocumentForPrinting(); }
 #endif
 
     // FIXME: Remove this; nobody should have to know about the plug-in view's renderer except the plug-in view itself.
@@ -176,7 +179,7 @@ private:
 
     // Pending URLRequests that the plug-in has made.
     Deque<RefPtr<URLRequest> > m_pendingURLRequests;
-    RunLoop::Timer<PluginView> m_pendingURLRequestsTimer;
+    WebCore::RunLoop::Timer<PluginView> m_pendingURLRequestsTimer;
 
     // Pending frame loads that the plug-in has made.
     typedef HashMap<RefPtr<WebFrame>, RefPtr<URLRequest> > FrameLoadMap;

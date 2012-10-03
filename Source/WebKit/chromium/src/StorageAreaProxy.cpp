@@ -41,8 +41,8 @@
 #include "WebFrameImpl.h"
 #include "WebPermissionClient.h"
 #include "WebStorageArea.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 #include "WebViewImpl.h"
 
 namespace WebCore {
@@ -167,6 +167,8 @@ void StorageAreaProxy::storageEvent(const String& key, const String& oldValue, c
 
 bool StorageAreaProxy::canAccessStorage(Frame* frame) const
 {
+    if (!frame->page())
+        return false;
     WebKit::WebFrameImpl* webFrame = WebKit::WebFrameImpl::fromFrame(frame);
     WebKit::WebViewImpl* webView = webFrame->viewImpl();
     return !webView->permissionClient() || webView->permissionClient()->allowStorage(webFrame, m_storageType == LocalStorage);

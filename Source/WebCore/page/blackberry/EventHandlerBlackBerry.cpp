@@ -41,8 +41,7 @@ bool EventHandler::eventActivatedView(const PlatformMouseEvent&) const
 
 bool EventHandler::passMouseMoveEventToSubframe(MouseEventWithHitTestResults& mev, Frame* subframe, HitTestResult* hoveredNode)
 {
-    subframe->eventHandler()->handleMouseMoveEvent(mev.event(), hoveredNode);
-    return true;
+    return subframe->eventHandler()->handleMouseMoveEvent(mev.event(), hoveredNode);
 }
 
 bool EventHandler::passMousePressEventToSubframe(MouseEventWithHitTestResults& mev, Frame* subframe)
@@ -57,7 +56,7 @@ bool EventHandler::passMouseReleaseEventToSubframe(MouseEventWithHitTestResults&
     return true;
 }
 
-bool EventHandler::passWheelEventToWidget(PlatformWheelEvent&, Widget*)
+bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent&, Widget*)
 {
     notImplemented();
     return false;

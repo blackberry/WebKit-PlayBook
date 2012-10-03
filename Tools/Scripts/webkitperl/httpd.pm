@@ -186,11 +186,7 @@ sub openHTTPD(@)
 
     my $httpdPath = getHTTPDPath();
 
-    if (isBlackBerry()) {
-        exec($httpdPath, @args);
-    } else {
-        open2(">&1", \*HTTPDIN, $httpdPath, @args);
-    }
+    open2(">&1", \*HTTPDIN, $httpdPath, @args);
 
     my $retryCount = 20;
     while (!-f $httpdPidFile && $retryCount) {

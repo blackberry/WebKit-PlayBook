@@ -25,12 +25,15 @@
 #include "RenderThemeQt.h"
 
 #include <QBrush>
+#include <QHash>
+#include <QPixmapCache>
 
 QT_BEGIN_NAMESPACE
 class QColor;
-class QPixmap;
 class QSize;
 QT_END_NAMESPACE
+
+typedef QPixmapCache::Key CacheKey;
 
 namespace WebCore {
 
@@ -47,6 +50,8 @@ public:
     virtual bool isControlStyled(const RenderStyle*, const BorderData&, const FillLayer&, const Color& backgroundColor) const;
 
     virtual int popupInternalPaddingBottom(RenderStyle*) const;
+
+    virtual bool delegatesMenuListRendering() const { return true; }
 
 protected:
 
@@ -81,30 +86,84 @@ private:
     void setPaletteFromPageClientIfExists(QPalette&) const;
 };
 
+struct KeyIdentifier {
+
+    KeyIdentifier()
+        : type(Undefined)
+        , width(0)
+        , height(0)
+        , trait1(0)
+        , trait2(0)
+        , trait3(0)
+    {
+    }
+
+    enum ControlType {
+        Undefined,
+        CheckBox,
+        Radio,
+        ComboButton,
+        LineEdit,
+        PushButton,
+        Progress,
+        SliderThumb
+    };
+
+    ControlType type : 3;
+    uint width : 11;
+    uint height : 9;
+    uint trait1 : 1;
+    uint trait2 : 1;
+    uint trait3 : 7;
+
+    inline bool operator==(const KeyIdentifier& other) const
+    {
+        return (type == other.type && width == other.width
+                && height == other.height && trait1 == other.trait1
+                && trait2 == other.trait2 && trait3 == other.trait3);
+    }
+};
+
 class StylePainterMobile : public StylePainter {
+
 public:
     explicit StylePainterMobile(RenderThemeQtMobile*, const PaintInfo&);
+    ~StylePainterMobile();
 
-    void drawLineEdit(const QRect&, bool sunken, bool enabled = true);
+    void drawLineEdit(const QRect&, bool focused, bool enabled = true);
     void drawCheckBox(const QRect&, bool checked, bool enabled = true);
     void drawRadioButton(const QRect&, bool checked, bool enabled = true);
     void drawPushButton(const QRect&, bool sunken, bool enabled = true);
     void drawComboBox(const QRect&, bool multiple, bool enabled = true);
+    void drawProgress(const QRect&, double progress, bool leftToRight = true, bool animated = false) const;
+    void drawSliderThumb(const QRect&, bool pressed) const;
 
 private:
-    void drawChecker(QPainter*, int size, QColor) const;
-    QPixmap findChecker(const QRect&, bool disabled) const;
+    void drawCheckableBackground(QPainter*, const QRect&, bool checked, bool enabled) const;
+    void drawChecker(QPainter*, const QRect&, const QColor&) const;
+    QPixmap findCheckBox(const QSize&, bool checked, bool enabled) const;
 
-    void drawRadio(QPainter*, const QSize&, bool checked, QColor) const;
-    QPixmap findRadio(const QSize&, bool checked, bool disabled) const;
+    void drawRadio(QPainter*, const QSize&, bool checked, bool enabled) const;
+    QPixmap findRadio(const QSize&, bool checked, bool enabled) const;
 
-    QSize getButtonImageSize(const QSize&) const;
-    void drawSimpleComboButton(QPainter*, const QSize&, QColor) const;
-    void drawMultipleComboButton(QPainter*, const QSize&, QColor) const;
-    QPixmap findComboButton(const QSize&, bool multiple, bool disabled) const;
+    QSizeF getButtonImageSize(int , bool multiple) const;
+    void drawSimpleComboButton(QPainter*, const QSizeF&, const QColor&) const;
+    void drawMultipleComboButton(QPainter*, const QSizeF&, const QColor&) const;
+    QPixmap findComboButton(const QSize&, bool multiple, bool enabled) const;
 
-    Q_DISABLE_COPY(StylePainterMobile);
+    QPixmap findLineEdit(const QSize&, bool focused) const;
+    QPixmap findPushButton(const QSize&, bool sunken, bool enabled) const;
+
+    QSize sizeForPainterScale(const QRect&) const;
+
+    static bool findCachedControl(const KeyIdentifier&, QPixmap*);
+    static void insertIntoCache(const KeyIdentifier&, const QPixmap&);
+
+    bool m_previousSmoothPixmapTransform;
+
+    Q_DISABLE_COPY(StylePainterMobile)
 };
+
 }
 
 #endif // RenderThemeQtMobile_h

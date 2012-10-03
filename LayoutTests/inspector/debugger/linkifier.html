@@ -21,7 +21,7 @@ function test()
                 return;
 
             var script = event.data;
-            if (script.sourceURL === WebInspector.mainResource._documentURL) {
+            if (script.sourceURL === WebInspector.inspectedPageURL) {
                 continued = true;
                 setTimeout(debuggerTest, 0);
             }
@@ -34,23 +34,23 @@ function test()
     function debuggerTest()
     {
         linkifier = WebInspector.debuggerPresentationModel.createLinkifier();
-        rawSourceCode = WebInspector.debuggerPresentationModel._rawSourceCodeForScriptWithURL(WebInspector.mainResource._documentURL);
+        rawSourceCode = WebInspector.debuggerPresentationModel._rawSourceCodeForScriptWithURL(WebInspector.inspectedPageURL);
 
         var count1 = listenersCount(rawSourceCode);
-        link = linkifier.linkifyLocation(WebInspector.mainResource._documentURL, 20, 0, "dummy-class");
+        link = linkifier.linkifyLocation(WebInspector.inspectedPageURL, 20, 0, "dummy-class");
         var count2 = listenersCount(rawSourceCode);
 
         InspectorTest.addResult("listeners added on raw source code: " + (count2 - count1));
         InspectorTest.addResult("original location: " + link.textContent);
 
-        InspectorTest.addSniffer(linkifier, "_updateAnchor", linkUpdated);
+        InspectorTest.addSniffer(linkifier._formatter, "formatLiveAnchor", linkUpdated);
         WebInspector.debuggerPresentationModel.setFormatSource(true);
     }
 
     function linkUpdated()
     {
         InspectorTest.addResult("pretty printed location: " + link.textContent);
-        InspectorTest.addSniffer(linkifier, "_updateAnchor", linkReverted);
+        InspectorTest.addSniffer(linkifier._formatter, "formatLiveAnchor", linkReverted);
         WebInspector.debuggerPresentationModel.setFormatSource(false);
     }
 
@@ -75,7 +75,7 @@ function test()
             var listenersArray = listeners[eventTypes];
             count += listenersArray.length;
         }
-        return count; 
+        return count;
     }
 }
 

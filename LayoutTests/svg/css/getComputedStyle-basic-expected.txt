@@ -92,7 +92,7 @@ rect: style.getPropertyValue(font-variant) : normal
 rect: style.getPropertyCSSValue(font-variant) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(font-weight) : normal
 rect: style.getPropertyCSSValue(font-weight) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(height) : 0px
+rect: style.getPropertyValue(height) : auto
 rect: style.getPropertyCSSValue(height) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(image-rendering) : auto
 rect: style.getPropertyCSSValue(image-rendering) : [object CSSPrimitiveValue]
@@ -190,7 +190,7 @@ rect: style.getPropertyValue(white-space) : normal
 rect: style.getPropertyCSSValue(white-space) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(widows) : 2
 rect: style.getPropertyCSSValue(widows) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(width) : 0px
+rect: style.getPropertyValue(width) : auto
 rect: style.getPropertyCSSValue(width) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(word-break) : normal
 rect: style.getPropertyCSSValue(word-break) : [object CSSPrimitiveValue]
@@ -288,10 +288,24 @@ rect: style.getPropertyValue(-webkit-flex-pack) : start
 rect: style.getPropertyCSSValue(-webkit-flex-pack) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-flex-align) : stretch
 rect: style.getPropertyCSSValue(-webkit-flex-align) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(-webkit-flex-flow) : row
-rect: style.getPropertyCSSValue(-webkit-flex-flow) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-flex-item-align) : stretch
+rect: style.getPropertyCSSValue(-webkit-flex-item-align) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-flex-direction) : row
+rect: style.getPropertyCSSValue(-webkit-flex-direction) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-flex-flow) : row none
+rect: style.getPropertyCSSValue(-webkit-flex-flow) : [object CSSValueList]
+rect: style.getPropertyValue(-webkit-flex-wrap) : none
+rect: style.getPropertyCSSValue(-webkit-flex-wrap) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-font-kerning) : auto
+rect: style.getPropertyCSSValue(-webkit-font-kerning) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-font-smoothing) : auto
 rect: style.getPropertyCSSValue(-webkit-font-smoothing) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-font-variant-ligatures) : normal
+rect: style.getPropertyCSSValue(-webkit-font-variant-ligatures) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-grid-column) : auto
+rect: style.getPropertyCSSValue(-webkit-grid-column) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-grid-row) : auto
+rect: style.getPropertyCSSValue(-webkit-grid-row) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-highlight) : none
 rect: style.getPropertyCSSValue(-webkit-highlight) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-hyphenate-character) : auto
@@ -304,6 +318,8 @@ rect: style.getPropertyValue(-webkit-hyphenate-limit-lines) : no-limit
 rect: style.getPropertyCSSValue(-webkit-hyphenate-limit-lines) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-hyphens) : manual
 rect: style.getPropertyCSSValue(-webkit-hyphens) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-line-align) : none
+rect: style.getPropertyCSSValue(-webkit-line-align) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-line-box-contain) : block inline replaced
 rect: style.getPropertyCSSValue(-webkit-line-box-contain) : [object CSSValue]
 rect: style.getPropertyValue(-webkit-line-break) : normal
@@ -312,8 +328,8 @@ rect: style.getPropertyValue(-webkit-line-clamp) : none
 rect: style.getPropertyCSSValue(-webkit-line-clamp) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-line-grid) : none
 rect: style.getPropertyCSSValue(-webkit-line-grid) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(-webkit-line-grid-snap) : none
-rect: style.getPropertyCSSValue(-webkit-line-grid-snap) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-line-snap) : none
+rect: style.getPropertyCSSValue(-webkit-line-snap) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-locale) : auto
 rect: style.getPropertyCSSValue(-webkit-locale) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-margin-before-collapse) : collapse
@@ -408,7 +424,7 @@ rect: style.getPropertyValue(-webkit-user-select) : text
 rect: style.getPropertyCSSValue(-webkit-user-select) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-writing-mode) : horizontal-tb
 rect: style.getPropertyCSSValue(-webkit-writing-mode) : [object CSSPrimitiveValue]
-rect: style.getPropertyValue(-webkit-flow-into) : auto
+rect: style.getPropertyValue(-webkit-flow-into) : none
 rect: style.getPropertyCSSValue(-webkit-flow-into) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-flow-from) : none
 rect: style.getPropertyCSSValue(-webkit-flow-from) : [object CSSPrimitiveValue]
@@ -420,6 +436,14 @@ rect: style.getPropertyValue(-webkit-region-break-before) : auto
 rect: style.getPropertyCSSValue(-webkit-region-break-before) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(-webkit-region-break-inside) : auto
 rect: style.getPropertyCSSValue(-webkit-region-break-inside) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-wrap-flow) : auto
+rect: style.getPropertyCSSValue(-webkit-wrap-flow) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-wrap-margin) : 0px
+rect: style.getPropertyCSSValue(-webkit-wrap-margin) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-wrap-padding) : 0px
+rect: style.getPropertyCSSValue(-webkit-wrap-padding) : [object CSSPrimitiveValue]
+rect: style.getPropertyValue(-webkit-wrap-through) : wrap
+rect: style.getPropertyCSSValue(-webkit-wrap-through) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(clip-path) : none
 rect: style.getPropertyCSSValue(clip-path) : [object CSSPrimitiveValue]
 rect: style.getPropertyValue(clip-rule) : nonzero
@@ -588,7 +612,7 @@ g: style.getPropertyValue(font-variant) : normal
 g: style.getPropertyCSSValue(font-variant) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(font-weight) : normal
 g: style.getPropertyCSSValue(font-weight) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(height) : 0px
+g: style.getPropertyValue(height) : auto
 g: style.getPropertyCSSValue(height) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(image-rendering) : auto
 g: style.getPropertyCSSValue(image-rendering) : [object CSSPrimitiveValue]
@@ -686,7 +710,7 @@ g: style.getPropertyValue(white-space) : normal
 g: style.getPropertyCSSValue(white-space) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(widows) : 2
 g: style.getPropertyCSSValue(widows) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(width) : 0px
+g: style.getPropertyValue(width) : auto
 g: style.getPropertyCSSValue(width) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(word-break) : normal
 g: style.getPropertyCSSValue(word-break) : [object CSSPrimitiveValue]
@@ -784,10 +808,24 @@ g: style.getPropertyValue(-webkit-flex-pack) : start
 g: style.getPropertyCSSValue(-webkit-flex-pack) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-flex-align) : stretch
 g: style.getPropertyCSSValue(-webkit-flex-align) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(-webkit-flex-flow) : row
-g: style.getPropertyCSSValue(-webkit-flex-flow) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-flex-item-align) : stretch
+g: style.getPropertyCSSValue(-webkit-flex-item-align) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-flex-direction) : row
+g: style.getPropertyCSSValue(-webkit-flex-direction) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-flex-flow) : row none
+g: style.getPropertyCSSValue(-webkit-flex-flow) : [object CSSValueList]
+g: style.getPropertyValue(-webkit-flex-wrap) : none
+g: style.getPropertyCSSValue(-webkit-flex-wrap) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-font-kerning) : auto
+g: style.getPropertyCSSValue(-webkit-font-kerning) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-font-smoothing) : auto
 g: style.getPropertyCSSValue(-webkit-font-smoothing) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-font-variant-ligatures) : normal
+g: style.getPropertyCSSValue(-webkit-font-variant-ligatures) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-grid-column) : auto
+g: style.getPropertyCSSValue(-webkit-grid-column) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-grid-row) : auto
+g: style.getPropertyCSSValue(-webkit-grid-row) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-highlight) : none
 g: style.getPropertyCSSValue(-webkit-highlight) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-hyphenate-character) : auto
@@ -800,6 +838,8 @@ g: style.getPropertyValue(-webkit-hyphenate-limit-lines) : no-limit
 g: style.getPropertyCSSValue(-webkit-hyphenate-limit-lines) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-hyphens) : manual
 g: style.getPropertyCSSValue(-webkit-hyphens) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-line-align) : none
+g: style.getPropertyCSSValue(-webkit-line-align) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-line-box-contain) : block inline replaced
 g: style.getPropertyCSSValue(-webkit-line-box-contain) : [object CSSValue]
 g: style.getPropertyValue(-webkit-line-break) : normal
@@ -808,8 +848,8 @@ g: style.getPropertyValue(-webkit-line-clamp) : none
 g: style.getPropertyCSSValue(-webkit-line-clamp) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-line-grid) : none
 g: style.getPropertyCSSValue(-webkit-line-grid) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(-webkit-line-grid-snap) : none
-g: style.getPropertyCSSValue(-webkit-line-grid-snap) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-line-snap) : none
+g: style.getPropertyCSSValue(-webkit-line-snap) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-locale) : auto
 g: style.getPropertyCSSValue(-webkit-locale) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-margin-before-collapse) : collapse
@@ -904,7 +944,7 @@ g: style.getPropertyValue(-webkit-user-select) : text
 g: style.getPropertyCSSValue(-webkit-user-select) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-writing-mode) : horizontal-tb
 g: style.getPropertyCSSValue(-webkit-writing-mode) : [object CSSPrimitiveValue]
-g: style.getPropertyValue(-webkit-flow-into) : auto
+g: style.getPropertyValue(-webkit-flow-into) : none
 g: style.getPropertyCSSValue(-webkit-flow-into) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-flow-from) : none
 g: style.getPropertyCSSValue(-webkit-flow-from) : [object CSSPrimitiveValue]
@@ -916,6 +956,14 @@ g: style.getPropertyValue(-webkit-region-break-before) : auto
 g: style.getPropertyCSSValue(-webkit-region-break-before) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(-webkit-region-break-inside) : auto
 g: style.getPropertyCSSValue(-webkit-region-break-inside) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-wrap-flow) : auto
+g: style.getPropertyCSSValue(-webkit-wrap-flow) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-wrap-margin) : 0px
+g: style.getPropertyCSSValue(-webkit-wrap-margin) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-wrap-padding) : 0px
+g: style.getPropertyCSSValue(-webkit-wrap-padding) : [object CSSPrimitiveValue]
+g: style.getPropertyValue(-webkit-wrap-through) : wrap
+g: style.getPropertyCSSValue(-webkit-wrap-through) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(clip-path) : none
 g: style.getPropertyCSSValue(clip-path) : [object CSSPrimitiveValue]
 g: style.getPropertyValue(clip-rule) : nonzero

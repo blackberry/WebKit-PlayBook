@@ -51,6 +51,7 @@
 #include "Uint16Array.h"
 #include "Uint32Array.h"
 #include "Uint8Array.h"
+#include "Uint8ClampedArray.h"
 #include "V8ArrayBuffer.h"
 #include "V8ArrayBufferView.h"
 #include "V8Binding.h"
@@ -69,6 +70,7 @@
 #include "V8Uint16Array.h"
 #include "V8Uint32Array.h"
 #include "V8Uint8Array.h"
+#include "V8Uint8ClampedArray.h"
 #include "V8Utilities.h"
 
 #include <wtf/Assertions.h>
@@ -197,6 +199,7 @@ enum SerializationTag {
                          //                                            fills it with the last length elements and numProperties name,value pairs pushed onto deserialization stack
     RegExpTag = 'R', // pattern:RawString, flags:uint32_t -> RegExp (ref)
     ArrayBufferTag = 'B', // byteLength:uint32_t, data:byte[byteLength] -> ArrayBuffer (ref)
+    ArrayBufferTransferTag = 't', // index:uint32_t -> ArrayBuffer. For ArrayBuffer transfer
     ArrayBufferViewTag = 'V', // subtag:byte, byteOffset:uint32_t, byteLength:uint32_t -> ArrayBufferView (ref). Consumes an ArrayBuffer from the top of the deserialization stack.
     ObjectReferenceTag = '^', // ref:uint32_t -> reference table[ref]
     GenerateFreshObjectTag = 'o', // -> empty object allocated an object ID and pushed onto the open stack (ref)
@@ -213,6 +216,7 @@ enum SerializationTag {
 enum ArrayBufferViewSubTag {
     ByteArrayTag = 'b',
     UnsignedByteArrayTag = 'B',
+    UnsignedByteClampedArrayTag = 'C',
     ShortArrayTag = 'w',
     UnsignedShortArrayTag = 'W',
     IntArrayTag = 'd',
@@ -393,6 +397,8 @@ public:
 #endif
         if (arrayBufferView.isByteArray())
             append(ByteArrayTag);
+        else if (arrayBufferView.isUnsignedByteClampedArray())
+            append(UnsignedByteClampedArrayTag);
         else if (arrayBufferView.isUnsignedByteArray())
             append(UnsignedByteArrayTag);
         else if (arrayBufferView.isShortArray())
@@ -435,6 +441,12 @@ public:
     void writeTransferredMessagePort(uint32_t index)
     {
         append(MessagePortTag);
+        doWriteUint32(index);
+    }
+
+    void writeTransferredArrayBuffer(uint32_t index)
+    {
+        append(ArrayBufferTransferTag);
         doWriteUint32(index);
     }
 
@@ -589,11 +601,12 @@ public:
         Success,
         InputError,
         DataCloneError,
+        InvalidStateError,
         JSException,
         JSFailure
     };
 
-    Serializer(Writer& writer, MessagePortArray* messagePorts, v8::TryCatch& tryCatch)
+    Serializer(Writer& writer, MessagePortArray* messagePorts, ArrayBufferArray* arrayBuffers, v8::TryCatch& tryCatch)
         : m_writer(writer)
         , m_tryCatch(tryCatch)
         , m_depth(0)
@@ -605,6 +618,14 @@ public:
         if (messagePorts) {
             for (size_t i = 0; i < messagePorts->size(); i++)
                 m_transferredMessagePorts.set(V8MessagePort::wrap(messagePorts->at(i).get()), i);
+        }
+        if (arrayBuffers) {
+            for (size_t i = 0; i < arrayBuffers->size(); i++)  {
+                v8::Handle<v8::Object> v8ArrayBuffer = V8ArrayBuffer::wrap(arrayBuffers->at(i).get());
+                // Coalesce multiple occurences of the same buffer to the first index.
+                if (!m_transferredArrayBuffers.contains(v8ArrayBuffer))
+                    m_transferredArrayBuffers.set(v8ArrayBuffer, i);
+            }
         }
     }
 
@@ -995,6 +1016,8 @@ private:
         ArrayBufferView* arrayBufferView = V8ArrayBufferView::toNative(object);
         if (!arrayBufferView)
             return 0;
+        if (!arrayBufferView->buffer())
+            return handleError(DataCloneError, next);
         v8::Handle<v8::Value> underlyingBuffer = toV8(arrayBufferView->buffer());
         if (underlyingBuffer.IsEmpty())
             return handleError(DataCloneError, next);
@@ -1014,12 +1037,27 @@ private:
         return 0;
     }
 
-    void writeArrayBuffer(v8::Handle<v8::Value> value)
+    StateBase* writeArrayBuffer(v8::Handle<v8::Value> value, StateBase* next)
     {
         ArrayBuffer* arrayBuffer = V8ArrayBuffer::toNative(value.As<v8::Object>());
         if (!arrayBuffer)
-            return;
+            return 0;
+        if (arrayBuffer->isNeutered())
+            return handleError(InvalidStateError, next);
+        ASSERT(!m_transferredArrayBuffers.contains(value.As<v8::Object>()));
         m_writer.writeArrayBuffer(*arrayBuffer);
+        return 0;
+    }
+
+    StateBase* writeTransferredArrayBuffer(v8::Handle<v8::Value> value, uint32_t index, StateBase* next)
+    {
+        ArrayBuffer* arrayBuffer = V8ArrayBuffer::toNative(value.As<v8::Object>());
+        if (!arrayBuffer)
+            return 0;
+        if (arrayBuffer->isNeutered())
+            return handleError(DataCloneError, next);
+        m_writer.writeTransferredArrayBuffer(index);
+        return 0;
     }
 
     static bool shouldSerializeDensely(uint32_t length, uint32_t propertyCount) 
@@ -1071,6 +1109,7 @@ private:
     typedef V8ObjectMap<v8::Object, uint32_t> ObjectPool;
     ObjectPool m_objectPool;
     ObjectPool m_transferredMessagePorts;
+    ObjectPool m_transferredArrayBuffers;
     uint32_t m_nextObjectReference;
 };
 
@@ -1082,6 +1121,7 @@ Serializer::StateBase* Serializer::doSerialize(v8::Handle<v8::Value> value, Stat
     }
     m_writer.writeReferenceCount(m_nextObjectReference);
     uint32_t objectReference;
+    uint32_t arrayBufferIndex;
     if ((value->IsObject() || value->IsDate() || value->IsRegExp())
         && m_objectPool.tryGet(value.As<v8::Object>(), &objectReference)) {
         // Note that IsObject() also detects wrappers (eg, it will catch the things
@@ -1114,7 +1154,8 @@ Serializer::StateBase* Serializer::doSerialize(v8::Handle<v8::Value> value, Stat
                 m_writer.writeTransferredMessagePort(messagePortIndex);
             else
                 return handleError(DataCloneError, next);
-        }
+    } else if (V8ArrayBuffer::HasInstance(value) && m_transferredArrayBuffers.tryGet(value.As<v8::Object>(), &arrayBufferIndex))
+        return writeTransferredArrayBuffer(value, arrayBufferIndex, next);
     else {
         v8::Handle<v8::Object> jsObject = value.As<v8::Object>();
         if (jsObject.IsEmpty())
@@ -1141,7 +1182,7 @@ Serializer::StateBase* Serializer::doSerialize(v8::Handle<v8::Value> value, Stat
         else if (value->IsRegExp())
             writeRegExp(value);
         else if (V8ArrayBuffer::HasInstance(value))
-            writeArrayBuffer(value);
+            return writeArrayBuffer(value, next);
         else if (value->IsObject()) {
             if (isHostObject(jsObject) || jsObject->IsCallable() || value->IsNativeError())
                 return handleError(DataCloneError, next);
@@ -1162,6 +1203,7 @@ public:
     virtual void pushObjectReference(const v8::Handle<v8::Value>&) = 0;
     virtual bool tryGetObjectFromObjectReference(uint32_t reference, v8::Handle<v8::Value>*) = 0;
     virtual bool tryGetTransferredMessagePort(uint32_t index, v8::Handle<v8::Value>*) = 0;
+    virtual bool tryGetTransferredArrayBuffer(uint32_t index, v8::Handle<v8::Value>*) = 0;
     virtual bool newSparseArray(uint32_t length) = 0;
     virtual bool newDenseArray(uint32_t length) = 0;
     virtual bool newObject() = 0;
@@ -1368,6 +1410,16 @@ public:
                 return false;
             break;
         }
+        case ArrayBufferTransferTag: {
+            if (m_version <= 0)
+                return false;
+            uint32_t index;
+            if (!doReadUint32(&index))
+                return false;
+            if (!creator.tryGetTransferredArrayBuffer(index, value))
+                return false;
+            break;
+        }
         case ObjectReferenceTag: {
             if (m_version <= 0)
                 return false;
@@ -1569,6 +1621,8 @@ private:
             return false;
         if (!creator.consumeTopOfStack(&arrayBufferV8Value))
             return false;
+        if (arrayBufferV8Value.IsEmpty()) 
+            return false;
         arrayBuffer = V8ArrayBuffer::toNative(arrayBufferV8Value.As<v8::Object>());
         if (!arrayBuffer)
             return false;
@@ -1578,6 +1632,9 @@ private:
             break;
         case UnsignedByteArrayTag:
             *value = toV8(Uint8Array::create(arrayBuffer.release(), byteOffset, byteLength));
+            break;
+        case UnsignedByteClampedArrayTag:
+            *value = toV8(Uint8ClampedArray::create(arrayBuffer.release(), byteOffset, byteLength));
             break;
         case ShortArrayTag: {
             uint32_t shortLength = byteLength / sizeof(int16_t);
@@ -1741,11 +1798,17 @@ private:
     uint32_t m_version;
 };
 
+
+typedef Vector<WTF::ArrayBufferContents, 1> ArrayBufferContentsArray;
+
 class Deserializer : public CompositeCreator {
 public:
-    explicit Deserializer(Reader& reader, MessagePortArray* messagePorts)
+    explicit Deserializer(Reader& reader, 
+                          MessagePortArray* messagePorts, ArrayBufferContentsArray* arrayBufferContents)
         : m_reader(reader)
         , m_transferredMessagePorts(messagePorts)
+        , m_arrayBufferContents(arrayBufferContents)
+        , m_arrayBuffers(arrayBufferContents ? arrayBufferContents->size() : 0)
         , m_version(0)
     {
     }
@@ -1890,6 +1953,21 @@ public:
         return true;
     }
 
+    virtual bool tryGetTransferredArrayBuffer(uint32_t index, v8::Handle<v8::Value>* object)
+    {
+        if (!m_arrayBufferContents)
+            return false;
+        if (index >= m_arrayBuffers.size())
+            return false;
+        v8::Handle<v8::Object> result = m_arrayBuffers.at(index);
+        if (result.IsEmpty()) {
+            result = V8ArrayBuffer::wrap(ArrayBuffer::create(m_arrayBufferContents->at(index)).get());
+            m_arrayBuffers[index] = result;
+        }
+        *object = result;
+        return true;
+    }
+
     virtual bool tryGetObjectFromObjectReference(uint32_t reference, v8::Handle<v8::Value>* object)
     {
         if (reference >= m_objectPool.size())
@@ -1969,6 +2047,8 @@ private:
     Vector<v8::Handle<v8::Value> > m_objectPool;
     Vector<uint32_t> m_openCompositeReferenceStack;
     MessagePortArray* m_transferredMessagePorts;
+    ArrayBufferContentsArray* m_arrayBufferContents;
+    Vector<v8::Handle<v8::Object> > m_arrayBuffers;
     uint32_t m_version;
 };
 
@@ -1988,15 +2068,17 @@ void SerializedScriptValue::deserializeAndSetProperty(v8::Handle<v8::Object> obj
     deserializeAndSetProperty(object, propertyName, attribute, value.get());
 }
 
-PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(v8::Handle<v8::Value> value, MessagePortArray* messagePorts, bool& didThrow)
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(v8::Handle<v8::Value> value,
+                                                                MessagePortArray* messagePorts, ArrayBufferArray* arrayBuffers,
+                                                                bool& didThrow)
 {
-    return adoptRef(new SerializedScriptValue(value, messagePorts, didThrow));
+    return adoptRef(new SerializedScriptValue(value, messagePorts, arrayBuffers, didThrow));
 }
 
 PassRefPtr<SerializedScriptValue> SerializedScriptValue::create(v8::Handle<v8::Value> value)
 {
     bool didThrow;
-    return adoptRef(new SerializedScriptValue(value, 0, didThrow));
+    return adoptRef(new SerializedScriptValue(value, 0, 0, didThrow));
 }
 
 PassRefPtr<SerializedScriptValue> SerializedScriptValue::createFromWire(const String& data)
@@ -2050,6 +2132,14 @@ PassRefPtr<SerializedScriptValue> SerializedScriptValue::booleanValue(bool value
     return adoptRef(new SerializedScriptValue(wireData));
 }
 
+PassRefPtr<SerializedScriptValue> SerializedScriptValue::numberValue(double value)
+{
+    Writer writer;
+    writer.writeNumber(value);
+    String wireData = StringImpl::adopt(writer.data());
+    return adoptRef(new SerializedScriptValue(wireData));
+}
+
 PassRefPtr<SerializedScriptValue> SerializedScriptValue::release()
 {
     RefPtr<SerializedScriptValue> result = adoptRef(new SerializedScriptValue(m_data));
@@ -2061,14 +2151,60 @@ SerializedScriptValue::SerializedScriptValue()
 {
 }
 
-SerializedScriptValue::SerializedScriptValue(v8::Handle<v8::Value> value, MessagePortArray* messagePorts, bool& didThrow)
+static void neuterBinding(void* domObject) 
+{
+    DOMDataList& allStores = DOMDataStore::allStores();
+    for (size_t i = 0; i < allStores.size(); i++) {
+        v8::Handle<v8::Object> obj = allStores[i]->domObjectMap().get(domObject);
+        if (!obj.IsEmpty())
+            obj->SetIndexedPropertiesToExternalArrayData(0, v8::kExternalByteArray, 0);
+    }
+}
+
+PassOwnPtr<SerializedScriptValue::ArrayBufferContentsArray> SerializedScriptValue::transferArrayBuffers(ArrayBufferArray& arrayBuffers, bool& didThrow) 
+{
+    for (size_t i = 0; i < arrayBuffers.size(); i++) {
+        if (arrayBuffers[i]->isNeutered()) {
+            throwError(INVALID_STATE_ERR);
+            didThrow = true;
+            return nullptr;
+        }
+    }
+
+    OwnPtr<ArrayBufferContentsArray> contents = adoptPtr(new ArrayBufferContentsArray(arrayBuffers.size()));
+
+    HashSet<ArrayBuffer*> visited;
+    for (size_t i = 0; i < arrayBuffers.size(); i++) {
+        Vector<RefPtr<ArrayBufferView> > neuteredViews;
+
+        if (visited.contains(arrayBuffers[i].get()))
+            continue;
+        visited.add(arrayBuffers[i].get());
+
+        bool result = arrayBuffers[i]->transfer(contents->at(i), neuteredViews);
+        if (!result) {
+            throwError(INVALID_STATE_ERR);
+            didThrow = true;
+            return nullptr;
+        }
+
+        neuterBinding(arrayBuffers[i].get());
+        for (size_t j = 0; j < neuteredViews.size(); j++)
+            neuterBinding(neuteredViews[j].get());
+    }
+    return contents.release();
+}
+
+SerializedScriptValue::SerializedScriptValue(v8::Handle<v8::Value> value, 
+                                             MessagePortArray* messagePorts, ArrayBufferArray* arrayBuffers,
+                                             bool& didThrow)
 {
     didThrow = false;
     Writer writer;
     Serializer::Status status;
     {
         v8::TryCatch tryCatch;
-        Serializer serializer(writer, messagePorts, tryCatch);
+        Serializer serializer(writer, messagePorts, arrayBuffers, tryCatch);
         status = serializer.serialize(value);
         if (status == Serializer::JSException) {
             // If there was a JS exception thrown, re-throw it.
@@ -2085,6 +2221,10 @@ SerializedScriptValue::SerializedScriptValue(v8::Handle<v8::Value> value, Messag
         didThrow = true;
         throwError(DATA_CLONE_ERR);
         return;
+    case Serializer::InvalidStateError:
+        didThrow = true;
+        throwError(INVALID_STATE_ERR);
+        return;
     case Serializer::JSFailure:
         // If there was a JS failure (but no exception), there's not
         // much we can do except for unwinding the C++ stack by
@@ -2093,6 +2233,8 @@ SerializedScriptValue::SerializedScriptValue(v8::Handle<v8::Value> value, Messag
         return;
     case Serializer::Success:
         m_data = String(StringImpl::adopt(writer.data())).isolatedCopy();
+        if (arrayBuffers)
+            m_arrayBufferContentsArray = transferArrayBuffers(*arrayBuffers, didThrow);
         return;
     case Serializer::JSException:
         // We should never get here because this case was handled above.
@@ -2112,8 +2254,18 @@ v8::Handle<v8::Value> SerializedScriptValue::deserialize(MessagePortArray* messa
         return v8::Null();
     COMPILE_ASSERT(sizeof(BufferValueType) == 2, BufferValueTypeIsTwoBytes);
     Reader reader(reinterpret_cast<const uint8_t*>(m_data.impl()->characters()), 2 * m_data.length());
-    Deserializer deserializer(reader, messagePorts);
+    Deserializer deserializer(reader, messagePorts, m_arrayBufferContentsArray.get());
     return deserializer.deserialize();
 }
+
+#if ENABLE(INSPECTOR)
+ScriptValue SerializedScriptValue::deserializeForInspector(ScriptState* scriptState)
+{
+    v8::HandleScope handleScope;
+    v8::Context::Scope contextScope(scriptState->context());
+
+    return ScriptValue(deserialize());
+}
+#endif
 
 } // namespace WebCore

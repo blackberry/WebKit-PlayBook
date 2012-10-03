@@ -31,6 +31,7 @@
 #include "MainResourceLoader.h"
 
 #include "ApplicationCacheHost.h"
+#include "BackForwardController.h"
 #include "Console.h"
 #include "DOMWindow.h"
 #include "Document.h"
@@ -41,6 +42,7 @@
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "HTMLFormElement.h"
+#include "HistoryItem.h"
 #include "InspectorInstrumentation.h"
 #include "Page.h"
 #include "ResourceError.h"
@@ -144,7 +146,7 @@ void MainResourceLoader::continueAfterNavigationPolicy(const ResourceRequest& re
         stopLoadingForPolicyChange();
     else if (m_substituteData.isValid()) {
         // A redirect resulted in loading substitute data.
-        ASSERT(documentLoader()->timing()->redirectCount);
+        ASSERT(documentLoader()->timing()->redirectCount());
         handle()->cancel();
         handleDataLoadSoon(request);
     }
@@ -183,7 +185,7 @@ void MainResourceLoader::willSendRequest(ResourceRequest& newRequest, const Reso
     // reference to this object; one example of this is 3266216.
     RefPtr<MainResourceLoader> protect(this);
 
-    ASSERT(documentLoader()->timing()->fetchStart);
+    ASSERT(documentLoader()->timing()->fetchStart());
     if (!redirectResponse.isNull()) {
         // If the redirecting url is not allowed to display content from the target origin,
         // then block the redirect.
@@ -193,19 +195,7 @@ void MainResourceLoader::willSendRequest(ResourceRequest& newRequest, const Reso
             cancel();
             return;
         }
-
-        DocumentLoadTiming* documentLoadTiming = documentLoader()->timing();
-
-        // Check if the redirected url is allowed to access the redirecting url's timing information.
-        RefPtr<SecurityOrigin> securityOrigin = SecurityOrigin::create(newRequest.url());
-        if (!securityOrigin->canRequest(redirectResponse.url()))
-            documentLoadTiming->hasCrossOriginRedirect = true;
-
-        documentLoadTiming->redirectCount++;
-        if (!documentLoadTiming->redirectStart)
-            documentLoadTiming->redirectStart = documentLoadTiming->fetchStart;
-        documentLoadTiming->redirectEnd = currentTime();
-        documentLoadTiming->fetchStart = documentLoadTiming->redirectEnd;
+        documentLoader()->timing()->addRedirect(redirectResponse.url(), newRequest.url());
     }
 
     // Update cookie policy base URL as URL changes, except for subframes, which use the
@@ -281,19 +271,26 @@ void MainResourceLoader::continueAfterContentPolicy(PolicyAction contentPolicy, 
         break;
     }
 
-    case PolicyDownload:
+    case PolicyDownload: {
         // m_handle can be null, e.g. when loading a substitute resource from application cache.
         if (!m_handle) {
             receivedError(cannotShowURLError());
             return;
         }
         InspectorInstrumentation::continueWithPolicyDownload(m_frame.get(), documentLoader(), identifier(), r);
-        frameLoader()->client()->download(m_handle.get(), request(), m_handle.get()->firstRequest(), r);
+
+        // When starting the request, we didn't know that it would result in download and not navigation. Now we know that main document URL didn't change.
+        // Download may use this knowledge for purposes unrelated to cookies, notably for setting file quarantine data.
+        ResourceRequest request = this->request();
+        frameLoader()->setOriginalURLForDownloadRequest(request);
+
+        frameLoader()->client()->download(m_handle.get(), request, r);
+
         // It might have gone missing
         if (frameLoader())
             receivedError(interruptedForPolicyChangeError());
         return;
-
+    }
     case PolicyIgnore:
         InspectorInstrumentation::continueWithPolicyIgnore(m_frame.get(), documentLoader(), identifier(), r);
         stopLoadingForPolicyChange();
@@ -382,7 +379,7 @@ void MainResourceLoader::didReceiveResponse(const ResourceResponse& r)
         if (m_frame->loader()->shouldInterruptLoadForXFrameOptions(content, r.url())) {
             InspectorInstrumentation::continueAfterXFrameOptionsDenied(m_frame.get(), documentLoader(), identifier(), r);
             DEFINE_STATIC_LOCAL(String, consoleMessage, ("Refused to display document because display forbidden by X-Frame-Options.\n"));
-            m_frame->domWindow()->console()->addMessage(JSMessageSource, LogMessageType, ErrorMessageLevel, consoleMessage, 1, String());
+            m_frame->domWindow()->console()->addMessage(JSMessageSource, LogMessageType, ErrorMessageLevel, consoleMessage);
 
             cancel();
             return;
@@ -468,7 +465,7 @@ void MainResourceLoader::didReceiveData(const char* data, int length, long long 
     // reference to this object; one example of this is 3266216.
     RefPtr<MainResourceLoader> protect(this);
 
-    m_timeOfLastDataReceived = currentTime();
+    m_timeOfLastDataReceived = monotonicallyIncreasingTime();
 
     ResourceLoader::didReceiveData(data, length, encodedDataLength, allAtOnce);
 }
@@ -478,9 +475,9 @@ void MainResourceLoader::didFinishLoading(double finishTime)
     // There is a bug in CFNetwork where callbacks can be dispatched even when loads are deferred.
     // See <rdar://problem/6304600> for more details.
 #if !USE(CF)
-    ASSERT(shouldLoadAsEmptyDocument(frameLoader()->activeDocumentLoader()->url()) || !defersLoading());
+    ASSERT(shouldLoadAsEmptyDocument(frameLoader()->activeDocumentLoader()->url()) || !defersLoading() || InspectorInstrumentation::isDebuggerPaused(m_frame.get()));
 #endif
-    
+
     // The additional processing can do anything including possibly removing the last
     // reference to this object.
     RefPtr<MainResourceLoader> protect(this);
@@ -489,14 +486,11 @@ void MainResourceLoader::didFinishLoading(double finishTime)
     if (m_loadingMultipartContent)
         dl->maybeFinishLoadingMultipartContent();
 
-    ASSERT(!documentLoader()->timing()->responseEnd);
-    documentLoader()->timing()->responseEnd = finishTime ? finishTime : (m_timeOfLastDataReceived ? m_timeOfLastDataReceived : currentTime());
-
+    documentLoader()->timing()->setResponseEnd(finishTime ? finishTime : (m_timeOfLastDataReceived ? m_timeOfLastDataReceived : monotonicallyIncreasingTime()));
 #if PLATFORM(BLACKBERRY)
     if (m_fromApplicationCache)
         frameLoader()->client()->dispatchDidLoadFromApplicationCache(request());
 #endif
-
     frameLoader()->finishedLoading();
     ResourceLoader::didFinishLoading(finishTime);
 
@@ -576,6 +570,7 @@ bool MainResourceLoader::loadNow(ResourceRequest& r)
     // we no longer send the callback from within NSURLConnection for
     // initial requests.
     willSendRequest(r, ResourceResponse());
+    ASSERT(!deletionHasBegun());
 
     // <rdar://problem/4801066>
     // willSendRequest() is liable to make the call to frameLoader() return NULL, so we need to check that here
@@ -605,9 +600,9 @@ bool MainResourceLoader::load(const ResourceRequest& r, const SubstituteData& su
 
     m_substituteData = substituteData;
 
-    ASSERT(documentLoader()->timing()->navigationStart);
-    ASSERT(!documentLoader()->timing()->fetchStart);
-    documentLoader()->timing()->fetchStart = currentTime();
+    ASSERT(documentLoader()->timing()->navigationStart());
+    ASSERT(!documentLoader()->timing()->fetchStart());
+    documentLoader()->timing()->markFetchStart();
     ResourceRequest request(r);
 
     documentLoader()->applicationCacheHost()->maybeLoadMainResource(request, m_substituteData);

@@ -83,7 +83,7 @@ namespace WTF {
             }
         }
 
-        static PassRefPtr<ByteArray> create(size_t size);
+        WTF_EXPORT_PRIVATE static PassRefPtr<ByteArray> create(size_t size);
 
         static size_t offsetOfSize() { return OBJECT_OFFSETOF(ByteArray, m_size); }
         static size_t offsetOfData() { return OBJECT_OFFSETOF(ByteArray, m_data); }
@@ -97,7 +97,7 @@ namespace WTF {
 // MSVC can't handle correctly unsized array.
 // warning C4200: nonstandard extension used : zero-sized array in struct/union
 // Cannot generate copy-ctor or copy-assignment operator when UDT contains a zero-sized array
-#if COMPILER(MSVC) && !COMPILER(INTEL)
+#if (COMPILER(MSVC)  || COMPILER(SUNCC)) && !COMPILER(INTEL)
         unsigned char m_data[INT_MAX];
 #else
         unsigned char m_data[];

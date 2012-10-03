@@ -90,6 +90,11 @@ DragCaretController::DragCaretController()
 {
 }
 
+PassOwnPtr<DragCaretController> DragCaretController::create()
+{
+    return adoptPtr(new DragCaretController);
+}
+
 bool DragCaretController::isContentRichlyEditable() const
 {
     return isRichlyEditablePosition(m_position.deepEquivalent());
@@ -264,7 +269,7 @@ void FrameSelection::setSelection(const VisibleSelection& newSelection, SetSelec
     m_granularity = granularity;
 
     if (closeTyping)
-        TypingCommand::closeTyping(m_frame->editor()->lastEditCommand());
+        TypingCommand::closeTyping(m_frame);
 
     if (shouldClearTypingStyle)
         clearTypingStyle();
@@ -420,10 +425,17 @@ static void updatePositionAfterAdoptingTextReplacement(Position& position, Chara
         position.moveToOffset(positionOffset - oldLength + newLength);
 }
 
+static inline bool nodeIsDetachedFromDocument(Node* node)
+{
+    ASSERT(node);
+    Node* highest = highestAncestor(node);
+    return highest->nodeType() == Node::DOCUMENT_FRAGMENT_NODE && !highest->isShadowRoot();
+}
+
 void FrameSelection::textWillBeReplaced(CharacterData* node, unsigned offset, unsigned oldLength, unsigned newLength)
 {
     // The fragment check is a performance optimization. See http://trac.webkit.org/changeset/30062.
-    if (isNone() || !node || highestAncestor(node)->nodeType() == Node::DOCUMENT_FRAGMENT_NODE)
+    if (isNone() || !node || nodeIsDetachedFromDocument(node))
         return;
 
     Position base = m_selection.base();
@@ -572,8 +584,6 @@ VisiblePosition FrameSelection::modifyExtendingRight(TextGranularity granularity
         // FIXME: implement all of the above?
         pos = modifyExtendingForward(granularity);
         break;
-    case WebKitVisualWordGranularity:
-        break;
     }
     return pos;
 }
@@ -613,8 +623,6 @@ VisiblePosition FrameSelection::modifyExtendingForward(TextGranularity granulari
         else
             pos = endOfDocument(pos);
         break;
-    case WebKitVisualWordGranularity:
-        break;
     }
     
     return pos;
@@ -634,7 +642,8 @@ VisiblePosition FrameSelection::modifyMovingRight(TextGranularity granularity)
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).right(true);
         break;
     case WordGranularity:
-        if (visualWordMovementEnabled()) {
+        if (visualWordMovementEnabled()
+            || (m_frame && m_frame->editor()->behavior().shouldMoveLeftRightByWordInVisualOrder())) {
             pos = rightWordPosition(VisiblePosition(m_selection.extent(), m_selection.affinity()));
             break;
         }
@@ -649,9 +658,6 @@ VisiblePosition FrameSelection::modifyMovingRight(TextGranularity granularity)
         break;
     case LineBoundary:
         pos = rightBoundaryOfLine(startForPlatform(), directionOfEnclosingBlock());
-        break;
-    case WebKitVisualWordGranularity:
-        pos = rightWordPosition(VisiblePosition(m_selection.extent(), m_selection.affinity()));
         break;
     }
     return pos;
@@ -701,8 +707,6 @@ VisiblePosition FrameSelection::modifyMovingForward(TextGranularity granularity)
         else
             pos = endOfDocument(pos);
         break;
-    case WebKitVisualWordGranularity:
-        break;
     }
     return pos;
 }
@@ -742,8 +746,6 @@ VisiblePosition FrameSelection::modifyExtendingLeft(TextGranularity granularity)
     case ParagraphBoundary:
     case DocumentBoundary:
         pos = modifyExtendingBackward(granularity);
-        break;
-    case WebKitVisualWordGranularity:
         break;
     }
     return pos;
@@ -789,8 +791,6 @@ VisiblePosition FrameSelection::modifyExtendingBackward(TextGranularity granular
         else
             pos = startOfDocument(pos);
         break;
-    case WebKitVisualWordGranularity:
-        break;
     }
     return pos;
 }
@@ -809,7 +809,8 @@ VisiblePosition FrameSelection::modifyMovingLeft(TextGranularity granularity)
             pos = VisiblePosition(m_selection.extent(), m_selection.affinity()).left(true);
         break;
     case WordGranularity:
-        if (visualWordMovementEnabled()) {
+        if (visualWordMovementEnabled()
+            || (m_frame && m_frame->editor()->behavior().shouldMoveLeftRightByWordInVisualOrder())) {
             pos = leftWordPosition(VisiblePosition(m_selection.extent(), m_selection.affinity()));
             break;
         }
@@ -824,9 +825,6 @@ VisiblePosition FrameSelection::modifyMovingLeft(TextGranularity granularity)
         break;
     case LineBoundary:
         pos = leftBoundaryOfLine(startForPlatform(), directionOfEnclosingBlock());
-        break;
-    case WebKitVisualWordGranularity:
-        pos = leftWordPosition(VisiblePosition(m_selection.extent(), m_selection.affinity()));
         break;
     }
     return pos;
@@ -869,8 +867,6 @@ VisiblePosition FrameSelection::modifyMovingBackward(TextGranularity granularity
             pos = startOfEditableContent(pos);
         else
             pos = startOfDocument(pos);
-        break;
-    case WebKitVisualWordGranularity:
         break;
     }
     return pos;
@@ -947,6 +943,19 @@ bool FrameSelection::modify(EAlteration alter, SelectionDirection direction, Tex
         moveTo(position, userTriggered);
         break;
     case AlterationExtend:
+        if (!m_selection.isCaret()
+            && (granularity == WordGranularity || granularity == ParagraphGranularity || granularity == LineGranularity)
+            && m_frame && !m_frame->editor()->behavior().shouldExtendSelectionByWordOrLineAcrossCaret()) {
+            // Don't let the selection go across the base position directly. Needed to match mac
+            // behavior when, for instance, word-selecting backwards starting with the caret in
+            // the middle of a word and then word-selecting forward, leaving the caret in the
+            // same place where it was, instead of directly selecting to the end of the word.
+            VisibleSelection newSelection = m_selection;
+            newSelection.setExtent(position);
+            if (m_selection.isBaseFirst() != newSelection.isBaseFirst())
+                position = m_selection.base();
+        }
+
         // Standard Mac behavior when extending to a boundary is grow the selection rather than leaving the
         // base in place and moving the extent. Matches NSTextView.
         if (!m_frame || !m_frame->editor()->behavior().shouldAlwaysGrowSelectionWhenExtendingToBoundary() || m_selection.isCaret() || !isBoundary(granularity))
@@ -1665,6 +1674,11 @@ bool FrameSelection::isFocusedAndActive() const
     return m_focused && m_frame->page() && m_frame->page()->focusController()->isActive();
 }
 
+inline static bool shouldStopBlinkingDueToTypingCommand(Frame* frame)
+{
+    return frame->editor()->lastEditCommand() && frame->editor()->lastEditCommand()->shouldStopCaretBlinking();
+}
+
 void FrameSelection::updateAppearance()
 {
 #if ENABLE(TEXT_CARET)
@@ -1675,7 +1689,7 @@ void FrameSelection::updateAppearance()
 
     // If the caret moved, stop the blink timer so we can restart with a
     // black caret in the new location.
-    if (caretRectChanged || !shouldBlink)
+    if (caretRectChanged || !shouldBlink || shouldStopBlinkingDueToTypingCommand(m_frame))
         m_caretBlinkTimer.stop();
 
     // Start blinking with a black caret. Be sure not to restart if we're
@@ -1835,7 +1849,7 @@ void DragCaretController::paintDragCaret(Frame* frame, GraphicsContext* p, const
 #endif
 }
 
-PassRefPtr<CSSMutableStyleDeclaration> FrameSelection::copyTypingStyle() const
+PassRefPtr<StylePropertySet> FrameSelection::copyTypingStyle() const
 {
     if (!m_typingStyle || !m_typingStyle->style())
         return 0;

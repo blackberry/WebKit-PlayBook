@@ -31,14 +31,16 @@
 #include "IDBDatabaseException.h"
 #include "IDBKey.h"
 #include "IDBKeyPath.h"
+#include "IDBTracing.h"
 #include "SerializedScriptValue.h"
 #include "V8Binding.h"
 #include "V8IDBKey.h"
+#include <wtf/MathExtras.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
 
-static const size_t maximumDepth = 20000;
+static const size_t maximumDepth = 2000;
 
 static PassRefPtr<IDBKey> createIDBKeyFromValue(v8::Handle<v8::Value> value, Vector<v8::Handle<v8::Array> >& stack)
 {
@@ -46,7 +48,7 @@ static PassRefPtr<IDBKey> createIDBKeyFromValue(v8::Handle<v8::Value> value, Vec
         return IDBKey::createNumber(value->NumberValue());
     if (value->IsString())
         return IDBKey::createString(v8ValueToWebCoreString(value));
-    if (value->IsDate())
+    if (value->IsDate() && !isnan(value->NumberValue()))
         return IDBKey::createDate(value->NumberValue());
     if (value->IsArray()) {
         v8::Handle<v8::Array> array = v8::Handle<v8::Array>::Cast(value);
@@ -125,10 +127,30 @@ v8::Handle<v8::Value> getNthValueOnKeyPath(v8::Handle<v8::Value>& rootValue, con
     return currentValue;
 }
 
+v8::Handle<v8::Value> ensureNthValueOnKeyPath(v8::Handle<v8::Value>& rootValue, const Vector<String>& keyPathElements, size_t index)
+{
+    v8::Handle<v8::Value> currentValue(rootValue);
+
+    ASSERT(index <= keyPathElements.size());
+    for (size_t i = 0; i < index; ++i) {
+        v8::Handle<v8::Value> parentValue(currentValue);
+        const String& keyPathElement = keyPathElements[i];
+        if (!get(currentValue, keyPathElement)) {
+            v8::Handle<v8::Object> object = v8::Object::New();
+            if (!set(parentValue, keyPathElement, object))
+                return v8::Handle<v8::Value>();
+            currentValue = object;
+        }
+    }
+
+    return currentValue;
+}
+
 } // anonymous namespace
 
 PassRefPtr<IDBKey> createIDBKeyFromSerializedValueAndKeyPath(PassRefPtr<SerializedScriptValue> value, const Vector<String>& keyPath)
 {
+    IDB_TRACE("createIDBKeyFromSerializedValueAndKeyPath");
     V8LocalContext localContext;
     v8::Handle<v8::Value> v8Value(value->deserialize());
     v8::Handle<v8::Value> v8Key(getNthValueOnKeyPath(v8Value, keyPath, keyPath.size()));
@@ -139,12 +161,13 @@ PassRefPtr<IDBKey> createIDBKeyFromSerializedValueAndKeyPath(PassRefPtr<Serializ
 
 PassRefPtr<SerializedScriptValue> injectIDBKeyIntoSerializedValue(PassRefPtr<IDBKey> key, PassRefPtr<SerializedScriptValue> value, const Vector<String>& keyPath)
 {
+    IDB_TRACE("injectIDBKeyIntoSerializedValue");
     V8LocalContext localContext;
     if (!keyPath.size())
         return 0;
 
     v8::Handle<v8::Value> v8Value(value->deserialize());
-    v8::Handle<v8::Value> parent(getNthValueOnKeyPath(v8Value, keyPath, keyPath.size() - 1));
+    v8::Handle<v8::Value> parent(ensureNthValueOnKeyPath(v8Value, keyPath, keyPath.size() - 1));
     if (parent.IsEmpty())
         return 0;
 

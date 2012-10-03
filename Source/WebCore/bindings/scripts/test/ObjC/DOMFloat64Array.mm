@@ -33,11 +33,15 @@
 #import "DOMCSSRuleInternal.h"
 #import "DOMCSSValueInternal.h"
 #import "DOMEventInternal.h"
+#import "DOMFloat32ArrayInternal.h"
 #import "DOMFloat64ArrayInternal.h"
+#import "DOMInt32ArrayInternal.h"
 #import "DOMNodeInternal.h"
 #import "DOMStyleSheetInternal.h"
 #import "ExceptionHandlers.h"
+#import "Float32Array.h"
 #import "Float64Array.h"
+#import "Int32Array.h"
 #import "JSMainThreadExecState.h"
 #import "ThreadCheck.h"
 #import "WebScriptObjectPrivate.h"
@@ -46,6 +50,12 @@
 #define IMPL static_cast<WebCore::Float64Array*>(reinterpret_cast<WebCore::Node*>(_internal))
 
 @implementation DOMFloat64Array
+
+- (DOMInt32Array *)foo:(DOMFloat32Array *)array
+{
+    WebCore::JSMainThreadNullState state;
+    return kit(WTF::getPtr(IMPL->foo(core(array))));
+}
 
 @end
 

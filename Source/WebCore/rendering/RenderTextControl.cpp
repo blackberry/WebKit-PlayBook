@@ -29,6 +29,7 @@
 #include "HitTestResult.h"
 #include "InlineTextBox.h"
 #include "RenderText.h"
+#include "RenderTheme.h"
 #include "ScrollbarTheme.h"
 #include "Text.h"
 #include "TextIterator.h"
@@ -38,32 +39,6 @@
 using namespace std;
 
 namespace WebCore {
-
-using namespace HTMLNames;
-
-// Value chosen by observation.  This can be tweaked.
-static const int minColorContrastValue = 1300;
-// For transparent or translucent background color, use lightening.
-static const int minDisabledColorAlphaValue = 128;
-
-static Color disabledTextColor(const Color& textColor, const Color& backgroundColor)
-{
-    // The explicit check for black is an optimization for the 99% case (black on white).
-    // This also means that black on black will turn into grey on black when disabled.
-    Color disabledColor;
-    if (textColor.rgb() == Color::black || backgroundColor.alpha() < minDisabledColorAlphaValue || differenceSquared(textColor, Color::white) > differenceSquared(backgroundColor, Color::white))
-        disabledColor = textColor.light();
-    else
-        disabledColor = textColor.dark();
-    
-    // If there's not very much contrast between the disabled color and the background color,
-    // just leave the text color alone.  We don't want to change a good contrast color scheme so that it has really bad contrast.
-    // If the the contrast was already poor, then it doesn't do any good to change it to a different poor contrast color scheme.
-    if (differenceSquared(disabledColor, backgroundColor) < minColorContrastValue)
-        return textColor;
-    
-    return disabledColor;
-}
 
 RenderTextControl::RenderTextControl(Node* node)
     : RenderBlock(node)
@@ -127,7 +102,7 @@ void RenderTextControl::adjustInnerTextStyle(const RenderStyle* startStyle, Rend
 
     bool disabled = updateUserModifyProperty(node(), textBlockStyle);
     if (disabled)
-        textBlockStyle->setColor(disabledTextColor(textBlockStyle->visitedDependentColor(CSSPropertyColor), startStyle->visitedDependentColor(CSSPropertyBackgroundColor)));
+        textBlockStyle->setColor(theme()->disabledTextColor(textBlockStyle->visitedDependentColor(CSSPropertyColor), startStyle->visitedDependentColor(CSSPropertyBackgroundColor)));
 }
 
 int RenderTextControl::textBlockHeight() const
@@ -160,87 +135,6 @@ VisiblePosition RenderTextControl::visiblePositionForIndex(int index) const
     CharacterIterator it(range.get());
     it.advance(index - 1);
     return VisiblePosition(it.range()->endPosition(), UPSTREAM);
-}
-
-static void getNextSoftBreak(RootInlineBox*& line, Node*& breakNode, unsigned& breakOffset)
-{
-    RootInlineBox* next;
-    for (; line; line = next) {
-        next = line->nextRootBox();
-        if (next && !line->endsWithBreak()) {
-            ASSERT(line->lineBreakObj());
-            breakNode = line->lineBreakObj()->node();
-            breakOffset = line->lineBreakPos();
-            line = next;
-            return;
-        }
-    }
-    breakNode = 0;
-    breakOffset = 0;
-}
-
-unsigned int RenderTextControl::softBreaksBeforeIndex(int index)
-{
-    if (index < 1)
-        return 0;
-
-    HTMLElement* innerText = innerTextElement();
-    if (!innerText)
-        return 0;
-
-    Node* firstChild = innerText->firstChild();
-    if (!firstChild)
-        return 0;
-
-    RenderObject* renderer = firstChild->renderer();
-    if (!renderer)
-        return 0;
-
-    InlineBox* box;
-    if (renderer->isText())
-        box = toRenderText(renderer)->firstTextBox();
-    else if (renderer->isBox())
-        box = toRenderBox(renderer)->inlineBoxWrapper();
-    else
-        return 0;
-
-    Node* breakNode;
-    unsigned breakOffset;
-    RootInlineBox* line = box->root();
-    getNextSoftBreak(line, breakNode, breakOffset);
-
-    if (!breakNode)
-        return 0;
-
-    unsigned int currentOffset = 0;
-    unsigned int softBreaks = 0;
-
-    for (Node* n = firstChild; n; n = n->traverseNextNode(innerText)) {
-        if (currentOffset > index)
-            break;
-
-        if (n->hasTagName(brTag))
-            currentOffset++;
-        else if (n->isTextNode()) {
-            Text* text = static_cast<Text*>(n);
-            unsigned length = text->data().length();
-            unsigned position = 0;
-            while (breakNode == n && breakOffset <= length) {
-                if (breakOffset >= position) {
-                    currentOffset += breakOffset - position;
-                    if (currentOffset > index)
-                        return softBreaks;
-                    position = breakOffset;
-                    softBreaks++;
-                }
-                getNextSoftBreak(line, breakNode, breakOffset);
-            }
-            currentOffset += length - position;
-        }
-        while (breakNode == n)
-            getNextSoftBreak(line, breakNode, breakOffset);
-    }
-    return softBreaks;
 }
 
 int RenderTextControl::scrollbarThickness() const
@@ -361,7 +255,7 @@ void RenderTextControl::computePreferredLogicalWidths()
     m_minPreferredLogicalWidth = 0;
     m_maxPreferredLogicalWidth = 0;
 
-    if (style()->width().isFixed() && style()->width().value() > 0)
+    if (style()->width().isFixed() && style()->width().value() >= 0)
         m_minPreferredLogicalWidth = m_maxPreferredLogicalWidth = computeContentBoxLogicalWidth(style()->width().value());
     else {
         // Use average character width. Matches IE.

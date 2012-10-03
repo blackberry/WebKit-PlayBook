@@ -26,46 +26,33 @@
 #define StyledElement_h
 
 #include "Element.h"
-#include "MappedAttributeEntry.h"
+#include "StylePropertySet.h"
 
 namespace WebCore {
 
 class Attribute;
-class CSSMappedAttributeDeclaration;
-class CSSMutableStyleDeclaration;
 
 class StyledElement : public Element {
 public:
     virtual ~StyledElement();
 
-    bool hasMappedAttributes() const { return attributeMap() && attributeMap()->hasMappedAttributes(); }
-    bool isMappedAttribute(const QualifiedName& name) const { MappedAttributeEntry res = eNone; mapToEntry(name, res); return res != eNone; }
-
-    void addCSSLength(Attribute*, int id, const String& value);
-    void addCSSProperty(Attribute*, int id, const String& value);
-    void addCSSProperty(Attribute*, int id, int value);
-    void addCSSImageProperty(Attribute*, int propertyID, const String& url);
-    void addCSSColor(Attribute*, int id, const String& color);
-
-    static CSSMappedAttributeDeclaration* getMappedAttributeDecl(MappedAttributeEntry, const QualifiedName& name, const AtomicString& value);
-    static void setMappedAttributeDecl(MappedAttributeEntry, const QualifiedName& name, const AtomicString& value, CSSMappedAttributeDeclaration*);
-    static void removeMappedAttributeDecl(MappedAttributeEntry, const QualifiedName& name, const AtomicString& value);
-
-    static CSSMappedAttributeDeclaration* getMappedAttributeDecl(MappedAttributeEntry, Attribute*);
-    static void setMappedAttributeDecl(MappedAttributeEntry, Attribute*, CSSMappedAttributeDeclaration*);
-
-    CSSMutableStyleDeclaration* inlineStyleDecl() const { return m_inlineStyleDecl.get(); }
-    virtual bool canHaveAdditionalAttributeStyleDecls() const { return false; }
-    virtual void additionalAttributeStyleDecls(Vector<CSSMutableStyleDeclaration*>&) { }
-    CSSMutableStyleDeclaration* getInlineStyleDecl();
-    CSSStyleDeclaration* style();
+    virtual StylePropertySet* additionalAttributeStyle() { return 0; }
     void invalidateStyleAttribute();
 
+    StylePropertySet* inlineStyleDecl() const { return attributeData() ? attributeData()->inlineStyleDecl() : 0; }
+    StylePropertySet* ensureInlineStyleDecl() { return ensureAttributeData()->ensureInlineStyleDecl(this); }
+    
+    // Unlike StylePropertySet setters, these implement invalidation.
+    bool setInlineStyleProperty(int propertyID, int identifier, bool important = false);
+    bool setInlineStyleProperty(int propertyID, double value, CSSPrimitiveValue::UnitTypes, bool important = false);
+    bool setInlineStyleProperty(int propertyID, const String& value, bool important = false);
+    bool removeInlineStyleProperty(int propertyID);
+    
+    virtual CSSStyleDeclaration* style() OVERRIDE { return ensureInlineStyleDecl()->ensureInlineCSSStyleDeclaration(this); }
+
+    StylePropertySet* attributeStyle();
+
     const SpaceSplitString& classNames() const;
-
-    virtual bool mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const;
-
-    virtual PassRefPtr<Attribute> createAttribute(const QualifiedName&, const AtomicString& value);
 
 protected:
     StyledElement(const QualifiedName& name, Document* document, ConstructionType type)
@@ -73,39 +60,59 @@ protected:
     {
     }
 
-    virtual void attributeChanged(Attribute*, bool preserveDecls = false);
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void attributeChanged(Attribute*) OVERRIDE;
+    virtual void parseAttribute(Attribute*);
     virtual void copyNonAttributeProperties(const Element*);
+
+    virtual bool isPresentationAttribute(const QualifiedName&) const { return false; }
+    virtual void collectStyleForAttribute(Attribute*, StylePropertySet*) { }
+
+    void addPropertyToAttributeStyle(StylePropertySet*, int propertyID, int identifier);
+    void addPropertyToAttributeStyle(StylePropertySet*, int propertyID, double value, CSSPrimitiveValue::UnitTypes);
+    void addPropertyToAttributeStyle(StylePropertySet*, int propertyID, const String& value);
 
     virtual void addSubresourceAttributeURLs(ListHashSet<KURL>&) const;
 
     // classAttributeChanged() exists to share code between
-    // parseMappedAttribute (called via setAttribute()) and
+    // parseAttribute (called via setAttribute()) and
     // svgAttributeChanged (called when element.className.baseValue is set)
     void classAttributeChanged(const AtomicString& newClassString);
-    
-    virtual void didMoveToNewOwnerDocument();
 
 private:
-    void createMappedDecl(Attribute*);
-
-    void createInlineStyleDecl();
-    void destroyInlineStyleDecl();
     virtual void updateStyleAttribute() const;
+    void inlineStyleChanged();
 
-    RefPtr<CSSMutableStyleDeclaration> m_inlineStyleDecl;
+    void updateAttributeStyle();
+
+    void destroyInlineStyleDecl()
+    {
+        if (attributeData())
+            attributeData()->destroyInlineStyleDecl(this);
+    }
 };
 
 inline const SpaceSplitString& StyledElement::classNames() const
 {
     ASSERT(hasClass());
-    ASSERT(attributeMap());
-    return attributeMap()->classNames();
+    ASSERT(attributeData());
+    return attributeData()->classNames();
 }
 
 inline void StyledElement::invalidateStyleAttribute()
 {
     clearIsStyleAttributeValid();
+}
+
+inline StylePropertySet* StyledElement::attributeStyle()
+{
+    if (attributeStyleDirty())
+        updateAttributeStyle();
+    return attributeData() ? attributeData()->attributeStyle() : 0;
+}
+
+inline void StyledElement::addPropertyToAttributeStyle(StylePropertySet* style, int propertyID, const String& value)
+{
+    style->setProperty(propertyID, value, false, document()->elementSheet());
 }
 
 } //namespace

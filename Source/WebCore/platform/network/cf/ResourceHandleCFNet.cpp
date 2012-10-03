@@ -333,11 +333,20 @@ static CFCachedURLResponseRef willCacheResponse(CFURLConnectionRef, CFCachedURLR
         handle->client()->willCacheResponse(handle, policy);
 
     if (static_cast<CFURLCacheStoragePolicy>(policy) != CFCachedURLResponseGetStoragePolicy(cachedResponse)) {
+#if HAVE(NETWORK_CFDATA_ARRAY_CALLBACK)
+        RetainPtr<CFArrayRef> receiverData(AdoptCF, CFCachedURLResponseCopyReceiverDataArray(cachedResponse));
+        cachedResponse = CFCachedURLResponseCreateWithDataArray(kCFAllocatorDefault,
+                                                                CFCachedURLResponseGetWrappedResponse(cachedResponse),
+                                                                receiverData.get(),
+                                                                CFCachedURLResponseGetUserInfo(cachedResponse),
+                                                                static_cast<CFURLCacheStoragePolicy>(policy));
+#else
         cachedResponse = CFCachedURLResponseCreateWithUserInfo(kCFAllocatorDefault, 
                                                                CFCachedURLResponseGetWrappedResponse(cachedResponse),
                                                                CFCachedURLResponseGetReceiverData(cachedResponse),
                                                                CFCachedURLResponseGetUserInfo(cachedResponse), 
                                                                static_cast<CFURLCacheStoragePolicy>(policy));
+#endif
     } else
         CFRetain(cachedResponse);
 
@@ -595,7 +604,7 @@ void ResourceHandle::didReceiveAuthenticationChallenge(const AuthenticationChall
         
         KURL urlToStore;
         if (challenge.failureResponse().httpStatusCode() == 401)
-            urlToStore = firstRequest().url();
+            urlToStore = challenge.failureResponse().url();
         CredentialStorage::set(core(credential.get()), challenge.protectionSpace(), urlToStore);
         
         CFURLConnectionUseCredential(d->m_connection.get(), credential.get(), challenge.cfURLAuthChallengeRef());
@@ -619,7 +628,7 @@ void ResourceHandle::didReceiveAuthenticationChallenge(const AuthenticationChall
                 ASSERT(credential.persistence() == CredentialPersistenceNone);
                 if (challenge.failureResponse().httpStatusCode() == 401) {
                     // Store the credential back, possibly adding it as a default for this directory.
-                    CredentialStorage::set(credential, challenge.protectionSpace(), firstRequest().url());
+                    CredentialStorage::set(credential, challenge.protectionSpace(), challenge.failureResponse().url());
                 }
                 RetainPtr<CFURLCredentialRef> cfCredential(AdoptCF, createCF(credential));
                 CFURLConnectionUseCredential(d->m_connection.get(), cfCredential.get(), challenge.cfURLAuthChallengeRef());
@@ -666,7 +675,7 @@ void ResourceHandle::receivedCredential(const AuthenticationChallenge& challenge
         
         KURL urlToStore;
         if (challenge.failureResponse().httpStatusCode() == 401)
-            urlToStore = firstRequest().url();      
+            urlToStore = challenge.failureResponse().url();      
         CredentialStorage::set(webCredential, challenge.protectionSpace(), urlToStore);
 
         CFURLConnectionUseCredential(d->m_connection.get(), cfCredential.get(), challenge.cfURLAuthChallengeRef());
@@ -1001,7 +1010,7 @@ void ResourceHandle::setPrivateBrowsingStorageSessionIdentifierBase(const String
     privateBrowsingStorageSessionIdentifierBase() = identifier;
 }
 
-#if PLATFORM(WIN)
+#if PLATFORM(WIN) || USE(CFNETWORK)
 
 String ResourceHandle::privateBrowsingStorageSessionIdentifierDefaultBase()
 {

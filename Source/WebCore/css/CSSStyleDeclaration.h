@@ -1,6 +1,6 @@
 /*
  * (C) 1999-2003 Lars Knoll (knoll@kde.org)
- * Copyright (C) 2004, 2005, 2006, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2004, 2005, 2006, 2008, 2012 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,108 +21,59 @@
 #ifndef CSSStyleDeclaration_h
 #define CSSStyleDeclaration_h
 
+#include "CSSPropertyNames.h"
 #include "CSSRule.h"
 #include <wtf/Forward.h>
 
 namespace WebCore {
 
-class CSSMutableStyleDeclaration;
 class CSSProperty;
 class CSSStyleSheet;
 class CSSValue;
+class StylePropertySet;
+class StyledElement;
 
 typedef int ExceptionCode;
 
-class CSSStyleDeclaration : public RefCounted<CSSStyleDeclaration> {
+class CSSStyleDeclaration {
+    WTF_MAKE_NONCOPYABLE(CSSStyleDeclaration); WTF_MAKE_FAST_ALLOCATED;
 public:
     virtual ~CSSStyleDeclaration() { }
 
-    static bool isPropertyName(const String&);
+    virtual void ref() = 0;
+    virtual void deref() = 0;
 
-    // FIXME: Refactor so CSSStyleDeclaration never needs to have a style sheet parent.
-
-    CSSRule* parentRule() const
-    {
-        return m_parentIsRule ? m_parentRule : 0;
-    }
-
-    void setParentRule(CSSRule* rule)
-    {
-        m_parentIsRule = true;
-        m_parentRule = rule;
-    }
-
-    void setParentStyleSheet(CSSStyleSheet* styleSheet)
-    {
-        m_parentIsRule = false;
-        m_parentStyleSheet = styleSheet;
-    }
-
-    CSSStyleSheet* parentStyleSheet() const
-    {
-        if (!m_parentIsRule)
-            return m_parentStyleSheet;
-        return m_parentRule ? m_parentRule->parentStyleSheet() : 0;
-    }
-
+    virtual CSSRule* parentRule() const = 0;
     virtual String cssText() const = 0;
     virtual void setCssText(const String&, ExceptionCode&) = 0;
-
-    unsigned length() const { return virtualLength(); }
-    virtual unsigned virtualLength() const = 0;
-    bool isEmpty() const { return !length(); }
+    virtual unsigned length() const = 0;
     virtual String item(unsigned index) const = 0;
+    virtual PassRefPtr<CSSValue> getPropertyCSSValue(const String& propertyName) = 0;
+    virtual String getPropertyValue(const String& propertyName) = 0;
+    virtual String getPropertyPriority(const String& propertyName) = 0;
+    virtual String getPropertyShorthand(const String& propertyName) = 0;
+    virtual bool isPropertyImplicit(const String& propertyName) = 0;
+    virtual void setProperty(const String& propertyName, const String& value, const String& priority, ExceptionCode&) = 0;
+    virtual String removeProperty(const String& propertyName, ExceptionCode&) = 0;
 
-    PassRefPtr<CSSValue> getPropertyCSSValue(const String& propertyName);
-    String getPropertyValue(const String& propertyName);
-    String getPropertyPriority(const String& propertyName);
-    String getPropertyShorthand(const String& propertyName);
-    bool isPropertyImplicit(const String& propertyName);
+    // CSSPropertyID versions of the CSSOM functions to support bindings and editing.
+    // Use the non-virtual methods in the concrete subclasses when possible.
+    virtual PassRefPtr<CSSValue> getPropertyCSSValueInternal(CSSPropertyID) = 0;
+    virtual String getPropertyValueInternal(CSSPropertyID) = 0;
+    virtual void setPropertyInternal(CSSPropertyID, const String& value, bool important, ExceptionCode&) = 0;
 
-    virtual PassRefPtr<CSSValue> getPropertyCSSValue(int propertyID) const = 0;
-    virtual String getPropertyValue(int propertyID) const = 0;
-    virtual bool getPropertyPriority(int propertyID) const = 0;
-    virtual int getPropertyShorthand(int propertyID) const = 0;
-    virtual bool isPropertyImplicit(int propertyID) const = 0;
+    virtual PassRefPtr<StylePropertySet> copy() const = 0;
+    virtual PassRefPtr<StylePropertySet> makeMutable() = 0;
 
-    void setProperty(const String& propertyName, const String& value, ExceptionCode&);
-    void setProperty(const String& propertyName, const String& value, const String& priority, ExceptionCode&);
-    String removeProperty(const String& propertyName, ExceptionCode&);
-    virtual void setProperty(int propertyId, const String& value, bool important, ExceptionCode&) = 0;
-    virtual String removeProperty(int propertyID, ExceptionCode&) = 0;
-
-    virtual PassRefPtr<CSSMutableStyleDeclaration> copy() const = 0;
-    virtual PassRefPtr<CSSMutableStyleDeclaration> makeMutable() = 0;
-
-    void diff(CSSMutableStyleDeclaration*) const;
-
-    PassRefPtr<CSSMutableStyleDeclaration> copyPropertiesInSet(const int* set, unsigned length) const;
+    virtual bool cssPropertyMatches(const CSSProperty*) const = 0;
+    virtual CSSStyleSheet* parentStyleSheet() const { return 0; }
 
 #ifndef NDEBUG
     void showStyle();
 #endif
 
-    bool isMutableStyleDeclaration() const { return m_isMutableStyleDeclaration; }
-
 protected:
-    CSSStyleDeclaration(CSSRule* parentRule = 0, bool isMutable = false);
-
-    virtual bool cssPropertyMatches(const CSSProperty*) const;
-
-    // These bits are only used by CSSMutableStyleDeclaration but kept here
-    // to maximize struct packing.
-    bool m_strictParsing : 1;
-#ifndef NDEBUG
-    unsigned m_iteratorCount : 4;
-#endif
-
-private:
-    bool m_isMutableStyleDeclaration : 1;
-    bool m_parentIsRule : 1;
-    union {
-        CSSRule* m_parentRule;
-        CSSStyleSheet* m_parentStyleSheet;
-    };
+    CSSStyleDeclaration() { }
 };
 
 } // namespace WebCore

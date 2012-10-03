@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,11 +23,14 @@
 #include "BlackBerryPlatformPrimitives.h"
 #include "TextGranularity.h"
 
+#include <wtf/Vector.h>
+
 namespace WTF {
 class String;
 }
 
 namespace WebCore {
+class FloatQuad;
 class IntPoint;
 class IntRect;
 class Node;
@@ -53,7 +56,6 @@ public:
     void cancelSelection();
     WebString selectedText() const;
 
-    bool findNextString(const WTF::String&, bool);
     bool selectionContains(const WebCore::IntPoint&);
 
     void setSelection(const WebCore::IntPoint& start, const WebCore::IntPoint& end);
@@ -65,17 +67,19 @@ public:
     void selectionPositionChanged(bool visualChangeOnly = false);
 
     void setCaretPosition(const WebCore::IntPoint&);
-    void caretPositionChanged();
 
     bool lastUpdatedEndPointIsValid() const { return m_lastUpdatedEndPointIsValid; }
+
 private:
-    void getConsolidatedRegionOfTextQuadsForSelection(const WebCore::VisibleSelection&, BlackBerry::Platform::IntRectRegion&) const;
-    void clipRegionToVisibleContainer(BlackBerry::Platform::IntRectRegion&);
+    void caretPositionChanged();
+    void regionForTextQuads(WTF::Vector<WebCore::FloatQuad>&, BlackBerry::Platform::IntRectRegion&, bool shouldClipToVisibleContent = true) const;
+    WebCore::IntRect clippingRectForVisibleContent() const;
     bool updateOrHandleInputSelection(WebCore::VisibleSelection& newSelection, const WebCore::IntPoint& relativeStart
                                       , const WebCore::IntPoint& relativeEnd);
     WebCore::Node* DOMContainerNodeForVisiblePosition(const WebCore::VisiblePosition&) const;
     bool shouldUpdateSelectionOrCaretForPoint(const WebCore::IntPoint&, const WebCore::IntRect&, bool startCaret = true) const;
     unsigned short extendSelectionToFieldBoundary(bool isStartHandle, const WebCore::IntPoint& selectionPoint, WebCore::VisibleSelection& newSelection);
+    WebCore::IntPoint clipPointToVisibleContainer(const WebCore::IntPoint&) const;
 
     WebPagePrivate* m_webPage;
 

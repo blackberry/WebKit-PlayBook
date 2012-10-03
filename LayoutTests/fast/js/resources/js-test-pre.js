@@ -1,6 +1,6 @@
 // svg/dynamic-updates tests set enablePixelTesting=true, as we want to dump text + pixel results
-if (window.layoutTestController)
-    layoutTestController.dumpAsText(window.enablePixelTesting);
+if (self.layoutTestController)
+    layoutTestController.dumpAsText(self.enablePixelTesting);
 
 var description, debug, successfullyParsed, errorMessage;
 
@@ -48,55 +48,44 @@ var description, debug, successfullyParsed, errorMessage;
         span.innerHTML = msg + '<br />';
     };
 
-    function findPath() {
-        var scripts = document.getElementsByTagName("script");
-        var regExp = /^(.*resources\/)js-test-pre\.js/;
-        for (var i = scripts.length - 1; i >= 0; i--) {
-            var src = scripts[i].getAttribute("src");
-            var match;
-            regExp.lastIndex = 0;
-            if (src && (match = regExp.exec(src)))
-                return match[1];
-        }
-        return null;
-    }
+    var css =
+        ".pass {" +
+            "font-weight: bold;" +
+            "color: green;" +
+        "}" +
+        ".fail {" +
+            "font-weight: bold;" +
+            "color: red;" +
+        "}" +
+        "#console {" +
+            "white-space: pre-wrap;" +
+            "font-family: monospace;" +
+        "}";
 
-    // FIXME: No test should depend on this stylesheet.
-    function hasStyleSheet() {
-        var links = document.getElementsByTagName("link");
-        var regExp = /resources\/js-test-style.css/;
-        for (var i = 0; i < links.length; i++) {
-            var link = links[i];
-            if (link.rel.toLowerCase() === "stylesheet" && regExp.test(link.href))
-                return true;
-        }
-        return false;
-    }
-
-    function insertStyleSheet() {
-        if (hasStyleSheet())
-            return;
-
-        // FIXME: Once all tests have been updated to not depend on this link element
-        // we should remove this and replace with a simple style element instead.
-        var path = findPath();
-        if (!path == null)
-            return;
-
-        var link = document.createElement("link");
-        link.rel = "stylesheet";
-        link.href = path + "js-test-style.css";
-        document.documentElement.appendChild(link);
+    function insertStyleSheet()
+    {
+        var styleElement = document.createElement("style");
+        styleElement.textContent = css;
+        (document.head || document.documentElement).appendChild(styleElement);
     }
     
-    insertStyleSheet();
+    if (!isWorker())
+        insertStyleSheet();
 
-    window.onerror = function(message)
+    self.onerror = function(message)
     {
         errorMessage = message;
     };
 
 })();
+
+function isWorker()
+{
+    // It's conceivable that someone would stub out 'document' in a worker so
+    // also check for childNodes, an arbitrary DOM-related object that is
+    // meaningless in a WorkerContext.
+    return (typeof document === 'undefined' || typeof document.childNodes === 'undefined') && !!self.importScripts;
+}
 
 function descriptionQuiet(msg) { description(msg, true); }
 
@@ -196,6 +185,68 @@ function shouldBe(_a, _b, quiet)
     testFailed(_a + " should be " + _bv + ". Was " + stringify(_av) + ".");
   else
     testFailed(_a + " should be " + _bv + " (of type " + typeof _bv + "). Was " + _av + " (of type " + typeof _av + ").");
+}
+
+// Variant of shouldBe()--confirms that result of eval(_to_eval) is within
+// numeric _tolerance of numeric _target.
+function shouldBeCloseTo(_to_eval, _target, _tolerance, quiet)
+{
+  if (typeof _to_eval != "string") {
+    testFailed("shouldBeCloseTo() requires string argument _to_eval. was type " + typeof _to_eval);
+    return;
+  }
+  if (typeof _target != "number") {
+    testFailed("shouldBeCloseTo() requires numeric argument _target. was type " + typeof _target);
+    return;
+  }
+  if (typeof _tolerance != "number") {
+    testFailed("shouldBeCloseTo() requires numeric argument _tolerance. was type " + typeof _tolerance);
+    return;
+  }
+
+  var _result;
+  try {
+     _result = eval(_to_eval);
+  } catch (e) {
+    testFailed(_to_eval + " should be within " + _tolerance + " of "
+               + _target + ". Threw exception " + e);
+    return;
+  }
+
+  if (typeof(_result) != typeof(_target)) {
+    testFailed(_to_eval + " should be of type " + typeof _target
+               + " but was of type " + typeof _result);
+  } else if (Math.abs(_result - _target) <= _tolerance) {
+    if (!quiet) {
+        testPassed(_to_eval + " is within " + _tolerance + " of " + _target);
+    }
+  } else {
+    testFailed(_to_eval + " should be within " + _tolerance + " of " + _target
+               + ". Was " + _result + ".");
+  }
+}
+
+function shouldNotBe(_a, _b, quiet)
+{
+  if (typeof _a != "string" || typeof _b != "string")
+    debug("WARN: shouldNotBe() expects string arguments");
+  var exception;
+  var _av;
+  try {
+     _av = eval(_a);
+  } catch (e) {
+     exception = e;
+  }
+  var _bv = eval(_b);
+
+  if (exception)
+    testFailed(_a + " should not be " + _bv + ". Threw exception " + exception);
+  else if (!isResultCorrect(_av, _bv)) {
+    if (!quiet) {
+        testPassed(_a + " is not " + _b);
+    }
+  } else
+    testFailed(_a + " should not be " + _bv + ".");
 }
 
 function shouldBeTrue(_a) { shouldBe(_a, "true"); }
@@ -397,10 +448,11 @@ function gc() {
 
 function isSuccessfullyParsed()
 {
+    // FIXME: Remove this and only report unexpected syntax errors.
     if (!errorMessage)
         successfullyParsed = true;
     shouldBeTrue("successfullyParsed");
-    debug('<br><span class="pass">TEST COMPLETE</span>');
+    debug('<br /><span class="pass">TEST COMPLETE</span>');
 }
 
 // It's possible for an async test to call finishJSTest() before js-test-post.js
@@ -408,13 +460,62 @@ function isSuccessfullyParsed()
 function finishJSTest()
 {
     wasFinishJSTestCalled = true;
-    if (!window.wasPostTestScriptParsed)
+    if (!self.wasPostTestScriptParsed)
         return;
-    if (!errorMessage)
-        successfullyParsed = true;
-    // FIXME: Remove this and only report unexpected syntax errors.
-    shouldBeTrue("successfullyParsed");
-    debug('<br /><span class="pass">TEST COMPLETE</span>');
-    if (window.jsTestIsAsync && window.layoutTestController)
+    isSuccessfullyParsed();
+    if (self.jsTestIsAsync && self.layoutTestController)
         layoutTestController.notifyDone();
+}
+
+function startWorker(testScriptURL)
+{
+    self.jsTestIsAsync = true;
+    debug('Starting worker: ' + testScriptURL);
+    var worker = new Worker(testScriptURL);
+    worker.onmessage = function(event)
+    {
+        var workerPrefix = "[Worker] ";
+        if (event.data.length < 5 || event.data.charAt(4) != ':') {
+          debug(workerPrefix + event.data);
+          return;
+        }
+        var code = event.data.substring(0, 4);
+        var payload = workerPrefix + event.data.substring(5);
+        if (code == "PASS")
+            testPassed(payload);
+        else if (code == "FAIL")
+            testFailed(payload);
+        else if (code == "DESC")
+            description(payload);
+        else if (code == "DONE")
+            finishJSTest();
+        else
+            debug(workerPrefix + event.data);
+    };
+
+    worker.onerror = function(event)
+    {
+        debug('Got error from worker: ' + event.message);
+        finishJSTest();
+    }
+
+    return worker;
+}
+
+if (isWorker()) {
+    description = function(msg, quiet) {
+        postMessage('DESC:' + msg);
+    }
+    testFailed = function(msg) {
+        postMessage('FAIL:' + msg);
+    }
+    testPassed = function(msg) {
+        postMessage('PASS:' + msg);
+    }
+    finishJSTest = function() {
+        postMessage('DONE:');
+    }
+    debug = function(msg) {
+        postMessage(msg);
+    }
 }

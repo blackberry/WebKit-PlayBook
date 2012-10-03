@@ -45,8 +45,8 @@ namespace JSC {
 
     class SamplingFlags {
     public:
-        static void start();
-        static void stop();
+        JS_EXPORT_PRIVATE static void start();
+        JS_EXPORT_PRIVATE static void stop();
 
 #if ENABLE(SAMPLING_FLAGS)
         static void setFlag(unsigned flag)
@@ -89,7 +89,7 @@ namespace JSC {
 
 #endif
     private:
-        static uint32_t s_flags;
+        JS_EXPORTDATA static uint32_t s_flags;
 #if ENABLE(SAMPLING_FLAGS)
         static uint64_t s_flagCounts[33];
 #endif
@@ -174,7 +174,7 @@ namespace JSC {
     class SamplingRegion {
     public:
         SamplingRegion(const char*) { }
-        void dump();
+        JS_EXPORT_PRIVATE void dump();
     };
 #endif // ENABLE(SAMPLING_REGIONS)
 
@@ -211,7 +211,7 @@ namespace JSC {
         unsigned m_size;
     };
 
-    typedef WTF::HashMap<ScriptExecutable*, ScriptSampleRecord*> ScriptSampleRecordMap;
+    typedef HashMap<ScriptExecutable*, OwnPtr<ScriptSampleRecord> > ScriptSampleRecordMap;
 
     class SamplingThread {
     public:
@@ -220,10 +220,10 @@ namespace JSC {
         static unsigned s_hertz;
         static ThreadIdentifier s_samplingThread;
 
-        static void start(unsigned hertz=10000);
-        static void stop();
+        JS_EXPORT_PRIVATE static void start(unsigned hertz=10000);
+        JS_EXPORT_PRIVATE static void stop();
 
-        static void* threadStartFunc(void*);
+        static void threadStartFunc(void*);
     };
 
     class SamplingTool {
@@ -287,21 +287,14 @@ namespace JSC {
             , m_sampleCount(0)
             , m_opcodeSampleCount(0)
 #if ENABLE(CODEBLOCK_SAMPLING)
-            , m_scopeSampleMap(adoptPtr(new ScriptSampleRecordMap()))
+            , m_scopeSampleMap(adoptPtr(new ScriptSampleRecordMap))
 #endif
         {
             memset(m_opcodeSamples, 0, sizeof(m_opcodeSamples));
             memset(m_opcodeSamplesInCTIFunctions, 0, sizeof(m_opcodeSamplesInCTIFunctions));
         }
 
-        ~SamplingTool()
-        {
-#if ENABLE(CODEBLOCK_SAMPLING)
-            deleteAllValues(*m_scopeSampleMap);
-#endif
-        }
-
-        void setup();
+        JS_EXPORT_PRIVATE void setup();
         void dump(ExecState*);
 
         void notifyOfScope(JSGlobalData&, ScriptExecutable* scope);

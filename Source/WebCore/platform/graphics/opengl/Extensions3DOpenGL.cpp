@@ -35,10 +35,8 @@
 #if PLATFORM(MAC)
 #include "ANGLE/ShaderLang.h"
 #include <OpenGL/gl.h>
-#elif PLATFORM(GTK)
+#elif PLATFORM(GTK) || PLATFORM(EFL) || PLATFORM(QT)
 #include "OpenGLShims.h"
-#elif PLATFORM(QT)
-#include <cairo/OpenGLShims.h>
 #elif PLATFORM(BLACKBERRY)
 #include <EGL/egl.h>
 #endif
@@ -198,7 +196,7 @@ void Extensions3DOpenGL::renderbufferStorageMultisample(unsigned long target, un
 Platform3DObject Extensions3DOpenGL::createVertexArrayOES()
 {
     m_context->makeContextCurrent();
-#if !PLATFORM(GTK) && !PLATFORM(QT) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
+#if !PLATFORM(GTK) && !PLATFORM(QT) && !PLATFORM(EFL) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
     GLuint array = 0;
     glGenVertexArraysAPPLE(1, &array);
     return array;
@@ -222,7 +220,7 @@ void Extensions3DOpenGL::deleteVertexArrayOES(Platform3DObject array)
         return;
     
     m_context->makeContextCurrent();
-#if !PLATFORM(GTK) && !PLATFORM(QT) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
+#if !PLATFORM(GTK) && !PLATFORM(QT) && !PLATFORM(EFL) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
     glDeleteVertexArraysAPPLE(1, &array);
 #elif PLATFORM(BLACKBERRY)
     if (m_glDeleteVertexArraysOES)
@@ -238,7 +236,7 @@ GC3Dboolean Extensions3DOpenGL::isVertexArrayOES(Platform3DObject array)
         return GL_FALSE;
     
     m_context->makeContextCurrent();
-#if !PLATFORM(GTK) && !PLATFORM(QT) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
+#if !PLATFORM(GTK) && !PLATFORM(QT) && !PLATFORM(EFL) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
     return glIsVertexArrayAPPLE(array);
 #elif PLATFORM(BLACKBERRY)
     if (m_glIsVertexArrayOES)
@@ -258,7 +256,7 @@ void Extensions3DOpenGL::bindVertexArrayOES(Platform3DObject array)
         return;
 
     m_context->makeContextCurrent();
-#if !PLATFORM(GTK) && !PLATFORM(QT) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
+#if !PLATFORM(GTK) && !PLATFORM(QT) && !PLATFORM(EFL) && defined(GL_APPLE_vertex_array_object) && GL_APPLE_vertex_array_object
     glBindVertexArrayAPPLE(array);
 #elif PLATFORM(BLACKBERRY)
     if (m_glBindVertexArrayOES)

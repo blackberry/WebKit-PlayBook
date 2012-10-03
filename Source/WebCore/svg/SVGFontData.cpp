@@ -31,6 +31,12 @@
 #include "TextRun.h"
 #include "WidthIterator.h"
 #include "XMLNames.h"
+#include <wtf/text/StringBuilder.h>
+#include <wtf/unicode/CharacterNames.h>
+#include <wtf/unicode/Unicode.h>
+
+using namespace WTF;
+using namespace Unicode;
 
 namespace WebCore {
 
@@ -63,13 +69,6 @@ void SVGFontData::initializeFontData(SimpleFontData* fontData, float fontSize)
     fontData->setZeroWidthSpaceGlyph(0);
     fontData->determinePitch();
 
-    GlyphPage* glyphPageZero = GlyphPageTreeNode::getRootChild(fontData, 0)->page();
-    if (!glyphPageZero) {
-        fontData->setSpaceGlyph(0);
-        fontData->setSpaceWidth(0);
-        return;
-    }
-
     unsigned unitsPerEm = svgFontFaceElement->unitsPerEm();
     float scale = scaleEmToUnits(fontSize, unitsPerEm);
     float xHeight = svgFontFaceElement->xHeight() * scale;
@@ -77,7 +76,9 @@ void SVGFontData::initializeFontData(SimpleFontData* fontData, float fontSize)
     float descent = svgFontFaceElement->descent() * scale;
     float lineGap = 0.1f * fontSize;
 
-    if (!xHeight) {
+    GlyphPage* glyphPageZero = GlyphPageTreeNode::getRootChild(fontData, 0)->page();
+
+    if (!xHeight && glyphPageZero) {
         // Fallback if x_heightAttr is not specified for the font element.
         Glyph letterXGlyph = glyphPageZero->glyphDataForCharacter('x').glyph;
         xHeight = letterXGlyph ? fontData->widthForGlyph(letterXGlyph) : 2 * ascent / 3;
@@ -90,6 +91,14 @@ void SVGFontData::initializeFontData(SimpleFontData* fontData, float fontSize)
     fontMetrics.setLineGap(lineGap);
     fontMetrics.setLineSpacing(roundf(ascent) + roundf(descent) + roundf(lineGap));
     fontMetrics.setXHeight(xHeight);
+
+    if (!glyphPageZero) {
+        fontData->setSpaceGlyph(0);
+        fontData->setSpaceWidth(0);
+        fontData->setAvgCharWidth(0);
+        fontData->setMaxCharWidth(ascent);
+        return;
+    }
 
     // Calculate space width.
     Glyph spaceGlyph = glyphPageZero->glyphDataForCharacter(' ').glyph;
@@ -127,6 +136,8 @@ bool SVGFontData::applySVGGlyphSelection(WidthIterator& iterator, GlyphData& gly
     // Associate text with arabic forms, if needed.
     String remainingTextInRun(run.data(currentCharacter), run.charactersLength() - currentCharacter);
     remainingTextInRun = Font::normalizeSpaces(remainingTextInRun.characters(), remainingTextInRun.length());
+    if (mirror)
+        remainingTextInRun = createStringWithMirroredCharacters(remainingTextInRun.characters(), remainingTextInRun.length());
     if (!currentCharacter && arabicForms.isEmpty())
         arabicForms = charactersWithArabicForm(remainingTextInRun, mirror);
 
@@ -257,6 +268,27 @@ bool SVGFontData::fillNonBMPGlyphs(SVGFontElement* fontElement, GlyphPage* pageT
     return haveGlyphs;
 }
 
+String SVGFontData::createStringWithMirroredCharacters(const UChar* characters, unsigned length) const
+{
+    StringBuilder mirroredCharacters;
+    mirroredCharacters.reserveCapacity(length);
+
+    UChar32 character;
+    unsigned i = 0;
+    while (i < length) {
+        U16_NEXT(characters, i, length, character);
+        character = mirroredChar(character);
+
+        if (U16_LENGTH(character) == 1)
+            mirroredCharacters.append(static_cast<UChar>(character));
+        else {
+            mirroredCharacters.append(U16_LEAD(character));
+            mirroredCharacters.append(U16_TRAIL(character));
+        }
+    }
+
+    return mirroredCharacters.toString();
+}
 
 } // namespace WebCore
 

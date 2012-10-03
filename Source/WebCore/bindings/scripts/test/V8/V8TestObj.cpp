@@ -21,27 +21,36 @@
 #include "config.h"
 #include "V8TestObj.h"
 
+#include "Dictionary.h"
 #include "ExceptionCode.h"
 #include "HTMLNames.h"
 #include "IDBBindingUtilities.h"
 #include "IDBKey.h"
-#include "OptionsObject.h"
 #include "RuntimeEnabledFeatures.h"
+#include "SVGPropertyTearOff.h"
+#include "SVGStaticPropertyTearOff.h"
 #include "ScriptArguments.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
-#include "ScriptController.h"
 #include "SerializedScriptValue.h"
 #include "V8Binding.h"
 #include "V8BindingMacros.h"
 #include "V8BindingState.h"
 #include "V8DOMWrapper.h"
+#include "V8Document.h"
 #include "V8IsolatedContext.h"
 #include "V8Proxy.h"
+#include "V8SVGDocument.h"
+#include "V8SVGPoint.h"
 #include "V8TestCallback.h"
+#include "V8a.h"
 #include "V8any.h"
+#include "V8b.h"
+#include "V8bool.h"
+#include "V8c.h"
+#include "V8d.h"
+#include "V8e.h"
 #include "V8int.h"
-#include "V8log.h"
 #include <wtf/GetPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -320,22 +329,6 @@ static void reflectedURLAttrAttrSetter(v8::Local<v8::String> name, v8::Local<v8:
     return;
 }
 
-static v8::Handle<v8::Value> reflectedNonEmptyURLAttrAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
-{
-    INC_STATS("DOM.TestObj.reflectedNonEmptyURLAttr._get");
-    TestObj* imp = V8TestObj::toNative(info.Holder());
-    return v8String(imp->getNonEmptyURLAttribute(WebCore::HTMLNames::reflectednonemptyurlattrAttr));
-}
-
-static void reflectedNonEmptyURLAttrAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
-{
-    INC_STATS("DOM.TestObj.reflectedNonEmptyURLAttr._set");
-    TestObj* imp = V8TestObj::toNative(info.Holder());
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK_VOID(V8Parameter<WithNullCheck>, v, value);
-    imp->setAttribute(WebCore::HTMLNames::reflectednonemptyurlattrAttr, v);
-    return;
-}
-
 static v8::Handle<v8::Value> reflectedStringAttrAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
 {
     INC_STATS("DOM.TestObj.reflectedStringAttr._get");
@@ -397,22 +390,6 @@ static void reflectedCustomURLAttrAttrSetter(v8::Local<v8::String> name, v8::Loc
     TestObj* imp = V8TestObj::toNative(info.Holder());
     STRING_TO_V8PARAMETER_EXCEPTION_BLOCK_VOID(V8Parameter<WithNullCheck>, v, value);
     imp->setAttribute(WebCore::HTMLNames::customContentURLAttrAttr, v);
-    return;
-}
-
-static v8::Handle<v8::Value> reflectedCustomNonEmptyURLAttrAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
-{
-    INC_STATS("DOM.TestObj.reflectedCustomNonEmptyURLAttr._get");
-    TestObj* imp = V8TestObj::toNative(info.Holder());
-    return v8String(imp->getNonEmptyURLAttribute(WebCore::HTMLNames::customContentNonEmptyURLAttrAttr));
-}
-
-static void reflectedCustomNonEmptyURLAttrAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
-{
-    INC_STATS("DOM.TestObj.reflectedCustomNonEmptyURLAttr._set");
-    TestObj* imp = V8TestObj::toNative(info.Holder());
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK_VOID(V8Parameter<WithNullCheck>, v, value);
-    imp->setAttribute(WebCore::HTMLNames::customContentNonEmptyURLAttrAttr, v);
     return;
 }
 
@@ -504,11 +481,239 @@ static void stringAttrWithSetterExceptionAttrSetter(v8::Local<v8::String> name, 
     return;
 }
 
-static v8::Handle<v8::Value> scriptStringAttrAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+static v8::Handle<v8::Value> withScriptStateAttributeAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
 {
-    INC_STATS("DOM.TestObj.scriptStringAttr._get");
+    INC_STATS("DOM.TestObj.withScriptStateAttribute._get");
     TestObj* imp = V8TestObj::toNative(info.Holder());
-    return v8StringOrNull(imp->scriptStringAttr());
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return v8::Undefined();
+    return v8::Integer::New(imp->withScriptStateAttribute(state));
+}
+
+static void withScriptStateAttributeAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptStateAttribute._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    int v = toInt32(value);
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return;
+    imp->setWithScriptStateAttribute(state, v);
+    if (state.hadException())
+        throwError(state.exception());
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAttributeAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAttribute._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    return toV8(imp->withScriptExecutionContextAttribute(scriptContext));
+}
+
+static void withScriptExecutionContextAttributeAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAttribute._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return;
+    imp->setWithScriptExecutionContextAttribute(scriptContext, WTF::getPtr(v));
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptStateAttributeRaisesAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptStateAttributeRaises._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ExceptionCode ec = 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return v8::Undefined();
+    RefPtr<TestObj> v = imp->withScriptStateAttributeRaises(state, ec);
+    if (UNLIKELY(ec)) {
+        V8Proxy::setDOMException(ec);
+        return v8::Handle<v8::Value>();
+    }
+    if (state.hadException())
+        return throwError(state.exception());
+    return toV8(v.release());
+}
+
+static void withScriptStateAttributeRaisesAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptStateAttributeRaises._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ExceptionCode ec = 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return;
+    imp->setWithScriptStateAttributeRaises(state, WTF::getPtr(v), ec);
+    if (UNLIKELY(ec))
+        V8Proxy::setDOMException(ec);
+    if (state.hadException())
+        throwError(state.exception());
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAttributeRaisesAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAttributeRaises._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ExceptionCode ec = 0;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    RefPtr<TestObj> v = imp->withScriptExecutionContextAttributeRaises(scriptContext, ec);
+    if (UNLIKELY(ec)) {
+        V8Proxy::setDOMException(ec);
+        return v8::Handle<v8::Value>();
+    }
+    return toV8(v.release());
+}
+
+static void withScriptExecutionContextAttributeRaisesAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAttributeRaises._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ExceptionCode ec = 0;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return;
+    imp->setWithScriptExecutionContextAttributeRaises(scriptContext, WTF::getPtr(v), ec);
+    if (UNLIKELY(ec))
+        V8Proxy::setDOMException(ec);
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateAttributeAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateAttribute._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return v8::Undefined();
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    return toV8(imp->withScriptExecutionContextAndScriptStateAttribute(state, scriptContext));
+}
+
+static void withScriptExecutionContextAndScriptStateAttributeAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateAttribute._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return;
+    imp->setWithScriptExecutionContextAndScriptStateAttribute(state, scriptContext, WTF::getPtr(v));
+    if (state.hadException())
+        throwError(state.exception());
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateAttributeRaisesAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateAttributeRaises._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ExceptionCode ec = 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return v8::Undefined();
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    RefPtr<TestObj> v = imp->withScriptExecutionContextAndScriptStateAttributeRaises(state, scriptContext, ec);
+    if (UNLIKELY(ec)) {
+        V8Proxy::setDOMException(ec);
+        return v8::Handle<v8::Value>();
+    }
+    if (state.hadException())
+        return throwError(state.exception());
+    return toV8(v.release());
+}
+
+static void withScriptExecutionContextAndScriptStateAttributeRaisesAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateAttributeRaises._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ExceptionCode ec = 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return;
+    imp->setWithScriptExecutionContextAndScriptStateAttributeRaises(state, scriptContext, WTF::getPtr(v), ec);
+    if (UNLIKELY(ec))
+        V8Proxy::setDOMException(ec);
+    if (state.hadException())
+        throwError(state.exception());
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateWithSpacesAttributeAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateWithSpacesAttribute._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return v8::Undefined();
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    return toV8(imp->withScriptExecutionContextAndScriptStateWithSpacesAttribute(state, scriptContext));
+}
+
+static void withScriptExecutionContextAndScriptStateWithSpacesAttributeAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateWithSpacesAttribute._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    ScriptState* state = ScriptState::current();
+    if (!state)
+        return;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return;
+    imp->setWithScriptExecutionContextAndScriptStateWithSpacesAttribute(state, scriptContext, WTF::getPtr(v));
+    if (state.hadException())
+        throwError(state.exception());
+    return;
+}
+
+static v8::Handle<v8::Value> withScriptArgumentsAndCallStackAttributeAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptArgumentsAndCallStackAttribute._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    RefPtr<ScriptCallStack> callStack(createScriptCallStackForInspector());
+    if (!callStack)
+        return v8::Undefined();
+    return toV8(imp->withScriptArgumentsAndCallStackAttribute(callStack));
+}
+
+static void withScriptArgumentsAndCallStackAttributeAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.withScriptArgumentsAndCallStackAttribute._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    TestObj* v = V8TestObj::HasInstance(value) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    RefPtr<ScriptCallStack> callStack(createScriptCallStackForInspector());
+    if (!callStack)
+        return v8::Undefined();
+    imp->setWithScriptArgumentsAndCallStackAttribute(callStack, WTF::getPtr(v));
+    return;
 }
 
 #if ENABLE(Condition1)
@@ -675,6 +880,64 @@ static void doubleArrayAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Valu
     return;
 }
 
+static v8::Handle<v8::Value> contentDocumentAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.contentDocument._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    if (!V8BindingSecurity::shouldAllowAccessToNode(V8BindingState::Only(), imp->contentDocument()))
+    return v8::Handle<v8::Value>();
+
+    return toV8(imp->contentDocument());
+}
+
+static v8::Handle<v8::Value> mutablePointAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.mutablePoint._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    return toV8(WTF::getPtr(SVGStaticPropertyTearOff<TestObj, FloatPoint>::create(imp, imp->mutablePoint(), &TestObj::updateMutablePoint)));
+}
+
+static void mutablePointAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.mutablePoint._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    RefPtr<SVGPropertyTearOff<FloatPoint> > v = V8SVGPoint::HasInstance(value) ? V8SVGPoint::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    imp->setMutablePoint(WTF::getPtr(v));
+    return;
+}
+
+static v8::Handle<v8::Value> immutablePointAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.immutablePoint._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    return toV8(WTF::getPtr(SVGPropertyTearOff<FloatPoint>::create(imp->immutablePoint())));
+}
+
+static void immutablePointAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.immutablePoint._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    RefPtr<SVGPropertyTearOff<FloatPoint> > v = V8SVGPoint::HasInstance(value) ? V8SVGPoint::toNative(v8::Handle<v8::Object>::Cast(value)) : 0;
+    imp->setImmutablePoint(WTF::getPtr(v));
+    return;
+}
+
+static v8::Handle<v8::Value> strictFloatAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.strictFloat._get");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    return v8::Number::New(imp->strictFloat());
+}
+
+static void strictFloatAttrSetter(v8::Local<v8::String> name, v8::Local<v8::Value> value, const v8::AccessorInfo& info)
+{
+    INC_STATS("DOM.TestObj.strictFloat._set");
+    TestObj* imp = V8TestObj::toNative(info.Holder());
+    float v = static_cast<float>(value->NumberValue());
+    imp->setStrictFloat(v);
+    return;
+}
+
 static v8::Handle<v8::Value> descriptionAttrGetter(v8::Local<v8::String> name, const v8::AccessorInfo& info)
 {
     INC_STATS("DOM.TestObj.description._get");
@@ -727,9 +990,9 @@ static v8::Handle<v8::Value> voidMethodWithArgsCallback(const v8::Arguments& arg
     if (args.Length() < 3)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined));
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined));
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined))) : 0);
     imp->voidMethodWithArgs(intArg, strArg, objArg);
     return v8::Handle<v8::Value>();
 }
@@ -747,9 +1010,9 @@ static v8::Handle<v8::Value> intMethodWithArgsCallback(const v8::Arguments& args
     if (args.Length() < 3)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined));
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined));
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined))) : 0);
     return v8::Integer::New(imp->intMethodWithArgs(intArg, strArg, objArg));
 }
 
@@ -766,9 +1029,9 @@ static v8::Handle<v8::Value> objMethodWithArgsCallback(const v8::Arguments& args
     if (args.Length() < 3)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined));
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined));
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined))) : 0);
     return toV8(imp->objMethodWithArgs(intArg, strArg, objArg));
 }
 
@@ -780,8 +1043,8 @@ static v8::Handle<v8::Value> methodThatRequiresAllArgsAndThrowsCallback(const v8
     TestObj* imp = V8TestObj::toNative(args.Holder());
     ExceptionCode ec = 0;
     {
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined));
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined))) : 0);
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined))) : 0);
     RefPtr<TestObj> result = imp->methodThatRequiresAllArgsAndThrows(strArg, objArg, ec);
     if (UNLIKELY(ec))
         goto fail;
@@ -799,7 +1062,7 @@ static v8::Handle<v8::Value> serializedValueCallback(const v8::Arguments& args)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
     bool serializedArgDidThrow = false;
-    RefPtr<SerializedScriptValue> serializedArg = SerializedScriptValue::create(args[0], 0, serializedArgDidThrow);
+    RefPtr<SerializedScriptValue> serializedArg = SerializedScriptValue::create(args[0], 0, 0, serializedArgDidThrow);
     if (serializedArgDidThrow)
         return v8::Undefined();
     imp->serializedValue(serializedArg);
@@ -812,8 +1075,8 @@ static v8::Handle<v8::Value> idbKeyCallback(const v8::Arguments& args)
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(RefPtr<IDBKey>, key, createIDBKeyFromValue(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    imp->idbKey(key);
+    EXCEPTION_BLOCK(RefPtr<IDBKey>, key, createIDBKeyFromValue(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
+    imp->idbKey(key.get());
     return v8::Handle<v8::Value>();
 }
 
@@ -823,12 +1086,22 @@ static v8::Handle<v8::Value> optionsObjectCallback(const v8::Arguments& args)
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(OptionsObject, oo, MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined));
+    EXCEPTION_BLOCK(Dictionary, oo, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    if (args.Length() > 0 && !oo.isUndefinedOrNull() && !oo.isObject()) {
+        ec = TYPE_MISMATCH_ERR;
+        V8Proxy::setDOMException(ec);
+        return throwError("Not an object.", V8Proxy::TypeError);
+    }
     if (args.Length() <= 1) {
         imp->optionsObject(oo);
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(OptionsObject, ooo, MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined));
+    EXCEPTION_BLOCK(Dictionary, ooo, MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined));
+    if (args.Length() > 1 && !ooo.isUndefinedOrNull() && !ooo.isObject()) {
+        ec = TYPE_MISMATCH_ERR;
+        V8Proxy::setDOMException(ec);
+        return throwError("Not an object.", V8Proxy::TypeError);
+    }
     imp->optionsObject(oo, ooo);
     return v8::Handle<v8::Value>();
 }
@@ -840,30 +1113,6 @@ static v8::Handle<v8::Value> methodWithExceptionCallback(const v8::Arguments& ar
     ExceptionCode ec = 0;
     {
     imp->methodWithException(ec);
-    if (UNLIKELY(ec))
-        goto fail;
-    return v8::Handle<v8::Value>();
-    }
-    fail:
-    V8Proxy::setDOMException(ec);
-    return v8::Handle<v8::Value>();
-}
-
-static v8::Handle<v8::Value> customArgsAndExceptionCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.customArgsAndException");
-    if (args.Length() < 1)
-        return throwError("Not enough arguments", V8Proxy::TypeError);
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    ExceptionCode ec = 0;
-    {
-    RefPtr<ScriptArguments> scriptArguments(createScriptArguments(args, 1));
-    size_t maxStackSize = imp->shouldCaptureFullStackTrace() ? ScriptCallStack::maxCallStackSizeToCapture : 1;
-    RefPtr<ScriptCallStack> callStack(createScriptCallStack(maxStackSize));
-    if (!callStack)
-        return v8::Undefined();
-    EXCEPTION_BLOCK(log*, intArg, V8log::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)) ? V8log::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined))) : 0);
-    imp->customArgsAndException(intArg, scriptArguments, callStack, ec);
     if (UNLIKELY(ec))
         goto fail;
     return v8::Handle<v8::Value>();
@@ -893,89 +1142,6 @@ static v8::Handle<v8::Value> removeEventListenerCallback(const v8::Arguments& ar
         removeHiddenDependency(args.Holder(), args[1], V8TestObj::eventListenerCacheIndex);
     }
     return v8::Undefined();
-}
-
-static v8::Handle<v8::Value> withDynamicFrameCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.withDynamicFrame");
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-    if (!enteredFrame)
-        return v8::Undefined();
-    imp->withDynamicFrame(enteredFrame);
-    return v8::Handle<v8::Value>();
-}
-
-static v8::Handle<v8::Value> withDynamicFrameAndArgCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.withDynamicFrameAndArg");
-    if (args.Length() < 1)
-        return throwError("Not enough arguments", V8Proxy::TypeError);
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-    if (!enteredFrame)
-        return v8::Undefined();
-    imp->withDynamicFrameAndArg(enteredFrame, intArg);
-    return v8::Handle<v8::Value>();
-}
-
-static v8::Handle<v8::Value> withDynamicFrameAndOptionalArgCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.withDynamicFrameAndOptionalArg");
-    if (args.Length() < 1)
-        return throwError("Not enough arguments", V8Proxy::TypeError);
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    if (args.Length() <= 1) {
-        Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-        if (!enteredFrame)
-            return v8::Undefined();
-        imp->withDynamicFrameAndOptionalArg(enteredFrame, intArg);
-        return v8::Handle<v8::Value>();
-    }
-    EXCEPTION_BLOCK(int, optionalArg, toInt32(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)));
-    Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-    if (!enteredFrame)
-        return v8::Undefined();
-    imp->withDynamicFrameAndOptionalArg(enteredFrame, intArg, optionalArg);
-    return v8::Handle<v8::Value>();
-}
-
-static v8::Handle<v8::Value> withDynamicFrameAndUserGestureCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.withDynamicFrameAndUserGesture");
-    if (args.Length() < 1)
-        return throwError("Not enough arguments", V8Proxy::TypeError);
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-    if (!enteredFrame)
-        return v8::Undefined();
-    imp->withDynamicFrameAndUserGesture(enteredFrame, intArg, ScriptController::processingUserGesture());
-    return v8::Handle<v8::Value>();
-}
-
-static v8::Handle<v8::Value> withDynamicFrameAndUserGestureASADCallback(const v8::Arguments& args)
-{
-    INC_STATS("DOM.TestObj.withDynamicFrameAndUserGestureASAD");
-    if (args.Length() < 1)
-        return throwError("Not enough arguments", V8Proxy::TypeError);
-    TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
-    if (args.Length() <= 1) {
-        Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-        if (!enteredFrame)
-            return v8::Undefined();
-        imp->withDynamicFrameAndUserGestureASAD(enteredFrame, intArg, ScriptController::processingUserGesture());
-        return v8::Handle<v8::Value>();
-    }
-    EXCEPTION_BLOCK(int, optionalArg, toInt32(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)));
-    Frame* enteredFrame = V8Proxy::retrieveFrameForEnteredContext();
-    if (!enteredFrame)
-        return v8::Undefined();
-    imp->withDynamicFrameAndUserGestureASAD(enteredFrame, intArg, optionalArg, ScriptController::processingUserGesture());
-    return v8::Handle<v8::Value>();
 }
 
 static v8::Handle<v8::Value> withScriptStateVoidCallback(const v8::Arguments& args)
@@ -1049,6 +1215,68 @@ static v8::Handle<v8::Value> withScriptExecutionContextCallback(const v8::Argume
     return v8::Handle<v8::Value>();
 }
 
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptState");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EmptyScriptState state;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    imp->withScriptExecutionContextAndScriptState(&state, scriptContext);
+    if (state.hadException())
+        return throwError(state.exception());
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateObjExceptionCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateObjException");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    ExceptionCode ec = 0;
+    {
+    EmptyScriptState state;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    RefPtr<TestObj> result = imp->withScriptExecutionContextAndScriptStateObjException(&state, scriptContext, ec);
+    if (UNLIKELY(ec))
+        goto fail;
+    if (state.hadException())
+        return throwError(state.exception());
+    return toV8(result.release());
+    }
+    fail:
+    V8Proxy::setDOMException(ec);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> withScriptExecutionContextAndScriptStateWithSpacesCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.withScriptExecutionContextAndScriptStateWithSpaces");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EmptyScriptState state;
+    ScriptExecutionContext* scriptContext = getScriptExecutionContext();
+    if (!scriptContext)
+        return v8::Undefined();
+    RefPtr<TestObj> result = imp->withScriptExecutionContextAndScriptStateWithSpaces(&state, scriptContext);
+    if (state.hadException())
+        return throwError(state.exception());
+    return toV8(result.release());
+}
+
+static v8::Handle<v8::Value> withScriptArgumentsAndCallStackCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.withScriptArgumentsAndCallStack");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    RefPtr<ScriptArguments> scriptArguments(createScriptArguments(args, 0));
+    RefPtr<ScriptCallStack> callStack(createScriptCallStackForInspector());
+    if (!callStack)
+        return v8::Undefined();
+    imp->withScriptArgumentsAndCallStack(scriptArguments, callStack);
+    return v8::Handle<v8::Value>();
+}
+
 static v8::Handle<v8::Value> methodWithOptionalArgCallback(const v8::Arguments& args)
 {
     INC_STATS("DOM.TestObj.methodWithOptionalArg");
@@ -1057,7 +1285,7 @@ static v8::Handle<v8::Value> methodWithOptionalArgCallback(const v8::Arguments& 
         imp->methodWithOptionalArg();
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(int, opt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, opt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     imp->methodWithOptionalArg(opt);
     return v8::Handle<v8::Value>();
 }
@@ -1068,12 +1296,12 @@ static v8::Handle<v8::Value> methodWithNonOptionalArgAndOptionalArgCallback(cons
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, nonOpt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, nonOpt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     if (args.Length() <= 1) {
         imp->methodWithNonOptionalArgAndOptionalArg(nonOpt);
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(int, opt, toInt32(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, opt, toInt32(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined)));
     imp->methodWithNonOptionalArgAndOptionalArg(nonOpt, opt);
     return v8::Handle<v8::Value>();
 }
@@ -1084,18 +1312,49 @@ static v8::Handle<v8::Value> methodWithNonOptionalArgAndTwoOptionalArgsCallback(
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, nonOpt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, nonOpt, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     if (args.Length() <= 1) {
         imp->methodWithNonOptionalArgAndTwoOptionalArgs(nonOpt);
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(int, opt1, toInt32(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, opt1, toInt32(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined)));
     if (args.Length() <= 2) {
         imp->methodWithNonOptionalArgAndTwoOptionalArgs(nonOpt, opt1);
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(int, opt2, toInt32(MAYBE_MISSING_PARAMETER(args, 2, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, opt2, toInt32(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined)));
     imp->methodWithNonOptionalArgAndTwoOptionalArgs(nonOpt, opt1, opt2);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> methodWithOptionalStringCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.methodWithOptionalString");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    if (args.Length() <= 0) {
+        imp->methodWithOptionalString();
+        return v8::Handle<v8::Value>();
+    }
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, str, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    imp->methodWithOptionalString(str);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> methodWithOptionalStringIsUndefinedCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.methodWithOptionalStringIsUndefined");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, str, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    imp->methodWithOptionalStringIsUndefined(str);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> methodWithOptionalStringIsNullStringCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.methodWithOptionalStringIsNullString");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, str, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsNullString));
+    imp->methodWithOptionalStringIsNullString(str);
     return v8::Handle<v8::Value>();
 }
 
@@ -1118,7 +1377,7 @@ static v8::Handle<v8::Value> methodWithNonCallbackArgAndCallbackArgCallback(cons
     if (args.Length() < 2)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, nonCallback, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, nonCallback, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     if (args.Length() <= 1 || !args[1]->IsObject())
         return throwError(TYPE_MISMATCH_ERR);
     RefPtr<TestCallback> callback = V8TestCallback::create(args[1], getScriptExecutionContext());
@@ -1140,12 +1399,18 @@ static v8::Handle<v8::Value> methodWithCallbackAndOptionalArgCallback(const v8::
     return v8::Handle<v8::Value>();
 }
 
+#if ENABLE(Condition1)
+
 static v8::Handle<v8::Value> conditionalMethod1Callback(const v8::Arguments& args)
 {
     INC_STATS("DOM.TestObj.conditionalMethod1");
     TestObj* imp = V8TestObj::toNative(args.Holder());
     return v8String(imp->conditionalMethod1());
 }
+
+#endif // ENABLE(Condition1)
+
+#if ENABLE(Condition1) && ENABLE(Condition2)
 
 static v8::Handle<v8::Value> conditionalMethod2Callback(const v8::Arguments& args)
 {
@@ -1155,6 +1420,10 @@ static v8::Handle<v8::Value> conditionalMethod2Callback(const v8::Arguments& arg
     return v8::Handle<v8::Value>();
 }
 
+#endif // ENABLE(Condition1) && ENABLE(Condition2)
+
+#if ENABLE(Condition1) || ENABLE(Condition2)
+
 static v8::Handle<v8::Value> conditionalMethod3Callback(const v8::Arguments& args)
 {
     INC_STATS("DOM.TestObj.conditionalMethod3");
@@ -1163,14 +1432,16 @@ static v8::Handle<v8::Value> conditionalMethod3Callback(const v8::Arguments& arg
     return v8::Handle<v8::Value>();
 }
 
+#endif // ENABLE(Condition1) || ENABLE(Condition2)
+
 static v8::Handle<v8::Value> overloadedMethod1Callback(const v8::Arguments& args)
 {
     INC_STATS("DOM.TestObj.overloadedMethod1");
     if (args.Length() < 2)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined))) : 0);
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined));
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined));
     imp->overloadedMethod(objArg, strArg);
     return v8::Handle<v8::Value>();
 }
@@ -1181,12 +1452,12 @@ static v8::Handle<v8::Value> overloadedMethod2Callback(const v8::Arguments& args
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(TestObj*, objArg, V8TestObj::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8TestObj::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
     if (args.Length() <= 1) {
         imp->overloadedMethod(objArg);
         return v8::Handle<v8::Value>();
     }
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 1, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined)));
     imp->overloadedMethod(objArg, intArg);
     return v8::Handle<v8::Value>();
 }
@@ -1197,7 +1468,7 @@ static v8::Handle<v8::Value> overloadedMethod3Callback(const v8::Arguments& args
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined));
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, strArg, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
     imp->overloadedMethod(strArg);
     return v8::Handle<v8::Value>();
 }
@@ -1208,7 +1479,7 @@ static v8::Handle<v8::Value> overloadedMethod4Callback(const v8::Arguments& args
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, intArg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     imp->overloadedMethod(intArg);
     return v8::Handle<v8::Value>();
 }
@@ -1232,7 +1503,7 @@ static v8::Handle<v8::Value> overloadedMethod6Callback(const v8::Arguments& args
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(RefPtr<DOMStringList>, listArg, v8ValueToWebCoreDOMStringList(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(RefPtr<DOMStringList>, listArg, v8ValueToWebCoreDOMStringList(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     imp->overloadedMethod(listArg);
     return v8::Handle<v8::Value>();
 }
@@ -1243,7 +1514,7 @@ static v8::Handle<v8::Value> overloadedMethod7Callback(const v8::Arguments& args
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(RefPtr<DOMStringList>, arrayArg, v8ValueToWebCoreDOMStringList(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(RefPtr<DOMStringList>, arrayArg, v8ValueToWebCoreDOMStringList(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     imp->overloadedMethod(arrayArg);
     return v8::Handle<v8::Value>();
 }
@@ -1282,9 +1553,52 @@ static v8::Handle<v8::Value> classMethodWithOptionalCallback(const v8::Arguments
     if (args.Length() <= 0) {
         return v8::Integer::New(TestObj::classMethodWithOptional());
     }
-    EXCEPTION_BLOCK(int, arg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)));
+    EXCEPTION_BLOCK(int, arg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
     return v8::Integer::New(TestObj::classMethodWithOptional(arg));
 }
+
+#if ENABLE(Condition1)
+
+static v8::Handle<v8::Value> overloadedMethod11Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.overloadedMethod11");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    EXCEPTION_BLOCK(int, arg, toInt32(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)));
+    TestObj::overloadedMethod1(arg);
+    return v8::Handle<v8::Value>();
+}
+
+#endif // ENABLE(Condition1)
+
+#if ENABLE(Condition1)
+
+static v8::Handle<v8::Value> overloadedMethod12Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.overloadedMethod12");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, type, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    TestObj::overloadedMethod1(type);
+    return v8::Handle<v8::Value>();
+}
+
+#endif // ENABLE(Condition1)
+
+#if ENABLE(Condition1)
+
+static v8::Handle<v8::Value> overloadedMethod1Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.overloadedMethod1");
+    if (args.Length() == 1)
+        return overloadedMethod11Callback(args);
+    if ((args.Length() == 1 && (args[0]->IsNull() || args[0]->IsUndefined() || args[0]->IsString() || args[0]->IsObject())))
+        return overloadedMethod12Callback(args);
+    V8Proxy::throwTypeError();
+    return notHandledByInterceptor();
+}
+
+#endif // ENABLE(Condition1)
 
 static v8::Handle<v8::Value> enabledAtRuntimeMethod1Callback(const v8::Arguments& args)
 {
@@ -1292,7 +1606,7 @@ static v8::Handle<v8::Value> enabledAtRuntimeMethod1Callback(const v8::Arguments
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, V8int::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)) ? V8int::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(int, intArg, V8int::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8int::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
     imp->enabledAtRuntimeMethod1(intArg);
     return v8::Handle<v8::Value>();
 }
@@ -1303,8 +1617,124 @@ static v8::Handle<v8::Value> enabledAtRuntimeMethod2Callback(const v8::Arguments
     if (args.Length() < 1)
         return throwError("Not enough arguments", V8Proxy::TypeError);
     TestObj* imp = V8TestObj::toNative(args.Holder());
-    EXCEPTION_BLOCK(int, intArg, V8int::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined)) ? V8int::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, MissingIsUndefined))) : 0);
+    EXCEPTION_BLOCK(int, intArg, V8int::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8int::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
     imp->enabledAtRuntimeMethod2(intArg);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> getSVGDocumentCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.getSVGDocument");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    ExceptionCode ec = 0;
+    {
+    if (!V8BindingSecurity::shouldAllowAccessToNode(V8BindingState::Only(), imp->getSVGDocument(ec)))
+        return v8::Handle<v8::Value>();
+    RefPtr<SVGDocument> result = imp->getSVGDocument(ec);
+    if (UNLIKELY(ec))
+        goto fail;
+    return toV8(result.release());
+    }
+    fail:
+    V8Proxy::setDOMException(ec);
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> convert1Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.convert1");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EXCEPTION_BLOCK(a*, , V8a::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8a::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    imp->convert1();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> convert2Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.convert2");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EXCEPTION_BLOCK(b*, , V8b::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8b::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    imp->convert2();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> convert3Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.convert3");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EXCEPTION_BLOCK(c*, , V8c::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8c::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    imp->convert3();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> convert4Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.convert4");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EXCEPTION_BLOCK(d*, , V8d::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8d::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    imp->convert4();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> convert5Callback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.convert5");
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    EXCEPTION_BLOCK(e*, , V8e::HasInstance(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined)) ? V8e::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined))) : 0);
+    imp->convert5();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> mutablePointFunctionCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.mutablePointFunction");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    return toV8(WTF::getPtr(SVGPropertyTearOff<FloatPoint>::create(imp->mutablePointFunction())));
+}
+
+static v8::Handle<v8::Value> immutablePointFunctionCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.immutablePointFunction");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    return toV8(WTF::getPtr(SVGPropertyTearOff<FloatPoint>::create(imp->immutablePointFunction())));
+}
+
+static v8::Handle<v8::Value> orangeCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.orange");
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    imp->banana();
+    return v8::Handle<v8::Value>();
+}
+
+static v8::Handle<v8::Value> strictFunctionCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestObj.strictFunction");
+    if (args.Length() < 3)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+    TestObj* imp = V8TestObj::toNative(args.Holder());
+    ExceptionCode ec = 0;
+    {
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, str, MAYBE_MISSING_PARAMETER(args, 0, DefaultIsUndefined));
+    EXCEPTION_BLOCK(float, a, static_cast<float>(MAYBE_MISSING_PARAMETER(args, 1, DefaultIsUndefined)->NumberValue()));
+    EXCEPTION_BLOCK(int, b, V8int::HasInstance(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined)) ? V8int::toNative(v8::Handle<v8::Object>::Cast(MAYBE_MISSING_PARAMETER(args, 2, DefaultIsUndefined))) : 0);
+    RefPtr<bool> result = imp->strictFunction(str, a, b, ec);
+    if (UNLIKELY(ec))
+        goto fail;
+    return toV8(result.release());
+    }
+    fail:
+    V8Proxy::setDOMException(ec);
     return v8::Handle<v8::Value>();
 }
 
@@ -1345,8 +1775,6 @@ static const BatchedAttribute TestObjAttrs[] = {
     {"reflectedBooleanAttr", TestObjInternal::reflectedBooleanAttrAttrGetter, TestObjInternal::reflectedBooleanAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'reflectedURLAttr' (Type: 'attribute' ExtAttr: 'URL Reflect')
     {"reflectedURLAttr", TestObjInternal::reflectedURLAttrAttrGetter, TestObjInternal::reflectedURLAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
-    // Attribute 'reflectedNonEmptyURLAttr' (Type: 'attribute' ExtAttr: 'URL NonEmpty Reflect')
-    {"reflectedNonEmptyURLAttr", TestObjInternal::reflectedNonEmptyURLAttrAttrGetter, TestObjInternal::reflectedNonEmptyURLAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'reflectedStringAttr' (Type: 'attribute' ExtAttr: 'Reflect')
     {"reflectedStringAttr", TestObjInternal::reflectedStringAttrAttrGetter, TestObjInternal::reflectedStringAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'reflectedCustomIntegralAttr' (Type: 'attribute' ExtAttr: 'Reflect')
@@ -1355,8 +1783,6 @@ static const BatchedAttribute TestObjAttrs[] = {
     {"reflectedCustomBooleanAttr", TestObjInternal::reflectedCustomBooleanAttrAttrGetter, TestObjInternal::reflectedCustomBooleanAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'reflectedCustomURLAttr' (Type: 'attribute' ExtAttr: 'URL Reflect')
     {"reflectedCustomURLAttr", TestObjInternal::reflectedCustomURLAttrAttrGetter, TestObjInternal::reflectedCustomURLAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
-    // Attribute 'reflectedCustomNonEmptyURLAttr' (Type: 'attribute' ExtAttr: 'URL NonEmpty Reflect')
-    {"reflectedCustomNonEmptyURLAttr", TestObjInternal::reflectedCustomNonEmptyURLAttrAttrGetter, TestObjInternal::reflectedCustomNonEmptyURLAttrAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'attrWithGetterException' (Type: 'attribute' ExtAttr: '')
     {"attrWithGetterException", TestObjInternal::attrWithGetterExceptionAttrGetter, TestObjInternal::attrWithGetterExceptionAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'attrWithSetterException' (Type: 'attribute' ExtAttr: '')
@@ -1367,8 +1793,22 @@ static const BatchedAttribute TestObjAttrs[] = {
     {"stringAttrWithSetterException", TestObjInternal::stringAttrWithSetterExceptionAttrGetter, TestObjInternal::stringAttrWithSetterExceptionAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'customAttr' (Type: 'attribute' ExtAttr: 'Custom')
     {"customAttr", V8TestObj::customAttrAccessorGetter, V8TestObj::customAttrAccessorSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
-    // Attribute 'scriptStringAttr' (Type: 'readonly attribute' ExtAttr: 'ConvertScriptString')
-    {"scriptStringAttr", TestObjInternal::scriptStringAttrAttrGetter, 0, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptStateAttribute' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptStateAttribute", TestObjInternal::withScriptStateAttributeAttrGetter, TestObjInternal::withScriptStateAttributeAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptExecutionContextAttribute' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptExecutionContextAttribute", TestObjInternal::withScriptExecutionContextAttributeAttrGetter, TestObjInternal::withScriptExecutionContextAttributeAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptStateAttributeRaises' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptStateAttributeRaises", TestObjInternal::withScriptStateAttributeRaisesAttrGetter, TestObjInternal::withScriptStateAttributeRaisesAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptExecutionContextAttributeRaises' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptExecutionContextAttributeRaises", TestObjInternal::withScriptExecutionContextAttributeRaisesAttrGetter, TestObjInternal::withScriptExecutionContextAttributeRaisesAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptExecutionContextAndScriptStateAttribute' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptExecutionContextAndScriptStateAttribute", TestObjInternal::withScriptExecutionContextAndScriptStateAttributeAttrGetter, TestObjInternal::withScriptExecutionContextAndScriptStateAttributeAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptExecutionContextAndScriptStateAttributeRaises' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptExecutionContextAndScriptStateAttributeRaises", TestObjInternal::withScriptExecutionContextAndScriptStateAttributeRaisesAttrGetter, TestObjInternal::withScriptExecutionContextAndScriptStateAttributeRaisesAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptExecutionContextAndScriptStateWithSpacesAttribute' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptExecutionContextAndScriptStateWithSpacesAttribute", TestObjInternal::withScriptExecutionContextAndScriptStateWithSpacesAttributeAttrGetter, TestObjInternal::withScriptExecutionContextAndScriptStateWithSpacesAttributeAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'withScriptArgumentsAndCallStackAttribute' (Type: 'attribute' ExtAttr: 'CallWith')
+    {"withScriptArgumentsAndCallStackAttribute", TestObjInternal::withScriptArgumentsAndCallStackAttributeAttrGetter, TestObjInternal::withScriptArgumentsAndCallStackAttributeAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
 #if ENABLE(Condition1)
     // Attribute 'conditionalAttr1' (Type: 'attribute' ExtAttr: 'Conditional')
     {"conditionalAttr1", TestObjInternal::conditionalAttr1AttrGetter, TestObjInternal::conditionalAttr1AttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
@@ -1401,6 +1841,14 @@ static const BatchedAttribute TestObjAttrs[] = {
     {"floatArray", TestObjInternal::floatArrayAttrGetter, TestObjInternal::floatArrayAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'doubleArray' (Type: 'attribute' ExtAttr: '')
     {"doubleArray", TestObjInternal::doubleArrayAttrGetter, TestObjInternal::doubleArrayAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'contentDocument' (Type: 'readonly attribute' ExtAttr: 'CheckSecurityForNode')
+    {"contentDocument", TestObjInternal::contentDocumentAttrGetter, 0, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'mutablePoint' (Type: 'attribute' ExtAttr: '')
+    {"mutablePoint", TestObjInternal::mutablePointAttrGetter, TestObjInternal::mutablePointAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'immutablePoint' (Type: 'attribute' ExtAttr: 'Immutable')
+    {"immutablePoint", TestObjInternal::immutablePointAttrGetter, TestObjInternal::immutablePointAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
+    // Attribute 'strictFloat' (Type: 'attribute' ExtAttr: 'StrictTypeChecking')
+    {"strictFloat", TestObjInternal::strictFloatAttrGetter, TestObjInternal::strictFloatAttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'description' (Type: 'readonly attribute' ExtAttr: '')
     {"description", TestObjInternal::descriptionAttrGetter, 0, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
     // Attribute 'id' (Type: 'attribute' ExtAttr: '')
@@ -1421,19 +1869,21 @@ static const BatchedCallback TestObjCallbacks[] = {
     {"customMethodWithArgs", V8TestObj::customMethodWithArgsCallback},
     {"addEventListener", TestObjInternal::addEventListenerCallback},
     {"removeEventListener", TestObjInternal::removeEventListenerCallback},
-    {"withDynamicFrame", TestObjInternal::withDynamicFrameCallback},
-    {"withDynamicFrameAndArg", TestObjInternal::withDynamicFrameAndArgCallback},
-    {"withDynamicFrameAndOptionalArg", TestObjInternal::withDynamicFrameAndOptionalArgCallback},
-    {"withDynamicFrameAndUserGesture", TestObjInternal::withDynamicFrameAndUserGestureCallback},
-    {"withDynamicFrameAndUserGestureASAD", TestObjInternal::withDynamicFrameAndUserGestureASADCallback},
     {"withScriptStateVoid", TestObjInternal::withScriptStateVoidCallback},
     {"withScriptStateObj", TestObjInternal::withScriptStateObjCallback},
     {"withScriptStateVoidException", TestObjInternal::withScriptStateVoidExceptionCallback},
     {"withScriptStateObjException", TestObjInternal::withScriptStateObjExceptionCallback},
     {"withScriptExecutionContext", TestObjInternal::withScriptExecutionContextCallback},
+    {"withScriptExecutionContextAndScriptState", TestObjInternal::withScriptExecutionContextAndScriptStateCallback},
+    {"withScriptExecutionContextAndScriptStateObjException", TestObjInternal::withScriptExecutionContextAndScriptStateObjExceptionCallback},
+    {"withScriptExecutionContextAndScriptStateWithSpaces", TestObjInternal::withScriptExecutionContextAndScriptStateWithSpacesCallback},
+    {"withScriptArgumentsAndCallStack", TestObjInternal::withScriptArgumentsAndCallStackCallback},
     {"methodWithOptionalArg", TestObjInternal::methodWithOptionalArgCallback},
     {"methodWithNonOptionalArgAndOptionalArg", TestObjInternal::methodWithNonOptionalArgAndOptionalArgCallback},
     {"methodWithNonOptionalArgAndTwoOptionalArgs", TestObjInternal::methodWithNonOptionalArgAndTwoOptionalArgsCallback},
+    {"methodWithOptionalString", TestObjInternal::methodWithOptionalStringCallback},
+    {"methodWithOptionalStringIsUndefined", TestObjInternal::methodWithOptionalStringIsUndefinedCallback},
+    {"methodWithOptionalStringIsNullString", TestObjInternal::methodWithOptionalStringIsNullStringCallback},
     {"methodWithCallbackArg", TestObjInternal::methodWithCallbackArgCallback},
     {"methodWithNonCallbackArgAndCallbackArg", TestObjInternal::methodWithNonCallbackArgAndCallbackArgCallback},
     {"methodWithCallbackAndOptionalArg", TestObjInternal::methodWithCallbackAndOptionalArgCallback},
@@ -1447,9 +1897,17 @@ static const BatchedCallback TestObjCallbacks[] = {
     {"conditionalMethod3", TestObjInternal::conditionalMethod3Callback},
 #endif
     {"overloadedMethod", TestObjInternal::overloadedMethodCallback},
+    {"getSVGDocument", TestObjInternal::getSVGDocumentCallback},
+    {"mutablePointFunction", TestObjInternal::mutablePointFunctionCallback},
+    {"immutablePointFunction", TestObjInternal::immutablePointFunctionCallback},
+    {"orange", TestObjInternal::orangeCallback},
+    {"strictFunction", TestObjInternal::strictFunctionCallback},
 };
 
 static const BatchedConstant TestObjConsts[] = {
+#if ENABLE(Condition1)
+    {"CONDITIONAL_CONST", static_cast<signed int>(0)},
+#endif
     {"CONST_VALUE_0", static_cast<signed int>(0)},
     {"CONST_VALUE_1", static_cast<signed int>(1)},
     {"CONST_VALUE_2", static_cast<signed int>(2)},
@@ -1465,18 +1923,21 @@ static const BatchedConstant TestObjConsts[] = {
 };
 
 
-COMPILE_ASSERT(0 == TestObj::CONST_VALUE_0, TestObjEnumCONST_VALUE_0IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(1 == TestObj::CONST_VALUE_1, TestObjEnumCONST_VALUE_1IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(2 == TestObj::CONST_VALUE_2, TestObjEnumCONST_VALUE_2IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(4 == TestObj::CONST_VALUE_4, TestObjEnumCONST_VALUE_4IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(8 == TestObj::CONST_VALUE_8, TestObjEnumCONST_VALUE_8IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(-1 == TestObj::CONST_VALUE_9, TestObjEnumCONST_VALUE_9IsWrongUseDontCheckEnums);
-COMPILE_ASSERT("my constant string" == TestObj::CONST_VALUE_10, TestObjEnumCONST_VALUE_10IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(0xffffffff == TestObj::CONST_VALUE_11, TestObjEnumCONST_VALUE_11IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(0x01 == TestObj::CONST_VALUE_12, TestObjEnumCONST_VALUE_12IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(0X20 == TestObj::CONST_VALUE_13, TestObjEnumCONST_VALUE_13IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(0x1abc == TestObj::CONST_VALUE_14, TestObjEnumCONST_VALUE_14IsWrongUseDontCheckEnums);
-COMPILE_ASSERT(15 == TestObj::CONST_IMPL, TestObjEnumCONST_IMPLIsWrongUseDontCheckEnums);
+#if ENABLE(Condition1)
+COMPILE_ASSERT(0 == TestObj::CONDITIONAL_CONST, TestObjEnumCONDITIONAL_CONSTIsWrongUseDoNotCheckConstants);
+#endif
+COMPILE_ASSERT(0 == TestObj::CONST_VALUE_0, TestObjEnumCONST_VALUE_0IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(1 == TestObj::CONST_VALUE_1, TestObjEnumCONST_VALUE_1IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(2 == TestObj::CONST_VALUE_2, TestObjEnumCONST_VALUE_2IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(4 == TestObj::CONST_VALUE_4, TestObjEnumCONST_VALUE_4IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(8 == TestObj::CONST_VALUE_8, TestObjEnumCONST_VALUE_8IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(-1 == TestObj::CONST_VALUE_9, TestObjEnumCONST_VALUE_9IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT("my constant string" == TestObj::CONST_VALUE_10, TestObjEnumCONST_VALUE_10IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(0xffffffff == TestObj::CONST_VALUE_11, TestObjEnumCONST_VALUE_11IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(0x01 == TestObj::CONST_VALUE_12, TestObjEnumCONST_VALUE_12IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(0X20 == TestObj::CONST_VALUE_13, TestObjEnumCONST_VALUE_13IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(0x1abc == TestObj::CONST_VALUE_14, TestObjEnumCONST_VALUE_14IsWrongUseDoNotCheckConstants);
+COMPILE_ASSERT(15 == TestObj::CONST_IMPL, TestObjEnumCONST_IMPLIsWrongUseDoNotCheckConstants);
 
 v8::Handle<v8::Value> V8TestObj::constructorCallback(const v8::Arguments& args)
 {
@@ -1488,11 +1949,12 @@ v8::Handle<v8::Value> V8TestObj::constructorCallback(const v8::Arguments& args)
     if (ConstructorMode::current() == ConstructorMode::WrapExistingObject)
         return args.Holder();
 
-    RefPtr<TestObj> obj = TestObj::create();
+    RefPtr<TestObj> impl = TestObj::create();
+    v8::Handle<v8::Object> wrapper = args.Holder();
 
-    V8DOMWrapper::setDOMWrapper(args.Holder(), &info, obj.get());
-    obj->ref();
-    V8DOMWrapper::setJSWrapperForDOMObject(obj.get(), v8::Persistent<v8::Object>::New(args.Holder()));
+    V8DOMWrapper::setDOMWrapper(wrapper, &info, impl.get());
+    impl->ref();
+    V8DOMWrapper::setJSWrapperForDOMObject(impl.get(), v8::Persistent<v8::Object>::New(wrapper));
     return args.Holder();
 }
 
@@ -1501,7 +1963,7 @@ static v8::Persistent<v8::FunctionTemplate> ConfigureV8TestObjTemplate(v8::Persi
     desc->ReadOnlyPrototype();
 
     v8::Local<v8::Signature> defaultSignature;
-    defaultSignature = configureTemplate(desc, "TestObj", v8::Persistent<v8::FunctionTemplate>(), V8TestObj::internalFieldCount,
+    defaultSignature = configureTemplate(desc, "TestObject", v8::Persistent<v8::FunctionTemplate>(), V8TestObj::internalFieldCount,
         TestObjAttrs, WTF_ARRAY_LENGTH(TestObjAttrs),
         TestObjCallbacks, WTF_ARRAY_LENGTH(TestObjCallbacks));
     UNUSED_PARAM(defaultSignature); // In some cases, it will not be used.
@@ -1513,13 +1975,13 @@ static v8::Persistent<v8::FunctionTemplate> ConfigureV8TestObjTemplate(v8::Persi
     
     if (RuntimeEnabledFeatures::enabledAtRuntimeAttr1Enabled()) {
         static const BatchedAttribute attrData =\
-        // Attribute 'enabledAtRuntimeAttr1' (Type: 'attribute' ExtAttr: 'EnabledAtRuntime')
+        // Attribute 'enabledAtRuntimeAttr1' (Type: 'attribute' ExtAttr: 'V8EnabledAtRuntime')
         {"enabledAtRuntimeAttr1", TestObjInternal::enabledAtRuntimeAttr1AttrGetter, TestObjInternal::enabledAtRuntimeAttr1AttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */};
         configureAttribute(instance, proto, attrData);
     }
     if (RuntimeEnabledFeatures::featureNameEnabled()) {
         static const BatchedAttribute attrData =\
-        // Attribute 'enabledAtRuntimeAttr2' (Type: 'attribute' ExtAttr: 'EnabledAtRuntime')
+        // Attribute 'enabledAtRuntimeAttr2' (Type: 'attribute' ExtAttr: 'V8EnabledAtRuntime')
         {"enabledAtRuntimeAttr2", TestObjInternal::enabledAtRuntimeAttr2AttrGetter, TestObjInternal::enabledAtRuntimeAttr2AttrSetter, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */};
         configureAttribute(instance, proto, attrData);
     }
@@ -1547,18 +2009,45 @@ static v8::Persistent<v8::FunctionTemplate> ConfigureV8TestObjTemplate(v8::Persi
     v8::Handle<v8::FunctionTemplate> methodThatRequiresAllArgsAndThrowsArgv[methodThatRequiresAllArgsAndThrowsArgc] = { v8::Handle<v8::FunctionTemplate>(), V8TestObj::GetRawTemplate() };
     v8::Handle<v8::Signature> methodThatRequiresAllArgsAndThrowsSignature = v8::Signature::New(desc, methodThatRequiresAllArgsAndThrowsArgc, methodThatRequiresAllArgsAndThrowsArgv);
     proto->Set(v8::String::New("methodThatRequiresAllArgsAndThrows"), v8::FunctionTemplate::New(TestObjInternal::methodThatRequiresAllArgsAndThrowsCallback, v8::Handle<v8::Value>(), methodThatRequiresAllArgsAndThrowsSignature));
-
-    // Custom Signature 'customArgsAndException'
-    const int customArgsAndExceptionArgc = 1;
-    v8::Handle<v8::FunctionTemplate> customArgsAndExceptionArgv[customArgsAndExceptionArgc] = { V8log::GetRawTemplate() };
-    v8::Handle<v8::Signature> customArgsAndExceptionSignature = v8::Signature::New(desc, customArgsAndExceptionArgc, customArgsAndExceptionArgv);
-    proto->Set(v8::String::New("customArgsAndException"), v8::FunctionTemplate::New(TestObjInternal::customArgsAndExceptionCallback, v8::Handle<v8::Value>(), customArgsAndExceptionSignature));
     desc->Set(v8::String::New("classMethod"), v8::FunctionTemplate::New(TestObjInternal::classMethodCallback, v8::Handle<v8::Value>(), v8::Local<v8::Signature>()));
     desc->Set(v8::String::New("classMethodWithOptional"), v8::FunctionTemplate::New(TestObjInternal::classMethodWithOptionalCallback, v8::Handle<v8::Value>(), v8::Local<v8::Signature>()));
+#if ENABLE(Condition1)
+    desc->Set(v8::String::New("overloadedMethod1"), v8::FunctionTemplate::New(TestObjInternal::overloadedMethod1Callback, v8::Handle<v8::Value>(), v8::Local<v8::Signature>()));
+#endif // ENABLE(Condition1)
     if (RuntimeEnabledFeatures::enabledAtRuntimeMethod1Enabled())
         proto->Set(v8::String::New("enabledAtRuntimeMethod1"), v8::FunctionTemplate::New(TestObjInternal::enabledAtRuntimeMethod1Callback, v8::Handle<v8::Value>(), defaultSignature));
     if (RuntimeEnabledFeatures::featureNameEnabled())
         proto->Set(v8::String::New("enabledAtRuntimeMethod2"), v8::FunctionTemplate::New(TestObjInternal::enabledAtRuntimeMethod2Callback, v8::Handle<v8::Value>(), defaultSignature));
+
+    // Custom Signature 'convert1'
+    const int convert1Argc = 1;
+    v8::Handle<v8::FunctionTemplate> convert1Argv[convert1Argc] = { V8a::GetRawTemplate() };
+    v8::Handle<v8::Signature> convert1Signature = v8::Signature::New(desc, convert1Argc, convert1Argv);
+    proto->Set(v8::String::New("convert1"), v8::FunctionTemplate::New(TestObjInternal::convert1Callback, v8::Handle<v8::Value>(), convert1Signature));
+
+    // Custom Signature 'convert2'
+    const int convert2Argc = 1;
+    v8::Handle<v8::FunctionTemplate> convert2Argv[convert2Argc] = { V8b::GetRawTemplate() };
+    v8::Handle<v8::Signature> convert2Signature = v8::Signature::New(desc, convert2Argc, convert2Argv);
+    proto->Set(v8::String::New("convert2"), v8::FunctionTemplate::New(TestObjInternal::convert2Callback, v8::Handle<v8::Value>(), convert2Signature));
+
+    // Custom Signature 'convert3'
+    const int convert3Argc = 1;
+    v8::Handle<v8::FunctionTemplate> convert3Argv[convert3Argc] = { V8c::GetRawTemplate() };
+    v8::Handle<v8::Signature> convert3Signature = v8::Signature::New(desc, convert3Argc, convert3Argv);
+    proto->Set(v8::String::New("convert3"), v8::FunctionTemplate::New(TestObjInternal::convert3Callback, v8::Handle<v8::Value>(), convert3Signature));
+
+    // Custom Signature 'convert4'
+    const int convert4Argc = 1;
+    v8::Handle<v8::FunctionTemplate> convert4Argv[convert4Argc] = { V8d::GetRawTemplate() };
+    v8::Handle<v8::Signature> convert4Signature = v8::Signature::New(desc, convert4Argc, convert4Argv);
+    proto->Set(v8::String::New("convert4"), v8::FunctionTemplate::New(TestObjInternal::convert4Callback, v8::Handle<v8::Value>(), convert4Signature));
+
+    // Custom Signature 'convert5'
+    const int convert5Argc = 1;
+    v8::Handle<v8::FunctionTemplate> convert5Argv[convert5Argc] = { V8e::GetRawTemplate() };
+    v8::Handle<v8::Signature> convert5Signature = v8::Signature::New(desc, convert5Argc, convert5Argv);
+    proto->Set(v8::String::New("convert5"), v8::FunctionTemplate::New(TestObjInternal::convert5Callback, v8::Handle<v8::Value>(), convert5Signature));
     batchConfigureConstants(desc, proto, TestObjConsts, WTF_ARRAY_LENGTH(TestObjConsts));
 
     // Custom toString template

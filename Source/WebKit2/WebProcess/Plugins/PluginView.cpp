@@ -631,12 +631,13 @@ void PluginView::handleEvent(Event* event)
         // We have a mouse event.
 
         // FIXME: Clicking in a scroll bar should not change focus.
-        if (currentEvent->type() == WebEvent::MouseDown)
+        if (currentEvent->type() == WebEvent::MouseDown) {
             focusPluginElement();
-        
-        // Adjust mouse coordinates to account for frameScaleFactor
-        WebMouseEvent eventWithScaledCoordinates(*static_cast<const WebMouseEvent*>(currentEvent), frame()->frameScaleFactor());
-        didHandleEvent = m_plugin->handleMouseEvent(eventWithScaledCoordinates);
+            frame()->eventHandler()->setCapturingMouseEventsNode(m_pluginElement.get());
+        } else if (currentEvent->type() == WebEvent::MouseUp)
+            frame()->eventHandler()->setCapturingMouseEventsNode(0);
+
+        didHandleEvent = m_plugin->handleMouseEvent(static_cast<const WebMouseEvent&>(*currentEvent));
     } else if (event->type() == eventNames().mousewheelEvent && currentEvent->type() == WebEvent::Wheel) {
         // We have a wheel event.
         didHandleEvent = m_plugin->handleWheelEvent(static_cast<const WebWheelEvent&>(*currentEvent));
@@ -706,9 +707,16 @@ void PluginView::viewGeometryDidChange()
     if (!m_isInitialized || !m_plugin || !parent())
         return;
 
-    // FIXME: Just passing a translation matrix isn't good enough.
-    IntPoint locationInWindowCoordinates = parent()->contentsToRootView(frameRect().location());
-    AffineTransform transform = AffineTransform::translation(locationInWindowCoordinates.x(), locationInWindowCoordinates.y());
+    ASSERT(frame());
+    float frameScaleFactor = frame()->frameScaleFactor();
+
+    IntPoint scaledFrameRectLocation(frameRect().location().x() * frameScaleFactor, frameRect().location().y() * frameScaleFactor);
+    IntPoint scaledLocationInRootViewCoordinates(parent()->contentsToRootView(scaledFrameRectLocation));
+
+    // FIXME: We still don't get the right coordinates for transformed plugins.
+    AffineTransform transform;
+    transform.translate(scaledLocationInRootViewCoordinates.x(), scaledLocationInRootViewCoordinates.y());
+    transform.scale(frameScaleFactor);
 
     // FIXME: The clip rect isn't correct.
     IntRect clipRect = boundsRect();
@@ -985,8 +993,9 @@ void PluginView::loadURL(uint64_t requestID, const String& method, const String&
     frameLoadRequest.resourceRequest().setHTTPBody(FormData::create(httpBody.data(), httpBody.size()));
     frameLoadRequest.setFrameName(target);
 
-    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), frame()->loader()->outgoingReferrer()))
-        frameLoadRequest.resourceRequest().setHTTPReferrer(frame()->loader()->outgoingReferrer());
+    String referrer = SecurityPolicy::generateReferrerHeader(frame()->document()->referrerPolicy(), frameLoadRequest.resourceRequest().url(), frame()->loader()->outgoingReferrer());
+    if (!referrer.isEmpty())
+        frameLoadRequest.resourceRequest().setHTTPReferrer(referrer);
 
     m_pendingURLRequests.append(URLRequest::create(requestID, frameLoadRequest, allowPopups));
     m_pendingURLRequestsTimer.startOneShot(0);
@@ -1196,6 +1205,11 @@ void PluginView::protectPluginFromDestruction()
         ref();
 }
 
+static void derefPluginView(PluginView* pluginView)
+{
+    pluginView->deref();
+}
+
 void PluginView::unprotectPluginFromDestruction()
 {
     if (m_isBeingDestroyed)
@@ -1207,7 +1221,7 @@ void PluginView::unprotectPluginFromDestruction()
     // the destroyed object higher on the stack. To prevent this, if the plug-in has
     // only one remaining reference, call deref() asynchronously.
     if (hasOneRef())
-        RunLoop::main()->scheduleWork(WorkItem::createDeref(this));
+        RunLoop::main()->dispatch(bind(derefPluginView, this));
     else
         deref();
 }

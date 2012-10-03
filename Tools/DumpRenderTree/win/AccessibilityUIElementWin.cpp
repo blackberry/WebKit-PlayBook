@@ -613,7 +613,7 @@ bool AccessibilityUIElement::addNotificationListener(JSObjectRef functionCallbac
     if (!functionCallback)
         return false;
 
-    sharedFrameLoadDelegate->accessibilityController()->addNotificationListener(m_element, functionCallback);
+    sharedFrameLoadDelegate->accessibilityController()->winAddNotificationListener(m_element, functionCallback);
     return true;
 }
 
@@ -639,6 +639,12 @@ bool AccessibilityUIElement::isMultiSelectable() const
     DWORD multiSelectable = STATE_SYSTEM_EXTSELECTABLE | STATE_SYSTEM_MULTISELECTABLE;
     DWORD state = accessibilityState(m_element);
     return (state & multiSelectable) == multiSelectable;
+}
+
+bool AccessibilityUIElement::isSelectedOptionActive() const
+{
+    // FIXME: implement
+    return false;
 }
 
 bool AccessibilityUIElement::isVisible() const
@@ -689,4 +695,19 @@ void AccessibilityUIElement::addSelection()
 void AccessibilityUIElement::removeSelection()
 {
     m_element->accSelect(SELFLAG_REMOVESELECTION, self());
+}
+
+void AccessibilityUIElement::scrollToMakeVisible()
+{
+    // FIXME: implement
+}
+
+void AccessibilityUIElement::scrollToMakeVisibleWithSubFocus(int x, int y, int width, int height)
+{
+    // FIXME: implement
+}
+
+void AccessibilityUIElement::scrollToGlobalPoint(int x, int y)
+{
+    // FIXME: implement
 }

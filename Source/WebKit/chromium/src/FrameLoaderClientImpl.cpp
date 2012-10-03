@@ -47,6 +47,8 @@
 #include "HTMLAppletElement.h"
 #include "HTMLFormElement.h"  // needed by FormState.h
 #include "HTMLNames.h"
+#include "IntentRequest.h"
+#include "MessageEvent.h"
 #include "MIMETypeRegistry.h"
 #include "MouseEvent.h"
 #include "Page.h"
@@ -58,15 +60,17 @@
 #include "ResourceLoader.h"
 #include "Settings.h"
 #include "StringExtras.h"
+#include "WebDOMEvent.h"
 #include "WebDataSourceImpl.h"
 #include "WebDevToolsAgentPrivate.h"
 #include "WebDocument.h"
 #include "WebFormElement.h"
 #include "WebFrameClient.h"
 #include "WebFrameImpl.h"
+#include "WebIntentRequest.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
-#include "WebMimeRegistry.h"
+#include "platform/WebKitPlatformSupport.h"
+#include <public/WebMimeRegistry.h>
 #include "WebNode.h"
 #include "WebPermissionClient.h"
 #include "WebPlugin.h"
@@ -74,9 +78,9 @@
 #include "WebPluginLoadObserver.h"
 #include "WebPluginParams.h"
 #include "WebSecurityOrigin.h"
-#include "WebURL.h"
-#include "WebURLError.h"
-#include "WebVector.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLError.h"
+#include "platform/WebVector.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 #include "WindowFeatures.h"
@@ -141,10 +145,10 @@ void FrameLoaderClientImpl::documentElementAvailable()
 }
 
 #if USE(V8)
-void FrameLoaderClientImpl::didCreateScriptContext(v8::Handle<v8::Context> context, int worldId)
+void FrameLoaderClientImpl::didCreateScriptContext(v8::Handle<v8::Context> context, int extensionGroup, int worldId)
 {
     if (m_webFrame->client())
-        m_webFrame->client()->didCreateScriptContext(m_webFrame, context, worldId);
+        m_webFrame->client()->didCreateScriptContext(m_webFrame, context, extensionGroup, worldId);
 }
 
 void FrameLoaderClientImpl::willReleaseScriptContext(v8::Handle<v8::Context> context, int worldId)
@@ -155,11 +159,12 @@ void FrameLoaderClientImpl::willReleaseScriptContext(v8::Handle<v8::Context> con
 #endif
 
 bool FrameLoaderClientImpl::allowScriptExtension(const String& extensionName,
-                                                 int extensionGroup)
+                                                 int extensionGroup,
+                                                 int worldId)
 {
     WebViewImpl* webview = m_webFrame->viewImpl();
     if (webview && webview->permissionClient())
-        return webview->permissionClient()->allowScriptExtension(m_webFrame, extensionName, extensionGroup);
+        return webview->permissionClient()->allowScriptExtension(m_webFrame, extensionName, extensionGroup, worldId);
 
     return true;
 }
@@ -689,7 +694,7 @@ void FrameLoaderClientImpl::dispatchDidNavigateWithinPage()
     }
 
     bool isNewNavigation;
-    webView->didCommitLoad(&isNewNavigation);
+    webView->didCommitLoad(&isNewNavigation, true);
     if (m_webFrame->client())
         m_webFrame->client()->didNavigateWithinPage(m_webFrame, isNewNavigation);
 
@@ -801,7 +806,7 @@ void FrameLoaderClientImpl::dispatchDidCommitLoad()
 {
     WebViewImpl* webview = m_webFrame->viewImpl();
     bool isNewNavigation;
-    webview->didCommitLoad(&isNewNavigation);
+    webview->didCommitLoad(&isNewNavigation, false);
 
     if (m_webFrame->client())
         m_webFrame->client()->didCommitProvisionalLoad(m_webFrame, isNewNavigation);
@@ -1424,7 +1429,6 @@ bool FrameLoaderClientImpl::canCachePage() const
 // point, our download detection code in the ResourceDispatcherHost is broken!
 void FrameLoaderClientImpl::download(ResourceHandle* handle,
                                      const ResourceRequest& request,
-                                     const ResourceRequest& initialRequest,
                                      const ResourceResponse& response)
 {
     ASSERT_NOT_REACHED();
@@ -1616,5 +1620,22 @@ PassRefPtr<FrameNetworkingContext> FrameLoaderClientImpl::createNetworkingContex
 {
     return FrameNetworkingContextImpl::create(m_webFrame->frame());
 }
+
+bool FrameLoaderClientImpl::willCheckAndDispatchMessageEvent(
+    SecurityOrigin* target, MessageEvent* event) const
+{
+    if (!m_webFrame->client())
+        return false;
+
+    return m_webFrame->client()->willCheckAndDispatchMessageEvent(
+        m_webFrame, WebSecurityOrigin(target), WebDOMMessageEvent(event));
+}
+
+#if ENABLE(WEB_INTENTS)
+void FrameLoaderClientImpl::dispatchIntent(PassRefPtr<WebCore::IntentRequest> intentRequest)
+{
+    m_webFrame->client()->dispatchIntent(webFrame(), intentRequest);
+}
+#endif
 
 } // namespace WebKit

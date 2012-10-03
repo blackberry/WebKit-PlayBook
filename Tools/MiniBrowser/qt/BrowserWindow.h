@@ -31,16 +31,22 @@
 
 #include "MiniBrowserApplication.h"
 #include <QStringList>
-#include <QtDeclarative/QQuickView>
+#include <QtQuick/QQuickView>
+
+class QQuickWebView;
 
 class BrowserWindow : public QQuickView {
     Q_OBJECT
 
 public:
-    BrowserWindow(WindowOptions* = 0);
+    BrowserWindow(WindowOptions*);
     ~BrowserWindow();
     void load(const QString& url);
-    QObject* webView() const;
+    void reload();
+    void focusAddressBar();
+    QQuickWebView* webView() const;
+
+    void updateVisualMockTouchPoints(const QList<QWindowSystemInterface::TouchPoint>& touchPoints);
 
 public slots:
     BrowserWindow* newWindow(const QString& url = "about:blank");
@@ -50,6 +56,7 @@ protected slots:
 
 private:
     void updateUserAgentList();
+    WindowOptions* m_windowOptions;
     QStringList m_userAgentList;
 };
 

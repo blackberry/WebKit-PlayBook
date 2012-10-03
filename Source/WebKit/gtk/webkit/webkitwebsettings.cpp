@@ -118,7 +118,9 @@ enum {
     PROP_ENABLE_HYPERLINK_AUDITING,
     PROP_ENABLE_FULLSCREEN,
     PROP_ENABLE_DNS_PREFETCHING,
-    PROP_ENABLE_WEBGL
+    PROP_ENABLE_WEBGL,
+    PROP_ENABLE_WEB_AUDIO,
+    PROP_ENABLE_ACCELERATED_COMPOSITING
 };
 
 // Create a default user agent string
@@ -172,26 +174,16 @@ static String webkitOSVersion()
     return uaOSVersion;
 }
 
-static String webkitUserAgent()
+static String chromeUserAgent()
 {
     // We mention Safari since many broken sites check for it (OmniWeb does this too)
     // We re-use the WebKit version, though it doesn't seem to matter much in practice
+    // We claim to be Chrome as well, which prevents sites that look for Safari and assume
+    // that since we are not OS X, that we are the mobile version of Safari.
 
     DEFINE_STATIC_LOCAL(const String, uaVersion, (makeString(String::number(WEBKIT_USER_AGENT_MAJOR_VERSION), '.', String::number(WEBKIT_USER_AGENT_MINOR_VERSION), '+')));
     DEFINE_STATIC_LOCAL(const String, staticUA, (makeString("Mozilla/5.0 (", webkitPlatform(), webkitOSVersion(), ") AppleWebKit/", uaVersion) +
-                                                 makeString(" (KHTML, like Gecko) Version/5.0 Safari/", uaVersion)));
-
-    return staticUA;
-}
-
-static String safariUserAgent()
-{
-    // We mention Safari since many broken sites check for it (OmniWeb does this too)
-    // We re-use the WebKit version, though it doesn't seem to matter much in practice
-
-    DEFINE_STATIC_LOCAL(const String, uaVersion, (makeString(String::number(WEBKIT_USER_AGENT_MAJOR_VERSION), '.', String::number(WEBKIT_USER_AGENT_MINOR_VERSION), '+')));
-    DEFINE_STATIC_LOCAL(const String, staticUA, (makeString("Mozilla/5.0 (Macintosh; U; Intel Mac OS X 10_6_7; en_US) AppleWebKit/", uaVersion) +
-                                                 makeString(" (KHTML, like Gecko) Version/5.0.5 Safari/", uaVersion)));
+                                                 makeString(" (KHTML, like Gecko) Chromium/17.0.963.56 Chrome/17.0.963.56 Safari/", uaVersion)));
 
     return staticUA;
 }
@@ -621,7 +613,7 @@ static void webkit_web_settings_class_init(WebKitWebSettingsClass* klass)
                                     g_param_spec_string("user-agent",
                                                         _("User Agent"),
                                                         _("The User-Agent string used by WebKitGtk"),
-                                                        webkitUserAgent().utf8().data(),
+                                                        "", // An empty string means the default user-agent.
                                                         flags));
 
     /**
@@ -910,6 +902,43 @@ static void webkit_web_settings_class_init(WebKitWebSettingsClass* klass)
                                                          flags));
 
     /**
+    * WebKitWebSettings:enable-accelerated-compositing:
+    *
+    * Enable or disable support for accelerated compositing on pages. Accelerated
+    * compositing uses the GPU to render animations on pages smoothly and also allows
+    * proper rendering of 3D CSS transforms.
+    *
+    * Since: 1.7.5
+    */
+    g_object_class_install_property(gobject_class,
+                                    PROP_ENABLE_ACCELERATED_COMPOSITING,
+                                    g_param_spec_boolean("enable-accelerated-compositing",
+                                                         _("Enable accelerated compositing"),
+                                                         _("Whether accelerated compositing should be enabled"),
+                                                         FALSE,
+                                                         flags));
+    /**
+    * WebKitWebSettings:enable-webaudio:
+    *
+    * Enable or disable support for WebAudio on pages. WebAudio is an
+    * experimental proposal for allowing web pages to generate Audio
+    * WAVE data from JavaScript. The standard is currently a
+    * work-in-progress by the W3C Audio Working Group.
+    *
+    * See also https://dvcs.w3.org/hg/audio/raw-file/tip/webaudio/specification.html
+    *
+    * Since: TODO
+    */
+    g_object_class_install_property(gobject_class,
+                                    PROP_ENABLE_WEB_AUDIO,
+                                    g_param_spec_boolean("enable-webaudio",
+                                                         _("Enable WebAudio"),
+                                                         _("Whether WebAudio content should be handled"),
+                                                         FALSE,
+                                                         flags));
+
+
+    /**
     * WebKitWebSettings:enable-dns-prefetching
     *
     * Whether webkit prefetches domain names.  This is a separate knob from private browsing.
@@ -1038,7 +1067,7 @@ static void webkit_web_settings_set_property(GObject* object, guint prop_id, con
         break;
     case PROP_USER_AGENT:
         if (!g_value_get_string(value) || !strlen(g_value_get_string(value)))
-            priv->userAgent = webkitUserAgent().utf8();
+            priv->userAgent = chromeUserAgent().utf8();
         else
             priv->userAgent = g_value_get_string(value);
         break;
@@ -1092,6 +1121,12 @@ static void webkit_web_settings_set_property(GObject* object, guint prop_id, con
         break;
     case PROP_ENABLE_WEBGL:
         priv->enableWebgl = g_value_get_boolean(value);
+        break;
+    case PROP_ENABLE_WEB_AUDIO:
+        priv->enableWebAudio = g_value_get_boolean(value);
+        break;
+    case PROP_ENABLE_ACCELERATED_COMPOSITING:
+        priv->enableAcceleratedCompositing = g_value_get_boolean(value);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1251,6 +1286,12 @@ static void webkit_web_settings_get_property(GObject* object, guint prop_id, GVa
         break;
     case PROP_ENABLE_WEBGL:
         g_value_set_boolean(value, priv->enableWebgl);
+        break;
+    case PROP_ENABLE_WEB_AUDIO:
+        g_value_set_boolean(value, priv->enableWebAudio);
+        break;
+    case PROP_ENABLE_ACCELERATED_COMPOSITING:
+        g_value_set_boolean(value, priv->enableAcceleratedCompositing);
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, prop_id, pspec);
@@ -1437,25 +1478,12 @@ static bool isGoogleDomain(String host)
     return false;
 }
 
-static bool isGoogleCalendar(const KURL& url)
-{
-    if (url.host().find("calendar.google.") == 0
-        || (url.host().find("google.com") && url.path().startsWith("/calendar")))
-        return true;
-
-    return false;
-}
-
 static String userAgentForURL(const KURL& url)
 {
     // For Google domains, drop the browser's custom User Agent string, and use the
-    // standard WebKit/Safari one, so they don't give us a broken experience. Calendar
-    // thinks "Linux WebKit" means mobile.
-    if (isGoogleCalendar(url))
-        return safariUserAgent();
-
+    // standard Chrome one, so they don't give us a broken experience.
     if (isGoogleDomain(url.host()))
-        return webkitUserAgent();
+        return chromeUserAgent();
 
     return String();
 }

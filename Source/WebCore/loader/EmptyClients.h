@@ -47,8 +47,20 @@
 #include "ResourceError.h"
 #include "SearchPopupMenu.h"
 
+#if PLATFORM(BLACKBERRY)
+#include "SecurityOrigin.h"
+#endif
+
 #if USE(V8)
 #include <v8.h>
+#endif
+
+#if ENABLE(INPUT_COLOR)
+#include "ColorChooser.h"
+#endif
+
+#if ENABLE(WEB_INTENTS)
+#include "IntentRequest.h"
 #endif
 
 /*
@@ -144,12 +156,9 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural() { return false; }
     virtual bool selectItemAlignmentFollowsMenuWritingDirection() { return false; }
+    virtual bool hasOpenedPopup() const OVERRIDE { return false; }
     virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const { return adoptRef(new EmptyPopupMenu()); }
     virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const { return adoptRef(new EmptySearchPopupMenu()); }
-
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() { }
-#endif
 
 #if ENABLE(REGISTER_PROTOCOL_HANDLER)
     virtual void registerProtocolHandler(const String&, const String&, const String&, const String&) { }
@@ -161,12 +170,12 @@ public:
 
     virtual IntRect windowResizerRect() const { return IntRect(); }
 
-    virtual void invalidateWindow(const IntRect&, bool) { }
-    virtual void invalidateContentsAndWindow(const IntRect&, bool) { }
+    virtual void invalidateRootView(const IntRect&, bool) OVERRIDE { }
+    virtual void invalidateContentsAndRootView(const IntRect&, bool) OVERRIDE { }
 #if PLATFORM(BLACKBERRY)
-    virtual void invalidateContentsForSlowScroll(const IntSize&, const IntRect&, bool, const ScrollView*) {}
+    virtual void invalidateContentsForSlowScroll(const IntSize&, const IntRect&, bool, const ScrollView*) OVERRIDE {}
 #else
-    virtual void invalidateContentsForSlowScroll(const IntRect&, bool) {}
+    virtual void invalidateContentsForSlowScroll(const IntRect&, bool) OVERRIDE {}
 #endif
     virtual void scroll(const IntSize&, const IntRect&, const IntRect&) { }
 #if USE(TILED_BACKING_STORE)
@@ -178,8 +187,8 @@ public:
     virtual void scheduleAnimation() { }
 #endif
 
-    virtual IntPoint screenToWindow(const IntPoint& p) const { return p; }
-    virtual IntRect windowToScreen(const IntRect& r) const { return r; }
+    virtual IntPoint screenToRootView(const IntPoint& p) const OVERRIDE { return p; }
+    virtual IntRect rootViewToScreen(const IntRect& r) const OVERRIDE { return r; }
     virtual PlatformPageClient platformPageClient() const { return 0; }
     virtual void contentsSizeChanged(Frame*, const IntSize&) const { }
 
@@ -197,18 +206,12 @@ public:
     virtual void reachedMaxAppCacheSize(int64_t) { }
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t) { }
 
-#if ENABLE(NOTIFICATIONS)
-    virtual NotificationPresenter* notificationPresenter() const { return 0; }
-#endif
-
 #if ENABLE(DIRECTORY_UPLOAD)
     virtual void enumerateChosenDirectory(FileChooser*) { }
 #endif
 
 #if ENABLE(INPUT_COLOR)
-    void openColorChooser(ColorChooser*, const Color&) { }
-    void cleanupColorChooser(ColorChooser*) { }
-    void setSelectedColorInColorChooser(ColorChooser*, const Color&) { }
+    virtual PassOwnPtr<ColorChooser> createColorChooser(ColorChooserClient*, const Color&) { return nullptr; }
 #endif
 
     virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>) { }
@@ -240,7 +243,8 @@ public:
     virtual void needTouchEvents(bool) { }
 #endif
     
-    virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void numWheelEventHandlersChanged(unsigned) OVERRIDE { }
+    virtual void numTouchEventHandlersChanged(unsigned) OVERRIDE { }
     
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const { return false; }
 
@@ -252,10 +256,8 @@ public:
     virtual void requestWebGLPermission(Frame*) { }
 #endif
 #if ENABLE(SVG)
-        virtual void didSetSVGZoomAndPan(Frame*, unsigned short) { }
+    virtual void didSetSVGZoomAndPan(Frame*, unsigned short) { }
 #endif
-        virtual void* platformWindow() const { return 0; }
-        virtual void* platformCompositingWindow() const { return 0; }
 #endif
 
 #if ENABLE(VIEWPORT_REFLOW)
@@ -281,7 +283,7 @@ public:
     virtual void detachedFromParent2() { }
     virtual void detachedFromParent3() { }
 
-    virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceRequest&, const ResourceResponse&) { }
+    virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceResponse&) { }
 
     virtual void assignIdentifierToInitialRequest(unsigned long, DocumentLoader*, const ResourceRequest&) { }
     virtual bool shouldUseCredentialStorage(DocumentLoader*, unsigned long) { return false; }
@@ -317,6 +319,7 @@ public:
     virtual void dispatchDidFinishLoad() { }
     virtual void dispatchDidFirstLayout() { }
     virtual void dispatchDidFirstVisuallyNonEmptyLayout() { }
+    virtual void dispatchDidNewFirstVisuallyNonEmptyLayout() { }
 
     virtual Frame* dispatchCreatePage(const NavigationAction&) { return 0; }
     virtual void dispatchShow() { }
@@ -396,6 +399,7 @@ public:
 #if PLATFORM(BLACKBERRY)
     virtual void dispatchDidLoadFromApplicationCache(const ResourceRequest&) { }
     virtual void dispatchWillUpdateApplicationCache(const ResourceRequest&) { }
+    virtual PassRefPtr<SecurityOrigin> securityOriginForNewDocument(const KURL& url) { return SecurityOrigin::create(url); }
 #endif
     virtual void updateGlobalHistoryItemForPage() { }
     virtual void saveViewStateToItem(HistoryItem*) { }
@@ -428,9 +432,9 @@ public:
     virtual void registerForIconNotification(bool) { }
 
 #if USE(V8)
-    virtual void didCreateScriptContext(v8::Handle<v8::Context>, int worldId) { }
+    virtual void didCreateScriptContext(v8::Handle<v8::Context>, int extensionGroup, int worldId) { }
     virtual void willReleaseScriptContext(v8::Handle<v8::Context>, int worldId) { }
-    virtual bool allowScriptExtension(const String& extensionName, int extensionGroup) { return false; }
+    virtual bool allowScriptExtension(const String& extensionName, int extensionGroup, int worldId) { return false; }
 #endif
 
 #if PLATFORM(MAC)
@@ -443,6 +447,10 @@ public:
 #endif
 
     virtual PassRefPtr<FrameNetworkingContext> createNetworkingContext() { return PassRefPtr<FrameNetworkingContext>(); }
+
+#if ENABLE(WEB_INTENTS)
+    virtual void dispatchIntent(PassRefPtr<IntentRequest>) { }
+#endif
 };
 
 class EmptyTextCheckerClient : public TextCheckerClient {
@@ -458,7 +466,7 @@ public:
 #endif
 
     virtual void getGuessesForWord(const String&, const String&, Vector<String>&) { }
-    virtual void requestCheckingOfString(SpellChecker*, int, TextCheckingTypeMask, const String&) { }
+    virtual void requestCheckingOfString(SpellChecker*, const TextCheckingRequest&) { }
 };
 
 class EmptyEditorClient : public EditorClient {
@@ -484,15 +492,12 @@ public:
     virtual bool shouldBeginEditing(Range*) { return false; }
     virtual bool shouldEndEditing(Range*) { return false; }
     virtual bool shouldInsertNode(Node*, Range*, EditorInsertAction) { return false; }
-    //  virtual bool shouldInsertNode(Node*, Range* replacingRange, WebViewInsertAction) { return false; }
     virtual bool shouldInsertText(const String&, Range*, EditorInsertAction) { return false; }
     virtual bool shouldChangeSelectedRange(Range*, Range*, EAffinity, bool) { return false; }
 
-    virtual bool shouldApplyStyle(CSSStyleDeclaration*, Range*) { return false; }
+    virtual bool shouldApplyStyle(StylePropertySet*, Range*) { return false; }
     virtual bool shouldMoveRangeAfterDelete(Range*, Range*) { return false; }
-    //  virtual bool shouldChangeTypingStyle(CSSStyleDeclaration* fromStyle, CSSStyleDeclaration* toStyle) { return false; }
-    //  virtual bool doCommandBySelector(SEL selector) { return false; }
-    //
+
     virtual void didBeginEditing() { }
     virtual void respondToChangedContents() { }
     virtual void respondToChangedSelection(Frame*) { }
@@ -500,12 +505,9 @@ public:
     virtual void didEndEditing() { }
     virtual void didWriteSelectionToPasteboard() { }
     virtual void didSetSelectionTypesForPasteboard() { }
-    //  virtual void webViewDidChangeTypingStyle:(NSNotification *)notification { }
-    //  virtual void webViewDidChangeSelection:(NSNotification *)notification { }
-    //  virtual NSUndoManager* undoManagerForWebView:(WebView *)webView { return 0; }
 
-    virtual void registerCommandForUndo(PassRefPtr<EditCommand>) { }
-    virtual void registerCommandForRedo(PassRefPtr<EditCommand>) { }
+    virtual void registerUndoStep(PassRefPtr<UndoStep>) { }
+    virtual void registerRedoStep(PassRefPtr<UndoStep>) { }
     virtual void clearUndoRedoOperations() { }
 
     virtual bool canCopyCut(Frame*, bool defaultValue) const { return defaultValue; }
@@ -531,7 +533,7 @@ public:
 
     virtual NSString* userVisibleString(NSURL*) { return 0; }
     virtual DocumentFragment* documentFragmentFromAttributedString(NSAttributedString*, Vector<RefPtr<ArchiveResource> >&) { return 0; };
-    virtual void setInsertionPasteboard(NSPasteboard*) { };
+    virtual void setInsertionPasteboard(const String&) { };
     virtual NSURL* canonicalizeURL(NSURL*) { return 0; }
     virtual NSURL* canonicalizeURLString(NSString*) { return 0; }
 #endif
@@ -599,6 +601,10 @@ public:
 #if PLATFORM(MAC)
     virtual void searchWithSpotlight() { }
 #endif
+
+#if USE(ACCESSIBILITY_CONTEXT_MENUS)
+    virtual void showContextMenu() { }
+#endif
 };
 #endif // ENABLE(CONTEXT_MENUS)
 
@@ -627,6 +633,8 @@ public:
     virtual void inspectorDestroyed() { }
     
     virtual void openInspectorFrontend(InspectorController*) { }
+    virtual void closeInspectorFrontend() { }
+    virtual void bringFrontendToFront() { }
 
     virtual void highlight() { }
     virtual void hideHighlight() { }

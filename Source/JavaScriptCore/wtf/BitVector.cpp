@@ -42,7 +42,7 @@ void BitVector::setSlow(const BitVector& other)
     else {
         OutOfLineBits* newOutOfLineBits = OutOfLineBits::create(other.size());
         memcpy(newOutOfLineBits->bits(), other.bits(), byteCount(other.size()));
-        newBitsOrPointer = bitwise_cast<uintptr_t>(newOutOfLineBits);
+        newBitsOrPointer = bitwise_cast<uintptr_t>(newOutOfLineBits) >> 1;
     }
     if (!isInline())
         OutOfLineBits::destroy(outOfLineBits());
@@ -76,7 +76,7 @@ BitVector::OutOfLineBits* BitVector::OutOfLineBits::create(size_t numBits)
 {
     numBits = (numBits + bitsInPointer() - 1) & ~(bitsInPointer() - 1);
     size_t size = sizeof(OutOfLineBits) + sizeof(uintptr_t) * (numBits / bitsInPointer());
-    OutOfLineBits* result = new (fastMalloc(size)) OutOfLineBits(numBits);
+    OutOfLineBits* result = new (NotNull, fastMalloc(size)) OutOfLineBits(numBits);
     return result;
 }
 
@@ -91,7 +91,7 @@ void BitVector::resizeOutOfLine(size_t numBits)
     OutOfLineBits* newOutOfLineBits = OutOfLineBits::create(numBits);
     if (isInline()) {
         // Make sure that all of the bits are zero in case we do a no-op resize.
-        *newOutOfLineBits->bits() = m_bitsOrPointer & ~(static_cast<uintptr_t>(1));
+        *newOutOfLineBits->bits() = m_bitsOrPointer & ~(static_cast<uintptr_t>(1) << maxInlineBits());
     } else {
         if (numBits > size()) {
             size_t oldNumWords = outOfLineBits()->numWords();
@@ -102,11 +102,9 @@ void BitVector::resizeOutOfLine(size_t numBits)
             memcpy(newOutOfLineBits->bits(), outOfLineBits()->bits(), newOutOfLineBits->numWords() * sizeof(void*));
         OutOfLineBits::destroy(outOfLineBits());
     }
-    m_bitsOrPointer = bitwise_cast<uintptr_t>(newOutOfLineBits);
-    ASSERT(!isInline());
+    m_bitsOrPointer = bitwise_cast<uintptr_t>(newOutOfLineBits) >> 1;
 }
 
-#ifndef NDEBUG
 void BitVector::dump(FILE* out)
 {
     for (size_t i = 0; i < size(); ++i) {
@@ -116,6 +114,5 @@ void BitVector::dump(FILE* out)
             fprintf(out, "-");
     }
 }
-#endif
 
 } // namespace WTF

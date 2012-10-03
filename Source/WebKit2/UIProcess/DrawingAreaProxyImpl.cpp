@@ -30,11 +30,13 @@
 #include "DrawingAreaProxyMessages.h"
 #include "LayerTreeContext.h"
 #include "UpdateInfo.h"
+#include "WebPageGroup.h"
 #include "WebPageProxy.h"
+#include "WebPreferences.h"
 #include "WebProcessProxy.h"
 #include <WebCore/Region.h>
 
-#if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
+#if USE(UI_SIDE_COMPOSITING)
 #include "LayerTreeHostProxy.h"
 #endif
 
@@ -56,6 +58,11 @@ DrawingAreaProxyImpl::DrawingAreaProxyImpl(WebPageProxy* webPageProxy)
     , m_isBackingStoreDiscardable(true)
     , m_discardBackingStoreTimer(RunLoop::current(), this, &DrawingAreaProxyImpl::discardBackingStore)
 {
+#if USE(UI_SIDE_COMPOSITING)
+    // Construct the proxy early to allow messages to be sent to the web process while AC is entered there.
+    if (webPageProxy->pageGroup()->preferences()->forceCompositingMode())
+        m_layerTreeHostProxy = adoptPtr(new LayerTreeHostProxy(this));
+#endif
 }
 
 DrawingAreaProxyImpl::~DrawingAreaProxyImpl()
@@ -328,35 +335,41 @@ void DrawingAreaProxyImpl::enterAcceleratedCompositingMode(const LayerTreeContex
     m_backingStore = nullptr;
     m_layerTreeContext = layerTreeContext;
     m_webPageProxy->enterAcceleratedCompositingMode(layerTreeContext);
-#if USE(TEXTURE_MAPPER)
+#if USE(UI_SIDE_COMPOSITING)
     if (!m_layerTreeHostProxy)
         m_layerTreeHostProxy = adoptPtr(new LayerTreeHostProxy(this));
 #endif
 }
 
-#if USE(TILED_BACKING_STORE)
+#if USE(UI_SIDE_COMPOSITING)
 void DrawingAreaProxyImpl::didReceiveLayerTreeHostProxyMessage(CoreIPC::Connection* connection, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments)
 {
     if (m_layerTreeHostProxy)
         m_layerTreeHostProxy->didReceiveLayerTreeHostProxyMessage(connection, messageID, arguments);
 }
 
-void DrawingAreaProxyImpl::setVisibleContentsRectAndScale(const WebCore::IntRect& visibleContentsRect, float scale)
+void DrawingAreaProxyImpl::setVisibleContentsRectForScaling(const WebCore::IntRect& visibleContentsRect, float scale)
 {
     if (m_layerTreeHostProxy)
-        m_layerTreeHostProxy->setVisibleContentsRectAndScale(visibleContentsRect, scale);
+        m_layerTreeHostProxy->setVisibleContentsRectForScaling(visibleContentsRect, scale);
 }
 
-void DrawingAreaProxyImpl::setVisibleContentRectTrajectoryVector(const WebCore::FloatPoint& trajectoryVector)
+void DrawingAreaProxyImpl::setVisibleContentsRectForPanning(const WebCore::IntRect& visibleContentsRect, const WebCore::FloatPoint& trajectoryVector)
 {
     if (m_layerTreeHostProxy)
-        m_layerTreeHostProxy->setVisibleContentRectTrajectoryVector(trajectoryVector);
+        m_layerTreeHostProxy->setVisibleContentsRectForPanning(visibleContentsRect, trajectoryVector);
 }
 
-void DrawingAreaProxyImpl::paintToCurrentGLContext(const TransformationMatrix& matrix, float opacity)
+void DrawingAreaProxyImpl::paintLayerTree(BackingStore::PlatformGraphicsContext context)
 {
     if (m_layerTreeHostProxy)
-        m_layerTreeHostProxy->paintToCurrentGLContext(matrix, opacity);
+        m_layerTreeHostProxy->paintToGraphicsContext(context);
+}
+
+void DrawingAreaProxyImpl::paintToCurrentGLContext(const TransformationMatrix& matrix, float opacity, const FloatRect& clipRect)
+{
+    if (m_layerTreeHostProxy)
+        m_layerTreeHostProxy->paintToCurrentGLContext(matrix, opacity, clipRect);
 }
 #endif
 
@@ -368,6 +381,11 @@ void DrawingAreaProxyImpl::exitAcceleratedCompositingMode()
     m_webPageProxy->exitAcceleratedCompositingMode();
 }
 #endif
+
+void DrawingAreaProxyImpl::pageCustomRepresentationChanged()
+{
+    m_webPageProxy->process()->send(Messages::DrawingArea::PageCustomRepresentationChanged(), m_webPageProxy->pageID());
+}
 
 void DrawingAreaProxyImpl::discardBackingStoreSoon()
 {

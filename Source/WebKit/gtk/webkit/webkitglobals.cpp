@@ -24,6 +24,7 @@
 #include "ApplicationCacheStorage.h"
 #include "Chrome.h"
 #include "FrameNetworkingContextGtk.h"
+#include "GtkUtilities.h"
 #include "GOwnPtr.h"
 #include "GRefPtr.h"
 #include "IconDatabase.h"
@@ -51,6 +52,10 @@
 #include <runtime/InitializeThreading.h>
 #include <stdlib.h>
 #include <wtf/MainThread.h>
+
+#if USE(CLUTTER)
+#include <clutter-gtk/clutter-gtk.h>
+#endif
 
 static WebKitCacheModel cacheModel = WEBKIT_CACHE_MODEL_DEFAULT;
 
@@ -221,10 +226,7 @@ static GtkWidget* currentToplevelCallback(WebKitSoupAuthDialog* feature, SoupMes
         return NULL;
 
     GtkWidget* toplevel =  gtk_widget_get_toplevel(GTK_WIDGET(context->coreFrame()->page()->chrome()->platformPageClient()));
-    if (gtk_widget_is_toplevel(toplevel))
-        return toplevel;
-    else
-        return NULL;
+    return widgetIsOnscreenToplevelWindow(toplevel) ? toplevel : 0;
 }
 
 /**
@@ -334,11 +336,9 @@ void webkitInit()
     soup_session_add_feature(session, authDialog);
     g_object_unref(authDialog);
 
-    SoupSessionFeature* sniffer = static_cast<SoupSessionFeature*>(g_object_new(SOUP_TYPE_CONTENT_SNIFFER, NULL));
-    soup_session_add_feature(session, sniffer);
-    g_object_unref(sniffer);
-
-    soup_session_add_feature_by_type(session, SOUP_TYPE_CONTENT_DECODER);
+#if USE(CLUTTER)
+    gtk_clutter_init(0, 0);
+#endif
 
     atexit(webkitExit);
 }

@@ -36,6 +36,10 @@
 #include <stdlib.h>
 #include <wtf/text/CString.h>
 
+#if PLATFORM(BLACKBERRY)
+#include <BlackBerryPlatformClient.h>
+#endif
+
 namespace WebCore {
 
 typedef HashMap<String, RefPtr<PluginPackage> > PluginPackageByNameMap;
@@ -379,8 +383,8 @@ Vector<String> PluginDatabase::defaultPluginDirectories()
     Vector<String> paths;
 
     // Add paths specific to each platform
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-    // This is the only path supported on QNX right now
+#if PLATFORM(BLACKBERRY)
+    paths.append(BlackBerry::Platform::Client::get()->getApplicationPluginDirectory().c_str());
     paths.append("/usr/lib/browser/plugins");
 #elif defined(XP_UNIX)
     String userPluginPath = homeDirectoryPath();

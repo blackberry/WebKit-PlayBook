@@ -2,31 +2,21 @@
  * Copyright (C) 2007, 2008 Apple Inc. All rights reserved.
  * Copyright (C) 2008 Nokia Corporation and/or its subsidiary(-ies)
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
+ * Copyright (C) 2009, 2010, 2012 Research In Motion Limited. All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without
- * modification, are permitted provided that the following conditions
- * are met:
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
  *
- * 1.  Redistributions of source code must retain the above copyright
- *     notice, this list of conditions and the following disclaimer. 
- * 2.  Redistributions in binary form must reproduce the above copyright
- *     notice, this list of conditions and the following disclaimer in the
- *     documentation and/or other materials provided with the distribution. 
- * 3.  Neither the name of Apple Computer, Inc. ("Apple") nor the names of
- *     its contributors may be used to endorse or promote products derived
- *     from this software without specific prior written permission. 
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
  *
- * THIS SOFTWARE IS PROVIDED BY APPLE AND ITS CONTRIBUTORS "AS IS" AND ANY
- * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE IMPLIED
- * WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
- * DISCLAIMED. IN NO EVENT SHALL APPLE OR ITS CONTRIBUTORS BE LIABLE FOR ANY
- * DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES
- * (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES;
- * LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND
- * ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
- * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF
- * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
 #include "config.h"
@@ -36,21 +26,19 @@
 #include "DumpRenderTreeSupport.h"
 #include "IntPoint.h"
 #include "NotImplemented.h"
-#include "PlatformTouchPoint.h"
 #include "WebPage.h"
 
-#include <BlackBerryPlatformInputEvents.h>
 #include <BlackBerryPlatformKeyboardEvent.h>
 #include <BlackBerryPlatformMouseEvent.h>
 #include <BlackBerryPlatformTouchEvent.h>
 #include <JavaScriptCore/JSObjectRef.h>
-#include <JavaScriptCore/JSRetainPtr.h>
 #include <JavaScriptCore/JSStringRef.h>
 #include <JavaScriptCore/JSValueRef.h>
-#include <sys/keycodes.h>
 #include <wtf/Vector.h>
 
-static WebCore::IntPoint lastMousePosition;
+using namespace WebCore;
+
+static IntPoint lastMousePosition;
 static Vector<BlackBerry::Platform::TouchPoint> touches;
 static bool touchActive = false;
 
@@ -85,14 +73,14 @@ static JSValueRef contextClickCallback(JSContextRef context, JSObjectRef functio
 static JSValueRef mouseDownCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     BlackBerry::WebKit::WebPage* page = BlackBerry::WebKit::DumpRenderTree::currentInstance()->page();
-    page->mouseEvent(BlackBerry::Platform::MouseEvent(BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, 0, lastMousePosition, WebCore::IntPoint(0, 0), 0, 0));
+    page->mouseEvent(BlackBerry::Platform::MouseEvent(BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, 0, lastMousePosition, IntPoint::zero(), 0, 0));
     return JSValueMakeUndefined(context);
 }
 
 static JSValueRef mouseUpCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     BlackBerry::WebKit::WebPage* page = BlackBerry::WebKit::DumpRenderTree::currentInstance()->page();
-    page->mouseEvent(BlackBerry::Platform::MouseEvent(0, BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, lastMousePosition, WebCore::IntPoint(0, 0), 0, 0));
+    page->mouseEvent(BlackBerry::Platform::MouseEvent(0, BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, lastMousePosition, IntPoint::zero(), 0, 0));
     return JSValueMakeUndefined(context);
 }
 
@@ -106,9 +94,9 @@ static JSValueRef mouseMoveToCallback(JSContextRef context, JSObjectRef function
     int y = static_cast<int>(JSValueToNumber(context, arguments[1], exception));
     ASSERT(!exception || !*exception);
 
-    lastMousePosition = WebCore::IntPoint(x, y);
+    lastMousePosition = IntPoint(x, y);
     BlackBerry::WebKit::WebPage* page = BlackBerry::WebKit::DumpRenderTree::currentInstance()->page();
-    page->mouseEvent(BlackBerry::Platform::MouseEvent(BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, lastMousePosition, WebCore::IntPoint(0, 0), 0, 0));
+    page->mouseEvent(BlackBerry::Platform::MouseEvent(BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, BlackBerry::Platform::MouseEvent::ScreenLeftMouseButton, lastMousePosition, IntPoint::zero(), 0, 0));
 
 
     return JSValueMakeUndefined(context);
@@ -222,7 +210,7 @@ static JSValueRef addTouchPointCallback(JSContextRef context, JSObjectRef functi
 
     BlackBerry::Platform::TouchPoint touch;
     touch.m_id = touches.isEmpty() ? 0 : touches.last().m_id + 1;
-    WebCore::IntPoint pos(x, y);
+    IntPoint pos(x, y);
     touch.m_pos = pos;
     touch.m_screenPos = pos;
     touch.m_state = BlackBerry::Platform::TouchPoint::TouchPressed;
@@ -248,7 +236,7 @@ static JSValueRef updateTouchPointCallback(JSContextRef context, JSObjectRef fun
         return JSValueMakeUndefined(context);
 
     BlackBerry::Platform::TouchPoint& touch = touches[index];
-    WebCore::IntPoint pos(x, y);
+    IntPoint pos(x, y);
     touch.m_pos = pos;
     touch.m_screenPos = pos;
     touch.m_state = BlackBerry::Platform::TouchPoint::TouchMoved;
@@ -332,9 +320,7 @@ void sendTouchEvent(BlackBerry::Platform::TouchEvent::Type type)
 
     Vector<BlackBerry::Platform::TouchPoint> t;
 
-    for (Vector<BlackBerry::Platform::TouchPoint>::iterator it = touches.begin();
-         it != touches.end();
-         ++it) {
+    for (Vector<BlackBerry::Platform::TouchPoint>::iterator it = touches.begin(); it != touches.end(); ++it) {
         if (it->m_state != BlackBerry::Platform::TouchPoint::TouchReleased) {
             it->m_state = BlackBerry::Platform::TouchPoint::TouchStationary;
             t.append(*it);
@@ -419,3 +405,4 @@ JSObjectRef makeEventSender(JSContextRef context)
 {
     return JSObjectMake(context, getClass(context), 0);
 }
+

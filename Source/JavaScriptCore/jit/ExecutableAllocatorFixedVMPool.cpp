@@ -29,9 +29,9 @@
 
 #if ENABLE(EXECUTABLE_ALLOCATOR_FIXED)
 
+#include "CodeProfiling.h"
 #include <errno.h>
 
-#include "TCSpinLock.h"
 #include <sys/mman.h>
 #include <unistd.h>
 #include <wtf/AVLTree.h>
@@ -409,7 +409,7 @@ public:
         ASSERT(PageTables1GB::size() == 1024 * 1024 * 1024);
 
         m_reservation = PageReservation::reserveWithGuardPages(FixedVMPoolPageTables::size(), OSAllocator::JSJITCodePages, EXECUTABLE_POOL_WRITABLE, true);
-#if !ENABLE(INTERPRETER)
+#if !ENABLE(CLASSIC_INTERPRETER)
         if (!isValid())
             CRASH();
 #endif
@@ -480,15 +480,22 @@ private:
 };
 
 
-static SpinLock spinlock = SPINLOCK_INITIALIZER;
-static FixedVMPoolAllocator* allocator = 0;
-
+void ExecutableAllocator::initializeAllocator()
+{
+    ASSERT(!allocator);
+    allocator = new FixedVMPoolExecutableAllocator();
+    CodeProfiling::notifyAllocator(allocator);
+}
 
 size_t ExecutableAllocator::committedByteCount()
 {
     SpinLockHolder lockHolder(&spinlock);
     return allocator ? allocator->allocated() : 0;
 }   
+
+ExecutableAllocator::~ExecutableAllocator()
+{
+}
 
 bool ExecutableAllocator::isValid() const
 {
@@ -505,11 +512,23 @@ bool ExecutableAllocator::underMemoryPressure()
     return allocator && (allocator->allocated() > (FixedVMPoolPageTables::size() / 2));
 }
 
-ExecutablePool::Allocation ExecutablePool::systemAlloc(size_t size)
+PassRefPtr<ExecutableMemoryHandle> ExecutableAllocator::allocate(JSGlobalData& globalData, size_t sizeInBytes, void* ownerUID, JITCompilationEffort effort)
 {
-    SpinLockHolder lock_holder(&spinlock);
-    ASSERT(allocator);
-    return allocator->alloc(size);
+    RefPtr<ExecutableMemoryHandle> result = allocator->allocate(sizeInBytes, ownerUID);
+    if (!result) {
+        if (effort == JITCompilationCanFail)
+            return result;
+        releaseExecutableMemory(globalData);
+        result = allocator->allocate(sizeInBytes, ownerUID);
+        if (!result)
+            CRASH();
+    }
+    return result.release();
+}
+
+size_t ExecutableAllocator::committedByteCount()
+{
+    return allocator->bytesCommitted();
 }
 
 void ExecutablePool::systemRelease(ExecutablePool::Allocation& allocation) 

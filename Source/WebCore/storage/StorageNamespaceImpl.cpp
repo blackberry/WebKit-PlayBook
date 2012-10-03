@@ -22,9 +22,6 @@
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
-/*
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
- */
 
 #include "config.h"
 #include "StorageNamespaceImpl.h"

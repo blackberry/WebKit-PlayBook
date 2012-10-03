@@ -50,7 +50,7 @@ namespace JSC {
 void JIT::emit_op_call_put_result(Instruction* instruction)
 {
     int dst = instruction[1].u.operand;
-    emitValueProfilingSite(FirstProfilingSite);
+    emitValueProfilingSite();
     emitStore(dst, regT1, regT0);
 }
 
@@ -150,13 +150,11 @@ void JIT::compileLoadVarargs(Instruction* instruction)
 
     JumpList slowCase;
     JumpList end;
-    if (m_codeBlock->usesArguments()
-        && arguments == m_codeBlock->argumentsRegister()
-        && m_codeBlock->m_numParameters == 1) {
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister()) {
         emitLoadTag(arguments, regT1);
         slowCase.append(branch32(NotEqual, regT1, TrustedImm32(JSValue::EmptyValueTag)));
 
-        emitGetFromCallFrameHeader32(RegisterFile::ArgumentCount, regT2);
+        load32(payloadFor(RegisterFile::ArgumentCount), regT2);
         slowCase.append(branch32(Above, regT2, TrustedImm32(Arguments::MaxArguments + 1)));
         // regT2: argumentCountIncludingThis
 
@@ -169,27 +167,29 @@ void JIT::compileLoadVarargs(Instruction* instruction)
         slowCase.append(branchPtr(Below, AbsoluteAddress(m_globalData->interpreter->registerFile().addressOfEnd()), regT3));
 
         // Initialize ArgumentCount.
-        store32(TrustedImm32(JSValue::Int32Tag), tagFor(RegisterFile::ArgumentCount, regT3));
         store32(regT2, payloadFor(RegisterFile::ArgumentCount, regT3));
 
-        // Initialize 'this' and copy arguments.
-        neg32(regT2);
+        // Initialize 'this'.
         emitLoad(thisValue, regT1, regT0);
-        store32(regT0, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
-        store32(regT1, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
+        store32(regT0, Address(regT3, OBJECT_OFFSETOF(JSValue, u.asBits.payload) + (CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))));
+        store32(regT1, Address(regT3, OBJECT_OFFSETOF(JSValue, u.asBits.tag) + (CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))));
+
+        // Copy arguments.
+        neg32(regT2);
         end.append(branchAdd32(Zero, Imm32(1), regT2));
+        // regT2: -argumentCount;
 
         Label copyLoop = label();
-        load32(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) -((RegisterFile::CallFrameHeaderSize + 1) * static_cast<int>(sizeof(Register)))), regT0);
-        load32(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) -((RegisterFile::CallFrameHeaderSize + 1) * static_cast<int>(sizeof(Register)))), regT1);
-        store32(regT0, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
-        store32(regT1, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
+        load32(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) +(CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))), regT0);
+        load32(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) +(CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))), regT1);
+        store32(regT0, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) +(CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))));
+        store32(regT1, BaseIndex(regT3, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) +(CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register)))));
         branchAdd32(NonZero, Imm32(1), regT2).linkTo(copyLoop, this);
 
         end.append(jump());
     }
 
-    if (m_codeBlock->m_numParameters == 1)
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister())
         slowCase.link(this);
 
     JITStubCall stubCall(this, cti_op_load_varargs);
@@ -198,7 +198,7 @@ void JIT::compileLoadVarargs(Instruction* instruction)
     stubCall.addArgument(Imm32(firstFreeRegister));
     stubCall.call(regT3);
 
-    if (m_codeBlock->m_numParameters == 1)
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister())
         end.link(this);
 }
 
@@ -248,7 +248,6 @@ void JIT::compileOpCall(OpcodeID opcodeID, Instruction* instruction, unsigned ca
 
         addPtr(TrustedImm32(registerOffset * sizeof(Register)), callFrameRegister, regT3);
 
-        store32(TrustedImm32(JSValue::Int32Tag), tagFor(RegisterFile::ArgumentCount, regT3));
         store32(TrustedImm32(argCount), payloadFor(RegisterFile::ArgumentCount, regT3));
     } // regT3 holds newCallFrame with ArgumentCount initialized.
     emitLoad(callee, regT1, regT0); // regT1, regT0 holds callee.

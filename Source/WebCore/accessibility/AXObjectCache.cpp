@@ -178,7 +178,7 @@ AccessibilityObject* AXObjectCache::get(RenderObject* renderer)
     ASSERT(!HashTraits<AXID>::isDeletedValue(axID));
     if (!axID)
         return 0;
-    
+
     return m_objects.get(axID).get();    
 }
 
@@ -523,6 +523,11 @@ void AXObjectCache::postNotification(AccessibilityObject* object, Document* docu
         postPlatformNotification(object, notification);
 }
 
+void AXObjectCache::checkedStateChanged(RenderObject* renderer)
+{
+    postNotification(renderer, AXObjectCache::AXCheckedStateChanged, true);
+}
+
 void AXObjectCache::selectedChildrenChanged(RenderObject* renderer)
 {
     // postToElement is false so that you can pass in any child of an element and it will go up the parent tree
@@ -530,14 +535,28 @@ void AXObjectCache::selectedChildrenChanged(RenderObject* renderer)
     postNotification(renderer, AXSelectedChildrenChanged, false);
 }
 
-void AXObjectCache::nodeTextChangeNotification(RenderObject* renderer, AXTextChange textChange, unsigned offset, unsigned count)
+void AXObjectCache::nodeTextChangeNotification(RenderObject* renderer, AXTextChange textChange, unsigned offset, const String& text)
 {
     if (!renderer)
         return;
 
     // Delegate on the right platform
     AccessibilityObject* obj = getOrCreate(renderer);
-    nodeTextChangePlatformNotification(obj, textChange, offset, count);
+    nodeTextChangePlatformNotification(obj, textChange, offset, text);
+}
+
+void AXObjectCache::frameLoadingEventNotification(Frame* frame, AXLoadingEvent loadingEvent)
+{
+    if (!frame)
+        return;
+
+    // Delegate on the right platform
+    RenderView* contentRenderer = frame->contentRenderer();
+    if (!contentRenderer)
+        return;
+
+    AccessibilityObject* obj = getOrCreate(contentRenderer);
+    frameLoadingEventPlatformNotification(obj, loadingEvent);
 }
 #endif
 
@@ -643,5 +662,27 @@ void AXObjectCache::textMarkerDataForVisiblePosition(TextMarkerData& textMarkerD
     
     cache->setNodeInUse(domNode);
 }
-    
+
+const Element* AXObjectCache::rootAXEditableElement(const Node* node)
+{
+    const Element* result = node->rootEditableElement();
+    const Element* element = node->isElementNode() ? toElement(node) : node->parentElement();
+
+    for (; element; element = element->parentElement()) {
+        if (nodeIsTextControl(element))
+            result = element;
+    }
+
+    return result;
+}
+
+bool AXObjectCache::nodeIsTextControl(const Node* node)
+{
+    if (!node)
+        return false;
+
+    const AccessibilityObject* axObject = getOrCreate(node->renderer());
+    return axObject && axObject->isTextControl();
+}
+
 } // namespace WebCore

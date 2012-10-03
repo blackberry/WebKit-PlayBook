@@ -23,6 +23,8 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
+
 #include "InjectedBundle.h"
 #include <WebKit2/WKBundleInitialize.h>
 
@@ -31,7 +33,7 @@ extern "C" __declspec(dllexport)
 #else
 extern "C"
 #endif
-void WKBundleInitialize(WKBundleRef bundle)
+void WKBundleInitialize(WKBundleRef bundle, WKTypeRef initializationUserData)
 {
-    WTR::InjectedBundle::shared().initialize(bundle);
+    WTR::InjectedBundle::shared().initialize(bundle, initializationUserData);
 }

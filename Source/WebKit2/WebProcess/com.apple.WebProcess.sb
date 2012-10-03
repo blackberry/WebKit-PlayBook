@@ -24,30 +24,35 @@
        (subpath "/Library/Dictionaries")
        (subpath "/Library/Fonts")
        (subpath "/Library/Frameworks")
-       (subpath "/Library/Keychains")
+       (subpath "/Library/Managed Preferences")
        (subpath "/private/var/db/mds")
        (subpath "/private/var/db/DetachedSignatures")
        (regex #"^/private/etc/(hosts|group|passwd)$")
 
+       ;; FIXME: This should be removed when <rdar://problem/10479685> is fixed.
+       (subpath "/Library/Keychains")
+
        ;; System and user preferences
        (literal "/Library/Preferences/.GlobalPreferences.plist")
        (literal "/Library/Preferences/com.apple.crypto.plist")
+       (literal "/Library/Preferences/com.apple.networkd.plist")
        (literal "/Library/Preferences/com.apple.security.plist")
        (literal "/Library/Preferences/com.apple.security.common.plist")
        (literal "/Library/Preferences/com.apple.security.revocation.plist")
        (regex #"^/Library/Managed Preferences/[^/]+/com\.apple\.networkConnect\.plist$")
        (home-literal "/Library/Preferences/.GlobalPreferences.plist")
-       (home-regex "/Library/Preferences/ByHost/\.GlobalPreferences\.")
-       (home-regex "/Library/Preferences/ByHost/com\.apple\.networkConnect\.")
+       (home-regex #"/Library/Preferences/ByHost/\.GlobalPreferences\.")
+       (home-regex #"/Library/Preferences/ByHost/com\.apple\.networkConnect\.")
        (home-literal "/Library/Preferences/com.apple.ATS.plist")
        (home-literal "/Library/Preferences/com.apple.DownloadAssessment.plist")
        (home-literal "/Library/Preferences/com.apple.HIToolbox.plist")
        (home-literal "/Library/Preferences/com.apple.LaunchServices.plist")
+       (home-literal "/Library/Preferences/com.apple.QTKit.plist")
        (home-literal "/Library/Preferences/com.apple.WebFoundation.plist")
        (home-literal "/Library/Preferences/com.apple.security.plist")
        (home-literal "/Library/Preferences/com.apple.security.revocation.plist")
        (home-literal "/Library/Application Support/SyncServices/Local/ClientsWithChanges/com.apple.Keychain")
-       (home-regex "/Library/Preferences/com\.apple\.driver\.(AppleBluetoothMultitouch\.mouse|AppleBluetoothMultitouch\.trackpad|AppleHIDMouse)\.plist$")
+       (home-regex #"/Library/Preferences/com\.apple\.driver\.(AppleBluetoothMultitouch\.mouse|AppleBluetoothMultitouch\.trackpad|AppleHIDMouse)\.plist$")
 
        ;; On-disk WebKit2 framework location, to account for debug installations
        ;; outside of /System/Library/Frameworks
@@ -65,12 +70,6 @@
        (subpath "/Library/Video/Plug-Ins")
        (subpath "/Library/QuickTime")
 
-       ;; FIXME: This should be removed when <rdar://problem/9276253> is fixed.
-       (home-subpath "/Library/Keyboard Layouts")
-
-       ;; FIXME: This should be removed when <rdar://problem/9276268> is fixed.
-       (home-subpath "/Library/Input Methods")
-
        (home-subpath "/Library/Dictionaries"))
 
 ;; This should be updated when <rdar://problem/9355830> is fixed.
@@ -84,25 +83,21 @@
 ;; Writable preferences and temporary files
 (allow file*
        (home-subpath "/Library/Caches/com.apple.WebProcess")
-       (home-regex "/Library/Preferences/ByHost/com\.apple\.HIToolbox\.")
-       (home-regex "/Library/Preferences/com\.apple\.WebProcess\.")
-       (home-subpath "/Library/Keychains")
+       (home-regex #"/Library/Preferences/ByHost/com\.apple\.HIToolbox\.")
+       (home-regex #"/Library/Preferences/com\.apple\.WebProcess\.")
 
-       ;; FIXME: This should be removed when <rdar://problem/9276430> is fixed.
-       (home-literal "/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2")
-       (home-literal "/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2-journal"))
-
-(allow file-read-data
-       ;; FIXME: This should be removed when <rdar://problem/9276430> is fixed.
-       (home-literal "/Library/Preferences"))
+       ;; FIXME: This should be removed when <rdar://problem/10479685> is fixed.
+       (home-subpath "/Library/Keychains"))
 
 ;; Non-user Security mds caches
 (allow file*
     (subpath "/private/var/db/mds/system"))
 
-;; Darwin temporary files and Security mds caches, if present
+;; FIXME: <rdar://problem/10792047> Use private user cache directory
 (if (positive? (string-length (param "DARWIN_USER_CACHE_DIR")))
     (allow file* (subpath (string-append (param "DARWIN_USER_CACHE_DIR") "/mds"))))
+
+;; FIXME: <rdar://problem/10785457> Use private temporary directory
 (if (positive? (string-length (param "DARWIN_USER_TEMP_DIR")))
     (allow file* (subpath (param "DARWIN_USER_TEMP_DIR"))))
 
@@ -136,6 +131,7 @@
        (iokit-user-client-class "IOAccelerationUserClient")
        (iokit-user-client-class "IOFramebufferSharedUserClient")
        (iokit-user-client-class "AppleGraphicsControlClient")
+       (iokit-user-client-class "AppleSNBFBUserClient")
        (iokit-user-client-class "AGPMClient")
        (iokit-user-client-class "IOHIDParamUserClient")
        (iokit-user-client-class "RootDomainUserClient")
@@ -154,6 +150,7 @@
        (global-name "com.apple.SecurityServer")
        (global-name "com.apple.SystemConfiguration.configd")
        (global-name "com.apple.SystemConfiguration.PPPController")
+       (global-name "com.apple.SystemConfiguration.SCNetworkReachability")
        (global-name "com.apple.audio.VDCAssistant")
        (global-name "com.apple.audio.audiohald")
        (global-name "com.apple.audio.coreaudiod")
@@ -166,9 +163,8 @@
        (global-name "com.apple.system.opendirectoryd.api")
        (global-name "com.apple.window_proxies")
        (global-name "com.apple.windowserver.active")
-
-        ;; FIXME: This will be superfluous once <rdar://problem/10420555> is fixed.
        (global-name "com.apple.cfnetwork.AuthBrokerAgent")
+       (global-name "com.apple.PowerManagement.control")
 
        ;; FIXME: This should be removed when <rdar://problem/9276393> is fixed.
        (global-name "com.apple.metadata.mds"))
@@ -209,6 +205,10 @@
         (literal "/private/etc/services")
         (literal "/private/etc/host"))
 
-;; FIXME: Should be removed after <rdar://problem/9422957> is fixed
 (deny file-read* file-write* (with no-log)
-      (home-literal "/Library/Caches/Cache.db"))
+       ;; FIXME: Should be removed after <rdar://problem/9422957> is fixed.
+       (home-literal "/Library/Caches/Cache.db")
+
+       ;; FIXME: Should be removed after <rdar://problem/10463881> is fixed.
+       (home-literal "/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2")
+       (home-literal "/Library/Preferences/com.apple.LaunchServices.QuarantineEventsV2-journal"))

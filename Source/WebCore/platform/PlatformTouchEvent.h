@@ -20,6 +20,7 @@
 #ifndef PlatformTouchEvent_h
 #define PlatformTouchEvent_h
 
+#include "PlatformEvent.h"
 #include "PlatformTouchPoint.h"
 #include <wtf/Vector.h>
 
@@ -36,76 +37,51 @@ typedef struct _Eina_List Eina_List;
 #endif
 
 #if PLATFORM(BLACKBERRY)
-namespace BlackBerry
-{
-namespace Platform
-{
-    class TouchEvent;
+namespace BlackBerry {
+namespace Platform {
+class TouchEvent;
 };
 };
 #endif
 
 namespace WebCore {
 
-enum TouchEventType {
-    TouchStart
-    , TouchMove
-    , TouchEnd
-    , TouchCancel
-};
 
-class PlatformTouchEvent {
+class PlatformTouchEvent : public PlatformEvent {
 public:
     PlatformTouchEvent()
-        : m_type(TouchStart)
-        , m_ctrlKey(false)
-        , m_altKey(false)
-        , m_shiftKey(false)
-        , m_metaKey(false)
-        , m_timestamp(0)
+        : PlatformEvent(PlatformEvent::TouchStart)
+#if PLATFORM(BLACKBERRY)
         , m_rotation(0)
         , m_scale(1)
-#if PLATFORM(BLACKBERRY) && OS(QNX)
         , m_doubleTap(false)
         , m_touchHold(false)
 #endif
-    {}
+    {
+    }
+
 #if PLATFORM(QT)
     PlatformTouchEvent(QTouchEvent*);
 #elif PLATFORM(EFL)
-    PlatformTouchEvent(Eina_List*, const IntPoint, TouchEventType, int metaState);
+    PlatformTouchEvent(Eina_List*, const IntPoint, PlatformEvent::Type, int metaState);
 #elif PLATFORM(BLACKBERRY)
     PlatformTouchEvent(BlackBerry::Platform::TouchEvent*);
 #endif
 
-    TouchEventType type() const { return m_type; }
     const Vector<PlatformTouchPoint>& touchPoints() const { return m_touchPoints; }
 
-    bool ctrlKey() const { return m_ctrlKey; }
-    bool altKey() const { return m_altKey; }
-    bool shiftKey() const { return m_shiftKey; }
-    bool metaKey() const { return m_metaKey; }
-
-    // Time in seconds.
-    double timestamp() const { return m_timestamp; }
+#if PLATFORM(BLACKBERRY)
     float rotation() const { return m_rotation; }
     float scale() const { return m_scale; }
-#if PLATFORM(BLACKBERRY) && OS(QNX)
     bool doubleTap() const { return m_doubleTap; }
     bool touchHold() const { return m_touchHold; }
 #endif
 
 protected:
-    TouchEventType m_type;
     Vector<PlatformTouchPoint> m_touchPoints;
-    bool m_ctrlKey;
-    bool m_altKey;
-    bool m_shiftKey;
-    bool m_metaKey;
-    double m_timestamp;
+#if PLATFORM(BLACKBERRY)
     float m_rotation;
     float m_scale;
-#if PLATFORM(BLACKBERRY) && OS(QNX)
     bool m_doubleTap;
     bool m_touchHold;
 #endif

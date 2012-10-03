@@ -401,7 +401,7 @@ void GraphicsContext::drawBidiText(const Font& font, const TextRun& run, const F
 
     BidiResolver<TextRunIterator, BidiCharacterRun> bidiResolver;
     bidiResolver.setStatus(BidiStatus(run.direction(), run.directionalOverride()));
-    bidiResolver.setPosition(TextRunIterator(&run, 0));
+    bidiResolver.setPositionIgnoringNestedIsolates(TextRunIterator(&run, 0));
 
     // FIXME: This ownership should be reversed. We should pass BidiRunList
     // to BidiResolver in createBidiRunsForLine.
@@ -488,7 +488,7 @@ void GraphicsContext::drawImage(Image* image, ColorSpace styleColorSpace, const 
         image->draw(this, FloatRect(dest.location(), FloatSize(tw, th)), FloatRect(src.location(), FloatSize(tsw, tsh)), styleColorSpace, op);
 }
 
-void GraphicsContext::drawTiledImage(Image* image, ColorSpace styleColorSpace, const IntRect& rect, const IntPoint& srcPoint, const IntSize& tileSize, CompositeOperator op, bool useLowQualityScale)
+void GraphicsContext::drawTiledImage(Image* image, ColorSpace styleColorSpace, const IntRect& destRect, const IntPoint& srcPoint, const IntSize& tileSize, CompositeOperator op, bool useLowQualityScale)
 {
     if (paintingDisabled() || !image)
         return;
@@ -496,10 +496,10 @@ void GraphicsContext::drawTiledImage(Image* image, ColorSpace styleColorSpace, c
     if (useLowQualityScale) {
         InterpolationQuality previousInterpolationQuality = imageInterpolationQuality();
         setImageInterpolationQuality(InterpolationLow);
-        image->drawTiled(this, rect, srcPoint, tileSize, styleColorSpace, op);
+        image->drawTiled(this, destRect, srcPoint, tileSize, styleColorSpace, op);
         setImageInterpolationQuality(previousInterpolationQuality);
     } else
-        image->drawTiled(this, rect, srcPoint, tileSize, styleColorSpace, op);
+        image->drawTiled(this, destRect, srcPoint, tileSize, styleColorSpace, op);
 }
 
 void GraphicsContext::drawTiledImage(Image* image, ColorSpace styleColorSpace, const IntRect& dest, const IntRect& srcRect,
@@ -554,14 +554,14 @@ void GraphicsContext::drawImageBuffer(ImageBuffer* image, ColorSpace styleColorS
     float th = dest.height();
 
     if (tsw == -1)
-        tsw = image->width();
+        tsw = image->logicalSize().width();
     if (tsh == -1)
-        tsh = image->height();
+        tsh = image->logicalSize().height();
 
     if (tw == -1)
-        tw = image->width();
+        tw = image->logicalSize().width();
     if (th == -1)
-        th = image->height();
+        th = image->logicalSize().height();
 
     if (useLowQualityScale) {
         InterpolationQuality previousInterpolationQuality = imageInterpolationQuality();
@@ -755,7 +755,7 @@ PassOwnPtr<ImageBuffer> GraphicsContext::createCompatibleBuffer(const IntSize& s
     AffineTransform transform = getCTM();
     IntSize scaledSize(static_cast<int>(ceil(size.width() * transform.xScale())), static_cast<int>(ceil(size.height() * transform.yScale())));
 
-    OwnPtr<ImageBuffer> buffer = ImageBuffer::create(scaledSize);
+    OwnPtr<ImageBuffer> buffer = ImageBuffer::create(scaledSize, 1, ColorSpaceDeviceRGB, isAcceleratedContext() ? Accelerated : Unaccelerated);
     if (!buffer)
         return nullptr;
 

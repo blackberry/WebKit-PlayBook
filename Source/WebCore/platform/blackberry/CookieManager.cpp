@@ -36,7 +36,6 @@
 #include "CurrentTime.h"
 #include "FileSystem.h"
 #include "Logging.h"
-#include "ParsedCookie.h"
 #include "WebSettings.h"
 #include <BlackBerryPlatformClient.h>
 #include <BlackBerryPlatformExecutableMessage.h>
@@ -64,6 +63,12 @@
 #endif // ENABLE_COOKIE_LIMIT_DEBUG
 
 namespace WebCore {
+
+// Max count constants.
+static const unsigned s_globalMaxCookieCount = 6000;
+static const unsigned s_maxCookieCountPerHost = 60;
+static const unsigned s_cookiesToDeleteWhenLimitReached = 60;
+static const unsigned s_delayToStartCookieCleanup = 10;
 
 static void flushCookiesOnExit(void)
 {
@@ -99,7 +104,7 @@ CookieManager::CookieManager()
 CookieManager::~CookieManager()
 {
     removeAllCookies(DoNotRemoveFromBackingStore);
-    // TODO: m_managerMap and the top layer protocolMaps are not properly deleted.
+    // FIXME: m_managerMap and the top layer protocolMaps are not properly deleted.
     // Do not delete any protocol maps to avoid double-deletion of the maps that are
     // being used for both secure and non-secure protocols; this leak is OK since
     // there's nothing important in the hashtable destructors, and the memory will be reclaimed on exit
@@ -123,9 +128,7 @@ static bool cookieSorter(ParsedCookie* a, ParsedCookie* b)
 static bool shouldIgnoreDomain(const String protocol)
 {
     // ignore domain security for file and local
-    if ((protocol == "file" || protocol == "local" ))
-        return true;
-    return false;
+    return protocol == "file" || protocol == "local";
 }
 
 void CookieManager::setCookies(const KURL& url, const String& value)
@@ -137,7 +140,7 @@ void CookieManager::setCookies(const KURL& url, const String& value)
     for (size_t i = 0; i < cookies.size(); ++i) {
         ParsedCookie* cookie = cookies[i];
         if (!shouldRejectForSecurityReason(cookie, url)) {
-            BackingStoreRemoval treatment = m_privateMode ? DoNotRemoveFromBackingStore : RemoveFromBackingStore;
+            BackingStoreRemovalPolicy treatment = m_privateMode ? DoNotRemoveFromBackingStore : RemoveFromBackingStore;
             checkAndTreatCookie(cookie, treatment);
         } else
             delete cookie;
@@ -190,7 +193,7 @@ bool CookieManager::shouldRejectForSecurityReason(const ParsedCookie* cookie, co
     return false;
 }
 
-String CookieManager::getCookie(const KURL& url, HttpOnlyCookieFiltering filter) const
+String CookieManager::getCookie(const KURL& url, CookieFilter filter) const
 {
     Vector<ParsedCookie*> rawCookies;
     rawCookies.reserveInitialCapacity(s_maxCookieCountPerHost);
@@ -213,10 +216,44 @@ String CookieManager::getCookie(const KURL& url, HttpOnlyCookieFiltering filter)
     CookieLog("CookieManager - cookieString is - %s\n", cookieStringBuilder.toString().utf8().data());
 
     return cookieStringBuilder.toString();
-
 }
 
-void CookieManager::getRawCookies(Vector<ParsedCookie*> &stackOfCookies, const KURL& requestURL, HttpOnlyCookieFiltering filter) const
+String CookieManager::generateHtmlFragmentForCookies()
+{
+    CookieLog("CookieManager - generateHtmlFragmentForCookies\n");
+
+    Vector<ParsedCookie*> cookieCandidates;
+    for (HashMap<String, CookieMap*>::iterator it = m_managerMap.begin(); it != m_managerMap.end(); ++it)
+        it->second->getAllChildCookies(&cookieCandidates);
+
+    String result;
+    ParsedCookie* cookie = 0;
+    result.append(String("<table style=\"word-wrap:break-word\" cellSpacing=\"0\" cellPadding=\"0\" border=\"1\"><tr><th>Domain</th><th>Path</th><th>Protocol</th><th>Name</th><th>Value</th><th>Secure</th><th>HttpOnly</th><th>Session</th></tr>"));
+    for (size_t i = 0; i < cookieCandidates.size(); ++i) {
+        cookie = cookieCandidates[i];
+        result.append(String("<tr><td align=\"center\">"));
+        result.append(cookie->domain());
+        result.append(String("<td align=\"center\">"));
+        result.append(cookie->path());
+        result.append(String("<td align=\"center\">"));
+        result.append(cookie->protocol());
+        result.append(String("<td align=\"center\">"));
+        result.append(cookie->name());
+        result.append(String("<td align=\"center\" style= \"word-break:break-all\">"));
+        result.append(cookie->value());
+        result.append(String("<td align=\"center\">"));
+        result.append(String(cookie->isSecure() ? "Yes" : "No"));
+        result.append(String("<td align=\"center\">"));
+        result.append(String(cookie->isHttpOnly() ? "Yes" : "No"));
+        result.append(String("<td align=\"center\">"));
+        result.append(String(cookie->isSession() ? "Yes" : "No"));
+        result.append(String("</td></tr>"));
+    }
+    result.append(String("</table>"));
+    return result;
+}
+
+void CookieManager::getRawCookies(Vector<ParsedCookie*> &stackOfCookies, const KURL& requestURL, CookieFilter filter) const
 {
     CookieLog("CookieManager - getRawCookies - processing url with domain - %s & protocol: %s & path: %s\n", requestURL.host().utf8().data(), requestURL.protocol().utf8().data(), requestURL.path().utf8().data());
 
@@ -261,7 +298,7 @@ void CookieManager::getRawCookies(Vector<ParsedCookie*> &stackOfCookies, const K
             currentMap->getAllCookies(&cookieCandidates);
 
             // Get cookies from the valid domain maps
-            int i = delimitedHost.size()-1;
+            int i = delimitedHost.size() - 1;
             while (i >= 0) {
                 CookieLog("CookieManager - finding %s in currentmap\n", delimitedHost[i].utf8().data());
                 currentMap = currentMap->getSubdomainMap(delimitedHost[i]);
@@ -298,10 +335,10 @@ void CookieManager::getRawCookies(Vector<ParsedCookie*> &stackOfCookies, const K
         }
     }
 
-    std::sort(stackOfCookies.begin(), stackOfCookies.end(), cookieSorter);
+    std::stable_sort(stackOfCookies.begin(), stackOfCookies.end(), cookieSorter);
 }
 
-void CookieManager::removeAllCookies(BackingStoreRemoval backingStoreRemoval)
+void CookieManager::removeAllCookies(BackingStoreRemovalPolicy backingStoreRemoval)
 {
     HashMap<String, CookieMap*>::iterator first = m_managerMap.begin();
     HashMap<String, CookieMap*>::iterator end = m_managerMap.end();
@@ -319,7 +356,7 @@ void CookieManager::setCookieJar(const char* fileName)
     m_cookieBackingStore->open(m_cookieJarFileName);
 }
 
-void CookieManager::checkAndTreatCookie(ParsedCookie* candidateCookie, BackingStoreRemoval postToBackingStore)
+void CookieManager::checkAndTreatCookie(ParsedCookie* candidateCookie, BackingStoreRemovalPolicy postToBackingStore)
 {
     CookieLog("CookieManager - checkAndTreatCookie - processing url with domain - %s & protocol %s\n", candidateCookie->domain().utf8().data(), candidateCookie->protocol().utf8().data());
 
@@ -368,32 +405,59 @@ void CookieManager::checkAndTreatCookie(ParsedCookie* candidateCookie, BackingSt
         if (postToBackingStore == BackingStoreCookieEntry)
             m_cookieBackingStore->remove(candidateCookie);
         else if (curMap) {
-            bool cookieAlreadyExists = curMap->existsCookie(candidateCookie);
-            if (cookieAlreadyExists) {
-                CookieLog("CookieManager - expired cookie exists in memory");
-                ParsedCookie* expired = curMap->removeCookie(candidateCookie);
-                // Cookie is useless, Remove the cookie from the backingstore if it exists
-                // Backup check for BackingStoreCookieEntry incase someone incorrectly uses this enum
-                if (postToBackingStore != BackingStoreCookieEntry && !expired->isSession()) {
-                    CookieLog("CookieManager - expired cookie is nonsession, deleting from db");
-                    m_cookieBackingStore->remove(expired);
-                }
-                delete expired;
+            // RemoveCookie will return 0 if the cookie doesn't exist.
+            ParsedCookie* expired = curMap->removeCookie(candidateCookie);
+            // Cookie is useless, Remove the cookie from the backingstore if it exists.
+            // Backup check for BackingStoreCookieEntry incase someone incorrectly uses this enum.
+            if (expired && postToBackingStore != BackingStoreCookieEntry && !expired->isSession()) {
+                CookieLog("CookieManager - expired cookie is nonsession, deleting from db");
+                m_cookieBackingStore->remove(expired);
             }
+            delete expired;
+
         } else
             delete candidateCookie;
     } else {
         ASSERT(curMap);
-        bool cookieAlreadyExists = curMap->existsCookie(candidateCookie);
-        if (cookieAlreadyExists)
-            update(curMap, candidateCookie, postToBackingStore);
-        else
-            addCookieToMap(curMap, candidateCookie, postToBackingStore);
+        addCookieToMap(curMap, candidateCookie, postToBackingStore);
     }
 }
 
-void CookieManager::addCookieToMap(CookieMap* targetMap, ParsedCookie* candidateCookie, BackingStoreRemoval postToBackingStore)
+void CookieManager::addCookieToMap(CookieMap* targetMap, ParsedCookie* candidateCookie, BackingStoreRemovalPolicy postToBackingStore)
 {
+    ParsedCookie* prevCookie = targetMap->addOrReplaceCookie(candidateCookie);
+    if (prevCookie) {
+
+        CookieLog("CookieManager - updating new cookie - %s.\n", candidateCookie->toString().utf8().data());
+
+        // A cookie was replaced in targetMap.
+        // If old cookie is non-session and new one is, we have to delete it from backingstore
+        // If new cookie is non-session and old one is, we have to add it to backingstore
+        // If both sessions are non-session, then we update it in the backingstore
+        bool newIsSession = candidateCookie->isSession();
+        bool oldIsSession = prevCookie->isSession();
+
+        if (postToBackingStore == RemoveFromBackingStore) {
+            if (!newIsSession && !oldIsSession)
+                m_cookieBackingStore->update(candidateCookie);
+            else if (newIsSession && !oldIsSession) {
+                // Must manually decrease the counter because it was not counted when
+                // the cookie was removed in cookieVector.
+                removedCookie();
+                m_cookieBackingStore->remove(prevCookie);
+            } else if (!newIsSession && oldIsSession) {
+                // Must manually increase the counter because it was not counted when
+                // the cookie was added in cookieVector.
+                addedCookie();
+                m_cookieBackingStore->insert(candidateCookie);
+            }
+        }
+        delete prevCookie;
+        return;
+    }
+
+    CookieLog("CookieManager - adding new cookie - %s.\n", candidateCookie->toString().utf8().data());
+
     ParsedCookie* oldestCookie = 0;
     // Check if we have not reached the per cookie domain limit.
     // If that is not true, we check if the global limit has been reached if backingstore mode is on
@@ -406,17 +470,13 @@ void CookieManager::addCookieToMap(CookieMap* targetMap, ParsedCookie* candidate
     //    then it means the global count will never exceed the limit
 
     CookieLimitLog("CookieManager - local count: %d  global count: %d", targetMap->count(), m_count);
-    if (targetMap->count() >= s_maxCookieCountPerHost) {
+    if (targetMap->count() > s_maxCookieCountPerHost) {
         CookieLog("CookieManager - deleting oldest cookie from this map due to domain count.\n");
         oldestCookie = targetMap->removeOldestCookie();
-    } else if (m_count >= s_globalMaxCookieCount && (postToBackingStore != DoNotRemoveFromBackingStore)) {
-            CookieLimitLog("CookieManager - Global limit reached, initiate cookie limit clean up.");
-            initiateCookieLimitCleanUp();
+    } else if (m_count > s_globalMaxCookieCount && (postToBackingStore != DoNotRemoveFromBackingStore)) {
+        CookieLimitLog("CookieManager - Global limit reached, initiate cookie limit clean up.");
+        initiateCookieLimitCleanUp();
     }
-
-    CookieLog("CookieManager - adding new cookie - %s.\n", candidateCookie->toString().utf8().data());
-
-    targetMap->addCookie(candidateCookie);
 
     // Only add non session cookie to the backing store.
     if (postToBackingStore == RemoveFromBackingStore) {
@@ -429,39 +489,6 @@ void CookieManager::addCookieToMap(CookieMap* targetMap, ParsedCookie* candidate
     }
     if (oldestCookie)
         delete oldestCookie;
-}
-
-void CookieManager::update(CookieMap* targetMap, ParsedCookie* newCookie, BackingStoreRemoval postToBackingStore)
-{
-    // If old cookie is non-session and new one is, we have to delete it from backingstore
-    // If new cookie is non-session and old one is, we have to add it to backingstore
-    // If both sessions are non-session, then we update it in the backingstore
-
-    CookieLog("CookieManager - updating new cookie - %s.\n", newCookie->toString().utf8().data());
-
-    ParsedCookie* oldCookie = targetMap->updateCookie(newCookie);
-
-    ASSERT(oldCookie);
-
-    bool newIsSession = newCookie->isSession();
-    bool oldIsSession = oldCookie->isSession();
-
-    if (postToBackingStore == RemoveFromBackingStore) {
-        if (!newIsSession && !oldIsSession)
-            m_cookieBackingStore->update(newCookie);
-        else if (newIsSession && !oldIsSession) {
-            // Must manually decrease the counter because it was not counted when
-            // the cookie was removed in cookieMap.
-            removedCookie();
-            m_cookieBackingStore->remove(oldCookie);
-        } else if (!newIsSession && oldIsSession) {
-            // Must manually increase the counter because it was not counted when
-            // the cookie was added in cookieMap.
-            addedCookie();
-            m_cookieBackingStore->insert(newCookie);
-        }
-    }
-    delete oldCookie;
 }
 
 void CookieManager::getBackingStoreCookies()
@@ -548,7 +575,7 @@ void CookieManager::initiateCookieLimitCleanUp()
         CookieLog("CookieManager - Starting a timer for cookie cleanup");
         m_limitTimer.startOneShot(s_delayToStartCookieCleanup);
     } else {
-#if !NDEBUG
+#ifndef NDEBUG
         CookieLog("CookieManager - Cookie cleanup timer already running");
 #endif
     }

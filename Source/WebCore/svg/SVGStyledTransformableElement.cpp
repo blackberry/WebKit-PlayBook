@@ -64,7 +64,19 @@ AffineTransform SVGStyledTransformableElement::getScreenCTM(StyleUpdateStrategy 
 AffineTransform SVGStyledTransformableElement::animatedLocalTransform() const
 {
     AffineTransform matrix;
-    transform().concatenate(matrix);
+    RenderStyle* style = renderer() ? renderer()->style() : 0;
+
+    // if CSS property was set, use that, otherwise fallback to attribute (if set)
+    if (style && style->hasTransform()) {
+        TransformationMatrix t;
+        // For now, the transform-origin is not taken into account
+        // Also, any percentage values will not be taken into account
+        style->applyTransform(t, IntSize(0, 0), RenderStyle::ExcludeTransformOrigin);
+        // Flatten any 3D transform
+        matrix = t.toAffineTransform();
+    } else
+        transform().concatenate(matrix);
+
     if (m_supplementalTransform)
         return *m_supplementalTransform * matrix;
     return matrix;
@@ -85,10 +97,10 @@ bool SVGStyledTransformableElement::isSupportedAttribute(const QualifiedName& at
     return supportedAttributes.contains<QualifiedName, SVGAttributeHashTranslator>(attrName);
 }
 
-void SVGStyledTransformableElement::parseMappedAttribute(Attribute* attr)
+void SVGStyledTransformableElement::parseAttribute(Attribute* attr)
 {
     if (!isSupportedAttribute(attr->name())) {
-        SVGStyledLocatableElement::parseMappedAttribute(attr);
+        SVGStyledLocatableElement::parseAttribute(attr);
         return;
     }
 

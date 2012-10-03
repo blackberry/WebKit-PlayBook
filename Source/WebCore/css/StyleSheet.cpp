@@ -20,7 +20,7 @@
 #include "config.h"
 #include "StyleSheet.h"
 
-#include "CSSRule.h"
+#include "CSSImportRule.h"
 #include "CSSStyleSheet.h"
 #include "Document.h"
 #include "MediaList.h"
@@ -30,17 +30,17 @@ namespace WebCore {
 
 StyleSheet::StyleSheet(Node* parentNode, const String& originalURL, const KURL& finalURL)
     : m_disabled(false)
-    , m_parentRule(0)
-    , m_parentNode(parentNode)
+    , m_ownerRule(0)
+    , m_ownerNode(parentNode)
     , m_originalURL(originalURL)
     , m_finalURL(finalURL)
 {
 }
 
-StyleSheet::StyleSheet(CSSRule* parentRule, const String& originalURL, const KURL& finalURL)
+StyleSheet::StyleSheet(CSSImportRule* parentRule, const String& originalURL, const KURL& finalURL)
     : m_disabled(false)
-    , m_parentRule(parentRule)
-    , m_parentNode(0)
+    , m_ownerRule(parentRule)
+    , m_ownerNode(0)
     , m_originalURL(originalURL)
     , m_finalURL(finalURL)
 {
@@ -55,7 +55,7 @@ StyleSheet::~StyleSheet()
 StyleSheet* StyleSheet::parentStyleSheet() const
 {
     ASSERT(isCSSStyleSheet());
-    return m_parentRule ? m_parentRule->parentStyleSheet() : 0;
+    return m_ownerRule ? m_ownerRule->parentStyleSheet() : 0;
 }
 
 void StyleSheet::setMedia(PassRefPtr<MediaList> media)
@@ -76,19 +76,9 @@ KURL StyleSheet::baseURL() const
         return m_finalURL;
     if (StyleSheet* parentSheet = parentStyleSheet())
         return parentSheet->baseURL();
-    if (!m_parentNode)
+    if (!m_ownerNode)
         return KURL();
-    return m_parentNode->document()->baseURL();
-}
-
-KURL StyleSheet::completeURL(const String& url) const
-{
-    // Always return a null URL when passed a null string.
-    // FIXME: Should we change the KURL constructor to have this behavior?
-    // See also Document::completeURL(const String&)
-    if (url.isNull())
-        return KURL();
-    return KURL(baseURL(), url);
+    return m_ownerNode->document()->baseURL();
 }
 
 void StyleSheet::setDisabled(bool disabled)

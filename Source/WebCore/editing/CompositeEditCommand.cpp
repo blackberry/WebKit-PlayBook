@@ -28,6 +28,7 @@
 
 #include "AppendNodeCommand.h"
 #include "ApplyStyleCommand.h"
+#include "DeleteButtonController.h"
 #include "DeleteFromTextNodeCommand.h"
 #include "DeleteSelectionCommand.h"
 #include "Document.h"
@@ -52,6 +53,7 @@
 #include "ReplaceSelectionCommand.h"
 #include "RenderBlock.h"
 #include "RenderText.h"
+#include "ScopedEventQueue.h"
 #include "SetNodeAttributeCommand.h"
 #include "SplitElementCommand.h"
 #include "SplitTextNodeCommand.h"
@@ -70,6 +72,95 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
+PassRefPtr<EditCommandComposition> EditCommandComposition::create(Document* document,
+    const VisibleSelection& startingSelection, const VisibleSelection& endingSelection, EditAction editAction)
+{
+    return adoptRef(new EditCommandComposition(document, startingSelection, endingSelection, editAction));
+}
+
+EditCommandComposition::EditCommandComposition(Document* document, const VisibleSelection& startingSelection, const VisibleSelection& endingSelection, EditAction editAction)
+    : m_document(document)
+    , m_startingSelection(startingSelection)
+    , m_endingSelection(endingSelection)
+    , m_startingRootEditableElement(startingSelection.rootEditableElement())
+    , m_endingRootEditableElement(endingSelection.rootEditableElement())
+    , m_editAction(editAction)
+{
+}
+
+void EditCommandComposition::unapply()
+{
+    ASSERT(m_document);
+    Frame* frame = m_document->frame();
+    ASSERT(frame);
+
+    // Changes to the document may have been made since the last editing operation that require a layout, as in <rdar://problem/5658603>.
+    // Low level operations, like RemoveNodeCommand, don't require a layout because the high level operations that use them perform one
+    // if one is necessary (like for the creation of VisiblePositions).
+    m_document->updateLayoutIgnorePendingStylesheets();
+    
+    DeleteButtonController* deleteButtonController = frame->editor()->deleteButtonController();
+    deleteButtonController->disable();
+    size_t size = m_commands.size();
+    for (size_t i = size; i != 0; --i)
+        m_commands[i - 1]->doUnapply();
+    deleteButtonController->enable();
+    
+    frame->editor()->unappliedEditing(this);
+}
+
+void EditCommandComposition::reapply()
+{
+    ASSERT(m_document);
+    Frame* frame = m_document->frame();
+    ASSERT(frame);
+
+    // Changes to the document may have been made since the last editing operation that require a layout, as in <rdar://problem/5658603>.
+    // Low level operations, like RemoveNodeCommand, don't require a layout because the high level operations that use them perform one
+    // if one is necessary (like for the creation of VisiblePositions).
+    m_document->updateLayoutIgnorePendingStylesheets();
+    
+    DeleteButtonController* deleteButtonController = frame->editor()->deleteButtonController();
+    deleteButtonController->disable();
+    size_t size = m_commands.size();
+    for (size_t i = 0; i != size; ++i)
+        m_commands[i]->doReapply();
+    deleteButtonController->enable();
+    
+    frame->editor()->reappliedEditing(this);
+}
+
+void EditCommandComposition::append(SimpleEditCommand* command)
+{
+    m_commands.append(command);
+}
+
+void EditCommandComposition::setStartingSelection(const VisibleSelection& selection)
+{
+    m_startingSelection = selection;
+    m_startingRootEditableElement = selection.rootEditableElement();
+}
+
+void EditCommandComposition::setEndingSelection(const VisibleSelection& selection)
+{
+    m_endingSelection = selection;
+    m_endingRootEditableElement = selection.rootEditableElement();
+}
+
+#ifndef NDEBUG
+void EditCommandComposition::getNodesInCommand(HashSet<Node*>& nodes)
+{
+    size_t size = m_commands.size();
+    for (size_t i = 0; i < size; ++i)
+        m_commands[i]->getNodesInCommand(nodes);
+}
+#endif
+
+void applyCommand(PassRefPtr<CompositeEditCommand> command)
+{
+    command->apply();
+}
+
 CompositeEditCommand::CompositeEditCommand(Document *document)
     : EditCommand(document)
 {
@@ -77,30 +168,97 @@ CompositeEditCommand::CompositeEditCommand(Document *document)
 
 CompositeEditCommand::~CompositeEditCommand()
 {
+    ASSERT(isTopLevelCommand() || !m_composition);
 }
 
-void CompositeEditCommand::doUnapply()
+void CompositeEditCommand::apply()
 {
-    size_t size = m_commands.size();
-    for (size_t i = size; i != 0; --i)
-        m_commands[i - 1]->unapply();
+    if (!endingSelection().isContentRichlyEditable()) {
+        switch (editingAction()) {
+        case EditActionTyping:
+        case EditActionPaste:
+        case EditActionDrag:
+        case EditActionSetWritingDirection:
+        case EditActionCut:
+        case EditActionUnspecified:
+            break;
+        default:
+            ASSERT_NOT_REACHED();
+            return;
+        }
+    }
+    ensureComposition();
+
+    // Changes to the document may have been made since the last editing operation that require a layout, as in <rdar://problem/5658603>.
+    // Low level operations, like RemoveNodeCommand, don't require a layout because the high level operations that use them perform one
+    // if one is necessary (like for the creation of VisiblePositions).
+    ASSERT(document());
+    document()->updateLayoutIgnorePendingStylesheets();
+
+    Frame* frame = document()->frame();
+    ASSERT(frame);
+    {
+        EventQueueScope scope;
+        DeleteButtonController* deleteButtonController = frame->editor()->deleteButtonController();
+        deleteButtonController->disable();
+        doApply();
+        deleteButtonController->enable();
+    }
+
+    // Only need to call appliedEditing for top-level commands,
+    // and TypingCommands do it on their own (see TypingCommand::typingAddedToOpenCommand).
+    if (!isTypingCommand())
+        frame->editor()->appliedEditing(this);
+    setShouldRetainAutocorrectionIndicator(false);
 }
 
-void CompositeEditCommand::doReapply()
+EditCommandComposition* CompositeEditCommand::ensureComposition()
 {
-    size_t size = m_commands.size();
-    for (size_t i = 0; i != size; ++i)
-        m_commands[i]->reapply();
+    CompositeEditCommand* command = this;
+    while (command && command->parent())
+        command = command->parent();
+    if (!command->m_composition)
+        command->m_composition = EditCommandComposition::create(document(), startingSelection(), endingSelection(), editingAction());
+    return command->m_composition.get();
+}
+
+bool CompositeEditCommand::isCreateLinkCommand() const
+{
+    return false;
+}
+
+bool CompositeEditCommand::preservesTypingStyle() const
+{
+    return false;
+}
+
+bool CompositeEditCommand::isTypingCommand() const
+{
+    return false;
+}
+
+bool CompositeEditCommand::shouldRetainAutocorrectionIndicator() const
+{
+    return false;
+}
+
+void CompositeEditCommand::setShouldRetainAutocorrectionIndicator(bool)
+{
 }
 
 //
 // sugary-sweet convenience functions to help create and apply edit commands in composite commands
 //
-void CompositeEditCommand::applyCommandToComposite(PassRefPtr<EditCommand> cmd)
+void CompositeEditCommand::applyCommandToComposite(PassRefPtr<EditCommand> prpCommand)
 {
-    cmd->setParent(this);
-    cmd->apply();
-    m_commands.append(cmd);
+    RefPtr<EditCommand> command = prpCommand;
+    command->setParent(this);
+    command->doApply();
+    if (command->isSimpleEditCommand()) {
+        command->setParent(0);
+        ensureComposition()->append(toSimpleEditCommand(command.get()));
+    }
+    m_commands.append(command.release());
 }
 
 void CompositeEditCommand::applyCommandToComposite(PassRefPtr<CompositeEditCommand> command, const VisibleSelection& selection)
@@ -110,7 +268,7 @@ void CompositeEditCommand::applyCommandToComposite(PassRefPtr<CompositeEditComma
         command->setStartingSelection(selection);
         command->setEndingSelection(selection);
     }
-    command->apply();
+    command->doApply();
     m_commands.append(command);
 }
 
@@ -142,6 +300,18 @@ void CompositeEditCommand::insertParagraphSeparator(bool useDefaultParagraphElem
 void CompositeEditCommand::insertLineBreak()
 {
     applyCommandToComposite(InsertLineBreakCommand::create(document()));
+}
+
+bool CompositeEditCommand::isRemovableBlock(const Node* node)
+{
+    Node* parentNode = node->parentNode();
+    if ((parentNode && parentNode->firstChild() != parentNode->lastChild()) || !node->hasTagName(divTag))
+        return false;
+
+    if (!node->isElementNode() || !toElement(node)->hasAttributes())
+        return true;
+
+    return false;
 }
 
 void CompositeEditCommand::insertNodeBefore(PassRefPtr<Node> insertChild, PassRefPtr<Node> refChild)
@@ -186,7 +356,7 @@ void CompositeEditCommand::insertNodeAt(PassRefPtr<Node> insertChild, const Posi
     } else if (caretMinOffset(refChild) >= offset)
         insertNodeBefore(insertChild, refChild);
     else if (refChild->isTextNode() && caretMaxOffset(refChild) > offset) {
-        splitTextNode(static_cast<Text *>(refChild), offset);
+        splitTextNode(toText(refChild), offset);
 
         // Mutation events (bug 22634) from the text node insertion may have removed the refChild
         if (!refChild->inDocument())
@@ -362,7 +532,7 @@ Position CompositeEditCommand::positionOutsideTabSpan(const Position& pos)
     if (pos.offsetInContainerNode() >= caretMaxOffset(pos.containerNode()))
         return positionInParentAfterNode(tabSpan);
 
-    splitTextNodeContainingElement(static_cast<Text *>(pos.containerNode()), pos.offsetInContainerNode());
+    splitTextNodeContainingElement(toText(pos.containerNode()), pos.offsetInContainerNode());
     return positionInParentBeforeNode(tabSpan);
 }
 
@@ -420,7 +590,7 @@ bool CompositeEditCommand::canRebalance(const Position& position) const
     if (position.anchorType() != Position::PositionIsOffsetInAnchor || !node || !node->isTextNode())
         return false;
 
-    Text* textNode = static_cast<Text*>(node);
+    Text* textNode = toText(node);
     if (textNode->length() == 0)
         return false;
 
@@ -440,14 +610,14 @@ void CompositeEditCommand::rebalanceWhitespaceAt(const Position& position)
 
     // If the rebalance is for the single offset, and neither text[offset] nor text[offset - 1] are some form of whitespace, do nothing.
     int offset = position.deprecatedEditingOffset();
-    String text = static_cast<Text*>(node)->data();
+    String text = toText(node)->data();
     if (!isWhitespace(text[offset])) {
         offset--;
         if (offset < 0 || !isWhitespace(text[offset]))
             return;
     }
 
-    rebalanceWhitespaceOnTextSubstring(static_cast<Text*>(node), position.offsetInContainerNode(), position.offsetInContainerNode());
+    rebalanceWhitespaceOnTextSubstring(toText(node), position.offsetInContainerNode(), position.offsetInContainerNode());
 }
 
 void CompositeEditCommand::rebalanceWhitespaceOnTextSubstring(PassRefPtr<Text> prpTextNode, int startOffset, int endOffset)
@@ -489,7 +659,7 @@ void CompositeEditCommand::prepareWhitespaceAtPositionForSplit(Position& positio
     Node* node = position.deprecatedNode();
     if (!node || !node->isTextNode())
         return;
-    Text* textNode = static_cast<Text*>(node);    
+    Text* textNode = toText(node);    
     
     if (textNode->length() == 0)
         return;
@@ -507,9 +677,9 @@ void CompositeEditCommand::prepareWhitespaceAtPositionForSplit(Position& positio
     Position previous(previousVisiblePos.deepEquivalent());
     
     if (isCollapsibleWhitespace(previousVisiblePos.characterAfter()) && previous.deprecatedNode()->isTextNode() && !previous.deprecatedNode()->hasTagName(brTag))
-        replaceTextInNodePreservingMarkers(static_cast<Text*>(previous.deprecatedNode()), previous.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
+        replaceTextInNodePreservingMarkers(toText(previous.deprecatedNode()), previous.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
     if (isCollapsibleWhitespace(visiblePos.characterAfter()) && position.deprecatedNode()->isTextNode() && !position.deprecatedNode()->hasTagName(brTag))
-        replaceTextInNodePreservingMarkers(static_cast<Text*>(position.deprecatedNode()), position.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
+        replaceTextInNodePreservingMarkers(toText(position.deprecatedNode()), position.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
 }
 
 void CompositeEditCommand::rebalanceWhitespace()
@@ -527,6 +697,8 @@ void CompositeEditCommand::deleteInsignificantText(PassRefPtr<Text> textNode, un
 {
     if (!textNode || start >= end)
         return;
+
+    document()->updateLayout();
 
     RenderText* textRenderer = toRenderText(textNode->renderer());
     if (!textRenderer)
@@ -610,17 +782,19 @@ void CompositeEditCommand::deleteInsignificantText(const Position& start, const 
     if (comparePositions(start, end) >= 0)
         return;
 
-    Node* next;
-    for (Node* node = start.deprecatedNode(); node; node = next) {
-        next = node->traverseNextNode();
-        if (node->isTextNode()) {
-            Text* textNode = static_cast<Text*>(node);
-            int startOffset = node == start.deprecatedNode() ? start.deprecatedEditingOffset() : 0;
-            int endOffset = node == end.deprecatedNode() ? end.deprecatedEditingOffset() : static_cast<int>(textNode->length());
-            deleteInsignificantText(textNode, startOffset, endOffset);
-        }
+    Vector<RefPtr<Text> > nodes;
+    for (Node* node = start.deprecatedNode(); node; node = node->traverseNextNode()) {
+        if (node->isTextNode())
+            nodes.append(toText(node));
         if (node == end.deprecatedNode())
             break;
+    }
+
+    for (size_t i = 0; i < nodes.size(); ++i) {
+        Text* textNode = nodes[i].get();
+        int startOffset = textNode == start.deprecatedNode() ? start.deprecatedEditingOffset() : 0;
+        int endOffset = textNode == end.deprecatedNode() ? end.deprecatedEditingOffset() : static_cast<int>(textNode->length());
+        deleteInsignificantText(textNode, startOffset, endOffset);
     }
 }
 
@@ -661,7 +835,7 @@ PassRefPtr<Node> CompositeEditCommand::addBlockPlaceholderIfNeeded(Element* cont
     if (!container)
         return 0;
 
-    updateLayout();
+    document()->updateLayoutIgnorePendingStylesheets();
 
     RenderObject* renderer = container->renderer();
     if (!renderer || !renderer->isBlockFlow())
@@ -687,7 +861,7 @@ void CompositeEditCommand::removePlaceholderAt(const Position& p)
         return;
     }
     
-    deleteTextFromNode(static_cast<Text*>(p.anchorNode()), p.offsetInContainerNode(), 1);
+    deleteTextFromNode(toText(p.anchorNode()), p.offsetInContainerNode(), 1);
 }
 
 PassRefPtr<Node> CompositeEditCommand::insertNewDefaultParagraphElementAt(const Position& position)
@@ -706,7 +880,7 @@ PassRefPtr<Node> CompositeEditCommand::moveParagraphContentsToNewBlockIfNecessar
     if (pos.isNull())
         return 0;
     
-    updateLayout();
+    document()->updateLayoutIgnorePendingStylesheets();
     
     // It's strange that this function is responsible for verifying that pos has not been invalidated
     // by an earlier call to this function.  The caller, applyBlockStyle, should do this.
@@ -858,12 +1032,19 @@ void CompositeEditCommand::cleanupAfterDeletion(VisiblePosition destination)
         // doesn't require a placeholder to prop itself open (like a bordered
         // div or an li), remove it during the move (the list removal code
         // expects this behavior).
-        else if (isBlock(node))
+        else if (isBlock(node)) {
+            // If caret position after deletion and destination position coincides,
+            // node should not be removed.
+            if (!position.rendersInDifferentPosition(destination.deepEquivalent())) {
+                prune(node);
+                return;
+            }
             removeNodeAndPruneAncestors(node);
+        }
         else if (lineBreakExistsAtPosition(position)) {
             // There is a preserved '\n' at caretAfterDelete.
             // We can safely assume this is a text node.
-            Text* textNode = static_cast<Text*>(node);
+            Text* textNode = toText(node);
             if (textNode->length() == 1)
                 removeNodeAndPruneAncestors(node);
             else
@@ -1016,7 +1197,7 @@ void CompositeEditCommand::moveParagraphs(const VisiblePosition& startOfParagrap
         // FIXME: Trim text between beforeParagraph and afterParagraph if they aren't equal.
         insertNodeAt(createBreakElement(document()), beforeParagraph.deepEquivalent());
         // Need an updateLayout here in case inserting the br has split a text node.
-        updateLayout();
+        document()->updateLayoutIgnorePendingStylesheets();
     }
 
     RefPtr<Range> startToDestinationRange(Range::create(document(), firstPositionInNode(document()->documentElement()), destination.deepEquivalent().parentAnchoredEquivalent()));
@@ -1156,7 +1337,7 @@ bool CompositeEditCommand::breakOutOfEmptyMailBlockquotedParagraph()
         removeNodeAndPruneAncestors(caretPos.deprecatedNode());
     else if (caretPos.deprecatedNode()->isTextNode()) {
         ASSERT(caretPos.deprecatedEditingOffset() == 0);
-        Text* textNode = static_cast<Text*>(caretPos.deprecatedNode());
+        Text* textNode = toText(caretPos.deprecatedNode());
         ContainerNode* parentNode = textNode->parentNode();
         // The preserved newline must be the first thing in the node, since otherwise the previous
         // paragraph would be quoted, and we verified that it wasn't above.

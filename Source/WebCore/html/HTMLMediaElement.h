@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2007, 2008, 2009, 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2007, 2008, 2009, 2010, 2011, 2012 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,7 @@
 #if ENABLE(VIDEO)
 
 #include "ActiveDOMObject.h"
+#include "GenericEventQueue.h"
 #include "HTMLElement.h"
 #include "MediaCanStartListener.h"
 #include "MediaControllerInterface.h"
@@ -61,6 +62,14 @@ class TextTrackList;
 class TimeRanges;
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
 class Widget;
+#endif
+#if PLATFORM(MAC)
+class DisplaySleepDisabler;
+#endif
+
+#if ENABLE(VIDEO_TRACK)
+typedef PODIntervalTree<double, TextTrackCue*> CueIntervalTree;
+typedef Vector<CueIntervalTree::IntervalType> CueList;
 #endif
 
 // FIXME: The inheritance from MediaPlayerClient here should be private inheritance.
@@ -188,16 +197,45 @@ public:
     float percentLoaded() const;
 
 #if ENABLE(VIDEO_TRACK)
-    PassRefPtr<TextTrack> addTrack(const String& kind, const String& label = "", const String& language = "");
-    TextTrackList* textTracks() const;
+    PassRefPtr<TextTrack> addTextTrack(const String& kind, const String& label, const String& language, ExceptionCode&);
+    PassRefPtr<TextTrack> addTextTrack(const String& kind, const String& label, ExceptionCode& ec) { return addTextTrack(kind, label, emptyString(), ec); }
+    PassRefPtr<TextTrack> addTextTrack(const String& kind, ExceptionCode& ec) { return addTextTrack(kind, emptyString(), emptyString(), ec); }
 
-    void addTextTrack(PassRefPtr<TextTrack>);
+    TextTrackList* textTracks();
+    CueList currentlyActiveCues() const { return m_currentlyActiveCues; }
 
     virtual void trackWasAdded(HTMLTrackElement*);
-    virtual void trackWillBeRemoved(HTMLTrackElement*);
+    virtual void trackWasRemoved(HTMLTrackElement*);
+
+    struct TrackGroup {
+        enum GroupKind { CaptionsAndSubtitles, Description, Chapter, Metadata, Other };
+
+        TrackGroup(GroupKind kind)
+            : visibleTrack(0)
+            , defaultTrack(0)
+            , kind(kind)
+            , hasSrcLang(false)
+        {
+        }
+
+        Vector<HTMLTrackElement*> tracks;
+        HTMLTrackElement* visibleTrack;
+        HTMLTrackElement* defaultTrack;
+        GroupKind kind;
+        bool hasSrcLang;
+    };
+
+    void configureTextTrackGroupForLanguage(const TrackGroup&) const;
+    void configureNewTextTracks();
+    void configureTextTrackGroup(const TrackGroup&) const;
+
+    bool userIsInterestedInThisTrackKind(String) const;
+    bool textTracksAreReady() const;
+    void configureTextTrackDisplay();
 
     // TextTrackClient
     virtual void textTrackReadyStateChanged(TextTrack*);
+    virtual void textTrackKindChanged(TextTrack*);
     virtual void textTrackModeChanged(TextTrack*);
     virtual void textTrackAddCues(TextTrack*, const TextTrackCueList*);
     virtual void textTrackRemoveCues(TextTrack*, const TextTrackCueList*);
@@ -208,10 +246,9 @@ public:
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
     void allocateMediaPlayerIfNecessary();
     void setNeedWidgetUpdate(bool needWidgetUpdate) { m_needWidgetUpdate = needWidgetUpdate; }
-    void deliverNotification(MediaPlayerProxyNotificationType);
-    void setMediaPlayerProxy(WebMediaPlayerProxy*);
-    void getPluginProxyParams(KURL&, Vector<String>&, Vector<String>&);
-    virtual void finishParsingChildren();
+    void deliverNotification(MediaPlayerProxyNotificationType notification);
+    void setMediaPlayerProxy(WebMediaPlayerProxy* proxy);
+    void getPluginProxyParams(KURL& url, Vector<String>& names, Vector<String>& values);
     void createMediaPlayerProxy();
     void updateWidget(PluginCreationOption);
     void ensureMediaPlayer();
@@ -232,7 +269,7 @@ public:
     void sourceWillBeRemoved(HTMLSourceElement*);
     void sourceWasAdded(HTMLSourceElement*);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     void setNeedsSourceWidthUpdate(uint32_t layoutWidth, uint32_t layoutHeight)
     {
         m_needsSourceWidthUpdate = true;
@@ -268,20 +305,21 @@ public:
     MediaController* controller() const;
     void setController(PassRefPtr<MediaController>);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+    virtual bool dispatchEvent(PassRefPtr<Event>);
+#if PLATFORM(BLACKBERRY)
     void setNeedsSourceWidthUpdate() { m_needsSourceWidthUpdate = true; }
 #endif
 
 protected:
-    HTMLMediaElement(const QualifiedName&, Document*);
+    HTMLMediaElement(const QualifiedName&, Document*, bool);
     virtual ~HTMLMediaElement();
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
+    virtual void finishParsingChildren();
     virtual bool isURLAttribute(Attribute*) const;
     virtual void attach();
 
-    virtual void willMoveToNewOwnerDocument();
-    virtual void didMoveToNewOwnerDocument();
+    virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
 
     enum DisplayMode { Unknown, None, Poster, PosterWaitingForVideo, Video };
     DisplayMode displayMode() const { return m_displayMode; }
@@ -311,9 +349,10 @@ private:
     void createMediaPlayer();
 
     virtual bool supportsFocus() const;
-    virtual void attributeChanged(Attribute*, bool preserveDecls);
+    virtual bool isMouseFocusable() const;
     virtual bool rendererIsNeeded(const NodeRenderingContext&);
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
+    virtual bool childShouldCreateRenderer(const NodeRenderingContext&) const OVERRIDE;
     virtual void insertedIntoDocument();
     virtual void removedFromDocument();
     virtual void didRecalcStyle(StyleChange);
@@ -346,6 +385,7 @@ private:
     virtual void mediaPlayerRateChanged(MediaPlayer*);
     virtual void mediaPlayerPlaybackStateChanged(MediaPlayer*);
     virtual void mediaPlayerSawUnsupportedTracks(MediaPlayer*);
+    virtual void mediaPlayerResourceNotSupported(MediaPlayer*);
     virtual void mediaPlayerRepaint(MediaPlayer*);
     virtual void mediaPlayerSizeChanged(MediaPlayer*);
 #if USE(ACCELERATED_COMPOSITING)
@@ -362,8 +402,9 @@ private:
     virtual String mediaPlayerSourceURL() const;
 #endif
 
+    virtual String mediaPlayerReferrer() const OVERRIDE;
+
     void loadTimerFired(Timer<HTMLMediaElement>*);
-    void asyncEventTimerFired(Timer<HTMLMediaElement>*);
     void progressEventTimerFired(Timer<HTMLMediaElement>*);
     void playbackProgressTimerFired(Timer<HTMLMediaElement>*);
     void startPlaybackProgressTimer();
@@ -395,8 +436,13 @@ private:
     void mediaLoadingFailed(MediaPlayer::NetworkState);
 
 #if ENABLE(VIDEO_TRACK)
-    void configureTextTracks();
     void updateActiveTextTrackCues(float);
+    bool userIsInterestedInThisLanguage(const String&) const;
+    HTMLTrackElement* showingTrackWithSameKind(HTMLTrackElement*) const;
+
+    bool ignoreTrackDisplayUpdateRequests() const { return m_ignoreTrackDisplayUpdate > 0; }
+    void beginIgnoringTrackDisplayUpdateRequests() { ++m_ignoreTrackDisplayUpdate; }
+    void endIgnoringTrackDisplayUpdateRequests() { ASSERT(m_ignoreTrackDisplayUpdate); --m_ignoreTrackDisplayUpdate; }
 #endif
 
     // These "internal" functions do not check user gesture restrictions.
@@ -430,7 +476,7 @@ private:
     virtual void mediaCanStart();
 
     void setShouldDelayLoadEvent(bool);
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     void showErrorDialog();
 #endif
 
@@ -441,7 +487,14 @@ private:
     bool createMediaControls();
     void configureMediaControls();
 
+    void prepareMediaFragmentURI();
+    void applyMediaFragmentURI();
+
     virtual void* preDispatchEventHandler(Event*);
+
+    void changeNetworkStateFromLoadingToIdle();
+
+    void removeBehaviorsRestrictionsAfterFirstUserGesture();
 
 #if ENABLE(MICRODATA)
     virtual String itemValueText() const;
@@ -455,12 +508,16 @@ private:
     bool isLiveStream() const { return movieLoadType() == MediaPlayer::LiveStream; }
     bool isAutoplaying() const { return m_autoplaying; }
 
+#if PLATFORM(MAC)
+    void updateDisableSleep();
+    bool shouldDisableSleep() const;
+#endif
+
     Timer<HTMLMediaElement> m_loadTimer;
-    Timer<HTMLMediaElement> m_asyncEventTimer;
     Timer<HTMLMediaElement> m_progressEventTimer;
     Timer<HTMLMediaElement> m_playbackProgressTimer;
-    Vector<RefPtr<Event> > m_pendingEvents;
     RefPtr<TimeRanges> m_playedTimeRanges;
+    GenericEventQueue m_asyncEventQueue;
 
     float m_playbackRate;
     float m_defaultPlaybackRate;
@@ -487,9 +544,8 @@ private:
     // Loading state.
     enum LoadState { WaitingForSource, LoadingFromSrcAttr, LoadingFromSourceElement };
     LoadState m_loadState;
-    HTMLSourceElement* m_currentSourceNode;
-    Node* m_nextChildNodeToConsider;
-    Node* sourceChildEndOfListValue() { return static_cast<Node*>(this); }
+    RefPtr<HTMLSourceElement> m_currentSourceNode;
+    RefPtr<Node> m_nextChildNodeToConsider;
 
     OwnPtr<MediaPlayer> m_player;
 #if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
@@ -514,7 +570,10 @@ private:
     mutable float m_cachedTime;
     mutable double m_cachedTimeWallClockUpdateTime;
     mutable double m_minimumWallClockTimeToCacheMediaTime;
-    
+
+    double m_fragmentStartTime;
+    double m_fragmentEndTime;
+
     typedef unsigned PendingLoadFlags;
     PendingLoadFlags m_pendingLoadFlags;
 
@@ -551,8 +610,23 @@ private:
     bool m_loadInitiatedByUserGesture : 1;
     bool m_completelyLoaded : 1;
     bool m_havePreparedToPlay : 1;
+    bool m_parsingInProgress : 1;
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if ENABLE(VIDEO_TRACK)
+    bool m_tracksAreReady : 1;
+    bool m_haveVisibleTextTrack : 1;
+    float m_lastTextTrackUpdateTime;
+
+    RefPtr<TextTrackList> m_textTracks;
+    Vector<RefPtr<TextTrack> > m_textTracksWhenResourceSelectionBegan;
+
+    CueIntervalTree m_cueTree;
+
+    CueList m_currentlyActiveCues;
+    int m_ignoreTrackDisplayUpdate;
+#endif
+
+#if PLATFORM(BLACKBERRY)
     bool m_needsSourceWidthUpdate;
     uint32_t m_layoutWidth, m_layoutHeight;
     bool m_loadInternalAttempted;
@@ -565,17 +639,13 @@ private:
     MediaElementAudioSourceNode* m_audioSourceNode;
 #endif
 
-#if ENABLE(VIDEO_TRACK)
-    RefPtr<TextTrackList> m_textTracks;
-    
-    typedef PODIntervalTree <double, TextTrackCue*> CueIntervalTree;
-    CueIntervalTree m_cueTree;
-    Vector<CueIntervalTree::IntervalType> m_currentlyVisibleCues;
-#endif
-
     String m_mediaGroup;
     friend class MediaController;
     RefPtr<MediaController> m_mediaController;
+
+#if PLATFORM(MAC)
+    OwnPtr<DisplaySleepDisabler> m_sleepDisabler;
+#endif
 };
 
 #if ENABLE(VIDEO_TRACK)
@@ -593,7 +663,7 @@ template <>
 struct ValueToString<TextTrackCue*> {
     static String string(TextTrackCue* const& cue)
     {
-        return String::format("%p id=%s interval=%f-->%f cue=%s)", cue, cue->id().utf8().data(), cue->startTime(), cue->endTime(), cue->getCueAsSource().utf8().data());
+        return String::format("%p id=%s interval=%f-->%f cue=%s)", cue, cue->id().utf8().data(), cue->startTime(), cue->endTime(), cue->text().utf8().data());
     }
 };
 #endif

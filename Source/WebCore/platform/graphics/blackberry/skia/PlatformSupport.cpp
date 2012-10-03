@@ -96,24 +96,20 @@ void PlatformSupport::getRenderStyleForStrike(const char* family, int sizeAndSty
     if (!match)
         return;
 
-    FcBool b;
-    int i;
+    FcBool boolValue;
+    int intValue;
 
-    if (FcPatternGetBool(match, FC_ANTIALIAS, 0, &b) == FcResultMatch)
-        out->useAntiAlias = b;
-    if (FcPatternGetBool(match, FC_EMBEDDED_BITMAP, 0, &b) == FcResultMatch)
-        out->useBitmaps = b;
-    if (FcPatternGetBool(match, FC_AUTOHINT, 0, &b) == FcResultMatch)
-        out->useAutoHint = b;
-    if (FcPatternGetBool(match, FC_HINTING, 0, &b) == FcResultMatch)
-        out->useHinting = b;
-#if 0
-    // FIXME: Fontconfig tells us to use aggressive hinting, but FreeType breaks with our Adobe fonts
-    if (FcPatternGetInteger(match, FC_HINT_STYLE, 0, &i) == FcResultMatch)
-         out->hintStyle = i;
-#endif
-    if (FcPatternGetInteger(match, FC_RGBA, 0, &i) == FcResultMatch) {
-        switch (i) {
+    if (FcPatternGetBool(match, FC_ANTIALIAS, 0, &boolValue) == FcResultMatch)
+        out->useAntiAlias = boolValue;
+    if (FcPatternGetBool(match, FC_EMBEDDED_BITMAP, 0, &boolValue) == FcResultMatch)
+        out->useBitmaps = boolValue;
+    if (FcPatternGetBool(match, FC_AUTOHINT, 0, &boolValue) == FcResultMatch)
+        out->useAutoHint = boolValue;
+    if (FcPatternGetBool(match, FC_HINTING, 0, &boolValue) == FcResultMatch)
+        out->useHinting = boolValue;
+
+    if (FcPatternGetInteger(match, FC_RGBA, 0, &intValue) == FcResultMatch) {
+        switch (intValue) {
         case FC_RGBA_NONE:
             out->useSubpixel = 0;
             break;
@@ -138,11 +134,11 @@ void PlatformSupport::getFontFamilyForCharacters(const UChar* characters, size_t
     FcCharSet* cset = FcCharSetCreate();
     for (size_t i = 0; i < numCharacters; ++i) {
         if (U16_IS_SURROGATE(characters[i])
-         && U16_IS_SURROGATE_LEAD(characters[i])
-         && i != numCharacters - 1
-         && U16_IS_TRAIL(characters[i + 1])) {
-              FcCharSetAddChar(cset, U16_GET_SUPPLEMENTARY(characters[i], characters[i+1]));
-          i++;
+            && U16_IS_SURROGATE_LEAD(characters[i])
+            && i != numCharacters - 1
+            && U16_IS_TRAIL(characters[i + 1])) {
+            FcCharSetAddChar(cset, U16_GET_SUPPLEMENTARY(characters[i], characters[i+1]));
+            i++;
         } else
               FcCharSetAddChar(cset, characters[i]);
     }
@@ -195,16 +191,19 @@ void PlatformSupport::getFontFamilyForCharacters(const UChar* characters, size_t
             const char* charFamily = reinterpret_cast<char*>(familyName);
             family->name = String::fromUTF8(charFamily, strlen(charFamily));
         }
+
         int weight;
         if (FcPatternGetInteger(current, FC_WEIGHT, 0, &weight) == FcResultMatch)
             family->isBold = weight >= FC_WEIGHT_BOLD;
         else
             family->isBold = false;
+
         int slant;
         if (FcPatternGetInteger(current, FC_SLANT, 0, &slant) == FcResultMatch)
             family->isItalic = slant != FC_SLANT_ROMAN;
         else
             family->isItalic = false;
+
         FcFontSetDestroy(fontSet);
         return;
     }

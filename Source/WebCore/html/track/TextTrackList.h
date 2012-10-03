@@ -51,9 +51,11 @@ public:
     ~TextTrackList();
 
     unsigned length() const;
+    unsigned getTrackIndex(TextTrack*);
+
     TextTrack* item(unsigned index);
     void append(PassRefPtr<TextTrack>);
-    void remove(PassRefPtr<TextTrack>);
+    void remove(TextTrack*);
 
     // EventTarget
     virtual const AtomicString& interfaceName() const;
@@ -87,7 +89,8 @@ private:
     Timer<TextTrackList> m_pendingEventTimer;
 
     EventTargetData m_eventTargetData;
-    Vector<RefPtr<TextTrack> > m_tracks;
+    Vector<RefPtr<TextTrack> > m_addTrackTracks;
+    Vector<RefPtr<TextTrack> > m_elementTracks;
     
     int m_dispatchingEvents;
 };

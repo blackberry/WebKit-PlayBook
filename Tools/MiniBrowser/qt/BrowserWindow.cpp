@@ -28,15 +28,16 @@
 
 #include "BrowserWindow.h"
 
-#include "config.h"
-#include "qquickwebpage.h"
+#include "qquickwebpage_p.h"
 #include "qquickwebview_p.h"
 #include "utils.h"
 
 #include <QDeclarativeEngine>
 #include <QDir>
+#include <QPointF>
 
 BrowserWindow::BrowserWindow(WindowOptions* options)
+    : m_windowOptions(options)
 {
     setWindowTitle("MiniBrowser");
     setWindowFlags(Qt::Window | Qt::WindowTitleHint | Qt::WindowMinMaxButtonsHint | Qt::WindowCloseButtonHint);
@@ -52,16 +53,19 @@ BrowserWindow::BrowserWindow(WindowOptions* options)
     engine()->rootContext()->setContextProperty("options", options);
     setSource(QUrl("qrc:/qml/BrowserWindow.qml"));
     connect(rootObject(), SIGNAL(pageTitleChanged(QString)), this, SLOT(setWindowTitle(QString)));
-    if (!options->useTouchWebView())
-        QQuickWebViewPrivate::get(rootObject()->property("webview").value<QQuickWebView*>())->setUseTraditionalDesktopBehaviour(true);
-    if (options->startMaximized())
-        setWindowState(Qt::WindowMaximized);
-    else
-        resize(options->requestedWindowSize());
-    show();
+    connect(rootObject(), SIGNAL(newWindow(QString)), this, SLOT(newWindow(QString)));
+    if (options->startFullScreen())
+        showFullScreen();
+    else {
+        if (options->startMaximized())
+            setWindowState(Qt::WindowMaximized);
+        else
+            resize(options->requestedWindowSize());
+        show();
+    }
 }
 
-QObject* BrowserWindow::webView() const
+QQuickWebView* BrowserWindow::webView() const
 {
     return rootObject()->property("webview").value<QQuickWebView*>();
 }
@@ -72,11 +76,48 @@ void BrowserWindow::load(const QString& url)
     QMetaObject::invokeMethod(rootObject(), "load", Qt::DirectConnection, Q_ARG(QVariant, completedUrl));
 }
 
+void BrowserWindow::reload()
+{
+    QMetaObject::invokeMethod(rootObject(), "reload", Qt::DirectConnection);
+}
+
+void BrowserWindow::focusAddressBar()
+{
+    QMetaObject::invokeMethod(rootObject(), "focusAddressBar", Qt::DirectConnection);
+}
+
 BrowserWindow* BrowserWindow::newWindow(const QString& url)
 {
-    BrowserWindow* window = new BrowserWindow();
+    BrowserWindow* window = new BrowserWindow(m_windowOptions);
     window->load(url);
     return window;
+}
+
+void BrowserWindow::updateVisualMockTouchPoints(const QList<QWindowSystemInterface::TouchPoint>& touchPoints)
+{
+    foreach (const QWindowSystemInterface::TouchPoint& touchPoint, touchPoints) {
+        QString mockTouchPointIdentifier = QString("mockTouchPoint%1").arg(touchPoint.id);
+        QQuickItem* mockTouchPointItem = rootObject()->findChild<QQuickItem*>(mockTouchPointIdentifier, Qt::FindDirectChildrenOnly);
+
+        if (!mockTouchPointItem) {
+            QDeclarativeComponent touchMockPointComponent(engine(), QUrl("qrc:/qml/MockTouchPoint.qml"));
+            mockTouchPointItem = qobject_cast<QQuickItem*>(touchMockPointComponent.create());
+            mockTouchPointItem->setObjectName(mockTouchPointIdentifier);
+            mockTouchPointItem->setProperty("pointId", QVariant(touchPoint.id));
+            mockTouchPointItem->setParent(rootObject());
+            mockTouchPointItem->setParentItem(rootObject());
+        }
+
+        QPointF position = touchPoint.area.center();
+        position.rx() -= geometry().x();
+        position.ry() -= geometry().y();
+
+        mockTouchPointItem->setX(position.x());
+        mockTouchPointItem->setY(position.y());
+        mockTouchPointItem->setWidth(touchPoint.area.width());
+        mockTouchPointItem->setHeight(touchPoint.area.height());
+        mockTouchPointItem->setProperty("pressed", QVariant(touchPoint.state != Qt::TouchPointReleased));
+    }
 }
 
 void BrowserWindow::screenshot()

@@ -33,7 +33,7 @@
 
 #include "Task.h"
 #include "WebDevToolsAgentClient.h"
-#include "WebString.h"
+#include "platform/WebString.h"
 #include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
 
@@ -67,7 +67,6 @@ public:
 
     void attach(DRTDevToolsClient*);
     void detach();
-    void frontendLoaded();
 
     bool evaluateInWebInspector(long callID, const std::string& script);
     bool setJavaScriptProfilingEnabled(bool);
@@ -75,8 +74,6 @@ public:
 
 private:
     void call(const WebKit::WebString& args);
-    void delayedFrontendLoaded();
-    static void dispatchMessageLoop();
     WebKit::WebDevToolsAgent* webDevToolsAgent();
 
     class AsyncCallTask: public MethodTask<DRTDevToolsAgent> {
@@ -87,11 +84,6 @@ private:
 
     private:
         WebKit::WebString m_args;
-    };
-
-    struct DelayedFrontendLoadedTask: public MethodTask<DRTDevToolsAgent> {
-        DelayedFrontendLoadedTask(DRTDevToolsAgent* object) : MethodTask<DRTDevToolsAgent>(object) { }
-        virtual void runIfValid() { m_object->delayedFrontendLoaded(); }
     };
 
     TaskList m_taskList;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005, 2006, 2007, 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2005, 2006, 2007, 2008, 2011 Apple Inc. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -21,8 +21,9 @@
 #ifndef WTF_HashTraits_h
 #define WTF_HashTraits_h
 
-#include "HashFunctions.h"
-#include "TypeTraits.h"
+#include <wtf/HashFunctions.h>
+#include <wtf/StdLibExtras.h>
+#include <wtf/TypeTraits.h>
 #include <utility>
 #include <limits>
 
@@ -56,7 +57,25 @@ namespace WTF {
 
     template<typename T> struct GenericHashTraits : GenericHashTraitsBase<IsInteger<T>::value, T> {
         typedef T TraitType;
+        typedef T EmptyValueType;
+
         static T emptyValue() { return T(); }
+
+        // Type for functions that take ownership, such as add.
+        // The store function either not be called or called once to store something passed in.
+        // The value passed to the store function will be either PassInType or PassInType&.
+        typedef const T& PassInType;
+        static void store(const T& value, T& storage) { storage = value; }
+
+        // Type for return value of functions that transfer ownership, such as take. 
+        typedef T PassOutType;
+        static PassOutType passOut(const T& value) { return value; }
+
+        // Type for return value of functions that do not transfer ownership, such as get.
+        // FIXME: We could change this type to const T& for better performance if we figured out
+        // a way to handle the return value from emptyValue, which is a temporary.
+        typedef T PeekType;
+        static PeekType peek(const T& value) { return value; }
     };
 
     template<typename T> struct HashTraits : GenericHashTraits<T> { };
@@ -89,20 +108,36 @@ namespace WTF {
 
     template<typename T> struct SimpleClassHashTraits : GenericHashTraits<T> {
         static const bool emptyValueIsZero = true;
-        static void constructDeletedValue(T& slot) { new (&slot) T(HashTableDeletedValue); }
+        static void constructDeletedValue(T& slot) { new (NotNull, &slot) T(HashTableDeletedValue); }
         static bool isDeletedValue(const T& value) { return value.isHashTableDeletedValue(); }
     };
 
     template<typename P> struct HashTraits<OwnPtr<P> > : SimpleClassHashTraits<OwnPtr<P> > {
-        static std::nullptr_t emptyValue() { return nullptr; }
-        typedef PassOwnPtr<P> PassType;
-        static PassOwnPtr<P> pass(const OwnPtr<P>& value) { return value.release(); }
+        typedef std::nullptr_t EmptyValueType;
+
+        static EmptyValueType emptyValue() { return nullptr; }
+
+        typedef PassOwnPtr<P> PassInType;
+        static void store(PassOwnPtr<P> value, OwnPtr<P>& storage) { storage = value; }
+
+        typedef PassOwnPtr<P> PassOutType;
+        static PassOwnPtr<P> passOut(OwnPtr<P>& value) { return value.release(); }
+        static PassOwnPtr<P> passOut(std::nullptr_t) { return nullptr; }
+
         typedef typename OwnPtr<P>::PtrType PeekType;
         static PeekType peek(const OwnPtr<P>& value) { return value.get(); }
         static PeekType peek(std::nullptr_t) { return 0; }
     };
 
-    template<typename P> struct HashTraits<RefPtr<P> > : SimpleClassHashTraits<RefPtr<P> > { };
+    template<typename P> struct HashTraits<RefPtr<P> > : SimpleClassHashTraits<RefPtr<P> > {
+        typedef PassRefPtr<P> PassInType;
+        static void store(PassRefPtr<P> value, RefPtr<P>& storage) { storage = value; }
+
+        // FIXME: We should change PassOutType to PassRefPtr for better performance.
+        // FIXME: We should consider changing PeekType to a raw pointer for better performance,
+        // but then callers won't need to call get; doing so will require updating many call sites.
+    };
+
     template<> struct HashTraits<String> : SimpleClassHashTraits<String> { };
 
     // special traits for pairs, helpful for their use in HashMap implementation
@@ -112,9 +147,10 @@ namespace WTF {
         typedef FirstTraitsArg FirstTraits;
         typedef SecondTraitsArg SecondTraits;
         typedef pair<typename FirstTraits::TraitType, typename SecondTraits::TraitType> TraitType;
+        typedef pair<typename FirstTraits::EmptyValueType, typename SecondTraits::EmptyValueType> EmptyValueType;
 
         static const bool emptyValueIsZero = FirstTraits::emptyValueIsZero && SecondTraits::emptyValueIsZero;
-        static TraitType emptyValue() { return make_pair(FirstTraits::emptyValue(), SecondTraits::emptyValue()); }
+        static EmptyValueType emptyValue() { return make_pair(FirstTraits::emptyValue(), SecondTraits::emptyValue()); }
 
         static const bool needsDestruction = FirstTraits::needsDestruction || SecondTraits::needsDestruction;
 

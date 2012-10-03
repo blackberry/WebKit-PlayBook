@@ -41,8 +41,8 @@
 #include "MouseEventWithHitTestResults.h"
 #include "NotImplemented.h"
 #include "Page.h"
-#include "PlatformKeyboardEvent.h"
-#include "PlatformWheelEvent.h"
+#include "Pasteboard.h"
+#include "PlatformEventFactoryMac.h"
 #include "RenderWidget.h"
 #include "RuntimeApplicationChecks.h"
 #include "Scrollbar.h"
@@ -104,9 +104,7 @@ bool EventHandler::wheelEvent(NSEvent *event)
         return false;
 
     CurrentEventScope scope(event);
-
-    PlatformWheelEvent wheelEvent(event, page->chrome()->platformPageClient());
-    return handleWheelEvent(wheelEvent);
+    return handleWheelEvent(PlatformEventFactory::createPlatformWheelEvent(event, page->chrome()->platformPageClient()));
 }
 
 bool EventHandler::keyEvent(NSEvent *event)
@@ -116,7 +114,7 @@ bool EventHandler::keyEvent(NSEvent *event)
     ASSERT([event type] == NSKeyDown || [event type] == NSKeyUp);
 
     CurrentEventScope scope(event);
-    return keyEvent(PlatformKeyboardEvent(event));
+    return keyEvent(PlatformEventFactory::createPlatformKeyboardEvent(event));
 
     END_BLOCK_OBJC_EXCEPTIONS;
 
@@ -419,7 +417,7 @@ static void selfRetainingNSScrollViewScrollWheel(NSScrollView *self, SEL selecto
         [self release];
 }
 
-bool EventHandler::passWheelEventToWidget(PlatformWheelEvent& wheelEvent, Widget* widget)
+bool EventHandler::passWheelEventToWidget(const PlatformWheelEvent& wheelEvent, Widget* widget)
 {
     BEGIN_BLOCK_OBJC_EXCEPTIONS;
 
@@ -596,6 +594,19 @@ void EventHandler::mouseMoved(NSEvent *event)
     END_BLOCK_OBJC_EXCEPTIONS;
 }
 
+void EventHandler::passMouseMovedEventToScrollbars(NSEvent *event)
+{
+    // Reject a mouse moved if the button is down - screws up tracking during autoscroll
+    // These happen because WebKit sometimes has to fake up moved events.
+    if (!m_frame->view() || m_mousePressed || m_sendingEventToSubview)
+        return;
+
+    BEGIN_BLOCK_OBJC_EXCEPTIONS;
+    CurrentEventScope scope(event);
+    passMouseMovedEventToScrollbars(currentPlatformMouseEvent());
+    END_BLOCK_OBJC_EXCEPTIONS;
+}
+
 static bool frameHasPlatformWidget(Frame* frame)
 {
     if (FrameView* frameView = frame->view()) {
@@ -646,7 +657,7 @@ PlatformMouseEvent EventHandler::currentPlatformMouseEvent() const
     NSView *windowView = nil;
     if (Page* page = m_frame->page())
         windowView = page->chrome()->platformPageClient();
-    return PlatformMouseEvent(currentNSEvent(), windowView);
+    return PlatformEventFactory::createPlatformMouseEvent(currentNSEvent(), windowView);
 }
 
 bool EventHandler::eventActivatedView(const PlatformMouseEvent& event) const
@@ -658,11 +669,11 @@ bool EventHandler::eventActivatedView(const PlatformMouseEvent& event) const
 
 PassRefPtr<Clipboard> EventHandler::createDraggingClipboard() const
 {
-    NSPasteboard *pasteboard = [NSPasteboard pasteboardWithName:NSDragPboard];
     // Must be done before ondragstart adds types and data to the pboard,
     // also done for security, as it erases data from the last drag
-    [pasteboard declareTypes:[NSArray array] owner:nil];
-    return ClipboardMac::create(Clipboard::DragAndDrop, pasteboard, ClipboardWritable, m_frame);
+    Pasteboard pasteboard(NSDragPboard);
+    pasteboard.clear();
+    return ClipboardMac::create(Clipboard::DragAndDrop, String(NSDragPboard), ClipboardWritable, m_frame);
 }
 
 #endif
@@ -719,9 +730,9 @@ unsigned EventHandler::accessKeyModifiers()
     // So, we use Control in this case, even though it conflicts with Emacs-style key bindings.
     // See <https://bugs.webkit.org/show_bug.cgi?id=21107> for more detail.
     if (AXObjectCache::accessibilityEnhancedUserInterfaceEnabled())
-        return PlatformKeyboardEvent::CtrlKey;
+        return PlatformEvent::CtrlKey;
 
-    return PlatformKeyboardEvent::CtrlKey | PlatformKeyboardEvent::AltKey;
+    return PlatformEvent::CtrlKey | PlatformEvent::AltKey;
 }
 
 }

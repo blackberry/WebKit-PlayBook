@@ -88,7 +88,7 @@ PassOwnArrayPtr<Length> newCoordsArray(const String& string, int& len)
 {
     unsigned length = string.length();
     const UChar* data = string.characters();
-    StringBuffer spacified(length);
+    StringBuffer<UChar> spacified(length);
     for (unsigned i = 0; i < length; i++) {
         UChar cc = data[i];
         if (cc > '9' || (cc < '0' && cc != '-' && cc != '*' && cc != '.'))
@@ -148,5 +148,11 @@ PassOwnArrayPtr<Length> newLengthArray(const String& string, int& len)
 
     return r.release();
 }
+
+class SameSizeAsLength {
+    int32_t value;
+    int32_t metaData;
+};
+COMPILE_ASSERT(sizeof(Length) == sizeof(SameSizeAsLength), length_should_stay_small);
 
 } // namespace WebCore

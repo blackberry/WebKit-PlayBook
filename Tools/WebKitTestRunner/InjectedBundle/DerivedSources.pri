@@ -14,6 +14,10 @@ equals(sanitizedFile, $$toSanitizedPath($$_PRO_FILE_)):TEMPLATE = derived
 load(features)
 
 IDL_BINDINGS += \
+    Bindings/AccessibilityController.idl \
+    Bindings/AccessibilityTextMarker.idl \
+    Bindings/AccessibilityTextMarkerRange.idl \
+    Bindings/AccessibilityUIElement.idl \
     Bindings/EventSendingController.idl \
     Bindings/GCController.idl \
     Bindings/LayoutTestController.idl \
@@ -32,5 +36,5 @@ idl.depends = $${ROOT_WEBKIT_DIR}/Source/WebCore/bindings/scripts/CodeGenerator.
               $${ROOT_WEBKIT_DIR}/Source/WebCore/bindings/scripts/generate-bindings.pl
 GENERATORS += idl
 
-INCLUDEPATH += $$buildDirForSource(Tools/WebKitTestRunner/InjectedBundle)/$${GENERATED_SOURCES_DESTDIR}
+INCLUDEPATH += $${ROOT_BUILD_DIR}/Tools/WebKitTestRunner/InjectedBundle/$${GENERATED_SOURCES_DESTDIR}
 

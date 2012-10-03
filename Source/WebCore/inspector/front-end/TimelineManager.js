@@ -46,11 +46,14 @@ WebInspector.TimelineManager.EventTypes = {
 }
 
 WebInspector.TimelineManager.prototype = {
+    /**
+     * @param {number=} maxCallStackDepth
+     */
     start: function(maxCallStackDepth)
     {
         this._enablementCount++;
         if (this._enablementCount === 1)
-            TimelineAgent.start(maxCallStackDepth);
+            TimelineAgent.start(maxCallStackDepth, this._started.bind(this));
     },
 
     stop: function()
@@ -61,7 +64,17 @@ WebInspector.TimelineManager.prototype = {
         }
         this._enablementCount--;
         if (!this._enablementCount)
-            TimelineAgent.stop();
+            TimelineAgent.stop(this._stopped.bind(this));
+    },
+
+    _started: function()
+    {
+        this.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.TimelineStarted);
+    },
+
+    _stopped: function()
+    {
+        this.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.TimelineStopped);
     }
 }
 
@@ -78,20 +91,13 @@ WebInspector.TimelineDispatcher = function(manager)
 }
 
 WebInspector.TimelineDispatcher.prototype = {
-    started: function()
-    {
-        this._manager.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.TimelineStarted);
-    },
-
-    stopped: function()
-    {
-        this._manager.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.TimelineStopped);
-    },
-
     eventRecorded: function(record)
     {
         this._manager.dispatchEventToListeners(WebInspector.TimelineManager.EventTypes.TimelineEventRecorded, record);
     }
 }
 
-WebInspector.timelineManager = new WebInspector.TimelineManager();
+/**
+ * @type {WebInspector.TimelineManager}
+ */
+WebInspector.timelineManager;

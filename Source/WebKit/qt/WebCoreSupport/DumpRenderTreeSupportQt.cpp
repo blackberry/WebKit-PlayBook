@@ -34,7 +34,8 @@
 #include "ContextMenuClientQt.h"
 #include "ContextMenuController.h"
 #include "DeviceOrientation.h"
-#include "DeviceOrientationClientMockQt.h"
+#include "DeviceOrientationClientMock.h"
+#include "DeviceOrientationController.h"
 #include "DocumentLoader.h"
 #include "Editor.h"
 #include "EditorClientQt.h"
@@ -45,6 +46,8 @@
 #include "FrameView.h"
 #if USE(JSC)
 #include "GCController.h"
+#include "JSNode.h"
+#include "qt_runtime.h"
 #elif USE(V8)
 #include "V8GCController.h"
 #include "V8Proxy.h"
@@ -56,12 +59,14 @@
 #include "GeolocationPosition.h"
 #include "HistoryItem.h"
 #include "HTMLInputElement.h"
+#include "InitWebCoreQt.h"
 #include "InspectorController.h"
 #include "NodeList.h"
 #include "NotificationPresenterClientQt.h"
 #include "Page.h"
 #include "PageGroup.h"
 #include "PluginDatabase.h"
+#include "PluginView.h"
 #include "PositionError.h"
 #include "PrintContext.h"
 #include "RenderListItem.h"
@@ -73,10 +78,6 @@
 #include "SecurityOrigin.h"
 #include "SecurityPolicy.h"
 #include "Settings.h"
-#if ENABLE(SVG)
-#include "SVGDocumentExtensions.h"
-#include "SVGSMILElement.h"
-#endif
 #include "TextIterator.h"
 #include "ThirdPartyCookiesQt.h"
 #include "WebCoreTestSupport.h"
@@ -97,6 +98,9 @@
 #include "MediaPlayerPrivateQt.h"
 #endif
 
+#include <QAction>
+#include <QMenu>
+
 using namespace WebCore;
 
 QMap<int, QWebScriptWorld*> m_worldMap;
@@ -106,6 +110,14 @@ GeolocationClientMock* toGeolocationClientMock(GeolocationClient* client)
 {
      ASSERT(QWebPagePrivate::drtRun);
      return static_cast<GeolocationClientMock*>(client);
+}
+#endif
+
+#if ENABLE(DEVICE_ORIENTATION)
+DeviceOrientationClientMock* toDeviceOrientationClientMock(DeviceOrientationClient* client)
+{
+    ASSERT(QWebPagePrivate::drtRun);
+    return static_cast<DeviceOrientationClientMock*>(client);
 }
 #endif
 
@@ -149,6 +161,41 @@ QDRTNode& QDRTNode::operator=(const QDRTNode& other)
     return *this;
 }
 
+#if USE(JSC)
+QDRTNode QtDRTNodeRuntime::create(WebCore::Node* node)
+{
+    return QDRTNode(node);
+}
+
+WebCore::Node* QtDRTNodeRuntime::get(const QDRTNode& node)
+{
+    return node.m_node;
+}
+
+static QVariant convertJSValueToNodeVariant(JSC::JSObject* object, int *distance, HashSet<JSC::JSObject*>*)
+{
+    if (!object || !object->inherits(&JSNode::s_info))
+        return QVariant();
+    return QVariant::fromValue<QDRTNode>(QtDRTNodeRuntime::create((static_cast<JSNode*>(object))->impl()));
+}
+
+static JSC::JSValue convertNodeVariantToJSValue(JSC::ExecState* exec, WebCore::JSDOMGlobalObject* globalObject, const QVariant& variant)
+{
+    return toJS(exec, globalObject, QtDRTNodeRuntime::get(variant.value<QDRTNode>()));
+}
+#endif
+
+void QtDRTNodeRuntime::initialize()
+{
+    static bool initialized = false;
+    if (initialized)
+        return;
+    initialized = true;
+#if USE(JSC)
+    int id = qRegisterMetaType<QDRTNode>();
+    JSC::Bindings::registerCustomType(id, convertJSValueToNodeVariant, convertNodeVariantToJSValue);
+#endif
+}
 
 DumpRenderTreeSupportQt::DumpRenderTreeSupportQt()
 {
@@ -156,6 +203,12 @@ DumpRenderTreeSupportQt::DumpRenderTreeSupportQt()
 
 DumpRenderTreeSupportQt::~DumpRenderTreeSupportQt()
 {
+}
+
+void DumpRenderTreeSupportQt::initialize()
+{
+    WebCore::initializeWebCoreQt();
+    QtDRTNodeRuntime::initialize();
 }
 
 void DumpRenderTreeSupportQt::overwritePluginDirectories()
@@ -182,6 +235,10 @@ int DumpRenderTreeSupportQt::workerThreadCount()
 void DumpRenderTreeSupportQt::setDumpRenderTreeModeEnabled(bool b)
 {
     QWebPagePrivate::drtRun = b;
+#if ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX)
+    // PluginViewQt (X11) needs a few workarounds when running under DRT
+    PluginView::setIsRunningUnderDRT(b);
+#endif
 }
 
 void DumpRenderTreeSupportQt::setFrameFlatteningEnabled(QWebPage* page, bool enabled)
@@ -310,31 +367,6 @@ bool DumpRenderTreeSupportQt::pauseTransitionOfProperty(QWebFrame *frame, const 
         return false;
 
     return controller->pauseTransitionAtTime(coreNode->renderer(), propertyName, time);
-}
-
-// Pause a given SVG animation on the target node at a specific time.
-// This method is only intended to be used for testing the SVG animation system.
-bool DumpRenderTreeSupportQt::pauseSVGAnimation(QWebFrame *frame, const QString &animationId, double time, const QString &elementId)
-{
-#if !ENABLE(SVG)
-    return false;
-#else
-    Frame* coreFrame = QWebFramePrivate::core(frame);
-    if (!coreFrame)
-        return false;
-
-    Document* doc = coreFrame->document();
-    Q_ASSERT(doc);
-
-    if (!doc->svgExtensions())
-        return false;
-
-    Node* coreNode = doc->getElementById(animationId);
-    if (!coreNode || !SVGSMILElement::isSMILElement(coreNode))
-        return false;
-
-    return doc->accessSVGExtensions()->sampleAnimationAtTime(elementId, static_cast<SVGSMILElement*>(coreNode), time);
-#endif
 }
 
 // Returns the total number of currently running animations (includes both CSS transitions and CSS animations).
@@ -577,10 +609,11 @@ QVariantMap DumpRenderTreeSupportQt::computedStyleIncludingVisitedInfo(const QWe
     if (!webElement)
         return res;
 
-    RefPtr<WebCore::CSSComputedStyleDeclaration> style = computedStyle(webElement, true);
+    RefPtr<WebCore::CSSComputedStyleDeclaration> computedStyleDeclaration = CSSComputedStyleDeclaration::create(webElement, true);
+    CSSStyleDeclaration* style = static_cast<WebCore::CSSStyleDeclaration*>(computedStyleDeclaration.get());
     for (unsigned i = 0; i < style->length(); i++) {
         QString name = style->item(i);
-        QString value = (static_cast<WebCore::CSSStyleDeclaration*>(style.get()))->getPropertyValue(name);
+        QString value = style->getPropertyValue(name);
         res[convertToPropertyName(name)] = QVariant(value);
     }
     return res;
@@ -704,6 +737,11 @@ void DumpRenderTreeSupportQt::dumpResourceResponseMIMETypes(bool b)
     FrameLoaderClientQt::dumpResourceResponseMIMETypes = b;
 }
 
+void DumpRenderTreeSupportQt::dumpWillCacheResponseCallbacks(bool b)
+{
+    FrameLoaderClientQt::dumpWillCacheResponseCallbacks = b;
+}
+
 void DumpRenderTreeSupportQt::setWillSendRequestReturnsNullOnRedirect(bool b)
 {
     FrameLoaderClientQt::sendRequestReturnsNullOnRedirect = b;
@@ -789,25 +827,12 @@ void DumpRenderTreeSupportQt::scalePageBy(QWebFrame* frame, float scalefactor, c
         page->setPageScaleFactor(scalefactor, origin);
 }
 
-void DumpRenderTreeSupportQt::activeMockDeviceOrientationClient(bool b)
+void DumpRenderTreeSupportQt::setMockDeviceOrientation(QWebPage* page, bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
 {
 #if ENABLE(DEVICE_ORIENTATION)
-    DeviceOrientationClientMockQt::mockIsActive = b;
-#endif
-}
-
-void DumpRenderTreeSupportQt::removeMockDeviceOrientation()
-{
-#if ENABLE(DEVICE_ORIENTATION)
-    DeviceOrientationClientMockQt* client = DeviceOrientationClientMockQt::client();
-    delete client;
-#endif
-}
-
-void DumpRenderTreeSupportQt::setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma)
-{
-#if ENABLE(DEVICE_ORIENTATION)
-    DeviceOrientationClientMockQt::client()->setOrientation(canProvideAlpha, alpha, canProvideBeta, beta, canProvideGamma, gamma);
+    Page* corePage = QWebPagePrivate::core(page);
+    DeviceOrientationClientMock* mockClient = toDeviceOrientationClientMock(DeviceOrientationController::from(corePage)->client());
+    mockClient->setOrientation(DeviceOrientation::create(canProvideAlpha, alpha, canProvideBeta, beta, canProvideGamma, gamma));
 #endif
 }
 
@@ -976,27 +1001,6 @@ QString DumpRenderTreeSupportQt::plainText(const QVariant& range)
     return map.value(QLatin1String("innerText")).toString();
 }
 
-QVariantList DumpRenderTreeSupportQt::nodesFromRect(const QWebElement& document, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping)
-{
-    QVariantList res;
-    WebCore::Element* webElement = document.m_element;
-    if (!webElement)
-        return res;
-
-    Document* doc = webElement->document();
-    if (!doc)
-        return res;
-    RefPtr<NodeList> nodes = doc->nodesFromRect(x, y, top, right, bottom, left, ignoreClipping);
-    for (unsigned i = 0; i < nodes->length(); i++) {
-        // QWebElement will be null if the Node is not an HTML Element
-        if (nodes->item(i)->isHTMLElement())
-            res << QVariant::fromValue(QWebElement(nodes->item(i)));
-        else
-            res << QVariant::fromValue(QDRTNode(nodes->item(i)));
-    }
-    return res;
-}
-
 void DumpRenderTreeSupportQt::setDefersLoading(QWebPage* page, bool flag)
 {
     Page* corePage = QWebPagePrivate::core(page);
@@ -1081,9 +1085,10 @@ void DumpRenderTreeSupportQt::setMinimumTimerInterval(QWebPage* page, double int
 }
 
 #if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
-bool DumpRenderTreeSupportQt::thirdPartyCookiePolicyAllows(QNetworkCookieJar* jar, const QUrl& url, const QUrl& firstPartyUrl)
+bool DumpRenderTreeSupportQt::thirdPartyCookiePolicyAllows(QWebPage *page, const QUrl& url, const QUrl& firstPartyUrl)
 {
-    return thirdPartyCookiePolicyPermits(jar, url, firstPartyUrl);
+    Page* corePage = QWebPagePrivate::core(page);
+    return thirdPartyCookiePolicyPermits(corePage->mainFrame()->loader()->networkingContext(), url, firstPartyUrl);
 }
 #endif
 
@@ -1169,6 +1174,7 @@ void DumpRenderTreeSupportQt::injectInternalsObject(QWebFrame* frame)
     JSContextRef context = toRef(exec);
     WebCoreTestSupport::injectInternalsObject(context);
 #elif USE(V8)
+    v8::HandleScope handleScope;
     WebCoreTestSupport::injectInternalsObject(V8Proxy::mainWorldContext(coreFrame));
 #endif
 }
@@ -1195,7 +1201,24 @@ void DumpRenderTreeSupportQt::resetInternalsObject(QWebFrame* frame)
     JSContextRef context = toRef(exec);
     WebCoreTestSupport::resetInternalsObject(context);
 #elif USE(V8)
+    v8::HandleScope handleScope;
     WebCoreTestSupport::resetInternalsObject(V8Proxy::mainWorldContext(coreFrame));
+#endif
+}
+
+bool DumpRenderTreeSupportQt::defaultHixie76WebSocketProtocolEnabled()
+{
+    return true;
+}
+
+void DumpRenderTreeSupportQt::setHixie76WebSocketProtocolEnabled(QWebPage* page, bool enabled)
+{
+#if ENABLE(WEB_SOCKETS)
+    if (Page* corePage = QWebPagePrivate::core(page))
+        corePage->settings()->setUseHixie76WebSocketProtocol(enabled);
+#else
+    UNUSED_PARAM(page);
+    UNUSED_PARAM(enabled);
 #endif
 }
 

@@ -44,12 +44,16 @@ public:
     }
     ~ContentSecurityPolicy();
 
+    void copyStateFrom(const ContentSecurityPolicy*);
+
     enum HeaderType {
         ReportOnly,
         EnforcePolicy
     };
 
     void didReceiveHeader(const String&, HeaderType);
+    String policy() { return m_header; }
+    HeaderType headerType() { return m_reportOnly ? ReportOnly : EnforcePolicy; }
 
     bool allowJavaScriptURLs() const;
     bool allowInlineEventHandlers() const;
@@ -92,6 +96,7 @@ private:
     ScriptExecutionContext* m_scriptExecutionContext;
 
     bool m_reportOnly;
+    String m_header;
     OwnPtr<CSPDirective> m_defaultSrc;
     OwnPtr<CSPDirective> m_scriptSrc;
     OwnPtr<CSPDirective> m_objectSrc;

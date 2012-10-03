@@ -59,18 +59,18 @@ private:
     virtual bool shouldInsertText(const String&, WebCore::Range*, WebCore::EditorInsertAction) OVERRIDE;
     virtual bool shouldChangeSelectedRange(WebCore::Range* fromRange, WebCore::Range* toRange, WebCore::EAffinity, bool stillSelecting) OVERRIDE;
     
-    virtual bool shouldApplyStyle(WebCore::CSSStyleDeclaration*, WebCore::Range*) OVERRIDE;
+    virtual bool shouldApplyStyle(WebCore::StylePropertySet*, WebCore::Range*) OVERRIDE;
     virtual bool shouldMoveRangeAfterDelete(WebCore::Range*, WebCore::Range*) OVERRIDE;
 
     virtual void didBeginEditing() OVERRIDE;
     virtual void respondToChangedContents() OVERRIDE;
-    virtual void respondToChangedSelection() OVERRIDE;
+    virtual void respondToChangedSelection(WebCore::Frame*) OVERRIDE;
     virtual void didEndEditing() OVERRIDE;
     virtual void didWriteSelectionToPasteboard() OVERRIDE;
     virtual void didSetSelectionTypesForPasteboard() OVERRIDE;
     
-    virtual void registerCommandForUndo(PassRefPtr<WebCore::EditCommand>) OVERRIDE;
-    virtual void registerCommandForRedo(PassRefPtr<WebCore::EditCommand>) OVERRIDE;
+    virtual void registerUndoStep(PassRefPtr<WebCore::UndoStep>) OVERRIDE;
+    virtual void registerRedoStep(PassRefPtr<WebCore::UndoStep>) OVERRIDE;
     virtual void clearUndoRedoOperations() OVERRIDE;
 
     virtual bool canCopyCut(WebCore::Frame*, bool defaultValue) const OVERRIDE;
@@ -94,7 +94,7 @@ private:
 #if PLATFORM(MAC)
     virtual NSString *userVisibleString(NSURL *) OVERRIDE;
     virtual WebCore::DocumentFragment* documentFragmentFromAttributedString(NSAttributedString *, Vector< RefPtr<WebCore::ArchiveResource> >&) OVERRIDE;
-    virtual void setInsertionPasteboard(NSPasteboard *) OVERRIDE;
+    virtual void setInsertionPasteboard(const String& pasteboardName) OVERRIDE;
     virtual NSURL* canonicalizeURL(NSURL*) OVERRIDE;
     virtual NSURL* canonicalizeURLString(NSString*) OVERRIDE;
 #endif
@@ -121,6 +121,7 @@ private:
 #if PLATFORM(GTK)
     bool executePendingEditorCommands(WebCore::Frame*, Vector<WTF::String>, bool) OVERRIDE;
     void getEditorCommandsForKeyEvent(const WebCore::KeyboardEvent*, Vector<WTF::String>&) OVERRIDE;
+    void setSelectionPrimaryClipboardIfNeeded(WebCore::Frame*) OVERRIDE;
 #endif
 
     TextCheckerClient* textChecker()  OVERRIDE { return this; }
@@ -140,7 +141,7 @@ private:
     virtual void getGuessesForWord(const String& word, const String& context, Vector<String>& guesses) OVERRIDE;
     virtual void willSetInputMethodState() OVERRIDE;
     virtual void setInputMethodState(bool enabled) OVERRIDE;
-    virtual void requestCheckingOfString(WebCore::SpellChecker*, int, WebCore::TextCheckingTypeMask, const WTF::String&) OVERRIDE;
+    virtual void requestCheckingOfString(WebCore::SpellChecker*, const WebCore::TextCheckingRequest&) OVERRIDE;
 #if PLATFORM(MAC) && !defined(BUILDING_ON_SNOW_LEOPARD)
     virtual void showCorrectionPanel(WebCore::CorrectionPanelInfo::PanelType, const WebCore::FloatRect& boundingBoxOfReplacedString, const String& replacedString, const String& replacementString, const Vector<String>& alternativeReplacementStrings) OVERRIDE;
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingCorrectionPanel) OVERRIDE;

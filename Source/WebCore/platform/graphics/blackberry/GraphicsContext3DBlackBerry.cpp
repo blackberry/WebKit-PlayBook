@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Apple Inc. All rights reserved.
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,26 +30,18 @@
 
 #include "GraphicsContext3D.h"
 
-#include "Chrome.h"
-#include "ChromeClientBlackBerry.h"
+#include "BitmapImageSingleFrameSkia.h"
 #include "Extensions3DOpenGL.h"
-#include "LayerMessage.h"
-#include "NotImplemented.h"
+#include "GraphicsContext.h"
 #include "WebGLLayerWebKitThread.h"
 
-#include <BitmapImage.h>
-#include <BitmapImageSingleFrameSkia.h>
-
 #include <BlackBerryPlatformGraphics.h>
-#include <BlackBerryPlatformWindow.h>
-
-#include <pthread.h>
 
 namespace WebCore {
 
 PassRefPtr<GraphicsContext3D> GraphicsContext3D::create(Attributes attribs, HostWindow* hostWindow, RenderStyle renderStyle)
 {
-    // This implementation doesn't currently support rendering directly to a window
+    // This implementation doesn't currently support rendering directly to a window.
     if (renderStyle == RenderDirectlyToHostWindow)
         return 0;
 
@@ -59,9 +51,10 @@ PassRefPtr<GraphicsContext3D> GraphicsContext3D::create(Attributes attribs, Host
 GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes attrs, HostWindow* hostWindow, bool renderDirectlyToHostWindow)
     : m_currentWidth(0)
     , m_currentHeight(0)
+    , m_hostWindow(hostWindow)
+    , m_context(BlackBerry::Platform::Graphics::createWebGLContext())
     , m_extensions(adoptPtr(new Extensions3DOpenGL(this)))
     , m_attrs(attrs)
-    , m_hostWindow(hostWindow)
     , m_texture(0)
     , m_fbo(0)
     , m_depthStencilBuffer(0)
@@ -71,10 +64,7 @@ GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes attrs, HostWi
     , m_multisampleFBO(0)
     , m_multisampleDepthStencilBuffer(0)
     , m_multisampleColorBuffer(0)
-    , m_compositingLayer(0)
 {
-    m_context = BlackBerry::Platform::Graphics::createWebGLContext();
-
     if (!renderDirectlyToHostWindow) {
 #if USE(ACCELERATED_COMPOSITING)
         m_compositingLayer = WebGLLayerWebKitThread::create();
@@ -85,7 +75,7 @@ GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes attrs, HostWi
         if (!extensions->supports("GL_IMG_multisampled_render_to_texture"))
             m_attrs.antialias = false;
 
-        // create a texture to render into
+        // Create a texture to render into.
         ::glGenTextures(1, &m_texture);
         ::glBindTexture(GL_TEXTURE_2D, m_texture);
         ::glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
@@ -94,7 +84,7 @@ GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes attrs, HostWi
         ::glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
         ::glBindTexture(GL_TEXTURE_2D, 0);
 
-        // create an FBO
+        // Create an FBO.
         ::glGenFramebuffers(1, &m_fbo);
         ::glBindFramebuffer(GL_FRAMEBUFFER, m_fbo);
         if (m_attrs.stencil || m_attrs.depth)
@@ -106,8 +96,8 @@ GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes attrs, HostWi
 #endif
     }
 
-    // FIXME: if GraphicsContext3D is created with renderDirectlyToHostWindow == true,
-    // makeContextCurrent() will make the shared context current
+    // FIXME: If GraphicsContext3D is created with renderDirectlyToHostWindow == true,
+    // makeContextCurrent() will make the shared context current.
     makeContextCurrent();
 
     // FIXME: Do we need to enable GL_VERTEX_PROGRAM_POINT_SIZE with GL ES2? See PR #120141.
@@ -170,13 +160,13 @@ PlatformLayer* GraphicsContext3D::platformLayer() const
 void GraphicsContext3D::paintToCanvas(const unsigned char* imagePixels, int imageWidth, int imageHeight, int canvasWidth, int canvasHeight,
        GraphicsContext* context, bool flipY)
 {
-    // reorder pixels into BGRA format
+    // Reorder pixels into BGRA format.
     unsigned char* tempPixels = new unsigned char[imageWidth * imageHeight * 4];
 
     if (flipY) {
         for (int y = 0; y < imageHeight; y++) {
             const unsigned char *srcRow = imagePixels + (imageWidth * 4 * y);
-            unsigned char *destRow = tempPixels + (imageWidth * 4 * (imageHeight-y-1));
+            unsigned char *destRow = tempPixels + (imageWidth * 4 * (imageHeight - y - 1));
             for (int i = 0; i < imageWidth * 4; i += 4) {
                 destRow[i + 0] = srcRow[i + 2];
                 destRow[i + 1] = srcRow[i + 1];
@@ -197,18 +187,23 @@ void GraphicsContext3D::paintToCanvas(const unsigned char* imagePixels, int imag
 
     canvasBitmap.setConfig(SkBitmap::kARGB_8888_Config, canvasWidth, canvasHeight);
     canvasBitmap.allocPixels(0, 0);
-    bool rc = canvasBitmap.copyPixelsFrom(static_cast<void*>(const_cast<unsigned char*>(tempPixels)), imageWidth * imageHeight * 4);
+    canvasBitmap.lockPixels();
+    memcpy(canvasBitmap.getPixels(), tempPixels, imageWidth * imageHeight * 4);
+    canvasBitmap.unlockPixels();
     delete [] tempPixels;
 
     FloatRect src(0, 0, canvasWidth, canvasHeight);
     FloatRect dst(0, 0, imageWidth, imageHeight);
 
-    RefPtr<BitmapImageSingleFrameSkia> bitmapImage = BitmapImageSingleFrameSkia::create(canvasBitmap, false); // TODO: Should we copy pixels?
-    if (rc)
-        context->drawImage(bitmapImage.get(), ColorSpaceDeviceRGB, dst, src, CompositeCopy, false);
+    RefPtr<BitmapImageSingleFrameSkia> bitmapImage = BitmapImageSingleFrameSkia::create(canvasBitmap, false);
+    context->drawImage(bitmapImage.get(), ColorSpaceDeviceRGB, dst, src, CompositeCopy, false);
 }
 
 void GraphicsContext3D::setContextLostCallback(PassOwnPtr<ContextLostCallback>)
+{
+}
+
+void GraphicsContext3D::setErrorMessageCallback(PassOwnPtr<ErrorMessageCallback>)
 {
 }
 

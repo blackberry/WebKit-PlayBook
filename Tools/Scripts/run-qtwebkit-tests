@@ -206,8 +206,6 @@ class Main(Log):
         self._Pool = Pool
 
     def run(self):
-        """ We need to set this system variable in order to load the proper plugin for the qml tests """
-        os.putenv("QML_IMPORT_PATH", self._options.path + "../../../imports")
         """ Find && execute && publish results of all test. "All in one" function. """
         # This is needed for Qt finding our QML modules. The current code makes our
         # two existing API tests (WK1 API and WK2 UI process API) work correctly.

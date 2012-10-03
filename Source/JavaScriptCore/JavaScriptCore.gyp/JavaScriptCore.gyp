@@ -1,10 +1,10 @@
 #
-# Copyright (C) 2009 Google Inc. All rights reserved.
-# 
+# Copyright (C) 2009, 2012 Google Inc. All rights reserved.
+#
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions are
 # met:
-# 
+#
 #     * Redistributions of source code must retain the above copyright
 # notice, this list of conditions and the following disclaimer.
 #     * Redistributions in binary form must reproduce the above
@@ -14,7 +14,7 @@
 #     * Neither the name of Google Inc. nor the names of its
 # contributors may be used to endorse or promote products derived from
 # this software without specific prior written permission.
-# 
+#
 # THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
 # "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
 # LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
@@ -30,8 +30,7 @@
 
 {
   'includes': [
-    # FIXME: Sense whether upstream or downstream build, and
-    # include the right features.gypi
+    '../../WebKit/chromium/WinPrecompile.gypi',
     '../../WebKit/chromium/features.gypi',
     '../JavaScriptCore.gypi',
   ],
@@ -62,12 +61,11 @@
       # its dependents.
       'target_name': 'wtf_config',
       'type': 'none',
-      'msvs_guid': '2E2D3301-2EC4-4C0F-B889-87073B30F673',
       'direct_dependent_settings': {
         'defines': [
           # Import features_defines from features.gypi
           '<@(feature_defines)',
-          
+
           # Turns on #if PLATFORM(CHROMIUM)
           'BUILDING_CHROMIUM__=1',
           # Controls wtf/FastMalloc
@@ -103,7 +101,7 @@
     {
       'target_name': 'wtf',
       'type': 'static_library',
-      'msvs_guid': 'AA8A5A85-592B-4357-BC60-E0E91E026AF6',
+      'variables': { 'optimize': 'max' },
       'dependencies': [
         'wtf_config',
         '<(chromium_src_dir)/third_party/icu/icu.gyp:icui18n',
@@ -124,18 +122,18 @@
         ['exclude', '../'],
         # ... Then include what we want.
         ['include', '../wtf/'],
-        # FIXME: This is clearly not sustainable. 
-        ['exclude', '../wtf/efl'], 
-        ['exclude', '../wtf/gobject'], 
-        ['exclude', '../wtf/gtk'], 
-        ['exclude', '../wtf/mac'], 
-        ['exclude', '../wtf/qt'], 
-        ['exclude', '../wtf/url'], 
-        ['exclude', '../wtf/wince'], 
-        ['exclude', '../wtf/wx'], 
-        ['exclude', '../wtf/unicode/wince'], 
-        ['exclude', '../wtf/unicode/glib'], 
-        ['exclude', '../wtf/unicode/qt4'], 
+        # FIXME: This is clearly not sustainable.
+        ['exclude', '../wtf/efl'],
+        ['exclude', '../wtf/gobject'],
+        ['exclude', '../wtf/gtk'],
+        ['exclude', '../wtf/mac'],
+        ['exclude', '../wtf/qt'],
+        ['exclude', '../wtf/url'],
+        ['exclude', '../wtf/wince'],
+        ['exclude', '../wtf/wx'],
+        ['exclude', '../wtf/unicode/wince'],
+        ['exclude', '../wtf/unicode/glib'],
+        ['exclude', '../wtf/unicode/qt4'],
         # GLib/GTK, even though its name doesn't really indicate.
         ['exclude', '/(gtk|glib|gobject)/.*\\.(cpp|h)$'],
         ['exclude', '(Default|Gtk|Mac|None|Qt|Win|Wx|Efl|Symbian)\\.(cpp|mm)$'],
@@ -173,7 +171,8 @@
             ['exclude', 'ThreadingPthreads\\.cpp$'],
             ['include', 'Thread(ing|Specific)Win\\.cpp$'],
             ['exclude', 'OSAllocatorPosix\\.cpp$'],
-            ['include', 'OSAllocatorWin\\.cpp$']
+            ['include', 'OSAllocatorWin\\.cpp$'],
+            ['include', 'win/OwnPtrWin\\.cpp$'],
           ],
           'include_dirs!': [
             '<(SHARED_INTERMEDIATE_DIR)/webkit',
@@ -199,12 +198,7 @@
       'dependencies': [
         'wtf',
       ],
-      'conditions': [
-        ['OS=="win"', {
-          'dependencies': ['<(chromium_src_dir)/build/win/system.gyp:cygwin'],
-        }],
-      ],
-      'msvs_guid': '49909552-0B0C-4C14-8CF6-DB8A2ADE0934',
+      'variables': { 'optimize': 'max' },
       'actions': [
         {
           'action_name': 'retgen',
@@ -241,9 +235,3 @@
     },
   ], # targets
 }
-
-# Local Variables:
-# tab-width:2
-# indent-tabs-mode:nil
-# End:
-# vim: set expandtab tabstop=2 shiftwidth=2:

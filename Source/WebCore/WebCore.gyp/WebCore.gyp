@@ -30,6 +30,7 @@
 
 {
   'includes': [
+    '../../WebKit/chromium/WinPrecompile.gypi',
     # FIXME: Sense whether upstream or downstream build, and
     # include the right features.gypi
     '../../WebKit/chromium/features.gypi',
@@ -45,9 +46,17 @@
     # binary and increasing the speed of gdb.
     'enable_svg%': 1,
 
+    'enable_wexit_time_destructors': 1,
+
     'webcore_include_dirs': [
       '../',
       '../..',
+      '../Modules/gamepad',
+      '../Modules/geolocation',
+      '../Modules/intents',
+      '../Modules/indexeddb',
+      '../Modules/mediastream',
+      '../Modules/websockets',
       '../accessibility',
       '../accessibility/chromium',
       '../bindings',
@@ -78,11 +87,11 @@
       '../loader/cache',
       '../loader/icon',
       '../mathml',
-      '../mediastream',
       '../notifications',
       '../page',
       '../page/animation',
       '../page/chromium',
+      '../page/scrolling',
       '../platform',
       '../platform/animation',
       '../platform/audio',
@@ -108,7 +117,6 @@
       '../platform/image-encoders/skia',
       '../platform/leveldb',
       '../platform/mediastream',
-      '../platform/mediastream/chromium',
       '../platform/mock',
       '../platform/network',
       '../platform/network/chromium',
@@ -129,7 +137,6 @@
       '../svg/properties',
       '../../ThirdParty/glu',
       '../webaudio',
-      '../websockets',
       '../workers',
       '../xml',
       '../xml/parser',
@@ -228,6 +235,11 @@
         # FIXME: Also enable this for Windows after verifying no warnings
         'chromium_code': 1,
       }],
+      ['use_x11==1 or OS=="android"', {
+        'webcore_include_dirs': [
+          '../platform/graphics/harfbuzz',
+        ],
+      }],
       ['OS=="win" and buildtype=="Official"', {
         # On windows official release builds, we try to preserve symbol space.
         'derived_sources_aggregate_files': [
@@ -258,6 +270,12 @@
       }],
     ],
   },  # variables
+
+  'target_defaults': {
+    'variables': {
+      'optimize': 'max',
+    },
+  },
 
   'conditions': [
     ['OS!="win" and remove_webcore_debug_symbols==1', {
@@ -294,18 +312,11 @@
           # static library and rebuilds it with these global symbols
           # transformed to private_extern.
           'target_name': 'webkit_system_interface',
-          'type': 'static_library',
+          'type': 'none',
           'variables': {
             'adjusted_library_path':
                 '<(PRODUCT_DIR)/libWebKitSystemInterfaceLeopardPrivateExtern.a',
           },
-          'sources': [
-            # An empty source file is needed to convince Xcode to produce
-            # output for this target.  The resulting library won't actually
-            # contain anything.  The library at adjusted_library_path will,
-            # and that library is pushed to dependents of this target below.
-            'mac/Empty.cpp',
-          ],
           'actions': [
             {
               'action_name': 'Adjust Visibility',
@@ -331,6 +342,14 @@
         },  # target webkit_system_interface
       ],  # targets
     }],  # condition OS == "mac"
+    ['clang==1', {
+      'target_defaults': {
+        'cflags': ['-Wglobal-constructors'],
+        'xcode_settings': {
+          'WARNING_CFLAGS': ['-Wglobal-constructors'],
+        },
+      },
+    }],
   ],  # conditions
 
   'targets': [
@@ -354,6 +373,8 @@
             '<(SHARED_INTERMEDIATE_DIR)/webkit/InspectorBackendDispatcher.h',
             '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorFrontend.cpp',
             '<(SHARED_INTERMEDIATE_DIR)/webkit/InspectorFrontend.h',
+            '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorTypeBuilder.cpp',
+            '<(SHARED_INTERMEDIATE_DIR)/webkit/InspectorTypeBuilder.h',
             '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorBackendStub.js',
           ],
           'variables': {
@@ -365,7 +386,6 @@
             '<@(_inputs)',
             '--output_h_dir', '<(SHARED_INTERMEDIATE_DIR)/webkit',
             '--output_cpp_dir', '<(SHARED_INTERMEDIATE_DIR)/webcore',
-            '--defines', '<(feature_defines) LANGUAGE_JAVASCRIPT',
           ],
           'message': 'Generating Inspector protocol sources from Inspector.json',
         },
@@ -446,9 +466,56 @@
       ]
     },
     {
+      'target_name': 'generate_supplemental_dependency',
+      'type': 'none',
+      'actions': [
+         {
+          'action_name': 'generateSupplementalDependency',
+          'variables': {
+            # Write sources into a file, so that the action command line won't
+            # exceed OS limits.
+            'idl_files_list': '<|(idl_files_list.tmp <@(bindings_idl_files))',
+          },
+          'inputs': [
+            '../bindings/scripts/preprocess-idls.pl',
+            '../bindings/scripts/IDLParser.pm',
+            '../bindings/scripts/IDLAttributes.txt',
+            '<(idl_files_list)',
+            '<!@(cat <(idl_files_list))',
+          ],
+          'outputs': [
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
+          ],
+          'action': [
+            'perl',
+            '-w',
+            '-I../bindings/scripts',
+            '../bindings/scripts/preprocess-idls.pl',
+            '--defines',
+            '<(feature_defines) LANGUAGE_JAVASCRIPT V8_BINDING',
+            '--idlFilesList',
+            '<(idl_files_list)',
+            '--supplementalDependencyFile',
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
+            '--idlAttributesFile',
+            '../bindings/scripts/IDLAttributes.txt',
+          ],
+          'message': 'Resolving [Supplemental=XXX] dependencies in all IDL files',
+        }
+      ]
+    },
+    {
       'target_name': 'webcore_bindings_sources',
       'type': 'none',
       'hard_dependency': 1,
+      'dependencies': [
+        'generate_supplemental_dependency',
+      ],
+      'variables': {
+        # Write sources into a file, so that the action command line won't
+        # exceed OS limits.
+        'additional_idl_files_list': '<|(additional_idl_files_list.tmp <@(webcore_test_support_idl_files))',
+      },
       'sources': [
         # bison rule
         '../css/CSSGrammar.y',
@@ -661,7 +728,7 @@
           'action_name': 'EventFactory',
           'inputs': [
             '../dom/make_event_factory.pl',
-            '../dom/EventFactory.in',
+            '../dom/EventNames.in',
           ],
           'outputs': [
             '<(SHARED_INTERMEDIATE_DIR)/webkit/EventFactory.cpp',
@@ -751,6 +818,7 @@
               '../css/quirks.css',
               '../css/view-source.css',
               '../css/themeChromium.css', # Chromium only.
+              '../css/themeChromiumAndroid.css', # Chromium only.
               '../css/themeChromiumLinux.css', # Chromium only.
               '../css/themeChromiumSkia.css',  # Chromium only.
               '../css/themeWin.css',
@@ -843,33 +911,10 @@
           ],
         },
         {
-          'action_name': 'tokenizer',
-          'inputs': [
-            '../css/maketokenizer',
-            '../css/tokenizer.flex',
-          ],
-          'outputs': [
-            '<(SHARED_INTERMEDIATE_DIR)/webkit/tokenizer.cpp',
-          ],
-          'action': [
-            'python',
-            'scripts/action_maketokenizer.py',
-            '<@(_outputs)',
-            '--',
-            '<@(_inputs)'
-          ],
-        },
-        {
           'action_name': 'derived_sources_all_in_one',
-          'variables': {
-            # Write sources into a file, so that the action command line won't
-            # exceed OS limites.
-            'idls_list_temp_file': '<|(idls_list_temp_file.tmp <@(bindings_idl_files))',
-          },
           'inputs': [
             'scripts/action_derivedsourcesallinone.py',
-            '<(idls_list_temp_file)',
-            '<!@(cat <(idls_list_temp_file))',
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
           ],
           'outputs': [
             '<@(derived_sources_aggregate_files)',
@@ -877,7 +922,7 @@
           'action': [
             'python',
             'scripts/action_derivedsourcesallinone.py',
-            '<(idls_list_temp_file)',
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
             '--',
             '<@(derived_sources_aggregate_files)',
           ],
@@ -930,6 +975,9 @@
             '../bindings/scripts/IDLParser.pm',
             '../bindings/scripts/IDLStructure.pm',
             '../bindings/scripts/preprocessor.pm',
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
+            '<(additional_idl_files_list)',
+            '<!@(cat <(additional_idl_files_list))',
           ],
           'outputs': [
             # FIXME:  The .cpp file should be in webkit/bindings once
@@ -939,11 +987,12 @@
           ],
           'variables': {
             'generator_include_dirs': [
+              '--include', '../Modules/indexeddb',
+              '--include', '../Modules/mediastream',
               '--include', '../css',
               '--include', '../dom',
               '--include', '../fileapi',
               '--include', '../html',
-              '--include', '../mediastream',
               '--include', '../notifications',
               '--include', '../page',
               '--include', '../plugins',
@@ -951,7 +1000,6 @@
               '--include', '../svg',
               '--include', '../testing',
               '--include', '../webaudio',
-              '--include', '../websockets',
               '--include', '../workers',
               '--include', '../xml',
             ],
@@ -962,17 +1010,24 @@
           # from lists.  When we have a better GYP way to suppress that
           # behavior, change the output location.
           'action': [
-            'python',
-            'scripts/rule_binding.py',
-            '<(RULE_INPUT_PATH)',
-            '<(SHARED_INTERMEDIATE_DIR)/webcore/bindings',
+            'perl',
+            '-w',
+            '-I../bindings/scripts',
+            '../bindings/scripts/generate-bindings.pl',
+            '--outputHeadersDir',
             '<(SHARED_INTERMEDIATE_DIR)/webkit/bindings',
-            '--',
-            '<@(_inputs)',
-            '--',
-            '--defines', '<(feature_defines) LANGUAGE_JAVASCRIPT V8_BINDING',
-            '--generator', 'V8',
-            '<@(generator_include_dirs)'
+            '--outputDir',
+            '<(SHARED_INTERMEDIATE_DIR)/webcore/bindings',
+            '--defines',
+            '<(feature_defines) LANGUAGE_JAVASCRIPT V8_BINDING',
+            '--generator',
+            'V8',
+            '<@(generator_include_dirs)',
+            '--supplementalDependencyFile',
+            '<(SHARED_INTERMEDIATE_DIR)/supplemental_dependency.tmp',
+            '--additionalIdlFilesList',
+            '<(additional_idl_files_list)',
+            '<(RULE_INPUT_PATH)',
           ],
           'message': 'Generating binding from <(RULE_INPUT_PATH)',
         },
@@ -981,7 +1036,6 @@
     {
       'target_name': 'webcore_bindings',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'hard_dependency': 1,
       'dependencies': [
         'webcore_bindings_sources',
@@ -990,6 +1044,7 @@
         'debugger_script_source',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:yarr',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '../../WTF/WTF.gyp/WTF.gyp:newwtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
         '<(chromium_src_dir)/skia/skia.gyp:skia',
         '<(chromium_src_dir)/third_party/iccjpeg/iccjpeg.gyp:iccjpeg',
@@ -1057,6 +1112,7 @@
         # Additional .cpp files from the webcore_inspector_sources list.
         '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorFrontend.cpp',
         '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorBackendDispatcher.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webcore/InspectorTypeBuilder.cpp',
       ],
       'conditions': [
         ['inside_chromium_build==1 and OS=="win" and component=="shared_library"', {
@@ -1077,9 +1133,6 @@
           ],
         }],
         ['OS=="win"', {
-          'dependencies': [
-            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
-          ],
           'defines': [
             'WEBCORE_NAVIGATOR_PLATFORM="Win32"',
             '__PRETTY_FUNCTION__=__FUNCTION__',
@@ -1091,9 +1144,9 @@
             'include_dirs+++': ['../dom'],
           },
         }],
-        ['(OS=="linux" or OS=="win") and "WTF_USE_WEBAUDIO_FFTW=1" in feature_defines', {
-          'include_dirs': [
-            '<(chromium_src_dir)/third_party/fftw/api',
+        ['OS=="linux" and "WTF_USE_WEBAUDIO_IPP=1" in feature_defines', {
+          'cflags': [
+            '<!@(pkg-config --cflags-only-I ipp)',
           ],
         }],
       ],
@@ -1111,6 +1164,7 @@
         '../../ThirdParty/glu/glu.gyp:libtess',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:yarr',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '../../WTF/WTF.gyp/WTF.gyp:newwtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
         '<(chromium_src_dir)/skia/skia.gyp:skia',
         '<(chromium_src_dir)/third_party/iccjpeg/iccjpeg.gyp:iccjpeg',
@@ -1122,12 +1176,14 @@
         '<(chromium_src_dir)/third_party/ots/ots.gyp:ots',
         '<(chromium_src_dir)/third_party/sqlite/sqlite.gyp:sqlite',
         '<(chromium_src_dir)/third_party/angle/src/build_angle.gyp:translator_glsl',
+        '<(chromium_src_dir)/third_party/zlib/zlib.gyp:zlib',
         '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
         '<(libjpeg_gyp_path):libjpeg',
       ],
       'export_dependent_settings': [
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:yarr',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '../../WTF/WTF.gyp/WTF.gyp:newwtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
         '<(chromium_src_dir)/skia/skia.gyp:skia',
         '<(chromium_src_dir)/third_party/iccjpeg/iccjpeg.gyp:iccjpeg',
@@ -1253,13 +1309,13 @@
               # such as:
               # com.google.Chrome[] objc[]: Class ScrollbarPrefsObserver is implemented in both .../Google Chrome.app/Contents/Versions/.../Google Chrome Helper.app/Contents/MacOS/../../../Google Chrome Framework.framework/Google Chrome Framework and /System/Library/Frameworks/WebKit.framework/Versions/A/Frameworks/WebCore.framework/Versions/A/WebCore. One of the two will be used. Which one is undefined.
               'WebCascadeList=ChromiumWebCoreObjCWebCascadeList',
-              'ScrollbarPrefsObserver=ChromiumWebCoreObjCScrollbarPrefsObserver',
+              'WebScrollbarPrefsObserver=ChromiumWebCoreObjCWebScrollbarPrefsObserver',
               'WebCoreRenderThemeNotificationObserver=ChromiumWebCoreObjCWebCoreRenderThemeNotificationObserver',
               'WebFontCache=ChromiumWebCoreObjCWebFontCache',
-              'ScrollAnimationHelperDelegate=ChromiumWebCoreObjCScrollAnimationHelperDelegate',
-              'ScrollbarPainterControllerDelegate=ChromiumWebCoreObjCScrollbarPainterControllerDelegate',
-              'ScrollbarPainterDelegate=ChromiumWebCoreObjCScrollbarPainterDelegate',
-              'ScrollbarPartAnimation=ChromiumWebCoreObjCScrollbarPartAnimation',
+              'WebScrollAnimationHelperDelegate=ChromiumWebCoreObjCWebScrollAnimationHelperDelegate',
+              'WebScrollbarPainterControllerDelegate=ChromiumWebCoreObjCWebScrollbarPainterControllerDelegate',
+              'WebScrollbarPainterDelegate=ChromiumWebCoreObjCWebScrollbarPainterDelegate',
+              'WebScrollbarPartAnimation=ChromiumWebCoreObjCWebScrollbarPartAnimation',
             ],
             'include_dirs': [
               '<(chromium_src_dir)/third_party/apple_webkit',
@@ -1285,12 +1341,6 @@
           },
         }],
         ['OS=="win"', {
-          'dependencies': [
-            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
-          ],
-          'export_dependent_settings': [
-            '<(chromium_src_dir)/build/win/system.gyp:cygwin'
-          ],
           'direct_dependent_settings': {
             'defines': [
               # Match Safari and Mozilla on Windows.
@@ -1302,19 +1352,18 @@
             'include_dirs++': ['../dom'],
           },
         }],
-        ['(OS=="linux" or OS=="win") and "WTF_USE_WEBAUDIO_FFTW=1" in feature_defines', {
-          # This directory needs to be on the include path for multiple sub-targets of webcore.
+        ['OS=="linux" and "WTF_USE_WEBAUDIO_IPP=1" in feature_defines', {
           'direct_dependent_settings': {
-            'include_dirs': [
-              '<(chromium_src_dir)/third_party/fftw/api',
+            'cflags': [
+              '<!@(pkg-config --cflags-only-I ipp)',
             ],
           },
         }],
-        ['(OS=="mac" or OS=="linux" or OS=="win") and "WTF_USE_WEBAUDIO_FFMPEG=1" in feature_defines', {
+        ['OS != "android" and "WTF_USE_WEBAUDIO_FFMPEG=1" in feature_defines', {
           # This directory needs to be on the include path for multiple sub-targets of webcore.
           'direct_dependent_settings': {
             'include_dirs': [
-              '<(chromium_src_dir)/third_party/ffmpeg/patched-ffmpeg',
+              '<(chromium_src_dir)/third_party/ffmpeg',
             ],
           },
           'dependencies': [
@@ -1340,7 +1389,6 @@
     {
       'target_name': 'webcore_dom',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1363,7 +1411,6 @@
     {
       'target_name': 'webcore_html',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1378,7 +1425,6 @@
     {
       'target_name': 'webcore_svg',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1393,7 +1439,6 @@
     {
       'target_name': 'webcore_platform',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1412,7 +1457,7 @@
         ['include', 'platform/'],
 
         # FIXME: Figure out how to store these patterns in a variable.
-        ['exclude', '(cairo|ca|cf|cg|curl|efl|freetype|gstreamer|gtk|linux|mac|opengl|openvg|opentype|pango|posix|qt|soup|svg|symbian|texmap|iphone|win|wince|wx)/'],
+        ['exclude', '(cairo|ca|cf|cg|curl|efl|freetype|gstreamer|gtk|harfbuzz|linux|mac|opengl|openvg|opentype|pango|posix|qt|soup|svg|symbian|texmap|iphone|win|wince|wx)/'],
         ['exclude', '(?<!Chromium)(Cairo|CF|CG|Curl|Gtk|JSC|Linux|Mac|OpenType|POSIX|Posix|Qt|Safari|Soup|Symbian|Win|WinCE|Wx)\\.(cpp|mm?)$'],
 
         ['exclude', 'platform/LinkHash\\.cpp$'],
@@ -1434,11 +1479,12 @@
         ['use_x11 == 1', {
           'sources/': [
             # Cherry-pick files excluded by the broader regular expressions above.
-            ['include', 'platform/graphics/chromium/ComplexTextControllerLinux\\.cpp$'],
-            ['include', 'platform/graphics/chromium/FontCacheLinux\\.cpp$'],
-            ['include', 'platform/graphics/chromium/FontLinux\\.cpp$'],
-            ['include', 'platform/graphics/chromium/FontPlatformDataLinux\\.cpp$'],
-            ['include', 'platform/graphics/chromium/SimpleFontDataLinux\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/ComplexTextControllerHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/FontHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/FontPlatformDataHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/HarfBuzzSkia\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/HarfBuzzShaperBase\\.(cpp|h)$'],
+            ['include', 'platform/graphics/skia/SimpleFontDataSkia\\.cpp$'],
           ],
         }, { # use_x11==0
           'sources/': [
@@ -1465,7 +1511,8 @@
           'sources/': [
             ['include', 'platform/graphics/opentype/OpenTypeSanitizer\\.cpp$'],
           ],
-        }],['OS=="mac" and use_skia==0', {
+        }],
+        ['OS=="mac" and use_skia==0', {
           'sources/': [
             # The Mac build is PLATFORM_CG too.  platform/graphics/cg is the
             # only place that CG files we want to build are located, and not
@@ -1473,7 +1520,8 @@
             # regexp matching their directory.
             ['include', 'platform/graphics/cg/[^/]*(?<!Win)?\\.(cpp|mm?)$'],
           ],
-        }],['OS=="mac"', {
+        }],
+        ['OS=="mac"', {
           # Necessary for Mac .mm stuff.
           'include_dirs': [
             '<(chromium_src_dir)/third_party/apple_webkit',
@@ -1525,7 +1573,11 @@
             ['include', 'platform/mac/BlockExceptions\\.mm$'],
             ['include', 'platform/mac/KillRingMac\\.mm$'],
             ['include', 'platform/mac/LocalCurrentGraphicsContext\\.mm$'],
+            ['include', 'platform/mac/NSScrollerImpDetails\\.mm$'],
             ['include', 'platform/mac/PurgeableBufferMac\\.cpp$'],
+            ['include', 'platform/mac/ScrollbarThemeMac\\.mm$'],
+            ['include', 'platform/mac/ScrollAnimatorMac\\.mm$'],
+            ['include', 'platform/mac/ScrollElasticityController\\.mm$'],
             ['include', 'platform/mac/WebCoreSystemInterface\\.mm$'],
             ['include', 'platform/mac/WebCoreTextRenderer\\.mm$'],
             ['include', 'platform/text/mac/ShapeArabic\\.c$'],
@@ -1595,8 +1647,11 @@
             ['include', 'platform/graphics/cg/IntPointCG\\.cpp$'],
             ['include', 'platform/graphics/cg/IntRectCG\\.cpp$'],
             ['include', 'platform/graphics/cg/IntSizeCG\\.cpp$'],
+            ['exclude', 'platform/graphics/chromium/ImageChromiumMac\\.mm$'],
             ['exclude', 'platform/graphics/mac/FontMac\\.mm$'],
+            ['exclude', 'platform/graphics/skia/FontCacheSkia\\.cpp$'],
             ['exclude', 'platform/graphics/skia/GlyphPageTreeNodeSkia\\.cpp$'],
+            ['exclude', 'platform/graphics/skia/SimpleFontDataSkia\\.cpp$'],
             ['exclude', 'platform/chromium/DragImageChromiumMac\\.cpp$'],
           ],
         }],
@@ -1626,10 +1681,31 @@
 
             # The Chromium Win currently uses GlyphPageTreeNodeChromiumWin.cpp from
             # platform/graphics/chromium, included by regex above, instead.
+            ['exclude', 'platform/graphics/skia/FontCacheSkia\\.cpp$'],
             ['exclude', 'platform/graphics/skia/GlyphPageTreeNodeSkia\\.cpp$'],
+            ['exclude', 'platform/graphics/skia/SimpleFontDataSkia\\.cpp$'],
 
             # SystemInfo.cpp is useful and we don't want to copy it.
             ['include', 'platform/win/SystemInfo\\.cpp$'],
+          ],
+        }],
+        ['OS=="android"', {
+          'sources/': [
+            ['include', 'platform/chromium/ClipboardChromiumLinux\\.cpp$'],
+            ['include', 'platform/chromium/FileSystemChromiumLinux\\.cpp$'],
+            ['include', 'platform/graphics/chromium/GlyphPageTreeNodeLinux\\.cpp$'],
+            ['exclude', 'platform/graphics/chromium/IconChromium\\.cpp$'],
+            ['include', 'platform/graphics/chromium/VDMXParser\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/ComplexTextControllerHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/FontHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/FontPlatformDataHarfBuzz\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/HarfBuzzSkia\\.cpp$'],
+            ['include', 'platform/graphics/harfbuzz/HarfBuzzShaperBase\\.cpp$'],
+            ['include', 'platform/graphics/skia/SimpleFontDataSkia\\.cpp$'],
+          ],
+        }, { # OS!="android"
+          'sources/': [
+            ['exclude', 'Android\\.cpp$'],
           ],
         }],
       ],
@@ -1640,7 +1716,6 @@
     {
       'target_name': 'webcore_arm_neon',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1665,7 +1740,6 @@
     {
       'target_name': 'webcore_rendering',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
       ],
@@ -1692,7 +1766,7 @@
         ['OS=="mac"', {
           'sources/': [
             # RenderThemeChromiumSkia is not used on mac since RenderThemeChromiumMac
-            # does not reference the Skia code that is used by Windows and Linux.
+            # does not reference the Skia code that is used by Windows, Linux and Android.
             ['exclude', 'rendering/RenderThemeChromiumSkia\\.cpp$'],
           ],
         }],
@@ -1719,12 +1793,20 @@
             ['exclude', 'Win\\.cpp$'],
           ],
         }],
+        ['OS=="android"', {
+          'sources/': [
+            ['include', 'rendering/RenderThemeChromiumLinux\\.cpp$'],
+          ],
+        }, {
+          'sources/': [
+            ['exclude', 'Android\\.cpp$'],
+          ],
+        }],
       ],
     },
     {
       'target_name': 'webcore_remaining',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore_prerequisites',
         '<(chromium_src_dir)/third_party/v8-i18n/build/all.gyp:v8-i18n',
@@ -1758,6 +1840,8 @@
 
         ['exclude', 'AllInOne\\.cpp$'],
 
+        ['exclude', 'Modules/indexeddb/IDBFactoryBackendInterface\\.cpp$'],
+        ['exclude', 'Modules/indexeddb/IDBKeyPathBackendImpl\\.cpp$'],
         ['exclude', 'fileapi/LocalFileSystem\\.cpp$'],
         ['exclude', 'inspector/InspectorFrontendClientLocal\\.cpp$'],
         ['exclude', 'inspector/JavaScript[^/]*\\.cpp$'],
@@ -1776,8 +1860,6 @@
         ['exclude', 'plugins/npapi\\.cpp$'],
         ['exclude', 'storage/DatabaseTrackerClient\\.h$'],
         ['exclude', 'storage/DatabaseTracker\\.cpp$'],
-        ['exclude', 'storage/IDBFactoryBackendInterface\\.cpp$'],
-        ['exclude', 'storage/IDBKeyPathBackendImpl\\.cpp$'],
         ['exclude', 'storage/OriginQuotaManager\\.(cpp|h)$'],
         ['exclude', 'storage/OriginUsageRecord\\.(cpp|h)$'],
         ['exclude', 'storage/SQLTransactionClient\\.cpp$'],
@@ -1872,6 +1954,7 @@
         # Exported.
         'webcore_bindings',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '../../WTF/WTF.gyp/WTF.gyp:newwtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
         '<(chromium_src_dir)/skia/skia.gyp:skia',
         '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
@@ -1880,6 +1963,7 @@
       'export_dependent_settings': [
         'webcore_bindings',
         '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
+        '../../WTF/WTF.gyp/WTF.gyp:newwtf',
         '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
         '<(chromium_src_dir)/skia/skia.gyp:skia',
         '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
@@ -1914,21 +1998,14 @@
             'include_dirs+++': ['../dom'],
           },
         }],
-        ['OS=="linux" and "WTF_USE_WEBAUDIO_FFTW=1" in feature_defines', {
-          # FIXME: (kbr) figure out how to make these dependencies
-          # work in a cross-platform way. Attempts to use
-          # "link_settings" and "libraries" in conjunction with the
-          # msvs-specific settings didn't work so far.
-          'all_dependent_settings': {
+        ['OS=="linux" and "WTF_USE_WEBAUDIO_IPP=1" in feature_defines', {
+          'link_settings': {
             'ldflags': [
-              # FIXME: (kbr) build the FFTW into PRODUCT_DIR using GYP.
-              '-Lthird_party/fftw/.libs',
+              '<!@(pkg-config --libs-only-L ipp)',
             ],
-            'link_settings': {
-              'libraries': [
-                '-lfftw3f'
-              ],
-            },
+            'libraries': [
+              '-lipps -lippcore',
+            ],
           },
         }],
         ['enable_svg!=0', {
@@ -1941,7 +2018,6 @@
     {
       'target_name': 'webcore_test_support',
       'type': 'static_library',
-      'variables': { 'enable_wexit_time_destructors': 1, },
       'dependencies': [
         'webcore',
       ],
@@ -1958,6 +2034,8 @@
         '<@(webcore_test_support_files)',
         '<(SHARED_INTERMEDIATE_DIR)/webcore/bindings/V8Internals.cpp',
         '<(SHARED_INTERMEDIATE_DIR)/webkit/bindings/V8Internals.h',
+        '<(SHARED_INTERMEDIATE_DIR)/webcore/bindings/V8InternalSettings.cpp',
+        '<(SHARED_INTERMEDIATE_DIR)/webkit/bindings/V8InternalSettings.h',
       ],
       'sources/': [
         ['exclude', 'testing/js'],

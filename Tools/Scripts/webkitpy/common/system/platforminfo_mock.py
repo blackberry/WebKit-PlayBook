@@ -28,5 +28,23 @@
 
 
 class MockPlatformInfo(object):
+    os_name = 'mac'
+    os_version = 'snowleopard'
+
+    def is_mac(self):
+        return self.os_name == 'mac'
+
+    def is_linux(self):
+        return self.os_name == 'linux'
+
+    def is_win(self):
+        return self.os_name == 'win'
+
     def display_name(self):
         return "MockPlatform 1.0"
+
+    def total_bytes_memory(self):
+        return 2 * 1024 * 1024 * 1024  # 2GB is a reasonable amount of ram to mock.
+
+    def free_bytes_memory(self):
+        return 1 * 1024 * 1024 * 1024  # 1GB is a reasonable amount of ram to mock as free.

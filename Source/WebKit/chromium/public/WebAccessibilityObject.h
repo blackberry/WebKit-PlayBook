@@ -32,9 +32,9 @@
 #define WebAccessibilityObject_h
 
 #include "WebAccessibilityRole.h"
-#include "WebCommon.h"
-#include "WebPrivatePtr.h"
-#include "WebVector.h"
+#include "platform/WebCommon.h"
+#include "platform/WebPrivatePtr.h"
+#include "platform/WebVector.h"
 
 #if WEBKIT_IMPLEMENTATION
 namespace WTF { template <typename T> class PassRefPtr; }
@@ -113,6 +113,7 @@ public:
     WEBKIT_EXPORT bool isReadOnly() const;
     WEBKIT_EXPORT bool isRequired() const;
     WEBKIT_EXPORT bool isSelected() const;
+    WEBKIT_EXPORT bool isSelectedOptionActive() const;
     WEBKIT_EXPORT bool isVertical() const;
     WEBKIT_EXPORT bool isVisible() const;
     WEBKIT_EXPORT bool isVisited() const;
@@ -162,6 +163,13 @@ public:
     WEBKIT_EXPORT unsigned cellColumnSpan() const;
     WEBKIT_EXPORT unsigned cellRowIndex() const;
     WEBKIT_EXPORT unsigned cellRowSpan() const;
+
+    // Make this object visible by scrolling as many nested scrollable views as needed.
+    WEBKIT_EXPORT void scrollToMakeVisible() const;
+    // Same, but if the whole object can't be made visible, try for this subrect, in local coordinates.
+    WEBKIT_EXPORT void scrollToMakeVisibleWithSubFocus(const WebRect&) const;
+    // Scroll this object to a given point in global coordinates of the top-level window.
+    WEBKIT_EXPORT void scrollToGlobalPoint(const WebPoint&) const;
 
 #if WEBKIT_IMPLEMENTATION
     WebAccessibilityObject(const WTF::PassRefPtr<WebCore::AccessibilityObject>&);

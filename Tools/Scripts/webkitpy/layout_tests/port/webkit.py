@@ -32,16 +32,18 @@
 """WebKit implementations of the Port interface."""
 
 import base64
+import itertools
 import logging
 import operator
-import os
 import re
 import sys
 import time
 
 from webkitpy.common.memoized import memoized
 from webkitpy.common.net.buildbot import BuildBot
+from webkitpy.common.system.environment import Environment
 from webkitpy.common.system.executive import Executive, ScriptError
+from webkitpy.common.system.path import cygpath
 from webkitpy.layout_tests.port import builders, server_process, Port, Driver, DriverOutput
 
 
@@ -49,8 +51,8 @@ _log = logging.getLogger(__name__)
 
 
 class WebKitPort(Port):
-    def __init__(self, host, **kwargs):
-        Port.__init__(self, host, **kwargs)
+    def __init__(self, host, port_name=None, **kwargs):
+        Port.__init__(self, host, port_name=port_name, **kwargs)
 
         # FIXME: Disable pixel tests until they are run by default on build.webkit.org.
         self.set_option_default("pixel_tests", False)
@@ -77,13 +79,7 @@ class WebKitPort(Port):
 
     def path_to_test_expectations_file(self):
         # test_expectations are always in mac/ not mac-leopard/ by convention, hence we use port_name instead of name().
-        expectations_directory = self._wk2_port_name() if self.get_option('webkit_test_runner') else self.port_name
-        return self._filesystem.join(self._webkit_baseline_path(expectations_directory), 'test_expectations.txt')
-
-    def _driver_build_script_name(self):
-        if self.get_option('webkit_test_runner'):
-            return "build-webkittestrunner"
-        return "build-dumprendertree"
+        return self._filesystem.join(self._webkit_baseline_path(self.port_name), 'test_expectations.txt')
 
     def _port_flag_for_scripts(self):
         # This is overrriden by ports which need a flag passed to scripts to distinguish the use of that port.
@@ -101,26 +97,32 @@ class WebKitPort(Port):
             config_args.append(port_flag)
         return config_args
 
-    def _run_script(self, script_name, args=None, include_configuration_arguments=True, decode_output=True):
+    def _run_script(self, script_name, args=None, include_configuration_arguments=True, decode_output=True, env=None):
         run_script_command = [self._config.script_path(script_name)]
         if include_configuration_arguments:
             run_script_command.extend(self._arguments_for_configuration())
         if args:
             run_script_command.extend(args)
-        return self._executive.run_command(run_script_command, cwd=self._config.webkit_base_dir(), decode_output=decode_output)
+        output = self._executive.run_command(run_script_command, cwd=self._config.webkit_base_dir(), decode_output=decode_output, env=env)
+        _log.debug('Output of %s:\n%s' % (run_script_command, output))
+        return output
 
     def _build_driver(self):
+        environment = self.host.copy_current_environment()
+        environment.disable_gcc_smartquotes()
+        env = environment.to_dictionary()
+
         # FIXME: We build both DumpRenderTree and WebKitTestRunner for
         # WebKitTestRunner runs because DumpRenderTree still includes
         # the DumpRenderTreeSupport module and the TestNetscapePlugin.
         # These two projects should be factored out into their own
         # projects.
         try:
-            self._run_script("build-dumprendertree")
+            self._run_script("build-dumprendertree", env=env)
             if self.get_option('webkit_test_runner'):
-                self._run_script("build-webkittestrunner")
-        except ScriptError:
-            _log.error("Failed to build %s" % self.driver_name())
+                self._run_script("build-webkittestrunner", env=env)
+        except ScriptError, e:
+            _log.error(e.message_with_output(output_limit=None))
             return False
         return True
 
@@ -155,7 +157,7 @@ class WebKitPort(Port):
             return False
         return True
 
-    def diff_image(self, expected_contents, actual_contents):
+    def diff_image(self, expected_contents, actual_contents, tolerance=None):
         # Handle the case where the test didn't actually generate an image.
         # FIXME: need unit tests for this.
         if not actual_contents and not expected_contents:
@@ -165,17 +167,18 @@ class WebKitPort(Port):
             # Maybe we should throw an exception?
             return (True, 0)
 
-        process = self._start_image_diff_process(expected_contents, actual_contents)
+        process = self._start_image_diff_process(expected_contents, actual_contents, tolerance=tolerance)
         return self._read_image_diff(process)
 
-    def _start_image_diff_process(self, expected_contents, actual_contents):
+    def _start_image_diff_process(self, expected_contents, actual_contents, tolerance=None):
         # FIXME: There needs to be a more sane way of handling default
         # values for options so that you can distinguish between a default
         # value of None and a default value that wasn't set.
-        if self.get_option('tolerance') is not None:
-            tolerance = self.get_option('tolerance')
-        else:
-            tolerance = 0.1
+        if tolerance is None:
+            if self.get_option('tolerance') is not None:
+                tolerance = self.get_option('tolerance')
+            else:
+                tolerance = 0.1
         command = [self._path_to_image_diff(), '--tolerance', str(tolerance)]
         process = server_process.ServerProcess(self, 'ImageDiff', command)
 
@@ -220,13 +223,18 @@ class WebKitPort(Port):
 
         return (output_image, diff_percent)
 
+    def setup_environ_for_server(self, server_name=None):
+        clean_env = super(WebKitPort, self).setup_environ_for_server(server_name)
+        self._copy_value_from_environ_if_set(clean_env, 'WEBKIT_TESTFONTS')
+        return clean_env
+
     def default_results_directory(self):
         # Results are store relative to the built products to make it easy
         # to have multiple copies of webkit checked out and built.
         return self._build_path('layout-test-results')
 
-    def create_driver(self, worker_number):
-        return WebKitDriver(self, worker_number)
+    def _driver_class(self):
+        return WebKitDriver
 
     def _tests_for_other_platforms(self):
         # By default we will skip any directory under LayoutTests/platform
@@ -297,40 +305,53 @@ class WebKitPort(Port):
             "MHTMLArchive": ["mhtml"],
         }
 
-    def _skipped_tests_for_unsupported_features(self):
-        # If the port supports runtime feature detection, disable any tests
-        # for features missing from the runtime feature list.
-        supported_feature_list = self._runtime_feature_list()
-        # If _runtime_feature_list returns a non-None value, then prefer
-        # runtime feature detection over static feature detection.
-        if supported_feature_list is not None:
-            return reduce(operator.add, [directories for feature, directories in self._missing_feature_to_skipped_tests().items() if feature not in supported_feature_list])
+    def _has_test_in_directories(self, directory_lists, test_list):
+        if not test_list:
+            return False
 
-        # Runtime feature detection not supported, fallback to static dectection:
-        # Disable any tests for symbols missing from the webcore symbol string.
-        webcore_symbols_string = self._webcore_symbols_string()
-        if webcore_symbols_string is not None:
-            return reduce(operator.add, [directories for symbol_substring, directories in self._missing_symbol_to_skipped_tests().items() if symbol_substring not in webcore_symbols_string], [])
+        directories = itertools.chain.from_iterable(directory_lists)
+        for directory, test in itertools.product(directories, test_list):
+            if test.startswith(directory):
+                return True
+        return False
+
+    def _skipped_tests_for_unsupported_features(self, test_list):
+        # Only check the runtime feature list of there are tests in the test_list that might get skipped.
+        # This is a performance optimization to avoid the subprocess call to DRT.
+        if self._has_test_in_directories(self._missing_feature_to_skipped_tests().values(), test_list):
+            # If the port supports runtime feature detection, disable any tests
+            # for features missing from the runtime feature list.
+            supported_feature_list = self._runtime_feature_list()
+            # If _runtime_feature_list returns a non-None value, then prefer
+            # runtime feature detection over static feature detection.
+            if supported_feature_list is not None:
+                return reduce(operator.add, [directories for feature, directories in self._missing_feature_to_skipped_tests().items() if feature not in supported_feature_list])
+
+        # Only check the symbols of there are tests in the test_list that might get skipped.
+        # This is a performance optimization to avoid the calling nm.
+        if self._has_test_in_directories(self._missing_symbol_to_skipped_tests().values(), test_list):
+            # Runtime feature detection not supported, fallback to static dectection:
+            # Disable any tests for symbols missing from the webcore symbol string.
+            webcore_symbols_string = self._webcore_symbols_string()
+            if webcore_symbols_string is not None:
+                return reduce(operator.add, [directories for symbol_substring, directories in self._missing_symbol_to_skipped_tests().items() if symbol_substring not in webcore_symbols_string], [])
+
         # Failed to get any runtime or symbol information, don't skip any tests.
         return []
 
-    def _tests_from_skipped_file_contents(self, skipped_file_contents):
-        tests_to_skip = []
-        for line in skipped_file_contents.split('\n'):
-            line = line.strip()
-            line = line.rstrip('/')  # Best to normalize directory names to not include the trailing slash.
-            if line.startswith('#') or not len(line):
-                continue
-            tests_to_skip.append(line)
-        return tests_to_skip
-
     def _wk2_port_name(self):
-        # By current convention, the WebKit2 name is always mac-wk2, win-wk2, not mac-leopard-wk2, etc.
+        # By current convention, the WebKit2 name is always mac-wk2, win-wk2, not mac-leopard-wk2, etc,
+        # except for Qt because WebKit2 is only supported by Qt 5.0 (therefore: qt-5.0-wk2).
         return "%s-wk2" % self.port_name
 
     def _skipped_file_search_paths(self):
         # Unlike baseline_search_path, we only want to search [WK2-PORT, PORT-VERSION, PORT] not the full casade.
         # Note order doesn't matter since the Skipped file contents are all combined.
+        #
+        # FIXME: It's not correct to assume that port names map directly to
+        # directory names. For example, mac-future is a port name that does
+        # not have a cooresponding directory. The WebKit2 ports are another
+        # example.
         search_paths = set([self.port_name, self.name()])
         if self.get_option('webkit_test_runner'):
             # Because nearly all of the skipped tests for WebKit 2 are due to cross-platform
@@ -338,52 +359,33 @@ class WebKitPort(Port):
             search_paths.update([self._wk2_port_name(), "wk2"])
         return search_paths
 
-    def _expectations_from_skipped_files(self):
-        tests_to_skip = []
-        for search_path in self._skipped_file_search_paths():
-            filename = self._filesystem.join(self._webkit_baseline_path(search_path), "Skipped")
-            if not self._filesystem.exists(filename):
-                _log.warn("Failed to open Skipped file: %s" % filename)
-                continue
-            _log.debug("Using Skipped file: %s" % filename)
-            skipped_file_contents = self._filesystem.read_text_file(filename)
-            tests_to_skip.extend(self._tests_from_skipped_file_contents(skipped_file_contents))
-        return tests_to_skip
-
     def test_expectations(self):
         # This allows ports to use a combination of test_expectations.txt files and Skipped lists.
-        expectations = self._skipped_list_as_expectations()
+        expectations = ''
         expectations_path = self.path_to_test_expectations_file()
         if self._filesystem.exists(expectations_path):
             _log.debug("Using test_expectations.txt: %s" % expectations_path)
-            expectations = self._filesystem.read_text_file(expectations_path) + '\n' + expectations
+            expectations = self._filesystem.read_text_file(expectations_path)
         return expectations
 
-    def _skipped_list_as_expectations(self):
-        # Each Skipped file contains a list of files
-        # or directories to be skipped during the test run. The total list
-        # of tests to skipped is given by the contents of the generic
-        # Skipped file found in platform/X plus a version-specific file
-        # found in platform/X-version. Duplicate entries are allowed.
-        # This routine reads those files and turns contents into the
-        # format expected by test_expectations.
-
-        tests_to_skip = self.skipped_layout_tests()
-        skip_lines = map(lambda test_path: "BUG_SKIPPED SKIP : %s = FAIL" % test_path, tests_to_skip)
-        return "\n".join(skip_lines)
-
-    def skipped_layout_tests(self):
+    def skipped_layout_tests(self, test_list):
         # Use a set to allow duplicates
-        tests_to_skip = set(self._expectations_from_skipped_files())
+        tests_to_skip = set(self._expectations_from_skipped_files(self._skipped_file_search_paths()))
         tests_to_skip.update(self._tests_for_other_platforms())
-        tests_to_skip.update(self._skipped_tests_for_unsupported_features())
+        tests_to_skip.update(self._skipped_tests_for_unsupported_features(test_list))
         return tests_to_skip
+
+    def skipped_tests(self, test_list):
+        return self.skipped_layout_tests(test_list)
 
     def _build_path(self, *comps):
         # --root is used for running with a pre-built root (like from a nightly zip).
-        build_directory = self.get_option('root')
+        build_directory = self.get_option('root') or self.get_option('build_directory')
         if not build_directory:
             build_directory = self._config.build_directory(self.get_option('configuration'))
+            # Set --build-directory here Since this modifies the options object used by the worker subprocesses,
+            # it avoids the slow call out to build_directory in each subprocess.
+            self.set_option_default('build_directory', build_directory)
         return self._filesystem.join(build_directory, *comps)
 
     def _path_to_driver(self):
@@ -440,8 +442,8 @@ class WebKitPort(Port):
 class WebKitDriver(Driver):
     """WebKit implementation of the DumpRenderTree/WebKitTestRunner interface."""
 
-    def __init__(self, port, worker_number):
-        Driver.__init__(self, port, worker_number)
+    def __init__(self, port, worker_number, pixel_tests, no_timeout=False):
+        Driver.__init__(self, port, worker_number, pixel_tests, no_timeout)
         self._driver_tempdir = port._filesystem.mkdtemp(prefix='%s-' % self._port.driver_name())
         # WebKitTestRunner can report back subprocess crashes by printing
         # "#CRASHED - PROCESSNAME".  Since those can happen at any time
@@ -457,30 +459,36 @@ class WebKitDriver(Driver):
         self.err_seen_eof = False
         self._server_process = None
 
-
     # FIXME: This may be unsafe, as python does not guarentee any ordering of __del__ calls
     # I believe it's possible that self._port or self._port._filesystem may already be destroyed.
     def __del__(self):
         self._port._filesystem.rmtree(str(self._driver_tempdir))
 
-    def cmd_line(self):
+    def cmd_line(self, pixel_tests, per_test_args):
         cmd = self._command_wrapper(self._port.get_option('wrapper'))
         cmd.append(self._port._path_to_driver())
-        if self._port.get_option('pixel_tests'):
-            cmd.append('--pixel-tests')
+        if self._port.get_option('skip_pixel_test_if_no_baseline'):
+            cmd.append('--skip-pixel-test-if-no-baseline')
         if self._port.get_option('gc_between_tests'):
             cmd.append('--gc-between-tests')
         if self._port.get_option('complex_text'):
             cmd.append('--complex-text')
         if self._port.get_option('threaded'):
             cmd.append('--threaded')
+        if self._no_timeout:
+            cmd.append('--no-timeout')
         # FIXME: We need to pass --timeout=SECONDS to WebKitTestRunner for WebKit2.
 
         cmd.extend(self._port.get_option('additional_drt_flag', []))
+
+        if pixel_tests or self._pixel_tests:
+            cmd.append('--pixel-tests')
+        cmd.extend(per_test_args)
+
         cmd.append('-')
         return cmd
 
-    def _start(self):
+    def _start(self, pixel_tests, per_test_args):
         server_name = self._port.driver_name()
         environment = self._port.setup_environ_for_server(server_name)
         environment['DYLD_FRAMEWORK_PATH'] = self._port._build_path()
@@ -488,16 +496,18 @@ class WebKitDriver(Driver):
         environment['DUMPRENDERTREE_TEMP'] = str(self._driver_tempdir)
         environment['LOCAL_RESOURCE_ROOT'] = self._port.layout_tests_dir()
         self._crashed_subprocess_name = None
-        self._server_process = server_process.ServerProcess(self._port, server_name, self.cmd_line(), environment)
+        self._server_process = server_process.ServerProcess(self._port, server_name, self.cmd_line(pixel_tests, per_test_args), environment)
 
-    def poll(self):
-        return self._server_process.poll()
+    def has_crashed(self):
+        if self._server_process is None:
+            return False
+        return self._server_process.poll() is not None
 
     def _check_for_driver_crash(self, error_line):
         if error_line == "#CRASHED\n":
             # This is used on Windows to report that the process has crashed
             # See http://trac.webkit.org/changeset/65537.
-            self._server_process.crash = True
+            self._server_process.set_crashed(True)
         elif error_line == "#CRASHED - WebProcess\n":
             # WebKitTestRunner uses this to report that the WebProcess subprocess crashed.
             self._subprocess_crashed("WebProcess")
@@ -518,8 +528,12 @@ class WebKitDriver(Driver):
         return self._crashed_subprocess_name or self._server_process.process_name()
 
     def _command_from_driver_input(self, driver_input):
-        uri = self._port.test_to_uri(driver_input.test_name)
-        command = uri[7:] if uri.startswith("file:///") else uri
+        if self.is_http_test(driver_input.test_name):
+            command = self.test_to_uri(driver_input.test_name)
+        else:
+            command = self._port.abspath_for_test(driver_input.test_name)
+            if sys.platform == 'cygwin':
+                command = cygpath(command)
 
         if driver_input.image_hash:
             # FIXME: Why the leading quote?
@@ -542,7 +556,7 @@ class WebKitDriver(Driver):
 
     def run_test(self, driver_input):
         if not self._server_process:
-            self._start()
+            self._start(driver_input.is_reftest or self._pixel_tests, [])
         self.error_from_test = str()
         self.err_seen_eof = False
 
@@ -633,6 +647,10 @@ class WebKitDriver(Driver):
 
         block.decode_content()
         return block
+
+    def start(self, pixel_tests, per_test_args):
+        if not self._server_process:
+            self._start(pixel_tests, per_test_args)
 
     def stop(self):
         if self._server_process:

@@ -61,7 +61,10 @@ void FEDropShadow::determineAbsolutePaintRect()
     FloatRect absoluteOffsetPaintRect(absolutePaintRect);
     absoluteOffsetPaintRect.move(filter->applyHorizontalScale(m_dx), filter->applyVerticalScale(m_dy));
     absolutePaintRect.unite(absoluteOffsetPaintRect);
-    absolutePaintRect.intersect(maxEffectRect());
+    if (clipsToBounds())
+        absolutePaintRect.intersect(maxEffectRect());
+    else
+        absolutePaintRect.unite(maxEffectRect());
     
     unsigned kernelSizeX = 0;
     unsigned kernelSizeY = 0;
@@ -100,12 +103,12 @@ void FEDropShadow::platformApplySoftware()
     ShadowBlur contextShadow(blurRadius, offset, m_shadowColor, ColorSpaceDeviceRGB);
 
     // TODO: Direct pixel access to ImageBuffer would avoid copying the ImageData.
-    IntRect shadowArea(IntPoint(), resultImage->size());
+    IntRect shadowArea(IntPoint(), resultImage->internalSize());
     RefPtr<ByteArray> srcPixelArray = resultImage->getPremultipliedImageData(shadowArea);
 
     contextShadow.blurLayerImage(srcPixelArray->data(), shadowArea.size(), 4 * shadowArea.size().width());
 
-    resultImage->putPremultipliedImageData(srcPixelArray.get(), shadowArea.size(), shadowArea, IntPoint());
+    resultImage->putByteArray(Premultiplied, srcPixelArray.get(), shadowArea.size(), shadowArea, IntPoint());
 
     resultContext->setCompositeOperation(CompositeSourceIn);
     resultContext->fillRect(FloatRect(FloatPoint(), absolutePaintRect().size()), m_shadowColor, ColorSpaceDeviceRGB);

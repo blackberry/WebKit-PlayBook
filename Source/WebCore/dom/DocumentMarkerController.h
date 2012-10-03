@@ -70,13 +70,13 @@ public:
     void setMarkersActive(Node*, unsigned startOffset, unsigned endOffset, bool);
 
     DocumentMarker* markerContainingPoint(const LayoutPoint&, DocumentMarker::MarkerType);
+#if PLATFORM(BLACKBERRY)
+    RenderedDocumentMarker* renderedMarkerContainingPoint(const LayoutPoint&, DocumentMarker::MarkerType);
+#endif
     Vector<DocumentMarker*> markersFor(Node*, DocumentMarker::MarkerTypes = DocumentMarker::AllMarkers());
     Vector<DocumentMarker*> markersInRange(Range*, DocumentMarker::MarkerTypes);
     Vector<DocumentMarker> markersForNode(Node*);
-    Vector<LayoutRect> renderedRectsForMarkers(DocumentMarker::MarkerType);
-#if PLATFORM(BLACKBERRY)
-    RenderedDocumentMarker* renderedMarkerContainingPoint(const IntPoint&, DocumentMarker::MarkerType);
-#endif
+    Vector<IntRect> renderedRectsForMarkers(DocumentMarker::MarkerType);
 
     void clearDescriptionOnMarkersIntersectingRange(Range*, DocumentMarker::MarkerTypes);
 

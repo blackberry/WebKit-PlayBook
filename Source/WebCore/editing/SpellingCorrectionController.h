@@ -36,8 +36,10 @@
 
 namespace WebCore {
 
+class CompositeEditCommand;
 class EditorClient;
 class EditCommand;
+class EditCommandComposition;
 class Frame;
 class TextCheckerClient;
 
@@ -87,8 +89,8 @@ public:
     bool applyAutocorrectionBeforeTypingIfAppropriate() UNLESS_ENABLED({ return false; })
 
     void respondToUnappliedSpellCorrection(const VisibleSelection&, const String& corrected, const String& correction) UNLESS_ENABLED({ UNUSED_PARAM(corrected); UNUSED_PARAM(correction); })
-    void respondToAppliedEditing(EditCommand*) UNLESS_ENABLED({})
-    void respondToUnappliedEditing(EditCommand*) UNLESS_ENABLED({})
+    void respondToAppliedEditing(CompositeEditCommand*) UNLESS_ENABLED({ })
+    void respondToUnappliedEditing(EditCommandComposition*) UNLESS_ENABLED({ })
     void respondToChangedSelection(const VisibleSelection& oldSelection) UNLESS_ENABLED({ UNUSED_PARAM(oldSelection); })
 
     void stopPendingCorrection(const VisibleSelection& oldSelection) UNLESS_ENABLED({ UNUSED_PARAM(oldSelection); })
@@ -124,7 +126,7 @@ private:
 
     EditorClient* client();
     TextCheckerClient* textChecker();
-    FloatRect windowRectForRange(const Range*) const;
+    FloatRect rootViewRectForRange(const Range*) const;
     void markPrecedingWhitespaceForDeletedAutocorrectionAfterCommand(EditCommand*);
 
     EditorClient* m_client;

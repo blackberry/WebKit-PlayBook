@@ -7,7 +7,7 @@ PASS imgdata[4] is 0
 PASS imgdata[5] is 128
 PASS imgdata[6] is 0
 PASS imgdata[4] is 0
-FAIL imgdata[5] should be 128. Was 127.
+PASS imgdata[5] is 128
 PASS imgdata[6] is 0
 PASS successfullyParsed is true
 

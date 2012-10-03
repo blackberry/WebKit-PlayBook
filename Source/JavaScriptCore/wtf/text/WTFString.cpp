@@ -24,6 +24,8 @@
 
 #include <stdarg.h>
 #include <wtf/ASCIICType.h>
+#include <wtf/DataLog.h>
+#include <wtf/MathExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/StringExtras.h>
 #include <wtf/Vector.h>
@@ -458,9 +460,16 @@ String String::number(unsigned long long n)
 #endif
 }
     
-String String::number(double n)
+String String::number(double number, unsigned flags, unsigned precision)
 {
-    return String::format("%.6lg", n);
+    NumberToStringBuffer buffer;
+
+    // Mimic String::format("%.[precision]g", ...), but use dtoas rounding facilities.
+    if (flags & ShouldRoundSignificantFigures)
+        return String(numberToFixedPrecisionString(number, precision, buffer, flags & ShouldTruncateTrailingZeros));
+
+    // Mimic String::format("%.[precision]f", ...), but use dtoas rounding facilities.
+    return String(numberToFixedWidthString(number, precision, buffer));
 }
 
 int String::toIntStrict(bool* ok, int base) const
@@ -641,7 +650,27 @@ CString String::ascii() const
     // preserved, characters outside of this range are converted to '?'.
 
     unsigned length = this->length();
-    const UChar* characters = this->characters();
+
+    if (!length) {
+        char* characterBuffer;
+        return CString::newUninitialized(length, characterBuffer);
+    }
+
+    if (this->is8Bit()) {
+        const LChar* characters = this->characters8();
+
+        char* characterBuffer;
+        CString result = CString::newUninitialized(length, characterBuffer);
+
+        for (unsigned i = 0; i < length; ++i) {
+            LChar ch = characters[i];
+            characterBuffer[i] = ch && (ch < 0x20 || ch > 0x7f) ? '?' : ch;
+        }
+
+        return result;        
+    }
+
+    const UChar* characters = this->characters16();
 
     char* characterBuffer;
     CString result = CString::newUninitialized(length, characterBuffer);
@@ -660,6 +689,13 @@ CString String::latin1() const
     // preserved, characters outside of this range are converted to '?'.
 
     unsigned length = this->length();
+
+    if (!length)
+        return CString("", 0);
+
+    if (is8Bit())
+        return CString(reinterpret_cast<const char*>(this->characters8()), length);
+
     const UChar* characters = this->characters();
 
     char* characterBuffer;
@@ -685,7 +721,9 @@ static inline void putUTF8Triple(char*& buffer, UChar ch)
 CString String::utf8(bool strict) const
 {
     unsigned length = this->length();
-    const UChar* characters = this->characters();
+
+    if (!length)
+        return CString("", 0);
 
     // Allocate a buffer big enough to hold all the characters
     // (an individual UTF-16 UChar can only expand to 3 UTF-8 bytes).
@@ -702,26 +740,36 @@ CString String::utf8(bool strict) const
     Vector<char, 1024> bufferVector(length * 3);
 
     char* buffer = bufferVector.data();
-    ConversionResult result = convertUTF16ToUTF8(&characters, characters + length, &buffer, buffer + bufferVector.size(), strict);
-    ASSERT(result != targetExhausted); // (length * 3) should be sufficient for any conversion
 
-    // Only produced from strict conversion.
-    if (result == sourceIllegal)
-        return CString();
+    if (is8Bit()) {
+        const LChar* characters = this->characters8();
 
-    // Check for an unconverted high surrogate.
-    if (result == sourceExhausted) {
-        if (strict)
+        ConversionResult result = convertLatin1ToUTF8(&characters, characters + length, &buffer, buffer + bufferVector.size());
+        ASSERT_UNUSED(result, result != targetExhausted); // (length * 3) should be sufficient for any conversion
+    } else {
+        const UChar* characters = this->characters16();
+
+        ConversionResult result = convertUTF16ToUTF8(&characters, characters + length, &buffer, buffer + bufferVector.size(), strict);
+        ASSERT(result != targetExhausted); // (length * 3) should be sufficient for any conversion
+
+        // Only produced from strict conversion.
+        if (result == sourceIllegal)
             return CString();
-        // This should be one unpaired high surrogate. Treat it the same
-        // was as an unpaired high surrogate would have been handled in
-        // the middle of a string with non-strict conversion - which is
-        // to say, simply encode it to UTF-8.
-        ASSERT((characters + 1) == (this->characters() + length));
-        ASSERT((*characters >= 0xD800) && (*characters <= 0xDBFF));
-        // There should be room left, since one UChar hasn't been converted.
-        ASSERT((buffer + 3) <= (buffer + bufferVector.size()));
-        putUTF8Triple(buffer, *characters);
+
+        // Check for an unconverted high surrogate.
+        if (result == sourceExhausted) {
+            if (strict)
+                return CString();
+            // This should be one unpaired high surrogate. Treat it the same
+            // was as an unpaired high surrogate would have been handled in
+            // the middle of a string with non-strict conversion - which is
+            // to say, simply encode it to UTF-8.
+            ASSERT((characters + 1) == (this->characters() + length));
+            ASSERT((*characters >= 0xD800) && (*characters <= 0xDBFF));
+            // There should be room left, since one UChar hasn't been converted.
+            ASSERT((buffer + 3) <= (buffer + bufferVector.size()));
+            putUTF8Triple(buffer, *characters);
+        }
     }
 
     return CString(bufferVector.data(), buffer - bufferVector.data());
@@ -988,7 +1036,7 @@ intptr_t charactersToIntPtr(const UChar* data, size_t length, bool* ok)
     return toIntegralType<intptr_t, UChar>(data, lengthOfCharactersAsInteger<UChar>(data, length), ok, 10);
 }
 
-template <typename CharType>
+template <typename CharType, WTF::AllowTrailingJunkTag allowTrailingJunk>
 static inline double toDoubleType(const CharType* data, size_t length, bool* ok, bool* didReadNumber)
 {
     if (!length) {
@@ -1005,9 +1053,9 @@ static inline double toDoubleType(const CharType* data, size_t length, bool* ok,
     bytes[length] = '\0';
     char* start = bytes.data();
     char* end;
-    double val = WTF::strtod(start, &end);
+    double val = WTF::strtod<allowTrailingJunk>(start, &end);
     if (ok)
-        *ok = (end == 0 || *end == '\0');
+        *ok = (end == 0 || *end == '\0') && !isnan(val);
     if (didReadNumber)
         *didReadNumber = end - start;
     return val;
@@ -1015,24 +1063,36 @@ static inline double toDoubleType(const CharType* data, size_t length, bool* ok,
 
 double charactersToDouble(const LChar* data, size_t length, bool* ok, bool* didReadNumber)
 {
-    return toDoubleType<LChar>(data, length, ok, didReadNumber);
+    return toDoubleType<LChar, WTF::DisallowTrailingJunk>(data, length, ok, didReadNumber);
 }
 
 double charactersToDouble(const UChar* data, size_t length, bool* ok, bool* didReadNumber)
 {
-    return toDoubleType<UChar>(data, length, ok, didReadNumber);
+    return toDoubleType<UChar, WTF::DisallowTrailingJunk>(data, length, ok, didReadNumber);
 }
 
 float charactersToFloat(const LChar* data, size_t length, bool* ok, bool* didReadNumber)
 {
     // FIXME: This will return ok even when the string fits into a double but not a float.
-    return static_cast<float>(toDoubleType<LChar>(data, length, ok, didReadNumber));
+    return static_cast<float>(toDoubleType<LChar, WTF::DisallowTrailingJunk>(data, length, ok, didReadNumber));
 }
 
 float charactersToFloat(const UChar* data, size_t length, bool* ok, bool* didReadNumber)
 {
     // FIXME: This will return ok even when the string fits into a double but not a float.
-    return static_cast<float>(toDoubleType<UChar>(data, length, ok, didReadNumber));
+    return static_cast<float>(toDoubleType<UChar, WTF::DisallowTrailingJunk>(data, length, ok, didReadNumber));
+}
+
+float charactersToFloatIgnoringJunk(const LChar* data, size_t length, bool* ok, bool* didReadNumber)
+{
+    // FIXME: This will return ok even when the string fits into a double but not a float.
+    return static_cast<float>(toDoubleType<LChar, WTF::AllowTrailingJunk>(data, length, ok, didReadNumber));
+}
+
+float charactersToFloatIgnoringJunk(const UChar* data, size_t length, bool* ok, bool* didReadNumber)
+{
+    // FIXME: This will return ok even when the string fits into a double but not a float.
+    return static_cast<float>(toDoubleType<UChar, WTF::AllowTrailingJunk>(data, length, ok, didReadNumber));
 }
 
 const String& emptyString()
@@ -1051,7 +1111,7 @@ Vector<char> asciiDebug(String& string);
 
 void String::show() const
 {
-    fprintf(stderr, "%s\n", asciiDebug(impl()).data());
+    dataLog("%s\n", asciiDebug(impl()).data());
 }
 
 String* string(const char* s)

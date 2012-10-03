@@ -31,20 +31,17 @@
 #define JITStubs_h
 
 #include "CallData.h"
-#include "DFGIntrinsic.h"
+#include "Intrinsic.h"
 #include "MacroAssemblerCodeRef.h"
 #include "Register.h"
 #include "ThunkGenerators.h"
 #include <wtf/HashMap.h>
-
-#if ENABLE(JIT)
 
 namespace JSC {
 
     struct StructureStubInfo;
 
     class CodeBlock;
-    class ExecutablePool;
     class FunctionExecutable;
     class Identifier;
     class JSGlobalData;
@@ -59,6 +56,7 @@ namespace JSC {
     class PutPropertySlot;
     class RegisterFile;
     class RegExp;
+    class Structure;
 
     template <typename T> class Weak;
 
@@ -78,6 +76,7 @@ namespace JSC {
         JSPropertyNameIterator* propertyNameIterator() { return static_cast<JSPropertyNameIterator*>(asPointer); }
         JSGlobalObject* globalObject() { return static_cast<JSGlobalObject*>(asPointer); }
         JSString* jsString() { return static_cast<JSString*>(asPointer); }
+        Structure* structure() { return static_cast<Structure*>(asPointer); }
         ReturnAddressPtr returnAddress() { return ReturnAddressPtr(asPointer); }
     };
     
@@ -261,6 +260,8 @@ namespace JSC {
 
 #define JITSTACKFRAME_ARGS_INDEX (OBJECT_OFFSETOF(JITStackFrame, args) / sizeof(void*))
 
+#if ENABLE(JIT)
+
 #define STUB_ARGS_DECLARATION void** args
 #define STUB_ARGS (args)
 
@@ -269,6 +270,8 @@ namespace JSC {
     #define JIT_STUB __fastcall
     #elif COMPILER(GCC)
     #define JIT_STUB  __attribute__ ((fastcall))
+    #elif COMPILER(SUNCC)
+    #define JIT_STUB
     #else
     #error "JIT_STUB function calls require fastcall conventions on x86, add appropriate directive/attribute here for your compiler!"
     #endif
@@ -279,6 +282,15 @@ namespace JSC {
     extern "C" void ctiVMThrowTrampoline();
     extern "C" void ctiOpThrowNotCaught();
     extern "C" EncodedJSValue ctiTrampoline(void* code, RegisterFile*, CallFrame*, void* /*unused1*/, Profiler**, JSGlobalData*);
+#if ENABLE(DFG_JIT)
+    extern "C" void ctiTrampolineEnd();
+
+    inline bool returnAddressIsInCtiTrampoline(ReturnAddressPtr returnAddress)
+    {
+        return returnAddress.value() >= bitwise_cast<void*>(&ctiTrampoline)
+            && returnAddress.value() < bitwise_cast<void*>(&ctiTrampolineEnd);
+    }
+#endif
 
     class JITThunks {
     public:
@@ -297,19 +309,19 @@ namespace JSC {
         MacroAssemblerCodePtr ctiNativeConstruct() { return m_trampolineStructure.ctiNativeConstruct; }
         MacroAssemblerCodePtr ctiSoftModulo() { return m_trampolineStructure.ctiSoftModulo; }
 
-        MacroAssemblerCodePtr ctiStub(JSGlobalData* globalData, ThunkGenerator generator);
+        MacroAssemblerCodeRef ctiStub(JSGlobalData*, ThunkGenerator);
 
         NativeExecutable* hostFunctionStub(JSGlobalData*, NativeFunction, NativeFunction constructor);
-        NativeExecutable* hostFunctionStub(JSGlobalData*, NativeFunction, ThunkGenerator, DFG::Intrinsic);
+        NativeExecutable* hostFunctionStub(JSGlobalData*, NativeFunction, ThunkGenerator, Intrinsic);
 
         void clearHostFunctionStubs();
 
     private:
-        typedef HashMap<ThunkGenerator, MacroAssemblerCodePtr> CTIStubMap;
+        typedef HashMap<ThunkGenerator, MacroAssemblerCodeRef> CTIStubMap;
         CTIStubMap m_ctiStubMap;
         typedef HashMap<NativeFunction, Weak<NativeExecutable> > HostFunctionStubMap;
         OwnPtr<HostFunctionStubMap> m_hostFunctionStubMap;
-        RefPtr<ExecutablePool> m_executablePool;
+        RefPtr<ExecutableMemoryHandle> m_executableMemory;
 
         TrampolineStructure m_trampolineStructure;
     };
@@ -317,7 +329,6 @@ namespace JSC {
 extern "C" {
     EncodedJSValue JIT_STUB cti_op_add(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_bitand(STUB_ARGS_DECLARATION);
-    EncodedJSValue JIT_STUB cti_op_bitnot(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_bitor(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_bitxor(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_call_NotJSFunction(STUB_ARGS_DECLARATION);
@@ -326,7 +337,6 @@ extern "C" {
     EncodedJSValue JIT_STUB cti_op_create_this(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_convert_this(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_create_arguments(STUB_ARGS_DECLARATION);
-    EncodedJSValue JIT_STUB cti_op_create_arguments_no_params(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_del_by_id(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_del_by_val(STUB_ARGS_DECLARATION);
     EncodedJSValue JIT_STUB cti_op_div(STUB_ARGS_DECLARATION);
@@ -422,8 +432,7 @@ extern "C" {
     void JIT_STUB cti_op_put_by_index(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_val(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_put_by_val_byte_array(STUB_ARGS_DECLARATION);
-    void JIT_STUB cti_op_put_getter(STUB_ARGS_DECLARATION);
-    void JIT_STUB cti_op_put_setter(STUB_ARGS_DECLARATION);
+    void JIT_STUB cti_op_put_getter_setter(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_tear_off_activation(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_tear_off_arguments(STUB_ARGS_DECLARATION);
     void JIT_STUB cti_op_throw_reference_error(STUB_ARGS_DECLARATION);
@@ -445,8 +454,8 @@ extern "C" {
     void* JIT_STUB cti_vm_throw(STUB_ARGS_DECLARATION);
 } // extern "C"
 
-} // namespace JSC
-
 #endif // ENABLE(JIT)
+
+} // namespace JSC
 
 #endif // JITStubs_h

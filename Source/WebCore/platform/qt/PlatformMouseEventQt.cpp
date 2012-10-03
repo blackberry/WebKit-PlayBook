@@ -35,50 +35,55 @@
 
 namespace WebCore {
 
-static void mouseEventModifiersFromQtKeyboardModifiers(Qt::KeyboardModifiers keyboardModifiers, bool& altKey, bool& ctrlKey, bool& metaKey, bool& shiftKey)
+static void mouseEventModifiersFromQtKeyboardModifiers(Qt::KeyboardModifiers keyboardModifiers, unsigned& modifiers)
 {
-    altKey = keyboardModifiers & Qt::AltModifier;
-    ctrlKey = keyboardModifiers & Qt::ControlModifier;
-    metaKey = keyboardModifiers & Qt::MetaModifier;
-    shiftKey = keyboardModifiers & Qt::ShiftModifier;
+    modifiers = 0;
+    if (keyboardModifiers & Qt::ShiftModifier)
+        modifiers |= PlatformEvent::ShiftKey;
+    if (keyboardModifiers & Qt::ControlModifier)
+        modifiers |= PlatformEvent::CtrlKey;
+    if (keyboardModifiers & Qt::AltModifier)
+        modifiers |= PlatformEvent::AltKey;
+    if (keyboardModifiers & Qt::MetaModifier)
+        modifiers |= PlatformEvent::MetaKey;
 }
 
-static void mouseEventTypeAndMouseButtonFromQEvent(const QEvent* event, MouseEventType& mouseEventType, MouseButton& mouseButton)
+static void mouseEventTypeAndMouseButtonFromQEvent(const QEvent* event, PlatformEvent::Type& mouseEventType, MouseButton& mouseButton)
 {
     enum { MouseEvent, GraphicsSceneMouseEvent } frameworkMouseEventType;
     switch (event->type()) {
     case QEvent::MouseButtonDblClick:
     case QEvent::MouseButtonPress:
         frameworkMouseEventType = MouseEvent;
-        mouseEventType = MouseEventPressed;
+        mouseEventType = PlatformEvent::MousePressed;
         break;
     case QEvent::MouseButtonRelease:
         frameworkMouseEventType = MouseEvent;
-        mouseEventType = MouseEventReleased;
+        mouseEventType = PlatformEvent::MouseReleased;
         break;
     case QEvent::MouseMove:
         frameworkMouseEventType = MouseEvent;
-        mouseEventType = MouseEventMoved;
+        mouseEventType = PlatformEvent::MouseMoved;
         break;
 #if !defined(QT_NO_GRAPHICSVIEW)
     case QEvent::GraphicsSceneMouseDoubleClick:
     case QEvent::GraphicsSceneMousePress:
         frameworkMouseEventType = GraphicsSceneMouseEvent;
-        mouseEventType = MouseEventPressed;
+        mouseEventType = PlatformEvent::MousePressed;
         break;
     case QEvent::GraphicsSceneMouseRelease:
         frameworkMouseEventType = GraphicsSceneMouseEvent;
-        mouseEventType = MouseEventReleased;
+        mouseEventType = PlatformEvent::MouseReleased;
         break;
     case QEvent::GraphicsSceneMouseMove:
         frameworkMouseEventType = GraphicsSceneMouseEvent;
-        mouseEventType = MouseEventMoved;
+        mouseEventType = PlatformEvent::MouseMoved;
         break;
 #endif
     default:
         ASSERT_NOT_REACHED();
         frameworkMouseEventType = MouseEvent;
-        mouseEventType = MouseEventMoved;
+        mouseEventType = PlatformEvent::MouseMoved;
         break;
     }
 
@@ -86,12 +91,12 @@ static void mouseEventTypeAndMouseButtonFromQEvent(const QEvent* event, MouseEve
     switch (frameworkMouseEventType) {
     case MouseEvent: {
         const QMouseEvent* mouseEvent = static_cast<const QMouseEvent*>(event);
-        mouseButtons = mouseEventType == MouseEventMoved ? mouseEvent->buttons() : mouseEvent->button();
+        mouseButtons = mouseEventType == PlatformEvent::MouseMoved ? mouseEvent->buttons() : mouseEvent->button();
         break;
     }
     case GraphicsSceneMouseEvent: {
         const QGraphicsSceneMouseEvent* mouseEvent = static_cast<const QGraphicsSceneMouseEvent*>(event);
-        mouseButtons = mouseEventType == MouseEventMoved ? mouseEvent->buttons() : mouseEvent->button();
+        mouseButtons = mouseEventType == PlatformEvent::MouseMoved ? mouseEvent->buttons() : mouseEvent->button();
         break;
     }
     }
@@ -113,12 +118,15 @@ PlatformMouseEvent::PlatformMouseEvent(QGraphicsSceneMouseEvent* event, int clic
 
     // FIXME: Why don't we handle a context menu event here as we do in PlatformMouseEvent(QInputEvent*, int)?
     // See <https://bugs.webkit.org/show_bug.cgi?id=60728>.
-    mouseEventTypeAndMouseButtonFromQEvent(event, m_eventType, m_button);
+    PlatformEvent::Type type;
+    mouseEventTypeAndMouseButtonFromQEvent(event, type, m_button);
+
+    m_type = type;
     m_position = IntPoint(event->pos().toPoint());
     m_globalPosition = IntPoint(event->screenPos());
 
     m_clickCount = clickCount;
-    mouseEventModifiersFromQtKeyboardModifiers(event->modifiers(), m_altKey, m_ctrlKey, m_metaKey, m_shiftKey);
+    mouseEventModifiersFromQtKeyboardModifiers(event->modifiers(), m_modifiers);
 }
 #endif // QT_NO_GRAPHICSVIEW
 
@@ -130,7 +138,7 @@ PlatformMouseEvent::PlatformMouseEvent(QInputEvent* event, int clickCount)
 #ifndef QT_NO_CONTEXTMENU
     if (event->type() == QEvent::ContextMenu) {
         isContextMenuEvent = true;
-        m_eventType = MouseEventPressed;
+        m_type = PlatformEvent::MousePressed;
         QContextMenuEvent* ce = static_cast<QContextMenuEvent*>(event);
         m_position = IntPoint(ce->pos());
         m_globalPosition = IntPoint(ce->globalPos());
@@ -138,14 +146,17 @@ PlatformMouseEvent::PlatformMouseEvent(QInputEvent* event, int clickCount)
     }
 #endif
     if (!isContextMenuEvent) {
-        mouseEventTypeAndMouseButtonFromQEvent(event, m_eventType, m_button);
+        PlatformEvent::Type type;
+        mouseEventTypeAndMouseButtonFromQEvent(event, type, m_button);
         QMouseEvent* mouseEvent = static_cast<QMouseEvent*>(event);
+
+        m_type = type;
         m_position = IntPoint(mouseEvent->pos());
         m_globalPosition = IntPoint(mouseEvent->globalPos());
     }
 
     m_clickCount = clickCount;
-    mouseEventModifiersFromQtKeyboardModifiers(event->modifiers(), m_altKey, m_ctrlKey, m_metaKey, m_shiftKey);
+    mouseEventModifiersFromQtKeyboardModifiers(event->modifiers(), m_modifiers);
 }
 
 }

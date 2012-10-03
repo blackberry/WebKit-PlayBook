@@ -47,6 +47,32 @@ using namespace std;
 
 namespace WebCore {
 
+struct SameSizeAsBorderValue {
+    Color m_color;
+    unsigned m_width;
+};
+
+COMPILE_ASSERT(sizeof(BorderValue) == sizeof(SameSizeAsBorderValue), BorderValue_should_not_grow);
+
+struct SameSizeAsRenderStyle : public RefCounted<SameSizeAsRenderStyle> {
+    unsigned m_bitfields;
+
+    void* dataRefs[7];
+    void* ownPtrs[1];
+#if ENABLE(SVG)
+    void* dataRefSvgStyle;
+#endif
+    struct InheritedFlags {
+        unsigned m_bitfields[2];
+    } inherited_flags;
+
+    struct NonInheritedFlags {
+        unsigned m_bitfields[2];
+    } noninherited_flags;
+};
+
+COMPILE_ASSERT(sizeof(RenderStyle) == sizeof(SameSizeAsRenderStyle), RenderStyle_should_stay_small);
+
 inline RenderStyle* defaultStyle()
 {
     static RenderStyle* s_defaultStyle = RenderStyle::createDefaultStyle().leakRef();
@@ -77,20 +103,7 @@ PassRefPtr<RenderStyle> RenderStyle::clone(const RenderStyle* other)
 }
 
 ALWAYS_INLINE RenderStyle::RenderStyle()
-    : m_affectedByUncommonAttributeSelectors(false)
-    , m_unique(false)
-    , m_affectedByEmpty(false)
-    , m_emptyState(false)
-    , m_childrenAffectedByFirstChildRules(false)
-    , m_childrenAffectedByLastChildRules(false)
-    , m_childrenAffectedByDirectAdjacentRules(false)
-    , m_childrenAffectedByForwardPositionalRules(false)
-    , m_childrenAffectedByBackwardPositionalRules(false)
-    , m_firstChildState(false)
-    , m_lastChildState(false)
-    , m_explicitInheritance(false)
-    , m_childIndex(0)
-    , m_box(defaultStyle()->m_box)
+    : m_box(defaultStyle()->m_box)
     , visual(defaultStyle()->visual)
     , m_background(defaultStyle()->m_background)
     , surround(defaultStyle()->surround)
@@ -107,19 +120,6 @@ ALWAYS_INLINE RenderStyle::RenderStyle()
 }
 
 ALWAYS_INLINE RenderStyle::RenderStyle(bool)
-    : m_affectedByUncommonAttributeSelectors(false)
-    , m_unique(false)
-    , m_affectedByEmpty(false)
-    , m_emptyState(false)
-    , m_childrenAffectedByFirstChildRules(false)
-    , m_childrenAffectedByLastChildRules(false)
-    , m_childrenAffectedByDirectAdjacentRules(false)
-    , m_childrenAffectedByForwardPositionalRules(false)
-    , m_childrenAffectedByBackwardPositionalRules(false)
-    , m_firstChildState(false)
-    , m_lastChildState(false)
-    , m_explicitInheritance(false)
-    , m_childIndex(0)
 {
     setBitDefaults();
 
@@ -136,6 +136,10 @@ ALWAYS_INLINE RenderStyle::RenderStyle(bool)
 #if ENABLE(CSS_FILTERS)
     rareNonInheritedData.access()->m_filter.init();
 #endif
+#if ENABLE(CSS_GRID_LAYOUT)
+    rareNonInheritedData.access()->m_grid.init();
+    rareNonInheritedData.access()->m_gridItem.init();
+#endif
     rareInheritedData.init();
     inherited.init();
 
@@ -146,19 +150,6 @@ ALWAYS_INLINE RenderStyle::RenderStyle(bool)
 
 ALWAYS_INLINE RenderStyle::RenderStyle(const RenderStyle& o)
     : RefCounted<RenderStyle>()
-    , m_affectedByUncommonAttributeSelectors(false)
-    , m_unique(false)
-    , m_affectedByEmpty(false)
-    , m_emptyState(false)
-    , m_childrenAffectedByFirstChildRules(false)
-    , m_childrenAffectedByLastChildRules(false)
-    , m_childrenAffectedByDirectAdjacentRules(false)
-    , m_childrenAffectedByForwardPositionalRules(false)
-    , m_childrenAffectedByBackwardPositionalRules(false)
-    , m_firstChildState(false)
-    , m_lastChildState(false)
-    , m_explicitInheritance(false)
-    , m_childIndex(0)
     , m_box(o.m_box)
     , visual(o.visual)
     , m_background(o.m_background)
@@ -202,19 +193,15 @@ void RenderStyle::copyNonInheritedFrom(const RenderStyle* other)
     noninherited_flags._position = other->noninherited_flags._position;
     noninherited_flags._floating = other->noninherited_flags._floating;
     noninherited_flags._table_layout = other->noninherited_flags._table_layout;
+    noninherited_flags._unicodeBidi = other->noninherited_flags._unicodeBidi;
     noninherited_flags._page_break_before = other->noninherited_flags._page_break_before;
     noninherited_flags._page_break_after = other->noninherited_flags._page_break_after;
     noninherited_flags._page_break_inside = other->noninherited_flags._page_break_inside;
-    noninherited_flags._unicodeBidi = other->noninherited_flags._unicodeBidi;
 #if ENABLE(SVG)
     if (m_svgStyle != other->m_svgStyle)
         m_svgStyle.access()->copyNonInheritedFrom(other->m_svgStyle.get());
 #endif
     ASSERT(zoom() == initialZoom());
-}
-
-RenderStyle::~RenderStyle()
-{
 }
 
 bool RenderStyle::operator==(const RenderStyle& o) const
@@ -321,6 +308,17 @@ bool RenderStyle::inheritedNotEqual(const RenderStyle* other) const
            || rareInheritedData != other->rareInheritedData;
 }
 
+bool RenderStyle::inheritedDataShared(const RenderStyle* other) const
+{
+    // This is a fast check that only looks if the data structures are shared.
+    return inherited_flags == other->inherited_flags
+        && inherited.get() == other->inherited.get()
+#if ENABLE(SVG)
+        && m_svgStyle.get() == other->m_svgStyle.get()
+#endif
+        && rareInheritedData.get() == other->rareInheritedData.get();
+}
+
 static bool positionedObjectMoved(const LengthBox& a, const LengthBox& b)
 {
     // If any unit types are different, then we can't guarantee
@@ -388,6 +386,12 @@ StyleDifference RenderStyle::diff(const RenderStyle* other, unsigned& changedCon
         if (rareNonInheritedData->m_regionOverflow != other->rareNonInheritedData->m_regionOverflow)
             return StyleDifferenceLayout;
 
+        if (rareNonInheritedData->m_wrapFlow != other->rareNonInheritedData->m_wrapFlow
+            || rareNonInheritedData->m_wrapThrough != other->rareNonInheritedData->m_wrapThrough
+            || rareNonInheritedData->m_wrapMargin != other->rareNonInheritedData->m_wrapMargin
+            || rareNonInheritedData->m_wrapPadding != other->rareNonInheritedData->m_wrapPadding)
+            return StyleDifferenceLayout;
+
         if (rareNonInheritedData->m_deprecatedFlexibleBox.get() != other->rareNonInheritedData->m_deprecatedFlexibleBox.get()
             && *rareNonInheritedData->m_deprecatedFlexibleBox.get() != *other->rareNonInheritedData->m_deprecatedFlexibleBox.get())
             return StyleDifferenceLayout;
@@ -422,6 +426,11 @@ StyleDifference RenderStyle::diff(const RenderStyle* other, unsigned& changedCon
             && *rareNonInheritedData->m_filter.get() != *other->rareNonInheritedData->m_filter.get()) {
             return StyleDifferenceLayout;
         }
+#endif
+#if ENABLE(CSS_GRID_LAYOUT)
+        if (rareNonInheritedData->m_grid.get() != other->rareNonInheritedData->m_grid.get()
+            && rareNonInheritedData->m_gridItem.get() != other->rareNonInheritedData->m_gridItem.get())
+            return StyleDifferenceLayout;
 #endif
 
 #if !USE(ACCELERATED_COMPOSITING)
@@ -465,7 +474,8 @@ StyleDifference RenderStyle::diff(const RenderStyle* other, unsigned& changedCon
 #if ENABLE(TOUCH_EVENTS)
             || rareInheritedData->useTouchOverflowScrolling != other->rareInheritedData->useTouchOverflowScrolling
 #endif
-            || rareInheritedData->m_lineGridSnap != other->rareInheritedData->m_lineGridSnap)
+            || rareInheritedData->m_lineSnap != other->rareInheritedData->m_lineSnap
+            || rareInheritedData->m_lineAlign != other->rareInheritedData->m_lineAlign)
             return StyleDifferenceLayout;
 
         if (!rareInheritedData->shadowDataEquivalent(*other->rareInheritedData.get()))
@@ -629,7 +639,8 @@ StyleDifference RenderStyle::diff(const RenderStyle* other, unsigned& changedCon
         // the parent container. For sure, I will have to revisit this code, but for now I've added this in order 
         // to avoid having diff() == StyleDifferenceEqual where wrap-shapes actually differ.
         // Tracking bug: https://bugs.webkit.org/show_bug.cgi?id=62991
-        if (rareNonInheritedData->m_wrapShape != other->rareNonInheritedData->m_wrapShape)
+        if (rareNonInheritedData->m_wrapShapeInside != other->rareNonInheritedData->m_wrapShapeInside
+            || rareNonInheritedData->m_wrapShapeOutside != other->rareNonInheritedData->m_wrapShapeOutside)
             return StyleDifferenceRepaint;
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -884,7 +895,7 @@ static float calcConstraintScaleFor(const IntRect& rect, const RoundedRect::Radi
 
 RoundedRect RenderStyle::getRoundedBorderFor(const LayoutRect& borderRect, bool includeLogicalLeftEdge, bool includeLogicalRightEdge) const
 {
-    RoundedRect roundedRect(borderRect);
+    RoundedRect roundedRect(pixelSnappedIntRect(borderRect));
     if (hasBorderRadius()) {
         RoundedRect::Radii radii = calcRadiiFor(surround->border, borderRect.size());
         radii.scale(calcConstraintScaleFor(borderRect, radii));
@@ -913,7 +924,7 @@ RoundedRect RenderStyle::getRoundedInnerBorderFor(const LayoutRect& borderRect,
                borderRect.width() - leftWidth - rightWidth, 
                borderRect.height() - topWidth - bottomWidth);
 
-    RoundedRect roundedRect(innerRect);
+    RoundedRect roundedRect(pixelSnappedIntRect(innerRect));
 
     if (hasBorderRadius()) {
         RoundedRect::Radii radii = getRoundedBorderFor(borderRect).radii();

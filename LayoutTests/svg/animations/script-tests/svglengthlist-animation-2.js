@@ -28,31 +28,29 @@ function sample1() {
 }
 
 function sample2() {
-	shouldBeCloseEnough("text.x.animVal.getItem(0).value", "81.7", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(1).value", "75", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(2).value", "144.49", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(3).value", "197.33", 0.01);
+	shouldBeCloseEnough("text.x.animVal.getItem(0).value", "81.7");
+	shouldBeCloseEnough("text.x.animVal.getItem(1).value", "75");
+	shouldBeCloseEnough("text.x.animVal.getItem(2).value", "144.5");
+	shouldBeCloseEnough("text.x.animVal.getItem(3).value", "197.3");
 }
 
 function sample3() {
-	shouldBeCloseEnough("text.x.animVal.getItem(0).value", "113.39", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(1).value", "80", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(2).value", "100", 0.01);
-	shouldBeCloseEnough("text.x.animVal.getItem(3).value", "383.99", 0.01);
+	shouldBeCloseEnough("text.x.animVal.getItem(0).value", "113.4");
+	shouldBeCloseEnough("text.x.animVal.getItem(1).value", "80");
+	shouldBeCloseEnough("text.x.animVal.getItem(2).value", "100");
+	shouldBeCloseEnough("text.x.animVal.getItem(3).value", "384");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,    "text", sample1],
-        ["animation", 2.0,    "text", sample2],
-        ["animation", 3.9999, "text", sample3],
-        ["animation", 4.0 ,   "text", sample1]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 2.0,   sample2],
+        ["animation", 3.999, sample3],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(51, 49)", 0);
 var successfullyParsed = true;

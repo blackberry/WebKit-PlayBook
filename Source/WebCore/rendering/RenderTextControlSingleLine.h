@@ -66,12 +66,12 @@ private:
     virtual void autoscroll();
 
     // Subclassed to forward to our inner div.
-    virtual LayoutUnit scrollLeft() const;
-    virtual LayoutUnit scrollTop() const;
-    virtual LayoutUnit scrollWidth() const;
-    virtual LayoutUnit scrollHeight() const;
-    virtual void setScrollLeft(LayoutUnit);
-    virtual void setScrollTop(LayoutUnit);
+    virtual int scrollLeft() const;
+    virtual int scrollTop() const;
+    virtual int scrollWidth() const;
+    virtual int scrollHeight() const;
+    virtual void setScrollLeft(int);
+    virtual void setScrollTop(int);
     virtual bool scroll(ScrollDirection, ScrollGranularity, float multiplier = 1, Node** stopNode = 0);
     virtual bool logicalScroll(ScrollLogicalDirection, ScrollGranularity, float multiplier = 1, Node** stopNode = 0);
 
@@ -86,36 +86,37 @@ private:
     virtual RenderStyle* textBaseStyle() const;
 
     EVisibility visibilityForCancelButton() const;
+    bool textShouldBeTruncated() const;
     const AtomicString& autosaveName() const;
 
     // PopupMenuClient methods
-    virtual void valueChanged(unsigned listIndex, bool fireEvents = true);
-    virtual void selectionChanged(unsigned, bool) {}
-    virtual void selectionCleared() {}
-    virtual String itemText(unsigned listIndex) const;
-    virtual String itemLabel(unsigned listIndex) const;
-    virtual String itemIcon(unsigned listIndex) const;
-    virtual String itemToolTip(unsigned) const { return String(); }
-    virtual String itemAccessibilityText(unsigned) const { return String(); }
-    virtual bool itemIsEnabled(unsigned listIndex) const;
-    virtual PopupMenuStyle itemStyle(unsigned listIndex) const;
-    virtual PopupMenuStyle menuStyle() const;
-    virtual int clientInsetLeft() const;
-    virtual int clientInsetRight() const;
-    virtual int clientPaddingLeft() const;
-    virtual int clientPaddingRight() const;
-    virtual int listSize() const;
-    virtual int selectedIndex() const;
-    virtual void popupDidHide();
-    virtual bool itemIsSeparator(unsigned listIndex) const;
-    virtual bool itemIsLabel(unsigned listIndex) const;
-    virtual bool itemIsSelected(unsigned listIndex) const;
-    virtual bool shouldPopOver() const { return false; }
-    virtual bool valueShouldChangeOnHotTrack() const { return false; }
-    virtual void setTextFromItem(unsigned listIndex);
-    virtual FontSelector* fontSelector() const;
-    virtual HostWindow* hostWindow() const;
-    virtual PassRefPtr<Scrollbar> createScrollbar(ScrollableArea*, ScrollbarOrientation, ScrollbarControlSize);
+    virtual void valueChanged(unsigned listIndex, bool fireEvents = true) OVERRIDE;
+    virtual void selectionChanged(unsigned, bool) OVERRIDE { }
+    virtual void selectionCleared() OVERRIDE { }
+    virtual String itemText(unsigned listIndex) const OVERRIDE;
+    virtual String itemLabel(unsigned listIndex) const OVERRIDE;
+    virtual String itemIcon(unsigned listIndex) const OVERRIDE;
+    virtual String itemToolTip(unsigned) const OVERRIDE { return String(); }
+    virtual String itemAccessibilityText(unsigned) const OVERRIDE { return String(); }
+    virtual bool itemIsEnabled(unsigned listIndex) const OVERRIDE;
+    virtual PopupMenuStyle itemStyle(unsigned listIndex) const OVERRIDE;
+    virtual PopupMenuStyle menuStyle() const OVERRIDE;
+    virtual int clientInsetLeft() const OVERRIDE;
+    virtual int clientInsetRight() const OVERRIDE;
+    virtual LayoutUnit clientPaddingLeft() const OVERRIDE;
+    virtual LayoutUnit clientPaddingRight() const OVERRIDE;
+    virtual int listSize() const OVERRIDE;
+    virtual int selectedIndex() const OVERRIDE;
+    virtual void popupDidHide() OVERRIDE;
+    virtual bool itemIsSeparator(unsigned listIndex) const OVERRIDE;
+    virtual bool itemIsLabel(unsigned listIndex) const OVERRIDE;
+    virtual bool itemIsSelected(unsigned listIndex) const OVERRIDE;
+    virtual bool shouldPopOver() const OVERRIDE { return false; }
+    virtual bool valueShouldChangeOnHotTrack() const OVERRIDE { return false; }
+    virtual void setTextFromItem(unsigned listIndex) OVERRIDE;
+    virtual FontSelector* fontSelector() const OVERRIDE;
+    virtual HostWindow* hostWindow() const OVERRIDE;
+    virtual PassRefPtr<Scrollbar> createScrollbar(ScrollableArea*, ScrollbarOrientation, ScrollbarControlSize) OVERRIDE;
 
     HTMLInputElement* inputElement() const;
 

@@ -88,13 +88,13 @@ public:
 
     virtual WebCore::IntRect windowResizerRect() const OVERRIDE;
 
-    virtual void invalidateWindow(const WebCore::IntRect&, bool) OVERRIDE;
-    virtual void invalidateContentsAndWindow(const WebCore::IntRect&, bool) OVERRIDE;
+    virtual void invalidateRootView(const WebCore::IntRect&, bool) OVERRIDE;
+    virtual void invalidateContentsAndRootView(const WebCore::IntRect&, bool) OVERRIDE;
     virtual void invalidateContentsForSlowScroll(const WebCore::IntRect&, bool) OVERRIDE;
     virtual void scroll(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& rectToScroll, const WebCore::IntRect& clipRect) OVERRIDE;
 
-    virtual WebCore::IntPoint screenToWindow(const WebCore::IntPoint&) const OVERRIDE;
-    virtual WebCore::IntRect windowToScreen(const WebCore::IntRect&) const OVERRIDE;
+    virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const OVERRIDE;
+    virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const OVERRIDE;
     virtual PlatformPageClient platformPageClient() const OVERRIDE;
     virtual void contentsSizeChanged(WebCore::Frame*, const WebCore::IntSize&) const OVERRIDE;
     virtual void scrollRectIntoView(const WebCore::IntRect&) const OVERRIDE;
@@ -148,19 +148,29 @@ public:
     virtual void attachRootGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) OVERRIDE;
     virtual void setNeedsOneShotDrawingSynchronization() OVERRIDE;
     virtual void scheduleCompositingLayerSync() OVERRIDE;
+
+    virtual CompositingTriggerFlags allowedCompositingTriggers() const
+    {
+        return static_cast<CompositingTriggerFlags>(
+            ThreeDTransformTrigger |
+            VideoTrigger |
+            PluginTrigger| 
+            CanvasTrigger |
+            AnimationTrigger);
+    }
 #endif
 
 #if ENABLE(VIDEO)
     virtual bool supportsFullscreenForNode(const WebCore::Node*) OVERRIDE;
     virtual void enterFullscreenForNode(WebCore::Node*) OVERRIDE;
     virtual void exitFullscreenForNode(WebCore::Node*) OVERRIDE;
-    virtual void fullScreenRendererChanged(WebCore::RenderBox*) OVERRIDE;
 #endif
     
 #if ENABLE(FULLSCREEN_API)
     virtual bool supportsFullScreenForElement(const WebCore::Element*, bool withKeyboard) OVERRIDE;
     virtual void enterFullScreenForElement(WebCore::Element*) OVERRIDE;
     virtual void exitFullScreenForElement(WebCore::Element*) OVERRIDE;
+    virtual void fullScreenRendererChanged(WebCore::RenderBox*) OVERRIDE;
 #endif
 
     // FIXME: Remove once all ports are using client-based geolocation. https://bugs.webkit.org/show_bug.cgi?id=40373
@@ -170,14 +180,12 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural() OVERRIDE;
     virtual bool selectItemAlignmentFollowsMenuWritingDirection() OVERRIDE;
+    virtual bool hasOpenedPopup() const OVERRIDE;
     virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const OVERRIDE;
     virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const OVERRIDE;
 
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() OVERRIDE;
-#endif
-    
     virtual void numWheelEventHandlersChanged(unsigned) OVERRIDE { }
+    virtual void numTouchEventHandlersChanged(unsigned) OVERRIDE { }
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const OVERRIDE { return false; }
 private:
     WebView *m_webView;

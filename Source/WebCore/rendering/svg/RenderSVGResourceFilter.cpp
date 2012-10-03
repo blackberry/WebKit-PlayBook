@@ -35,8 +35,10 @@
 #include "ImageBuffer.h"
 #include "ImageData.h"
 #include "IntRect.h"
+#include "Page.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGResourceFilterPrimitive.h"
+#include "Settings.h"
 #include "SVGElement.h"
 #include "SVGFilter.h"
 #include "SVGFilterElement.h"
@@ -226,25 +228,26 @@ bool RenderSVGResourceFilter::applyResource(RenderObject* object, RenderStyle*, 
         return false;
     }
 
-    absoluteDrawingRegion.scale(scale.width(), scale.height());
+    // Change the coordinate transformation applied to the filtered element to reflect the resolution of the filter.
+    AffineTransform effectiveTransform;
+    effectiveTransform.scale(scale.width(), scale.height());
+    effectiveTransform.multiply(filterData->shearFreeAbsoluteTransform);
 
     OwnPtr<ImageBuffer> sourceGraphic;
-    if (!SVGImageBufferTools::createImageBuffer(absoluteDrawingRegion, absoluteDrawingRegion, sourceGraphic, ColorSpaceLinearRGB)) {
+    RenderingMode renderingMode = object->document()->page()->settings()->acceleratedFiltersEnabled() ? Accelerated : Unaccelerated;
+    if (!SVGImageBufferTools::createImageBuffer(drawingRegion, effectiveTransform, sourceGraphic, ColorSpaceLinearRGB, renderingMode)) {
         ASSERT(!m_filter.contains(object));
         filterData->savedContext = context;
         m_filter.set(object, filterData.leakPtr());
         return false;
     }
     
+    // Set the rendering mode from the page's settings.
+    filterData->filter->setRenderingMode(renderingMode);
+
     GraphicsContext* sourceGraphicContext = sourceGraphic->context();
     ASSERT(sourceGraphicContext);
   
-    sourceGraphicContext->translate(-absoluteDrawingRegion.x(), -absoluteDrawingRegion.y());
-    if (scale.width() != 1 || scale.height() != 1)
-        sourceGraphicContext->scale(scale);
-
-    sourceGraphicContext->concatCTM(filterData->shearFreeAbsoluteTransform);
-    sourceGraphicContext->clearRect(FloatRect(FloatPoint(), absoluteDrawingRegion.size()));
     filterData->sourceGraphicBuffer = sourceGraphic.release();
     filterData->savedContext = context;
 
@@ -256,7 +259,7 @@ bool RenderSVGResourceFilter::applyResource(RenderObject* object, RenderStyle*, 
     return true;
 }
 
-void RenderSVGResourceFilter::postApplyResource(RenderObject* object, GraphicsContext*& context, unsigned short resourceMode, const Path*)
+void RenderSVGResourceFilter::postApplyResource(RenderObject* object, GraphicsContext*& context, unsigned short resourceMode, const Path*, const RenderSVGShape*)
 {
     ASSERT(object);
     ASSERT(context);
@@ -286,7 +289,7 @@ void RenderSVGResourceFilter::postApplyResource(RenderObject* object, GraphicsCo
     }
 
     FilterEffect* lastEffect = filterData->builder->lastEffect();
-    
+
     if (lastEffect && !filterData->boundaries.isEmpty() && !lastEffect->filterPrimitiveSubregion().isEmpty()) {
         // This is the real filtering of the object. It just needs to be called on the
         // initial filtering process. We just take the stored filter result on a

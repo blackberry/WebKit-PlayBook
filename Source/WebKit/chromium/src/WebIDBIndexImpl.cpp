@@ -68,6 +68,11 @@ bool WebIDBIndexImpl::unique() const
     return m_backend->unique();
 }
 
+bool WebIDBIndexImpl::multiEntry() const
+{
+    return m_backend->multiEntry();
+}
+
 void WebIDBIndexImpl::openObjectCursor(const WebIDBKeyRange& keyRange, unsigned short direction, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
 {
     m_backend->openCursor(keyRange, direction, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
@@ -76,6 +81,11 @@ void WebIDBIndexImpl::openObjectCursor(const WebIDBKeyRange& keyRange, unsigned 
 void WebIDBIndexImpl::openKeyCursor(const WebIDBKeyRange& keyRange, unsigned short direction, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
 {
     m_backend->openKeyCursor(keyRange, direction, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
+}
+
+void WebIDBIndexImpl::count(const WebIDBKeyRange& keyRange,  WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
+{
+    m_backend->count(keyRange, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
 }
 
 void WebIDBIndexImpl::getObject(const WebIDBKey& keyRange, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)

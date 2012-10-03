@@ -39,7 +39,7 @@
                             values : [30.5, 60.5, 361200.5],
                         },
                         {
-                            property : "getCueAsSource()",
+                            property : "text",
                             values : ["Bear is Coming!!!!!", "I said Bear is coming!!!!", "I said Bear is coming now!!!!"],
                         },
                     ],
@@ -64,7 +64,7 @@
             }
         </script>
     </head>
-    <body>
+    <body onload="enableAllTextTracks()">
         <p>Tests cue timings that contain hours (they are optional), and tests various syntax errors in timings with hours.</p>
         <video>
             <track src="captions-webvtt/tc009-timings-hour.vtt" onload="trackLoaded()">

@@ -31,7 +31,6 @@
 #include "InjectedBundle.h"
 #include "InjectedBundleMessageKinds.h"
 #include "InjectedBundleUserMessageCoders.h"
-#include "RunLoop.h"
 #include "SandboxExtension.h"
 #include "StatisticsData.h"
 #include "WebApplicationCacheManager.h"
@@ -59,6 +58,7 @@
 #include <WebCore/CrossOriginPreflightResultCache.h>
 #include <WebCore/Font.h>
 #include <WebCore/FontCache.h>
+#include <WebCore/Frame.h>
 #include <WebCore/GCController.h>
 #include <WebCore/GlyphPageTreeNode.h>
 #include <WebCore/IconDatabase.h>
@@ -71,6 +71,7 @@
 #include <WebCore/PageCache.h>
 #include <WebCore/PageGroup.h>
 #include <WebCore/ResourceHandle.h>
+#include <WebCore/RunLoop.h>
 #include <WebCore/SchemeRegistry.h>
 #include <WebCore/SecurityOrigin.h>
 #include <WebCore/Settings.h>
@@ -99,7 +100,8 @@ static void sleep(unsigned seconds)
 }
 #endif
 
-static void* randomCrashThread(void*)
+static void randomCrashThread(void*) NO_RETURN_DUE_TO_CRASH;
+void randomCrashThread(void*)
 {
     // This delay was chosen semi-arbitrarily. We want the crash to happen somewhat quickly to
     // enable useful stress testing, but not so quickly that the web process will always crash soon
@@ -108,7 +110,6 @@ static void* randomCrashThread(void*)
 
     sleep(randomNumber() * maximumRandomCrashDelay);
     CRASH();
-    return 0;
 }
 
 static void startRandomCrashThreadIfRequested()
@@ -140,6 +141,9 @@ WebProcess::WebProcess()
 #endif
     , m_textCheckerState()
     , m_geolocationManager(this)
+#if ENABLE(NOTIFICATIONS)
+    , m_notificationManager(this)
+#endif
     , m_iconDatabaseProxy(this)
 #if ENABLE(PLUGIN_PROCESS)
     , m_disablePluginProcessMessageTimeout(false)
@@ -157,13 +161,12 @@ void WebProcess::initialize(CoreIPC::Connection::Identifier serverIdentifier, Ru
 {
     ASSERT(!m_connection);
 
-    m_connection = CoreIPC::Connection::createClientConnection(serverIdentifier, this, runLoop);
-    m_connection->setDidCloseOnConnectionWorkQueueCallback(didCloseOnConnectionWorkQueue);
-    m_connection->setShouldExitOnSyncMessageSendFailure(true);
-    m_connection->addQueueClient(this);
+    m_connection = WebConnectionToUIProcess::create(this, serverIdentifier, runLoop);
 
-    m_connection->open();
+    m_connection->connection()->addQueueClient(&m_eventDispatcher);
+    m_connection->connection()->addQueueClient(this);
 
+    m_connection->connection()->open();
     m_runLoop = runLoop;
 
     startRandomCrashThreadIfRequested();
@@ -201,7 +204,7 @@ void WebProcess::initializeWebProcess(const WebProcessCreationParameters& parame
     m_iconDatabaseProxy.setEnabled(parameters.iconDatabaseEnabled);
 #endif
 
-    StorageTracker::initializeTracker(parameters.localStorageDirectory, 0);
+    StorageTracker::initializeTracker(parameters.localStorageDirectory, &WebKeyValueStorageManager::shared());
     m_localStorageDirectory = parameters.localStorageDirectory;
 
     if (!parameters.applicationCacheDirectory.isEmpty())
@@ -210,10 +213,12 @@ void WebProcess::initializeWebProcess(const WebProcessCreationParameters& parame
     setShouldTrackVisitedLinks(parameters.shouldTrackVisitedLinks);
     setCacheModel(static_cast<uint32_t>(parameters.cacheModel));
 
-    if (!parameters.languageCode.isEmpty())
-        overrideDefaultLanguage(parameters.languageCode);
+    if (!parameters.languages.isEmpty())
+        overrideUserPreferredLanguages(parameters.languages);
 
     m_textCheckerState = parameters.textCheckerState;
+
+    m_fullKeyboardAccessEnabled = parameters.fullKeyboardAccessEnabled;
 
     for (size_t i = 0; i < parameters.urlSchemesRegistererdAsEmptyDocument.size(); ++i)
         registerURLSchemeAsEmptyDocument(parameters.urlSchemesRegistererdAsEmptyDocument[i]);
@@ -283,9 +288,9 @@ void WebProcess::setShouldUseFontSmoothing(bool useFontSmoothing)
     WebCore::Font::setShouldUseSmoothing(useFontSmoothing);
 }
 
-void WebProcess::languageChanged(const String& language) const
+void WebProcess::userPreferredLanguagesChanged(const Vector<String>& languages) const
 {
-    overrideDefaultLanguage(language);
+    overrideUserPreferredLanguages(languages);
 }
 
 void WebProcess::fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled)
@@ -335,7 +340,7 @@ void WebProcess::addVisitedLink(WebCore::LinkHash linkHash)
 {
     if (isLinkVisited(linkHash))
         return;
-    m_connection->send(Messages::WebContext::AddVisitedLinkHash(linkHash), 0);
+    connection()->send(Messages::WebContext::AddVisitedLinkHash(linkHash), 0);
 }
 
 void WebProcess::setCacheModel(uint32_t cm)
@@ -551,7 +556,7 @@ bool WebProcess::shouldTerminate()
 
     // FIXME: the ShouldTerminate message should also send termination parameters, such as any session cookies that need to be preserved.
     bool shouldTerminate = false;
-    if (m_connection->sendSync(Messages::WebProcessProxy::ShouldTerminate(), Messages::WebProcessProxy::ShouldTerminate::Reply(shouldTerminate), 0)
+    if (connection()->sendSync(Messages::WebProcessProxy::ShouldTerminate(), Messages::WebProcessProxy::ShouldTerminate::Reply(shouldTerminate), 0)
         && !shouldTerminate)
         return false;
 
@@ -566,7 +571,6 @@ void WebProcess::terminate()
 #endif
 
     // Invalidate our connection.
-    m_connection->removeQueueClient(this);
     m_connection->invalidate();
     m_connection = nullptr;
 
@@ -634,6 +638,13 @@ void WebProcess::didReceiveMessage(CoreIPC::Connection* connection, CoreIPC::Mes
         return;
     }
 
+#if ENABLE(NOTIFICATIONS)
+    if (messageID.is<CoreIPC::MessageClassWebNotificationManager>()) {
+        m_notificationManager.didReceiveMessage(connection, messageID, arguments);
+        return;
+    }
+#endif
+    
     if (messageID.is<CoreIPC::MessageClassWebResourceCacheManager>()) {
         WebResourceCacheManager::shared().didReceiveMessage(connection, messageID, arguments);
         return;
@@ -690,12 +701,12 @@ void WebProcess::syncMessageSendTimedOut(CoreIPC::Connection*)
 {
 }
 
-bool WebProcess::willProcessMessageOnClientRunLoop(CoreIPC::Connection* connection, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments)
+void WebProcess::didReceiveMessageOnConnectionWorkQueue(CoreIPC::Connection* connection, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments, bool& didHandleMessage)
 {
-    if (messageID.is<CoreIPC::MessageClassWebProcess>())
-        return willProcessWebProcessMessageOnClientRunLoop(connection, messageID, arguments);
-
-    return true;
+    if (messageID.is<CoreIPC::MessageClassWebProcess>()) {
+        didReceiveWebProcessMessageOnConnectionWorkQueue(connection, messageID, arguments, didHandleMessage);
+        return;
+    }
 }
 
 WebFrame* WebProcess::webFrame(uint64_t frameID) const
@@ -718,7 +729,7 @@ void WebProcess::removeWebFrame(uint64_t frameID)
     if (!m_connection)
         return;
 
-    m_connection->send(Messages::WebProcessProxy::DidDestroyFrame(frameID), 0);
+    connection()->send(Messages::WebProcessProxy::DidDestroyFrame(frameID), 0);
 }
 
 WebPageGroupProxy* WebProcess::webPageGroup(uint64_t pageGroupID)
@@ -798,7 +809,7 @@ void WebProcess::getSitesWithPluginData(const Vector<String>& pluginPaths, uint6
     Vector<String> sites;
     copyToVector(sitesSet, sites);
 
-    m_connection->send(Messages::WebContext::DidGetSitesWithPluginData(sites, callbackID), 0);
+    connection()->send(Messages::WebContext::DidGetSitesWithPluginData(sites, callbackID), 0);
 }
 
 void WebProcess::clearPluginSiteData(const Vector<String>& pluginPaths, const Vector<String>& sites, uint64_t flags, uint64_t maxAgeInSeconds, uint64_t callbackID)
@@ -820,7 +831,7 @@ void WebProcess::clearPluginSiteData(const Vector<String>& pluginPaths, const Ve
             netscapePluginModule->clearSiteData(sites[i], flags, maxAgeInSeconds);
     }
 
-    m_connection->send(Messages::WebContext::DidClearPluginSiteData(callbackID), 0);
+    connection()->send(Messages::WebContext::DidClearPluginSiteData(callbackID), 0);
 }
 #endif
     
@@ -929,7 +940,7 @@ void WebProcess::getWebCoreStatistics(uint64_t callbackID)
     // Get WebCore memory cache statistics
     getWebCoreMemoryCacheStatistics(data.webCoreCacheStatistics);
     
-    m_connection->send(Messages::WebContext::DidGetWebCoreStatistics(data, callbackID), 0);
+    connection()->send(Messages::WebContext::DidGetWebCoreStatistics(data, callbackID), 0);
 }
 
 void WebProcess::garbageCollectJavaScriptObjects()
@@ -938,7 +949,7 @@ void WebProcess::garbageCollectJavaScriptObjects()
 }
 
 #if ENABLE(PLUGIN_PROCESS)
-void WebProcess::pluginProcessCrashed(const String& pluginPath)
+void WebProcess::pluginProcessCrashed(CoreIPC::Connection*, const String& pluginPath)
 {
     m_pluginProcessConnectionManager.pluginProcessCrashed(pluginPath);
 }
@@ -948,7 +959,11 @@ void WebProcess::downloadRequest(uint64_t downloadID, uint64_t initiatingPageID,
 {
     WebPage* initiatingPage = initiatingPageID ? webPage(initiatingPageID) : 0;
 
-    DownloadManager::shared().startDownload(downloadID, initiatingPage, request);
+    ResourceRequest requestWithOriginalURL = request;
+    if (initiatingPage)
+        initiatingPage->mainFrame()->loader()->setOriginalURLForDownloadRequest(requestWithOriginalURL);
+
+    DownloadManager::shared().startDownload(downloadID, initiatingPage, requestWithOriginalURL);
 }
 
 void WebProcess::cancelDownload(uint64_t downloadID)

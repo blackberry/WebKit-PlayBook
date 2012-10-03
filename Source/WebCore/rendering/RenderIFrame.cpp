@@ -92,7 +92,7 @@ bool RenderIFrame::flattenFrame()
         return false;
 
     Frame* frame = element->document()->frame();
-    bool enabled = frame && frame->settings()->frameFlatteningEnabled();
+    bool enabled = frame && frame->settings() && frame->settings()->frameFlatteningEnabled();
 
     if (!enabled || !frame->page())
         return false;
@@ -121,7 +121,7 @@ void RenderIFrame::layout()
     RenderPart::layout();
 
     m_overflow.clear();
-    addBoxShadowAndBorderOverflow();
+    addVisualEffectOverflow();
     updateLayerTransform();
 
     setNeedsLayout(false);

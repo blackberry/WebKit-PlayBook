@@ -36,9 +36,9 @@
 #include "NotImplemented.h"
 #include "Page.h"
 #include "WebDevToolsAgentImpl.h"
-#include "WebRect.h"
-#include "WebURL.h"
-#include "WebURLRequest.h"
+#include "platform/WebRect.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLRequest.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 #include <wtf/Vector.h>
@@ -69,6 +69,18 @@ void InspectorClientImpl::openInspectorFrontend(InspectorController* controller)
         agent->openInspectorFrontend(controller);
 }
 
+void InspectorClientImpl::closeInspectorFrontend()
+{
+    if (WebDevToolsAgentImpl* agent = devToolsAgent())
+        agent->closeInspectorFrontend();
+}
+
+void InspectorClientImpl::bringFrontendToFront()
+{
+    if (WebDevToolsAgentImpl* agent = devToolsAgent())
+        agent->bringFrontendToFront();
+}
+
 void InspectorClientImpl::highlight()
 {
     if (WebDevToolsAgentImpl* agent = devToolsAgent())
@@ -94,10 +106,20 @@ void InspectorClientImpl::updateInspectorStateCookie(const WTF::String& inspecto
         agent->updateInspectorStateCookie(inspectorState);
 }
 
+bool InspectorClientImpl::canClearBrowserCache()
+{
+    return true;
+}
+
 void InspectorClientImpl::clearBrowserCache()
 {
     if (WebDevToolsAgentImpl* agent = devToolsAgent())
         agent->clearBrowserCache();
+}
+
+bool InspectorClientImpl::canClearBrowserCookies()
+{
+    return true;
 }
 
 void InspectorClientImpl::clearBrowserCookies()

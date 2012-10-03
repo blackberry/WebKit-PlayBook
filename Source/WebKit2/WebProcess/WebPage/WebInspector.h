@@ -35,6 +35,7 @@
 
 namespace WebKit {
 
+class WebInspectorFrontendClient;
 class WebPage;
 struct WebPageCreationParameters;
 
@@ -91,6 +92,10 @@ private:
 
     void showConsole();
 
+    void showResources();
+
+    void showMainResourceForFrame(uint64_t frameID);
+
     void startJavaScriptDebugging();
     void stopJavaScriptDebugging();
 
@@ -99,6 +104,7 @@ private:
 
     WebPage* m_page;
     WebPage* m_inspectorPage;
+    WebInspectorFrontendClient* m_frontendClient;
 };
 
 } // namespace WebKit

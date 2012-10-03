@@ -41,7 +41,7 @@ install-libs:	install-prereq
 	
 
 binary-indep:
-	(cd WebKitTools/Scripts && ./build-webkit --wx --makeargs="--wxpython")
+	(cd Tools/Scripts && ./build-webkit --wx --makeargs="--wxpython")
 	dh_testdir
 	dh_testroot
 	dh_installchangelogs -i

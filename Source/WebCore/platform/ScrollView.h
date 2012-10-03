@@ -56,10 +56,9 @@ public:
     virtual int scrollSize(ScrollbarOrientation orientation) const;
     virtual int scrollPosition(Scrollbar*) const;
     virtual void setScrollOffset(const IntPoint&);
-    virtual void didCompleteRubberBand(const IntSize&) const;
     virtual void notifyPageThatContentAreaWillPaint() const;
     virtual bool isScrollCornerVisible() const;
-    virtual void scrollbarStyleChanged();
+    virtual void scrollbarStyleChanged(int newStyle, bool forceUpdate);
 
     // NOTE: This should only be called by the overriden setScrollOffset from ScrollableArea.
     virtual void scrollTo(const IntSize& newOffset);
@@ -73,8 +72,8 @@ public:
 
     // Functions for child manipulation and inspection.
     const HashSet<RefPtr<Widget> >* children() const { return &m_children; }
-    void addChild(PassRefPtr<Widget>);
-    void removeChild(Widget*);
+    virtual void addChild(PassRefPtr<Widget>);
+    virtual void removeChild(Widget*);
     
     // If the scroll view does not use a native widget, then it will have cross-platform Scrollbars. These functions
     // can be used to obtain those scrollbars.
@@ -169,12 +168,6 @@ public:
     bool useFixedLayout() const;
     void setUseFixedLayout(bool enable);
 
-#if PLATFORM(BLACKBERRY)
-    // Methods for getting/setting whether this scrollview allows scrolling past the maximumScrollPosition or even negative scroll positions.
-    void setCanOverscroll(bool b) { m_canOverscroll = b; }
-    bool canOverScroll() const { return m_canOverscroll; }
-#endif
-    
     // Functions for getting/setting the size of the document contained inside the ScrollView (as an IntSize or as individual width and height
     // values).
     IntSize contentsSize() const; // Always at least as big as the visibleWidth()/visibleHeight().
@@ -253,14 +246,6 @@ public:
     // For platforms that need to hit test scrollbars from within the engine's event handlers (like Win32).
     Scrollbar* scrollbarAtPoint(const IntPoint& windowPoint);
 
-    // This function exists for scrollviews that need to handle wheel events manually.
-    // On Mac the underlying NSScrollView just does the scrolling, but on other platforms
-    // (like Windows), we need this function in order to do the scroll ourselves.
-    bool wheelEvent(const PlatformWheelEvent&);
-#if ENABLE(GESTURE_EVENTS)
-    void gestureEvent(const PlatformGestureEvent&);
-#endif
-
     IntPoint convertChildToSelf(const Widget* child, const IntPoint& point) const
     {
         IntPoint newPoint = point;
@@ -298,6 +283,7 @@ public:
     virtual bool scrollbarCornerPresent() const;
     virtual IntRect scrollCornerRect() const;
     virtual void paintScrollCorner(GraphicsContext*, const IntRect& cornerRect);
+    virtual void paintScrollbar(GraphicsContext*, Scrollbar*, const IntRect&);
 
     virtual IntRect convertFromScrollbarToContainingView(const Scrollbar*, const IntRect&) const;
     virtual IntRect convertFromContainingViewToScrollbar(const Scrollbar*, const IntRect&) const;
@@ -315,11 +301,10 @@ protected:
     virtual void repaintContentRectangle(const IntRect&, bool now = false);
     virtual void paintContents(GraphicsContext*, const IntRect& damageRect) = 0;
 
-    void calculateOverhangAreasForPainting(IntRect& horizontalOverhangRect, IntRect& verticalOverhangRect);
     virtual void paintOverhangAreas(GraphicsContext*, const IntRect& horizontalOverhangArea, const IntRect& verticalOverhangArea, const IntRect& dirtyRect);
 
-    virtual void contentsResized() = 0;
     virtual void visibleContentsResized() = 0;
+    virtual void delegatesScrollingDidChange() { }
 
     IntRect fixedVisibleContentRect() const { return m_fixedVisibleContentRect; }
 
@@ -375,9 +360,6 @@ private:
 #endif
     IntSize m_fixedLayoutSize;
     IntSize m_contentsSize;
-#if PLATFORM(BLACKBERRY)
-    bool m_canOverscroll;
-#endif
 
     int m_scrollbarsAvoidingResizer;
     bool m_scrollbarsSuppressed;
@@ -425,6 +407,9 @@ private:
     void platformSetScrollbarOverlayStyle(ScrollbarOverlayStyle);
    
     void platformSetScrollOrigin(const IntPoint&, bool updatePositionAtAll, bool updatePositionSynchronously);
+
+    void calculateOverhangAreasForPainting(IntRect& horizontalOverhangRect, IntRect& verticalOverhangRect);
+    void updateOverhangAreas();
 
 #if PLATFORM(MAC) && defined __OBJC__
 public:

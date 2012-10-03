@@ -114,6 +114,8 @@ public:
     virtual void paint(PaintInfo&, const LayoutPoint&, LayoutUnit lineTop, LayoutUnit lineBottom);
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const LayoutPoint& pointInContainer, const LayoutPoint& accumulatedOffset, LayoutUnit lineTop, LayoutUnit lineBottom);
 
+    bool boxShadowCanBeAppliedToBackground(const FillLayer&) const;
+
     virtual RenderLineBoxList* rendererLineBoxes() const;
 
     // logicalLeft = left in a horizontal line and top in a vertical line.
@@ -192,7 +194,9 @@ public:
 
     bool hasTextChildren() const { return m_hasTextChildren; }
     bool hasTextDescendants() const { return m_hasTextDescendants; }
-
+    void setHasTextChildren() { m_hasTextChildren = true; setHasTextDescendants(); }
+    void setHasTextDescendants() { m_hasTextDescendants = true; }
+    
     void checkConsistency() const;
     void setHasBadChildList();
 

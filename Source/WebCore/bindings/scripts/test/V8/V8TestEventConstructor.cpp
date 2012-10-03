@@ -21,8 +21,10 @@
 #include "config.h"
 #include "V8TestEventConstructor.h"
 
+#include "Dictionary.h"
 #include "RuntimeEnabledFeatures.h"
 #include "V8Binding.h"
+#include "V8BindingMacros.h"
 #include "V8BindingState.h"
 #include "V8DOMWrapper.h"
 #include "V8IsolatedContext.h"
@@ -56,9 +58,42 @@ static v8::Handle<v8::Value> attr2AttrGetter(v8::Local<v8::String> name, const v
 static const BatchedAttribute TestEventConstructorAttrs[] = {
     // Attribute 'attr1' (Type: 'readonly attribute' ExtAttr: '')
     {"attr1", TestEventConstructorInternal::attr1AttrGetter, 0, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
-    // Attribute 'attr2' (Type: 'readonly attribute' ExtAttr: 'InitializedAtConstructor')
+    // Attribute 'attr2' (Type: 'readonly attribute' ExtAttr: 'InitializedByEventConstructor')
     {"attr2", TestEventConstructorInternal::attr2AttrGetter, 0, 0 /* no data */, static_cast<v8::AccessControl>(v8::DEFAULT), static_cast<v8::PropertyAttribute>(v8::None), 0 /* on instance */},
 };
+
+v8::Handle<v8::Value> V8TestEventConstructor::constructorCallback(const v8::Arguments& args)
+{
+    INC_STATS("DOM.TestEventConstructor.Constructor");
+
+    if (!args.IsConstructCall())
+        return throwError("DOM object constructor cannot be called as a function.", V8Proxy::TypeError);
+
+    if (ConstructorMode::current() == ConstructorMode::WrapExistingObject)
+        return args.Holder();
+
+    if (args.Length() < 1)
+        return throwError("Not enough arguments", V8Proxy::TypeError);
+
+    STRING_TO_V8PARAMETER_EXCEPTION_BLOCK(V8Parameter<>, type, args[0]);
+    TestEventConstructorInit eventInit;
+    if (args.Length() >= 2) {
+        EXCEPTION_BLOCK(Dictionary, options, args[1]);
+        if (!fillTestEventConstructorInit(eventInit, options))
+            return v8::Undefined();
+    }
+
+    RefPtr<TestEventConstructor> event = TestEventConstructor::create(type, eventInit);
+
+    V8DOMWrapper::setDOMWrapper(args.Holder(), &info, event.get());
+    return toV8(event.release(), args.Holder());
+}
+
+bool fillTestEventConstructorInit(TestEventConstructorInit& eventInit, const Dictionary& options)
+{
+    options.get("attr2", eventInit.attr2);
+    return true;
+}
 
 static v8::Persistent<v8::FunctionTemplate> ConfigureV8TestEventConstructorTemplate(v8::Persistent<v8::FunctionTemplate> desc)
 {

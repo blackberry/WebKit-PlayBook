@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,16 +23,13 @@
 #include "Geolocation.h"
 #include "GeolocationController.h"
 #include "GeolocationError.h"
-#include "GeolocationPosition.h"
-#include "NotImplemented.h"
 #include "Page.h"
-#include "WebPage.h"
 #include "WebPage_p.h"
 
 using namespace WebCore;
 
-GeolocationControllerClientBlackBerry::GeolocationControllerClientBlackBerry(BlackBerry::WebKit::WebPage* webPage)
-    : m_webPage(webPage)
+GeolocationControllerClientBlackBerry::GeolocationControllerClientBlackBerry(BlackBerry::WebKit::WebPagePrivate* webPagePrivate)
+    : m_webPagePrivate(webPagePrivate)
     , m_tracker(0)
     , m_accuracy(false)
 {
@@ -69,7 +66,7 @@ void GeolocationControllerClientBlackBerry::requestPermission(Geolocation* locat
     Frame* frame = location->frame();
     if (!frame)
         return;
-    m_webPage->d->m_page->chrome()->requestGeolocationPermissionForFrame(frame, location);
+    m_webPagePrivate->m_page->chrome()->client()->requestGeolocationPermissionForFrame(frame, location);
 }
 
 void GeolocationControllerClientBlackBerry::cancelPermissionRequest(Geolocation* location)
@@ -77,21 +74,21 @@ void GeolocationControllerClientBlackBerry::cancelPermissionRequest(Geolocation*
     Frame* frame = location->frame();
     if (!frame)
         return;
-    m_webPage->d->m_page->chrome()->cancelGeolocationPermissionRequestForFrame(frame, location);
+    m_webPagePrivate->m_page->chrome()->client()->cancelGeolocationPermissionRequestForFrame(frame, location);
 }
 
-void GeolocationControllerClientBlackBerry::onLocationUpdate(double timestamp, double latitude, double longitude, double accuracy, double altitude, bool altitudeValid, 
+void GeolocationControllerClientBlackBerry::onLocationUpdate(double timestamp, double latitude, double longitude, double accuracy, double altitude, bool altitudeValid,
                                                              double altitudeAccuracy, bool altitudeAccuracyValid, double speed, bool speedValid, double heading, bool headingValid)
 {
-    m_lastPosition = GeolocationPosition::create(timestamp, latitude, longitude, accuracy, altitudeValid, altitude, altitudeAccuracyValid, 
+    m_lastPosition = GeolocationPosition::create(timestamp, latitude, longitude, accuracy, altitudeValid, altitude, altitudeAccuracyValid,
                                                  altitudeAccuracy, headingValid, heading, speedValid, speed);
-    m_webPage->d->m_page->geolocationController()->positionChanged(m_lastPosition.get());
+    m_webPagePrivate->m_page->geolocationController()->positionChanged(m_lastPosition.get());
 }
 
 void GeolocationControllerClientBlackBerry::onLocationError(const char* errorStr)
 {
     RefPtr<GeolocationError> error = GeolocationError::create(GeolocationError::PositionUnavailable, String::fromUTF8(errorStr));
-    m_webPage->d->m_page->geolocationController()->errorOccurred(error.get());
+    m_webPagePrivate->m_page->geolocationController()->errorOccurred(error.get());
 }
 
 void GeolocationControllerClientBlackBerry::onPermission(void* context, bool isAllowed)

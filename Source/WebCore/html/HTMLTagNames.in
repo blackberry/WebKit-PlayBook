@@ -11,10 +11,11 @@ applet
 area
 article interfaceName=HTMLElement
 aside interfaceName=HTMLElement
-audio wrapperOnlyIfMediaIsAvailable, conditional=VIDEO
+audio wrapperOnlyIfMediaIsAvailable, conditional=VIDEO, constructorNeedsCreatedByParser
 b interfaceName=HTMLElement
 base
 basefont interfaceName=HTMLBaseFontElement
+bdi interfaceName=HTMLElement
 bdo interfaceName=HTMLElement
 bgsound interfaceName=HTMLElement
 big interfaceName=HTMLElement
@@ -30,6 +31,7 @@ code interfaceName=HTMLElement
 col interfaceName=HTMLTableColElement
 colgroup interfaceName=HTMLTableColElement
 command interfaceName=HTMLElement
+content interfaceName=HTMLContentElement, conditional=SHADOW_DOM
 datalist interfaceName=HTMLDataListElement, conditional=DATALIST
 dd interfaceName=HTMLElement
 del interfaceName=HTMLModElement
@@ -66,7 +68,7 @@ image mapToTagName=img
 img interfaceName=HTMLImageElement, constructorNeedsFormElement
 input constructorNeedsFormElement, constructorNeedsCreatedByParser
 ins interfaceName=HTMLModElement
-isindex interfaceName=HTMLIsIndexElement, constructorNeedsFormElement
+isindex interfaceName=HTMLUnknownElement
 kbd interfaceName=HTMLElement
 keygen constructorNeedsFormElement
 label
@@ -91,6 +93,7 @@ ol interfaceName=HTMLOListElement
 optgroup interfaceName=HTMLOptGroupElement, constructorNeedsFormElement
 option constructorNeedsFormElement
 output constructorNeedsFormElement
+shadow interfaceName=HTMLShadowElement, conditional=SHADOW_DOM
 p interfaceName=HTMLParagraphElement
 param
 plaintext interfaceName=HTMLElement
@@ -128,7 +131,7 @@ tt interfaceName=HTMLElement
 u interfaceName=HTMLElement
 ul interfaceName=HTMLUListElement
 var interfaceName=HTMLElement
-video wrapperOnlyIfMediaIsAvailable, conditional=VIDEO
+video wrapperOnlyIfMediaIsAvailable, conditional=VIDEO, constructorNeedsCreatedByParser
 wbr interfaceName=HTMLElement
 xmp interfaceName=HTMLPreElement
 noscript interfaceName=HTMLElement

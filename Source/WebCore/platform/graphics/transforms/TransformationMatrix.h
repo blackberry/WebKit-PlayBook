@@ -338,14 +338,6 @@ public:
     operator XFORM() const;
 #endif
 
-#if PLATFORM(BLACKBERRY)
-    String toString() const
-    {
-        return String::format("[TransformationMatrix [[%f %f %f %f], [%f %f %f %f], [%f %f %f %f], [%f %f %f %f]] ]",
-                m11(), m21(), m31(), m41(), m12(), m22(), m32(), m42(), m13(), m23(), m33(), m43(), m14(), m24(), m34(), m44());
-    }
-#endif
-
     bool isIdentityOrTranslation() const
     {
         return m_matrix[0][0] == 1 && m_matrix[0][1] == 0 && m_matrix[0][2] == 0 && m_matrix[0][3] == 0
@@ -358,6 +350,9 @@ public:
 
     // This method returns the matrix without 3D components.
     TransformationMatrix to2dTransform() const;
+    
+    typedef float FloatMatrix4[16];
+    void toColumnMajorFloatArray(FloatMatrix4& result) const;
 
 private:
     // multiply passed 2D point by matrix (assume z=0)

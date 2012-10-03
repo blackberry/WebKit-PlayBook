@@ -35,8 +35,8 @@
 
 namespace WebCore {
 
-class LocalStorageTask;
-class LocalStorageThread;
+class StorageTask;
+class StorageThread;
 class SecurityOrigin;
 class StorageTrackerClient;    
 
@@ -47,11 +47,15 @@ public:
     static void initializeTracker(const String& storagePath, StorageTrackerClient*);
     static StorageTracker& tracker();
 
+    void setDatabaseDirectoryPath(const String&);
+    String databaseDirectoryPath() const;
+
     void setOriginDetails(const String& originIdentifier, const String& databaseFile);
     
     void deleteAllOrigins();
     void deleteOrigin(SecurityOrigin*);
     void deleteOrigin(const String& originIdentifier);
+    bool originsLoaded() const { return m_finishedImportingOriginIdentifiers; }
     void origins(Vector<RefPtr<SecurityOrigin> >& result);
     long long diskUsageForOrigin(SecurityOrigin*);
     
@@ -80,6 +84,8 @@ private:
     void openTrackerDatabase(bool createIfDoesNotExist);
 
     void importOriginIdentifiers();
+    static void notifyFinishedImportingOriginIdentifiersOnMainThread(void*);
+    void finishedImportingOriginIdentifiers();
     
     void deleteTrackerFiles();
     String databasePathForOrigin(const String& originIdentifier);
@@ -107,10 +113,11 @@ private:
     OriginSet m_originSet;
     OriginSet m_originsBeingDeleted;
 
-    OwnPtr<LocalStorageThread> m_thread;
+    OwnPtr<StorageThread> m_thread;
     
     bool m_isActive;
     bool m_needsInitialization;
+    bool m_finishedImportingOriginIdentifiers;
 };
     
 } // namespace WebCore

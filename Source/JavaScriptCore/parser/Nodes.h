@@ -51,17 +51,14 @@ namespace JSC {
 
     const CodeFeatures NoFeatures = 0;
     const CodeFeatures EvalFeature = 1 << 0;
-    const CodeFeatures ClosureFeature = 1 << 1;
-    const CodeFeatures AssignFeature = 1 << 2;
-    const CodeFeatures ArgumentsFeature = 1 << 3;
-    const CodeFeatures WithFeature = 1 << 4;
-    const CodeFeatures CatchFeature = 1 << 5;
-    const CodeFeatures ThisFeature = 1 << 6;
-    const CodeFeatures StrictModeFeature = 1 << 7;
-    const CodeFeatures ShadowsArgumentsFeature = 1 << 8;
+    const CodeFeatures ArgumentsFeature = 1 << 1;
+    const CodeFeatures WithFeature = 1 << 2;
+    const CodeFeatures CatchFeature = 1 << 3;
+    const CodeFeatures ThisFeature = 1 << 4;
+    const CodeFeatures StrictModeFeature = 1 << 5;
+    const CodeFeatures ShadowsArgumentsFeature = 1 << 6;
     
-    
-    const CodeFeatures AllFeatures = EvalFeature | ClosureFeature | AssignFeature | ArgumentsFeature | WithFeature | CatchFeature | ThisFeature | StrictModeFeature | ShadowsArgumentsFeature;
+    const CodeFeatures AllFeatures = EvalFeature | ArgumentsFeature | WithFeature | CatchFeature | ThisFeature | StrictModeFeature | ShadowsArgumentsFeature;
 
     enum Operator {
         OpEqual,
@@ -181,7 +178,7 @@ namespace JSC {
         StatementNode(int);
 
     public:
-        void setLoc(int firstLine, int lastLine);
+        JS_EXPORT_PRIVATE void setLoc(int firstLine, int lastLine);
         int firstLine() const { return lineNo(); }
         int lastLine() const { return m_lastLine; }
 
@@ -796,11 +793,20 @@ namespace JSC {
         NegateNode(int, ExpressionNode*);
     };
 
-    class BitwiseNotNode : public UnaryOpNode {
+    class BitwiseNotNode : public ExpressionNode {
     public:
         BitwiseNotNode(int, ExpressionNode*);
-    };
 
+    protected:
+        ExpressionNode* expr() { return m_expr; }
+        const ExpressionNode* expr() const { return m_expr; }
+
+    private:
+        virtual RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = 0);
+
+        ExpressionNode* m_expr;
+    };
+ 
     class LogicalNotNode : public UnaryOpNode {
     public:
         LogicalNotNode(int, ExpressionNode*);
@@ -1348,7 +1354,7 @@ namespace JSC {
 
     class TryNode : public StatementNode {
     public:
-        TryNode(int, StatementNode* tryBlock, const Identifier& exceptionIdent, bool catchHasEval, StatementNode* catchBlock, StatementNode* finallyBlock);
+        TryNode(int, StatementNode* tryBlock, const Identifier& exceptionIdent, StatementNode* catchBlock, StatementNode* finallyBlock);
 
     private:
         virtual RegisterID* emitBytecode(BytecodeGenerator&, RegisterID* = 0);
@@ -1357,7 +1363,6 @@ namespace JSC {
         const Identifier& m_exceptionIdent;
         StatementNode* m_catchBlock;
         StatementNode* m_finallyBlock;
-        bool m_catchHasEval;
     };
 
     class ParameterNode : public ParserArenaFreeable {
@@ -1494,6 +1499,8 @@ namespace JSC {
         void finishParsing(PassRefPtr<FunctionParameters>, const Identifier&);
         
         const Identifier& ident() { return m_ident; }
+        void setInferredName(const Identifier& inferredName) { ASSERT(!inferredName.isNull()); m_inferredName = inferredName; }
+        const Identifier& inferredName() { return m_inferredName.isEmpty() ? m_ident : m_inferredName; }
 
         static const bool scopeIsFunction = true;
 
@@ -1502,6 +1509,7 @@ namespace JSC {
         FunctionBodyNode(JSGlobalData*, int, SourceElements*, VarStack*, FunctionStack*, IdentifierSet&, const SourceCode&, CodeFeatures, int numConstants);
 
         Identifier m_ident;
+        Identifier m_inferredName;
         RefPtr<FunctionParameters> m_parameters;
     };
 

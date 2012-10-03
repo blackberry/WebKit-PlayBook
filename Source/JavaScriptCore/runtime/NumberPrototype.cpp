@@ -29,7 +29,7 @@
 #include "JSString.h"
 #include "Operations.h"
 #include "Uint16WithFraction.h"
-#include "dtoa.h"
+#include <wtf/dtoa.h>
 #include <wtf/Assertions.h>
 #include <wtf/DecimalNumber.h>
 #include <wtf/MathExtras.h>
@@ -125,6 +125,7 @@ const ClassInfo NumberPrototype::s_info = { "Number", &NumberObject::s_info, 0, 
 */
 
 ASSERT_CLASS_FITS_IN_CELL(NumberPrototype);
+ASSERT_HAS_TRIVIAL_DESTRUCTOR(NumberPrototype);
 
 NumberPrototype::NumberPrototype(ExecState* exec, Structure* structure)
     : NumberObject(exec->globalData(), structure)
@@ -451,12 +452,8 @@ EncodedJSValue JSC_HOST_CALL numberProtoFuncToFixed(ExecState* exec)
     // handled by numberToString.
     ASSERT(isfinite(x));
 
-    char buffer[WTF::NumberToStringBufferLength];
-    DoubleConversionStringBuilder builder(buffer, WTF::NumberToStringBufferLength);
-    const DoubleToStringConverter& converter = DoubleToStringConverter::EcmaScriptConverter();
-    builder.Reset();
-    converter.ToFixed(x, decimalPlaces, &builder);
-    return JSValue::encode(jsString(exec, UString(builder.Finalize())));
+    NumberToStringBuffer buffer;
+    return JSValue::encode(jsString(exec, UString(numberToFixedWidthString(x, decimalPlaces, buffer))));
 }
 
 // toPrecision converts a number to a string, takeing an argument specifying a
@@ -486,12 +483,8 @@ EncodedJSValue JSC_HOST_CALL numberProtoFuncToPrecision(ExecState* exec)
     if (!isfinite(x))
         return JSValue::encode(jsString(exec, UString::number(x)));
 
-    char buffer[WTF::NumberToStringBufferLength];
-    DoubleConversionStringBuilder builder(buffer, WTF::NumberToStringBufferLength);
-    const DoubleToStringConverter& converter = DoubleToStringConverter::EcmaScriptConverter();
-    builder.Reset();
-    converter.ToPrecision(x, significantFigures, &builder);
-    return JSValue::encode(jsString(exec, UString(builder.Finalize())));
+    NumberToStringBuffer buffer;
+    return JSValue::encode(jsString(exec, UString(numberToFixedPrecisionString(x, significantFigures, buffer))));
 }
 
 EncodedJSValue JSC_HOST_CALL numberProtoFuncToString(ExecState* exec)
@@ -510,7 +503,7 @@ EncodedJSValue JSC_HOST_CALL numberProtoFuncToString(ExecState* exec)
         radix = static_cast<int>(radixValue.toInteger(exec)); // nan -> 0
 
     if (radix == 10)
-        return JSValue::encode(jsString(exec, jsNumber(x).toString(exec)));
+        return JSValue::encode(jsNumber(x).toString(exec));
 
     // Fast path for number to character conversion.
     if (radix == 36) {

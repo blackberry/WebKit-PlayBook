@@ -24,7 +24,7 @@
 #ifndef HTMLKeygenElement_h
 #define HTMLKeygenElement_h
 
-#include "HTMLFormControlElement.h"
+#include "HTMLFormControlElementWithState.h"
 
 namespace WebCore {
 
@@ -41,7 +41,7 @@ private:
 
     virtual bool canStartSelection() const { return false; }
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
     virtual bool appendFormData(FormDataList&, bool);
     virtual const AtomicString& formControlType() const;

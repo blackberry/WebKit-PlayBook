@@ -23,12 +23,18 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "TestController.h"
+#import "config.h"
+#import "TestController.h"
 
-#include <WebKit2/WKStringCF.h>
-#include <mach-o/dyld.h> 
+#import "PlatformWebView.h"
+#import <WebKit2/WKStringCF.h>
+#import <mach-o/dyld.h> 
 
 namespace WTR {
+
+void TestController::notifyDone()
+{
+}
 
 void TestController::platformInitialize()
 {
@@ -36,7 +42,7 @@ void TestController::platformInitialize()
 
 void TestController::initializeInjectedBundlePath()
 {
-    NSString *nsBundlePath = [[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:@"InjectedBundle.bundle"];
+    NSString *nsBundlePath = [[[NSBundle mainBundle] bundlePath] stringByAppendingPathComponent:@"WebKitTestRunnerInjectedBundle.bundle"];
     m_injectedBundlePath.adopt(WKStringCreateWithCFString((CFStringRef)nsBundlePath));
 }
 
@@ -45,14 +51,30 @@ void TestController::initializeTestPluginDirectory()
     m_testPluginDirectory.adopt(WKStringCreateWithCFString((CFStringRef)[[NSBundle mainBundle] bundlePath]));
 }
 
-void TestController::runUntil(bool& done)
+void TestController::platformRunUntil(bool& done, double timeout)
 {
-    while (!done)
-        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:[NSDate distantFuture]];
+    CFAbsoluteTime end = CFAbsoluteTimeGetCurrent() + timeout;
+    CFDateRef endDate = CFDateCreate(0, end);
+    while (!done && CFAbsoluteTimeGetCurrent() < end)
+        [[NSRunLoop currentRunLoop] runMode:NSDefaultRunLoopMode beforeDate:(NSDate *)endDate];
+    CFRelease(endDate);
 }
 
 void TestController::platformInitializeContext()
 {
+}
+
+void TestController::runModal(PlatformWebView* view)
+{
+    NSWindow *window = [view->platformView() window];
+    if (!window)
+        return;
+    [NSApp runModalForWindow:window];
+}
+
+const char* TestController::platformLibraryPathForTesting()
+{
+    return [[@"~/Library/Application Support/DumpRenderTree" stringByExpandingTildeInPath] UTF8String];
 }
 
 } // namespace WTR

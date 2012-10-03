@@ -44,7 +44,6 @@ PASS TryAllocate('HTMLHtmlElement') is 'exception'
 PASS TryAllocate('HTMLIFrameElement') is 'exception'
 PASS TryAllocate('HTMLImageElement') is 'exception'
 PASS TryAllocate('HTMLInputElement') is 'exception'
-PASS TryAllocate('HTMLIsIndexElement') is 'exception'
 PASS TryAllocate('HTMLLabelElement') is 'exception'
 PASS TryAllocate('HTMLLegendElement') is 'exception'
 PASS TryAllocate('HTMLLIElement') is 'exception'
@@ -116,8 +115,8 @@ FAIL TryAllocate('BarInfo') should be exception. Was no constructor.
 PASS TryAllocate('CanvasGradient') is 'exception'
 PASS TryAllocate('CanvasPattern') is 'exception'
 FAIL TryAllocate('Console') should be exception. Was no constructor.
-FAIL TryAllocate('DOMSelection') should be exception. Was no constructor.
-FAIL TryAllocate('DOMWindow') should be exception. Was no constructor.
+PASS TryAllocate('Selection') is 'exception'
+PASS TryAllocate('Window') is 'exception'
 FAIL TryAllocate('History') should be exception. Was no constructor.
 FAIL TryAllocate('HTMLOptionsCollection') should be exception. Was no constructor.
 FAIL TryAllocate('Location') should be exception. Was no constructor.

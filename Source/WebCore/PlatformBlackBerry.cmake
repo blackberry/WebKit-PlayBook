@@ -9,6 +9,7 @@ LIST(APPEND WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/platform/network/blackberry"
     "${WEBCORE_DIR}/platform/graphics/blackberry/skia"
     "${WEBCORE_DIR}/platform/graphics/chromium" # For font subsystem
+    "${WEBCORE_DIR}/platform/graphics/harfbuzz"
     "${WEBCORE_DIR}/platform/graphics/opentype/"
     "${WEBCORE_DIR}/platform/graphics/skia"
     "${WEBCORE_DIR}/platform/image-decoders/skia"
@@ -18,6 +19,7 @@ LIST(APPEND WebCore_INCLUDE_DIRECTORIES
 # Internals sources
 LIST(APPEND WebCore_SOURCES
     testing/js/WebCoreTestSupport.cpp
+    testing/js/JSInternalsCustom.cpp
 )
 
 # Skia sources
@@ -28,31 +30,35 @@ LIST(APPEND WebCore_SOURCES
     platform/graphics/skia/GradientSkia.cpp
     platform/graphics/skia/GraphicsContext3DSkia.cpp
     platform/graphics/skia/GraphicsContextSkia.cpp
-    platform/graphics/skia/HarfbuzzSkia.cpp
     platform/graphics/skia/ImageBufferSkia.cpp
     platform/graphics/skia/ImageSkia.cpp
     platform/graphics/skia/IntPointSkia.cpp
     platform/graphics/skia/IntRectSkia.cpp
     platform/graphics/skia/NativeImageSkia.cpp
+    platform/graphics/skia/OpaqueRegionSkia.cpp
     platform/graphics/skia/PathSkia.cpp
     platform/graphics/skia/PatternSkia.cpp
     platform/graphics/skia/PlatformContextSkia.cpp
     platform/graphics/skia/SkiaUtils.cpp
     platform/graphics/skia/TransformationMatrixSkia.cpp
     platform/graphics/skia/VDMXParser.cpp
+    platform/graphics/filters/skia/FEGaussianBlurSkia.cpp
+    platform/graphics/filters/skia/FEColorMatrixSkia.cpp
     platform/image-decoders/skia/ImageDecoderSkia.cpp
     platform/image-encoders/skia/PNGImageEncoder.cpp
+    platform/image-encoders/skia/JPEGImageEncoder.cpp
 )
 
 # Skia font backend sources
 LIST(APPEND WebCore_SOURCES
     platform/graphics/blackberry/skia/PlatformSupport.cpp
-    platform/graphics/chromium/ComplexTextControllerLinux.cpp
-    platform/graphics/chromium/FontCacheLinux.cpp
-    platform/graphics/chromium/FontLinux.cpp
-    platform/graphics/chromium/FontPlatformDataLinux.cpp
-    platform/graphics/chromium/HarfbuzzSkia.cpp
-    platform/graphics/chromium/SimpleFontDataLinux.cpp
+    platform/graphics/harfbuzz/ComplexTextControllerHarfBuzz.cpp
+    platform/graphics/harfbuzz/FontHarfBuzz.cpp
+    platform/graphics/harfbuzz/FontPlatformDataHarfBuzz.cpp
+    platform/graphics/harfbuzz/HarfBuzzShaperBase.cpp
+    platform/graphics/harfbuzz/HarfBuzzSkia.cpp
+    platform/graphics/skia/FontCacheSkia.cpp
+    platform/graphics/skia/SimpleFontDataSkia.cpp
     platform/graphics/skia/GlyphPageTreeNodeSkia.cpp
 )
 
@@ -76,7 +82,6 @@ LIST(APPEND WebCore_SOURCES
     platform/image-decoders/jpeg/JPEGImageDecoder.cpp
     platform/image-decoders/png/PNGImageDecoder.cpp
     platform/image-decoders/webp/WEBPImageDecoder.cpp
-    platform/image-encoders/JPEGImageEncoder.cpp
     platform/posix/FileSystemPOSIX.cpp
     platform/posix/SharedBufferPOSIX.cpp
     platform/text/TextBreakIteratorICU.cpp
@@ -84,7 +89,7 @@ LIST(APPEND WebCore_SOURCES
     platform/text/TextEncodingDetectorICU.cpp
     platform/text/blackberry/TextBreakIteratorInternalICUBlackBerry.cpp
     testing/Internals.cpp
-    platform/ColorChooser.cpp
+    testing/InternalSettings.cpp
 )
 
 # Networking sources
@@ -134,7 +139,7 @@ LIST(APPEND WebCore_SOURCES
     editing/blackberry/SmartReplaceBlackBerry.cpp
     page/blackberry/DragControllerBlackBerry.cpp
     page/blackberry/EventHandlerBlackBerry.cpp
-    page/blackberry/FrameBlackBerry.cpp
+    page/blackberry/SettingsBlackBerry.cpp
     platform/blackberry/ClipboardBlackBerry.cpp
     platform/blackberry/ContextMenuBlackBerry.cpp
     platform/blackberry/ContextMenuItemBlackBerry.cpp
@@ -155,6 +160,7 @@ LIST(APPEND WebCore_SOURCES
     platform/blackberry/PlatformTouchPointBlackBerry.cpp
     platform/blackberry/PopupMenuBlackBerry.cpp
     platform/blackberry/RenderThemeBlackBerry.cpp
+    platform/blackberry/RunLoopBlackBerry.cpp
     platform/blackberry/SSLKeyGeneratorBlackBerry.cpp
     platform/blackberry/ScrollbarThemeBlackBerry.cpp
     platform/blackberry/SearchPopupMenuBlackBerry.cpp
@@ -167,11 +173,11 @@ LIST(APPEND WebCore_SOURCES
     platform/graphics/blackberry/FloatRectBlackBerry.cpp
     platform/graphics/blackberry/FloatSizeBlackBerry.cpp
     platform/graphics/blackberry/IconBlackBerry.cpp
+    platform/graphics/blackberry/ImageBlackBerry.cpp
     platform/graphics/blackberry/IntPointBlackBerry.cpp
     platform/graphics/blackberry/IntRectBlackBerry.cpp
     platform/graphics/blackberry/IntSizeBlackBerry.cpp
     platform/graphics/blackberry/MediaPlayerPrivateBlackBerry.cpp
-    platform/graphics/blackberry/ResourceBlackBerry.cpp
     platform/text/blackberry/StringBlackBerry.cpp
 )
 
@@ -181,12 +187,26 @@ LIST(APPEND WebCore_SOURCES
     platform/network/blackberry/CredentialStorageBlackBerry.cpp
 )
 
+# File System support
+IF (ENABLE_FILE_SYSTEM)
+    LIST(APPEND WebCore_SOURCES
+        platform/blackberry/AsyncFileSystemBlackBerry.cpp
+    )
+ENDIF ()
+
 # Touch sources
 LIST(APPEND WebCore_SOURCES
     dom/Touch.cpp
     dom/TouchEvent.cpp
     dom/TouchList.cpp
 )
+
+if (ENABLE_REQUEST_ANIMATION_FRAME)
+    LIST(APPEND WebCore_SOURCES
+        platform/graphics/blackberry/DisplayRefreshMonitorBlackBerry.cpp
+        platform/graphics/DisplayRefreshMonitor.cpp
+    )
+ENDIF ()
 
 if (ENABLE_WEBGL)
     LIST(APPEND WebCore_INCLUDE_DIRECTORIES
@@ -196,6 +216,8 @@ if (ENABLE_WEBGL)
     LIST(APPEND WebCore_SOURCES
         platform/graphics/blackberry/DrawingBufferBlackBerry.cpp
         platform/graphics/blackberry/GraphicsContext3DBlackBerry.cpp
+        platform/graphics/opengl/GraphicsContext3DOpenGLCommon.cpp
+        platform/graphics/gpu/SharedGraphicsContext3D.cpp
     )
 ENDIF ()
 
@@ -232,13 +254,14 @@ IF (WTF_USE_ACCELERATED_COMPOSITING)
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerAnimation.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerCompositingThread.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerRenderer.cpp
+        ${WEBCORE_DIR}/platform/graphics/blackberry/LayerRendererSurface.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerTile.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerTiler.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/LayerWebKitThread.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/PluginLayerWebKitThread.cpp
-        ${WEBCORE_DIR}/platform/graphics/blackberry/RenderSurface.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/Texture.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/TextureCacheCompositingThread.cpp
+        ${WEBCORE_DIR}/platform/graphics/blackberry/VideoLayerWebKitThread.cpp
         ${WEBCORE_DIR}/platform/graphics/blackberry/WebGLLayerWebKitThread.cpp
         ${WEBCORE_DIR}/rendering/RenderLayerBacking.cpp
         ${WEBCORE_DIR}/rendering/RenderLayerCompositor.cpp

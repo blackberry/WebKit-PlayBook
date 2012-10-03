@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 #include "WebString.h"
 
 namespace WebCore {
+
 IconDatabaseClientBlackBerry* IconDatabaseClientBlackBerry::getInstance()
 {
     static IconDatabaseClientBlackBerry* instance = 0;
@@ -56,7 +57,7 @@ bool IconDatabaseClientBlackBerry::initIconDatabase(const BlackBerry::WebKit::We
 
     m_initState = iconDatabase().open(path, IconDatabase::defaultDatabaseFilename()) ? InitializeSucceeded : InitializeFailed;
 
-    return (m_initState == InitializeSucceeded);
+    return m_initState == InitializeSucceeded;
 }
 
 bool IconDatabaseClientBlackBerry::performImport()

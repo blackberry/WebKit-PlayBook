@@ -4,34 +4,33 @@ layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584 [bgcolor=#FFFFFF]
       RenderBlock {H2} at (0,0) size 784x27
-        RenderText {#text} at (0,0) size 494x27
-          text run at (0,0) width 494: "Safari Whitespace/Non-ASCII Bug"
-      RenderBlock {P} at (0,48) size 784x54
-        RenderText {#text} at (0,0) size 757x54
-          text run at (0,0) width 716: "Apart from whitespace (tab and linefeed characters), the two lists below (in red) use"
-          text run at (0,18) width 135: "identical HTML. "
-          text run at (135,18) width 622: "Both lists should be rendered on a single line. In Safari, however, the first"
-          text run at (0,36) width 334: "list shows each item on a separate line."
-      RenderBlock {P} at (0,119) size 784x36
-        RenderText {#text} at (0,0) size 784x36
-          text run at (0,0) width 784: "This bug only seems to occur if the bullet character is non-ASCII (has a Unicode value higher"
-          text run at (0,18) width 595: "than 127). Non-breaking spaces (&#160;), however, are an exception."
-      RenderBlock (anonymous) at (0,172) size 784x72
-        RenderBR {BR} at (0,0) size 0x18
-        RenderInline {FONT} at (0,0) size 437x54 [color=#CC0000]
-          RenderText {#text} at (0,18) size 437x18
-            text run at (0,18) width 90: "\x{BB} England "
-            text run at (90,18) width 79: "\x{BB} Ireland "
-            text run at (169,18) width 94: "\x{BB} Scotland "
-            text run at (263,18) width 98: "\x{BB} Germany "
-            text run at (361,18) width 76: "\x{BB} France "
-          RenderBR {BR} at (437,31) size 0x0
-          RenderBR {BR} at (0,36) size 0x18
-          RenderText {#text} at (0,54) size 437x18
-            text run at (0,54) width 90: "\x{BB} England "
-            text run at (90,54) width 79: "\x{BB} Ireland "
-            text run at (169,54) width 94: "\x{BB} Scotland "
-            text run at (263,54) width 98: "\x{BB} Germany "
-            text run at (361,54) width 76: "\x{BB} France "
+        RenderText {#text} at (0,0) size 357x26
+          text run at (0,0) width 357: "Safari Whitespace/Non-ASCII Bug"
+      RenderBlock {P} at (0,46) size 784x40
+        RenderText {#text} at (0,0) size 765x39
+          text run at (0,0) width 641: "Apart from whitespace (tab and linefeed characters), the two lists below (in red) use identical HTML. "
+          text run at (641,0) width 124: "Both lists should be"
+          text run at (0,20) width 581: "rendered on a single line. In Safari, however, the first list shows each item on a separate line."
+      RenderBlock {P} at (0,102) size 784x40
+        RenderText {#text} at (0,0) size 751x39
+          text run at (0,0) width 751: "This bug only seems to occur if the bullet character is non-ASCII (has a Unicode value higher than 127). Non-breaking"
+          text run at (0,20) width 281: "spaces (&#160;), however, are an exception."
+      RenderBlock (anonymous) at (0,158) size 784x80
+        RenderBR {BR} at (0,0) size 0x19
+        RenderInline {FONT} at (0,0) size 334x59 [color=#CC0000]
+          RenderText {#text} at (0,20) size 334x19
+            text run at (0,20) width 69: "\x{BB} England "
+            text run at (69,20) width 60: "\x{BB} Ireland "
+            text run at (129,20) width 71: "\x{BB} Scotland "
+            text run at (200,20) width 75: "\x{BB} Germany "
+            text run at (275,20) width 59: "\x{BB} France "
+          RenderBR {BR} at (334,35) size 0x0
+          RenderBR {BR} at (0,40) size 0x19
+          RenderText {#text} at (0,60) size 334x19
+            text run at (0,60) width 69: "\x{BB} England "
+            text run at (69,60) width 60: "\x{BB} Ireland "
+            text run at (129,60) width 71: "\x{BB} Scotland "
+            text run at (200,60) width 75: "\x{BB} Germany "
+            text run at (275,60) width 59: "\x{BB} France "
         RenderText {#text} at (0,0) size 0x0
         RenderBR {BR} at (0,0) size 0x0

@@ -17,23 +17,33 @@
  * Boston, MA 02110-1301, USA.
  *
  */
+
 #include "config.h"
 #include "DeviceMotionProviderQt.h"
 
+#include "DeviceMotionController.h"
 #include "DeviceOrientationProviderQt.h"
 
 namespace WebCore {
 
 DeviceMotionProviderQt::DeviceMotionProviderQt()
+    : m_motion(DeviceMotionData::create())
+    , m_deviceOrientation(new DeviceOrientationProviderQt)
+    , m_controller(0)
 {
     m_acceleration.addFilter(this);
-    m_motion = DeviceMotionData::create();
-    m_deviceOrientation = new DeviceOrientationProviderQt();
 }
 
 DeviceMotionProviderQt::~DeviceMotionProviderQt()
 {
     delete m_deviceOrientation;
+}
+
+void DeviceMotionProviderQt::setController(DeviceMotionController* controller)
+{
+    ASSERT(controller);
+    ASSERT(!m_controller);
+    m_controller = controller;
 }
 
 void DeviceMotionProviderQt::start()
@@ -50,26 +60,30 @@ void DeviceMotionProviderQt::stop()
 
 bool DeviceMotionProviderQt::filter(QAccelerometerReading* reading)
 {
+    if (!m_controller) {
+        // We are the only filter. No need to propagate from here.
+        return false;
+    }
+
     RefPtr<DeviceMotionData::Acceleration> accel = DeviceMotionData::Acceleration::create(
             /* x available */ true, reading->x(),
             /* y available */ true, reading->y(),
             /* z available */ true, reading->z());
 
     RefPtr<DeviceMotionData::RotationRate> rotation = DeviceMotionData::RotationRate::create(
-            m_deviceOrientation->hasAlpha(), m_deviceOrientation->orientation()->alpha(),
-            /* beta available */ true, m_deviceOrientation->orientation()->beta(),
-            /* gamma available */ true, m_deviceOrientation->orientation()->gamma());
+            m_deviceOrientation->hasAlpha(), m_deviceOrientation->lastOrientation()->alpha(),
+            /* beta available */ true, m_deviceOrientation->lastOrientation()->beta(),
+            /* gamma available */ true, m_deviceOrientation->lastOrientation()->gamma());
 
     m_motion = DeviceMotionData::create(accel,
             accel, /* FIXME: Needs to provide acceleration include gravity. */
             rotation,
             false, 0 /* The interval is treated internally by Qt mobility */);
 
-    emit deviceMotionChanged();
+    m_controller->didChangeDeviceMotion(m_motion.get());
 
+    // We are the only filter. No need to propagate from here.
     return false;
 }
 
 } // namespace WebCore
-
-#include "moc_DeviceMotionProviderQt.cpp"

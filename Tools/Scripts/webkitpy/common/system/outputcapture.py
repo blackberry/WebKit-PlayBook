@@ -37,6 +37,12 @@ from StringIO import StringIO
 class OutputCapture(object):
     def __init__(self):
         self.saved_outputs = dict()
+        self._log_level = logging.INFO
+
+    def set_log_level(self, log_level):
+        self._log_level = log_level
+        if hasattr(self, '_logs_handler'):
+            self._logs_handler.setLevel(self._log_level)
 
     def _capture_output_with_name(self, output_name):
         self.saved_outputs[output_name] = getattr(sys, output_name)
@@ -53,7 +59,7 @@ class OutputCapture(object):
     def capture_output(self):
         self._logs = StringIO()
         self._logs_handler = logging.StreamHandler(self._logs)
-        self._logs_handler.setLevel(logging.INFO)
+        self._logs_handler.setLevel(self._log_level)
         logging.getLogger().addHandler(self._logs_handler)
         return (self._capture_output_with_name("stdout"), self._capture_output_with_name("stderr"))
 
@@ -68,11 +74,14 @@ class OutputCapture(object):
 
     def assert_outputs(self, testcase, function, args=[], kwargs={}, expected_stdout="", expected_stderr="", expected_exception=None, expected_logs=None):
         self.capture_output()
-        if expected_exception:
-            return_value = testcase.assertRaises(expected_exception, function, *args, **kwargs)
-        else:
-            return_value = function(*args, **kwargs)
-        (stdout_string, stderr_string, logs_string) = self.restore_output()
+        try:
+            if expected_exception:
+                return_value = testcase.assertRaises(expected_exception, function, *args, **kwargs)
+            else:
+                return_value = function(*args, **kwargs)
+        finally:
+            (stdout_string, stderr_string, logs_string) = self.restore_output()
+
         testcase.assertEqual(stdout_string, expected_stdout)
         testcase.assertEqual(stderr_string, expected_stderr)
         if expected_logs is not None:

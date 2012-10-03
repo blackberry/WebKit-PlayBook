@@ -55,13 +55,28 @@ namespace JSC {
         unsigned lastOvectorIndex : 1;
     };
 
+    struct RegExpResult {
+        WTF_MAKE_FAST_ALLOCATED;
+    public:
+        RegExpResult()
+        : lastNumSubPatterns(0)
+        {
+        }
+        
+        RegExpResult& operator=(const RegExpConstructorPrivate&);
+        
+        UString input;
+        unsigned lastNumSubPatterns;
+        Vector<int, 32> ovector;
+    };
+    
     class RegExpConstructor : public InternalFunction {
     public:
         typedef InternalFunction Base;
 
         static RegExpConstructor* create(ExecState* exec, JSGlobalObject* globalObject, Structure* structure, RegExpPrototype* regExpPrototype)
         {
-            RegExpConstructor* constructor = new (allocateCell<RegExpConstructor>(*exec->heap())) RegExpConstructor(globalObject, structure);
+            RegExpConstructor* constructor = new (NotNull, allocateCell<RegExpConstructor>(*exec->heap())) RegExpConstructor(globalObject, structure);
             constructor->finishCreation(exec, regExpPrototype);
             return constructor;
         }
@@ -98,10 +113,11 @@ namespace JSC {
 
     private:
         RegExpConstructor(JSGlobalObject*, Structure*);
+        static void destroy(JSCell*);
         static ConstructType getConstructData(JSCell*, ConstructData&);
         static CallType getCallData(JSCell*, CallData&);
 
-        OwnPtr<RegExpConstructorPrivate> d;
+        RegExpConstructorPrivate d;
     };
 
     RegExpConstructor* asRegExpConstructor(JSValue);
@@ -121,20 +137,20 @@ namespace JSC {
     */
     ALWAYS_INLINE void RegExpConstructor::performMatch(JSGlobalData& globalData, RegExp* r, const UString& s, int startOffset, int& position, int& length, int** ovector)
     {
-        position = r->match(globalData, s, startOffset, &d->tempOvector());
+        position = r->match(globalData, s, startOffset, &d.tempOvector());
 
         if (ovector)
-            *ovector = d->tempOvector().data();
+            *ovector = d.tempOvector().data();
 
         if (position != -1) {
-            ASSERT(!d->tempOvector().isEmpty());
+            ASSERT(!d.tempOvector().isEmpty());
 
-            length = d->tempOvector()[1] - d->tempOvector()[0];
+            length = d.tempOvector()[1] - d.tempOvector()[0];
 
-            d->input = s;
-            d->lastInput = s;
-            d->changeLastOvector();
-            d->lastNumSubPatterns = r->numSubpatterns();
+            d.input = s;
+            d.lastInput = s;
+            d.changeLastOvector();
+            d.lastNumSubPatterns = r->numSubpatterns();
         }
     }
 

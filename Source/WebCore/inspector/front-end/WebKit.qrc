@@ -29,6 +29,7 @@
     <file>CookiesTable.js</file>
     <file>CSSCompletions.js</file>
     <file>CSSKeywordCompletions.js</file>
+    <file>CSSSelectorProfileView.js</file>
     <file>CSSStyleModel.js</file>
     <file>Database.js</file>
     <file>DatabaseQueryView.js</file>
@@ -38,6 +39,7 @@
     <file>DataGrid.js</file>
     <file>DebuggerModel.js</file>
     <file>DebuggerPresentationModel.js</file>
+    <file>Dialog.js</file>
     <file>DOMAgent.js</file>
     <file>DOMBreakpointsSidebarPane.js</file>
     <file>DOMPresentationUtils.js</file>
@@ -54,6 +56,7 @@
     <file>ExtensionPanel.js</file>
     <file>ExtensionRegistryStub.js</file>
     <file>ExtensionServer.js</file>
+    <file>FilteredItemSelectionDialog.js</file>
     <file>FontView.js</file>
     <file>GoToLineDialog.js</file>
     <file>HAREntry.js</file>
@@ -64,14 +67,19 @@
     <file>HeapSnapshotWorkerDispatcher.js</file>
     <file>HelpScreen.js</file>
     <file>ImageView.js</file>
+    <file>IndexedDBModel.js</file>
+    <file>IndexedDBViews.js</file>
     <file>InjectedFakeWorker.js</file>
     <file>inspector.js</file>
+    <file>InspectorBackend.js</file>
+    <file>InspectorFrontendAPI.js</file>
     <file>InspectorFrontendHostStub.js</file>
     <file>InspectorView.js</file>
     <file>JavaScriptContextManager.js</file>
     <file>JavaScriptFormatter.js</file>
     <file>JavaScriptSourceFrame.js</file>
     <file>KeyboardShortcut.js</file>
+    <file>MemoryStatistics.js</file>
     <file>MetricsSidebarPane.js</file>
     <file>NetworkItemView.js</file>
     <file>NetworkLog.js</file>
@@ -86,6 +94,7 @@
     <file>Placard.js</file>
     <file>Popover.js</file>
     <file>ProfileDataGridTree.js</file>
+    <file>ProfileLauncherView.js</file>
     <file>ProfilesPanel.js</file>
     <file>ProfileView.js</file>
     <file>PropertiesSection.js</file>
@@ -110,6 +119,7 @@
     <file>ScriptFormatter.js</file>
     <file>ScriptFormatterWorker.js</file>
     <file>ScriptsPanel.js</file>
+    <file>ScriptsNavigator.js</file>
     <file>ScriptsSearchScope.js</file>
     <file>SearchController.js</file>
     <file>Section.js</file>
@@ -117,6 +127,7 @@
     <file>SettingsScreen.js</file>
     <file>ShortcutsScreen.js</file>
     <file>ShowMoreDataGridNode.js</file>
+    <file>SidebarOverlay.js</file>
     <file>SidebarPane.js</file>
     <file>SidebarTreeElement.js</file>
     <file>SoftContextMenu.js</file>
@@ -125,16 +136,20 @@
     <file>SourceHTMLTokenizer.js</file>
     <file>SourceJavaScriptTokenizer.js</file>
     <file>SourceTokenizer.js</file>
+    <file>Spectrum.js</file>
+    <file>SplitView.js</file>
     <file>StatusBarButton.js</file>
     <file>StylesSidebarPane.js</file>
+    <file>TabbedEditorContainer.js</file>
     <file>TabbedPane.js</file>
     <file>TestController.js</file>
     <file>TextEditorHighlighter.js</file>
     <file>TextEditorModel.js</file>
     <file>TextPrompt.js</file>
     <file>TextViewer.js</file>
-    <file>TimelineAgent.js</file>
     <file>TimelineManager.js</file>
+    <file>TimelineModel.js</file>
+    <file>TimelinePresentationModel.js</file>
     <file>TimelineGrid.js</file>
     <file>TimelineOverviewPane.js</file>
     <file>TimelinePanel.js</file>
@@ -147,16 +162,17 @@
     <file>utilities.js</file>
     <file>View.js</file>
     <file>WatchExpressionsSidebarPane.js</file>
-    <file>WelcomeView.js</file>
     <file>WorkerManager.js</file>
     <file>WorkersSidebarPane.js</file>
     <file>UglifyJS/parse-js.js</file>
     <file>auditsPanel.css</file>
     <file>dataGrid.css</file>
+    <file>dialog.css</file>
     <file>elementsPanel.css</file>
-    <file>goToLineDialog.css</file>
+    <file>filteredItemSelectionDialog.css</file>
     <file>heapProfiler.css</file>
     <file>helpScreen.css</file>
+    <file>indexedDBViews.css</file>
     <file>inspector.css</file>
     <file>inspectorCommon.css</file>
     <file>inspectorSyntaxHighlight.css</file>
@@ -168,6 +184,8 @@
     <file>resourceView.css</file>
     <file>resourcesPanel.css</file>
     <file>scriptsPanel.css</file>
+    <file>splitView.css</file>
+    <file>tabbedPane.css</file>
     <file>textPrompt.css</file>
     <file>textViewer.css</file>
     <file>timelinePanel.css</file>
@@ -197,6 +215,7 @@
     <file>Images/disclosureTriangleSmallRightDownBlack.png</file>
     <file>Images/disclosureTriangleSmallRightDownWhite.png</file>
     <file>Images/disclosureTriangleSmallRightWhite.png</file>
+    <file>Images/domain.png</file>
     <file>Images/errorIcon.png</file>
     <file>Images/errorMediumIcon.png</file>
     <file>Images/errorRedDot.png</file>
@@ -209,7 +228,12 @@
     <file>Images/goArrow.png</file>
     <file>Images/graphLabelCalloutLeft.png</file>
     <file>Images/graphLabelCalloutRight.png</file>
+    <file>Images/indexedDB.png</file>
+    <file>Images/indexedDBObjectStore.png</file>
+    <file>Images/indexedDBIndex.png</file>
     <file>Images/localStorage.png</file>
+    <file>Images/navigatorShowHideButton.png</file>
+    <file>Images/navigatorPinButton.png</file>
     <file>Images/paneAddButtons.png</file>
     <file>Images/paneBottomGrow.png</file>
     <file>Images/paneBottomGrowActive.png</file>

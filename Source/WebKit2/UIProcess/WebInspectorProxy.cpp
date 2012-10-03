@@ -29,6 +29,7 @@
 
 #if ENABLE(INSPECTOR)
 
+#include "WebFrameProxy.h"
 #include "WebInspectorMessages.h"
 #include "WebPageCreationParameters.h"
 #include "WebPageGroup.h"
@@ -52,6 +53,9 @@ static PassRefPtr<WebPageGroup> createInspectorPageGroup()
     // Allow developers to inspect the Web Inspector in debug builds.
     pageGroup->preferences()->setDeveloperExtrasEnabled(true);
 #endif
+
+    pageGroup->preferences()->setApplicationChromeModeEnabled(true);
+    pageGroup->preferences()->setSuppressesIncrementalRendering(true);
 
     return pageGroup.release();
 }
@@ -96,6 +100,14 @@ void WebInspectorProxy::invalidate()
 }
 
 // Public APIs
+bool WebInspectorProxy::isFront()
+{
+    if (!m_page)
+        return false;
+
+    return platformIsFront();
+}
+
 void WebInspectorProxy::show()
 {
     if (!m_page)
@@ -118,6 +130,22 @@ void WebInspectorProxy::showConsole()
         return;
 
     m_page->process()->send(Messages::WebInspector::ShowConsole(), m_page->pageID());
+}
+
+void WebInspectorProxy::showResources()
+{
+    if (!m_page)
+        return;
+
+    m_page->process()->send(Messages::WebInspector::ShowResources(), m_page->pageID());
+}
+
+void WebInspectorProxy::showMainResourceForFrame(WebFrameProxy* frame)
+{
+    if (!m_page)
+        return;
+    
+    m_page->process()->send(Messages::WebInspector::ShowMainResourceForFrame(frame->frameID()), m_page->pageID());
 }
 
 void WebInspectorProxy::attach()
@@ -145,6 +173,7 @@ void WebInspectorProxy::detach()
 
 void WebInspectorProxy::setAttachedWindowHeight(unsigned height)
 {
+    inspectorPageGroup()->preferences()->setInspectorAttachedHeight(height);
     platformSetAttachedWindowHeight(height);
 }
 
@@ -203,6 +232,8 @@ void WebInspectorProxy::createInspectorPage(uint64_t& inspectorPageID, WebPageCr
     if (!m_page)
         return;
 
+    m_isAttached = shouldOpenAttached();
+
     WebPageProxy* inspectorPage = platformCreateInspectorPage();
     ASSERT(inspectorPage);
     if (!inspectorPage)
@@ -212,7 +243,7 @@ void WebInspectorProxy::createInspectorPage(uint64_t& inspectorPageID, WebPageCr
     inspectorPageParameters = inspectorPage->creationParameters();
 
     String url = inspectorPageURL();
-    if (shouldOpenAttached())
+    if (m_isAttached)
         url += "?docked=true";
     m_page->process()->assumeReadAccessToBaseURL(inspectorBaseURL());
     inspectorPage->loadURL(url);
@@ -221,7 +252,6 @@ void WebInspectorProxy::createInspectorPage(uint64_t& inspectorPageID, WebPageCr
 void WebInspectorProxy::didLoadInspectorPage()
 {
     m_isVisible = true;
-    m_isAttached = shouldOpenAttached();
 
     // platformOpen is responsible for rendering attached mode depending on m_isAttached.
     platformOpen();
@@ -230,6 +260,9 @@ void WebInspectorProxy::didLoadInspectorPage()
 void WebInspectorProxy::didClose()
 {
     m_isVisible = false;
+    m_isDebuggingJavaScript = false;
+    m_isProfilingJavaScript = false;
+    m_isProfilingPage = false;
 
     if (m_isAttached) {
         // Detach here so we only need to have one code path that is responsible for cleaning up the inspector
@@ -252,8 +285,17 @@ void WebInspectorProxy::inspectedURLChanged(const String& urlString)
 
 bool WebInspectorProxy::canAttach()
 {
-    unsigned inspectedWindowHeight = platformInspectedWindowHeight();
-    return inspectedWindowHeight && minimumAttachedHeight <= (inspectedWindowHeight * 3 / 4);
+    // Keep this in sync with InspectorFrontendClientLocal::canAttachWindow. There are two implementations
+    // to make life easier in the multi-process world we have. WebInspectorProxy uses canAttach to decide if
+    // we can attach on open (on the UI process side). And InspectorFrontendClientLocal::canAttachWindow is
+    // used to decide if we can attach when the attach button is pressed (on the WebProcess side).
+
+    // Don't allow the attach if the window would be too small to accommodate the minimum inspector height.
+    // Also don't allow attaching to another inspector -- two inspectors in one window is too much!
+    bool isInspectorPage = m_page->pageGroup() == inspectorPageGroup();
+    unsigned inspectedPageHeight = platformInspectedWindowHeight();
+    unsigned maximumAttachedHeight = inspectedPageHeight * 3 / 4;
+    return minimumAttachedHeight <= maximumAttachedHeight && !isInspectorPage;
 }
 
 bool WebInspectorProxy::shouldOpenAttached()

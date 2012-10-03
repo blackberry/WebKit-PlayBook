@@ -26,10 +26,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import os
-
 from webkitpy.common.system.deprecated_logging import log
-from webkitpy.common.config.ports import WebKitPort
 from webkitpy.tool.bot.sheriff import Sheriff
 from webkitpy.tool.bot.sheriffircbot import SheriffIRCBot
 from webkitpy.tool.commands.queues import AbstractQueue
@@ -42,9 +39,6 @@ class SheriffBot(AbstractQueue, StepSequenceErrorHandler):
         "abarth@webkit.org",
         "eric@webkit.org",
     ]
-
-    def _update(self):
-        self.run_webkit_patch(["update", "--force-clean", "--quiet"])
 
     # AbstractQueue methods
 
@@ -62,36 +56,9 @@ class SheriffBot(AbstractQueue, StepSequenceErrorHandler):
 
     def next_work_item(self):
         self._irc_bot.process_pending_messages()
-        self._update()
-
-        # FIXME: We need to figure out how to provoke_flaky_builders.
-
-        failure_map = self._tool.buildbot.failure_map()
-        failure_map.filter_out_old_failures(self._is_old_failure)
-        if failure_map.is_empty():
-            return None
-        return failure_map
-
-    def should_proceed_with_work_item(self, failure_map):
-        # Currently, we don't have any reasons not to proceed with work items.
-        return True
+        return
 
     def process_work_item(self, failure_map):
-        failing_revisions = failure_map.failing_revisions()
-        for revision in failing_revisions:
-            builders = failure_map.builders_failing_for(revision)
-            tests = failure_map.tests_failing_for(revision)
-            try:
-                commit_info = self._tool.checkout().commit_info_for_revision(revision)
-                if not commit_info:
-                    print "FAILED to fetch CommitInfo for r%s, likely missing ChangeLog" % revision
-                    continue
-                self._sheriff.post_irc_warning(commit_info, builders)
-                self._sheriff.post_blame_comment_on_bug(commit_info, builders, tests)
-
-            finally:
-                for builder in builders:
-                    self._tool.status_server.update_svn_revision(revision, builder.name())
         return True
 
     def handle_unexpected_error(self, failure_map, message):

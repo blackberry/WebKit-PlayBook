@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  * Copyright (C) 2009 Apple Inc. All rights reserved.
  *
@@ -49,15 +49,8 @@
 #include "FloatConversion.h"
 #include "FloatRect.h"
 #include "Image.h"
+#include "LayerAnimation.h"
 #include "LayerWebKitThread.h"
-#include "NotImplemented.h"
-#include "PlatformString.h"
-#include "SystemTime.h"
-#include <wtf/CurrentTime.h>
-#include <wtf/StringExtras.h>
-#include <wtf/text/CString.h>
-
-using namespace std;
 
 namespace WebCore {
 
@@ -68,7 +61,7 @@ static void setLayerBorderColor(LayerWebKitThread& layer, const Color& color)
 
 static void clearBorderColor(LayerWebKitThread& layer)
 {
-    layer.setBorderColor(static_cast<RGBA32>(0));
+    layer.setBorderColor(Color::transparent);
 }
 
 static void setLayerBackgroundColor(LayerWebKitThread& layer, const Color& color)
@@ -78,7 +71,7 @@ static void setLayerBackgroundColor(LayerWebKitThread& layer, const Color& color
 
 static void clearLayerBackgroundColor(LayerWebKitThread& layer)
 {
-    layer.setBackgroundColor(static_cast<RGBA32>(0));
+    layer.setBackgroundColor(Color::transparent);
 }
 
 PassOwnPtr<GraphicsLayer> GraphicsLayer::create(GraphicsLayerClient* client)
@@ -150,11 +143,11 @@ void GraphicsLayerBlackBerry::addChildAbove(GraphicsLayer* childLayer, GraphicsL
 
 bool GraphicsLayerBlackBerry::replaceChild(GraphicsLayer* oldChild, GraphicsLayer* newChild)
 {
-    if (GraphicsLayer::replaceChild(oldChild, newChild)) {
-        updateSublayerList();
-        return true;
-    }
-    return false;
+    if (!GraphicsLayer::replaceChild(oldChild, newChild))
+        return false;
+
+    updateSublayerList();
+    return true;
 }
 
 void GraphicsLayerBlackBerry::removeFromParent()
@@ -275,21 +268,21 @@ void GraphicsLayerBlackBerry::setFixedPosition(bool fixed)
     updateFixedPosition();
 }
 
-void GraphicsLayerBlackBerry::setHasFixedContainer(bool b)
+void GraphicsLayerBlackBerry::setHasFixedContainer(bool hasFixedContainer)
 {
-    if (b == m_hasFixedContainer)
+    if (hasFixedContainer == m_hasFixedContainer)
         return;
 
-    GraphicsLayer::setHasFixedContainer(b);
+    GraphicsLayer::setHasFixedContainer(hasFixedContainer);
     updateHasFixedContainer();
 }
 
-void GraphicsLayerBlackBerry::setHasFixedAncestorInDOMTree(bool b)
+void GraphicsLayerBlackBerry::setHasFixedAncestorInDOMTree(bool hasFixedAncestorInDOMTree)
 {
-    if (b == m_hasFixedAncestorInDOMTree)
+    if (hasFixedAncestorInDOMTree == m_hasFixedAncestorInDOMTree)
         return;
 
-    GraphicsLayer::setHasFixedAncestorInDOMTree(b);
+    GraphicsLayer::setHasFixedAncestorInDOMTree(hasFixedAncestorInDOMTree);
     updateHasFixedAncestorInDOMTree();
 }
 
@@ -333,7 +326,7 @@ void GraphicsLayerBlackBerry::setBackfaceVisibility(bool visible)
 
 void GraphicsLayerBlackBerry::setOpacity(float opacity)
 {
-    float clampedOpacity = max(min(opacity, 1.0f), 0.0f);
+    float clampedOpacity = clampTo(opacity, 0.0f, 1.0f);
 
     if (m_opacity == clampedOpacity)
         return;
@@ -388,7 +381,7 @@ static PassRefPtr<LayerAnimation> removeAnimationByName(const String& animationN
         if (list[i]->name() == animationName) {
             RefPtr<LayerAnimation> layerAnimation = list[i];
             list.remove(i);
-            return layerAnimation.release();
+            return layerAnimation;
         }
     }
 
@@ -397,13 +390,12 @@ static PassRefPtr<LayerAnimation> removeAnimationByName(const String& animationN
 
 bool GraphicsLayerBlackBerry::addAnimation(const KeyframeValueList& values, const IntSize& boxSize, const Animation* animation, const String& animationName, double timeOffset)
 {
-    // This is what GraphicsLayerCA checks for
+    // This is what GraphicsLayerCA checks for.
     if (!animation || animation->isEmptyOrZeroDuration() || values.size() < 2)
         return false;
 
-    // We only support these two kinds of properties ATM
-    if (values.property() != AnimatedPropertyWebkitTransform
-     && values.property() != AnimatedPropertyOpacity)
+    // We only support these two kinds of properties at the moment.
+    if (values.property() != AnimatedPropertyWebkitTransform && values.property() != AnimatedPropertyOpacity)
         return false;
 
     // Remove any running animation for the same property.
@@ -429,8 +421,7 @@ void GraphicsLayerBlackBerry::pauseAnimation(const String& animationName, double
 {
     // WebCore might have added several animations with the same name, but for different properties
 
-    RefPtr<LayerAnimation> animation;
-    while (animation = removeAnimationByName(animationName, m_runningAnimations)) {
+    while (RefPtr<LayerAnimation> animation = removeAnimationByName(animationName, m_runningAnimations)) {
 #if DEBUG_LAYER_ANIMATION
         fprintf(stderr, "LayerAnimation 0x%08x: Pausing animation %s\n", animation.get(), animation->name().latin1().data());
 #endif
@@ -562,12 +553,12 @@ void GraphicsLayerBlackBerry::setContentsToMedia(PlatformLayer* layer)
     } else {
         if (m_contentsLayer) {
             childrenChanged = true;
-  
+
             // The old contents layer will be removed via updateSublayerList.
             m_contentsLayer = 0;
         }
     }
-  
+
     if (childrenChanged)
         updateSublayerList();
 }
@@ -725,7 +716,7 @@ void GraphicsLayerBlackBerry::updateLayerPreserves3D()
         m_layer->setAnchorPoint(FloatPoint(0.5f, 0.5f));
         TransformationMatrix identity;
         m_layer->setTransform(identity);
-        
+
         // Set the old layer to opacity of 1. Further down we will set the opacity on the transform layer.
         m_layer->setOpacity(1);
 
@@ -839,8 +830,8 @@ void GraphicsLayerBlackBerry::updateContentsRect()
     if (!m_contentsLayer)
         return;
 
-    m_contentsLayer->setPosition(FloatPoint(m_contentsRect.x(), m_contentsRect.y()));
-    m_contentsLayer->setBounds(IntSize(m_contentsRect.width(), m_contentsRect.height()));
+    m_contentsLayer->setPosition(m_contentsRect.location());
+    m_contentsLayer->setBounds(m_contentsRect.size());
 }
 
 void GraphicsLayerBlackBerry::setupContentsLayer(LayerWebKitThread* contentsLayer)
@@ -856,7 +847,7 @@ void GraphicsLayerBlackBerry::setupContentsLayer(LayerWebKitThread* contentsLaye
     if (contentsLayer) {
         m_contentsLayer = contentsLayer;
 
-        m_contentsLayer->setAnchorPoint(FloatPoint(0, 0));
+        m_contentsLayer->setAnchorPoint(FloatPoint::zero());
 
         // It is necessary to update setDrawable as soon as we receive the new contentsLayer, for
         // the correctness of early exit conditions in setDrawsContent() and setContentsVisible().
@@ -881,13 +872,6 @@ void GraphicsLayerBlackBerry::updateOpacityOnLayer()
 {
     primaryLayer()->setOpacity(m_opacity);
 }
-
-#if 0
-GraphicsLayer::CompositingCoordinatesOrientation GraphicsLayer::compositingCoordinatesOrientation()
-{
-    return GraphicsLayer::CompositingCoordinatesTopDown;
-}
-#endif
 
 bool GraphicsLayerBlackBerry::contentsVisible(const IntRect& contentRect) const
 {

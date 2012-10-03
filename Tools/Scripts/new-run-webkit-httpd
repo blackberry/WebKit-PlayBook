@@ -42,8 +42,11 @@ import os
 import sys
 import tempfile
 
+import webkitpy.common.version_check
+
 from webkitpy.common.host import Host
 from webkitpy.layout_tests.servers import http_server
+
 
 def run(options):
     if not options.server:
@@ -57,16 +60,18 @@ def run(options):
             # meaningful.
             raise 'Specifying port requires also a root.'
         host = Host()
-        port_obj = host.port_factory.get(options=options)
+        # FIXME: Make this work with other ports as well.
+        port_obj = host.port_factory.get(port_name='chromium', options=options)
         httpd = http_server.Lighttpd(port_obj,
                                      tempfile.gettempdir(),
                                      port=options.port,
                                      root=options.root,
-                                     run_background=options.run_background)
+                                     run_background=options.run_background,
+                                     layout_tests_dir=options.layout_tests_dir)
         if options.server == 'start':
             httpd.start()
         else:
-            httpd.stop(force=True)
+            httpd.stop()
 
 
 def main():
@@ -82,10 +87,10 @@ def main():
     option_parser.add_option('--run_background', action="store_true",
         dest="run_background",
         help='Run on background (for running as UI test)')
+    option_parser.add_option('--layout_tests_dir',
+        dest="layout_tests_dir",
+        help='Absolute path to LayoutTests root')
     options, args = option_parser.parse_args()
-
-    # FIXME: Make this work with other ports as well.
-    options.chromium = True
 
     run(options)
 

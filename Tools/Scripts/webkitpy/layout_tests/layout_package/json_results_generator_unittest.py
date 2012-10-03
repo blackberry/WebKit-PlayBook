@@ -26,18 +26,17 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-"""Unit tests for json_results_generator.py."""
-
 import unittest
+import json
 import optparse
 import random
 
-from webkitpy.common.system import filesystem_mock
+from webkitpy.common.host_mock import MockHost
 from webkitpy.layout_tests.layout_package import json_results_generator
 from webkitpy.layout_tests.models import test_expectations
 from webkitpy.layout_tests.port import test
 from webkitpy.thirdparty.mock import Mock
-from webkitpy.thirdparty import simplejson
+
 
 class JSONGeneratorTest(unittest.TestCase):
     def setUp(self):
@@ -57,6 +56,11 @@ class JSONGeneratorTest(unittest.TestCase):
         self._FLAKY_count = 0
         self._FAILS_count = 0
         self._fixable_count = 0
+
+    def test_strip_json_wrapper(self):
+        json = "['contents']"
+        self.assertEqual(json_results_generator.strip_json_wrapper(json_results_generator._JSON_PREFIX + json + json_results_generator._JSON_SUFFIX), json)
+        self.assertEqual(json_results_generator.strip_json_wrapper(json), json)
 
     def _test_json_generation(self, passed_tests_list, failed_tests_list):
         tests_set = set(passed_tests_list) | set(failed_tests_list)
@@ -84,8 +88,9 @@ class JSONGeneratorTest(unittest.TestCase):
                 failed=(test in failed_tests),
                 elapsed_time=test_timings[test])
 
+        host = MockHost()
         port = Mock()
-        port._filesystem = filesystem_mock.MockFileSystem()
+        port._filesystem = host.filesystem
         generator = json_results_generator.JSONResultsGeneratorBase(port,
             self.builder_name, self.build_name, self.build_number,
             '',
@@ -208,7 +213,7 @@ class JSONGeneratorTest(unittest.TestCase):
         self._test_json_generation(['foo/A'], ['foo/B', 'bar/C'])
 
     def test_test_timings_trie(self):
-        test_port = test.TestPort()
+        test_port = test.TestPort(MockHost())
         individual_test_timings = []
         individual_test_timings.append(json_results_generator.TestResult('foo/bar/baz.html', elapsed_time=1.2))
         individual_test_timings.append(json_results_generator.TestResult('bar.html', elapsed_time=0.0001))
@@ -223,8 +228,7 @@ class JSONGeneratorTest(unittest.TestCase):
           }
         }
 
-        self.assertEqual(simplejson.dumps(trie), simplejson.dumps(expected_trie))
-
+        self.assertEqual(json.dumps(trie), json.dumps(expected_trie))
 
 
 if __name__ == '__main__':

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008, 2009 Julien Chaffraix <julien.chaffraix@gmail.com>
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,52 +51,38 @@ CookieMap::CookieMap(const String& name)
 
 CookieMap::~CookieMap()
 {
-    // There is no need to delete m_oldestCookie as it is handled in deleting m_cookieMap
-    deleteAllValues(m_cookieMap);
-    m_cookieMap.clear();
-    deleteAllValues(m_subdomains);
-    m_subdomains.clear();
+    deleteAllCookiesAndDomains();
 }
 
-bool CookieMap::existsCookie(const ParsedCookie* cookie) const
+ParsedCookie* CookieMap::addOrReplaceCookie(ParsedCookie* cookie)
 {
-    String key = cookie->name() + cookie->path();
-    return m_cookieMap.contains(key);
-}
-
-void CookieMap::addCookie(ParsedCookie* cookie)
-{
-    String key = cookie->name() + cookie->path();
-
     CookieLog("CookieMap - Attempting to add cookie - %s", cookie->name().utf8().data());
 
-    ASSERT(!m_cookieMap.contains(key));
-    m_cookieMap.add(key, cookie);
+    ParsedCookie* prevCookie = 0;
+    size_t cookieCount = m_cookieVector.size();
+    for (size_t i = 0; i < cookieCount; i++) {
+        if (m_cookieVector[i]->name() == cookie->name() && m_cookieVector[i]->path() == cookie->path()) {
+            prevCookie = m_cookieVector[i];
+            m_cookieVector[i] = cookie;
+            if (prevCookie == m_oldestCookie)
+                updateOldestCookie();
+            return prevCookie;
+        }
+    }
+
+    m_cookieVector.append(cookie);
     if (!cookie->isSession())
         cookieManager().addedCookie();
     if (!m_oldestCookie || m_oldestCookie->lastAccessed() > cookie->lastAccessed())
         m_oldestCookie = cookie;
+    return 0;
 }
 
-ParsedCookie* CookieMap::updateCookie(ParsedCookie* newCookie)
+ParsedCookie* CookieMap::removeCookieAtIndex(int position, const ParsedCookie* cookie)
 {
-    String key = newCookie->name() + newCookie->path();
-    ParsedCookie* oldCookie = m_cookieMap.take(key);
-    ASSERT(oldCookie);
-    m_cookieMap.add(key, newCookie);
-    if (oldCookie == m_oldestCookie)
-        updateOldestCookie();
-    return oldCookie;
-}
-
-ParsedCookie* CookieMap::removeCookie(const ParsedCookie* cookie)
-{
-    // Find a previous entry for deletion
-    String key = cookie->name() + cookie->path();
-    ParsedCookie* prevCookie = m_cookieMap.take(key);
-
-    if (!prevCookie)
-        return 0;
+    ASSERT(0 <= position && static_cast<unsigned>(position) < m_cookieVector.size());
+    ParsedCookie* prevCookie = m_cookieVector[position];
+    m_cookieVector.remove(position);
 
     if (prevCookie == m_oldestCookie)
         updateOldestCookie();
@@ -111,6 +97,16 @@ ParsedCookie* CookieMap::removeCookie(const ParsedCookie* cookie)
     if (!prevCookie->isSession())
         cookieManager().removedCookie();
     return prevCookie;
+}
+
+ParsedCookie* CookieMap::removeCookie(const ParsedCookie* cookie)
+{
+    size_t cookieCount = m_cookieVector.size();
+    for (size_t position = 0; position < cookieCount; ++position) {
+        if (m_cookieVector[position]->name() == cookie->name() && m_cookieVector[position]->path() == cookie->path())
+            return removeCookieAtIndex(position, cookie);
+    }
+    return 0;
 }
 
 CookieMap* CookieMap::getSubdomainMap(const String& subdomain)
@@ -130,23 +126,25 @@ void CookieMap::addSubdomainMap(const String& subdomain, CookieMap* newDomain)
 
 void CookieMap::getAllCookies(Vector<ParsedCookie*>* stackOfCookies)
 {
-    CookieLog("CookieMap - Attempting to copy Map:%s cookies with %d cookies into vectors", m_name.utf8().data(), m_cookieMap.size());
+    CookieLog("CookieMap - Attempting to copy Map:%s cookies with %d cookies into vectors", m_name.utf8().data(), m_cookieVector.size());
 
-    Vector<ParsedCookie*> newCookies;
-    copyValuesToVector(m_cookieMap, newCookies);
-    for (size_t i = 0; i < newCookies.size(); i++) {
-        ParsedCookie* newCookie = newCookies[i];
+    stackOfCookies->reserveCapacity(stackOfCookies->size() + m_cookieVector.size());
+
+    size_t position = 0;
+    while (position < m_cookieVector.size()) {
+        ParsedCookie* newCookie = m_cookieVector[position];
         if (newCookie->hasExpired()) {
             // Notice that we don't delete from backingstore. These expired cookies will be
             // deleted when manager loads the backingstore again.
-            ParsedCookie* expired = removeCookie(newCookie);
+            ParsedCookie* expired = removeCookieAtIndex(position, newCookie);
             delete expired;
-        } else
+        } else {
             stackOfCookies->append(newCookie);
+            position++;
+        }
     }
 
     CookieLog("CookieMap - stack of cookies now have %d cookies in it", (*stackOfCookies).size());
-
 }
 
 ParsedCookie* CookieMap::removeOldestCookie()
@@ -182,32 +180,25 @@ ParsedCookie* CookieMap::removeOldestCookie()
 
 void CookieMap::updateOldestCookie()
 {
-    if (!m_cookieMap.size())
+    size_t size = m_cookieVector.size();
+    if (!size) {
         m_oldestCookie = 0;
-    else {
-        HashMap<String, ParsedCookie*>::iterator it = m_cookieMap.begin();
-        m_oldestCookie = it->second;
-        ++it;
-        for (; it != m_cookieMap.end(); ++it)
-            if (m_oldestCookie->lastAccessed() > it->second->lastAccessed())
-                m_oldestCookie = it->second;
+        return;
+    }
+
+    m_oldestCookie = m_cookieVector[0];
+    for (size_t i = 1; i < size; ++i) {
+        if (m_oldestCookie->lastAccessed() > m_cookieVector[i]->lastAccessed())
+            m_oldestCookie = m_cookieVector[i];
     }
 }
 
 void CookieMap::deleteAllCookiesAndDomains()
 {
-    HashMap<String, CookieMap*>::iterator first = m_subdomains.begin();
-    HashMap<String, CookieMap*>::iterator end = m_subdomains.end();
-    for (HashMap<String, CookieMap*>::iterator it = first; it != end; ++it)
-        delete it->second;
-
-    HashMap<String, ParsedCookie*>::iterator firstCookieIterator = m_cookieMap.begin();
-    HashMap<String, ParsedCookie*>::iterator endCookieIterator = m_cookieMap.end();
-    for (HashMap<String, ParsedCookie*>::iterator it = firstCookieIterator; it != endCookieIterator; ++it)
-        delete it->second;
-
+    deleteAllValues(m_subdomains);
     m_subdomains.clear();
-    m_cookieMap.clear();
+    deleteAllValues(m_cookieVector);
+    m_cookieVector.clear();
 
     m_oldestCookie = 0;
 }

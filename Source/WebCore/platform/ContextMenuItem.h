@@ -33,19 +33,12 @@
 
 #if PLATFORM(MAC)
 #include <wtf/RetainPtr.h>
-
-#ifdef __OBJC__
-@class NSMenuItem;
-#else
-class NSMenuItem;
-#endif
+OBJC_CLASS NSMenuItem;
 #elif PLATFORM(WIN)
 typedef struct tagMENUITEMINFOW MENUITEMINFO;
 #elif PLATFORM(GTK)
 typedef struct _GtkMenuItem GtkMenuItem;
 typedef struct _GtkAction GtkAction;
-#elif PLATFORM(QT)
-#include <QAction>
 #elif PLATFORM(WX)
 class wxMenuItem;
 #endif
@@ -64,7 +57,7 @@ namespace WebCore {
         ContextMenuItemTagOpenImageInNewWindow,
         ContextMenuItemTagDownloadImageToDisk,
         ContextMenuItemTagCopyImageToClipboard,
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
         ContextMenuItemTagCopyImageUrlToClipboard,
 #endif
         ContextMenuItemTagOpenFrameInNewWindow,
@@ -78,7 +71,7 @@ namespace WebCore {
 #if PLATFORM(GTK)
         ContextMenuItemTagDelete,
 #endif
-#if PLATFORM(GTK) || PLATFORM(QT)
+#if PLATFORM(GTK) || PLATFORM(QT) || PLATFORM (EFL)
         ContextMenuItemTagSelectAll,
 #endif
 #if PLATFORM(GTK)
@@ -206,7 +199,7 @@ namespace WebCore {
         bool checked;
         bool enabled;
     };
-#elif PLATFORM(CHROMIUM)
+#elif PLATFORM(CHROMIUM) || PLATFORM(EFL)
     struct PlatformMenuItemDescription {
         PlatformMenuItemDescription()
             : type(ActionType)

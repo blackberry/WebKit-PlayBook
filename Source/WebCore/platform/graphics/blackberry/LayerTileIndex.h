@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,10 +23,6 @@
 #include <wtf/HashMap.h>
 
 namespace WebCore {
-
-class GLES2Context;
-class LayerWebKitThread;
-class Texture;
 
 class TileIndex {
 public:
@@ -55,12 +51,12 @@ private:
     unsigned m_j;
 };
 
-inline bool operator==(const WebCore::TileIndex& a, const WebCore::TileIndex& b)
+inline bool operator==(const TileIndex& a, const TileIndex& b)
 {
     return a.i() == b.i() && a.j() == b.j();
 }
 
-inline bool operator!=(const WebCore::TileIndex& a, const WebCore::TileIndex& b)
+inline bool operator!=(const TileIndex& a, const TileIndex& b)
 {
     return a.i() != b.i() || a.j() != b.j();
 }

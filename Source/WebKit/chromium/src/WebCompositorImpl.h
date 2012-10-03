@@ -28,51 +28,32 @@
 
 #include "WebCompositor.h"
 
-#include "cc/CCInputHandler.h"
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/PassOwnPtr.h>
-
-namespace WTF {
-class Mutex;
-}
+#include <wtf/OwnPtr.h>
 
 namespace WebCore {
-class CCScrollController;
+class CCThread;
 }
 
 namespace WebKit {
 
-class WebCompositorClient;
+class WebThread;
 
-class WebCompositorImpl : public WebCompositor, public WebCore::CCInputHandler {
+class WebCompositorImpl : public WebCompositor {
     WTF_MAKE_NONCOPYABLE(WebCompositorImpl);
 public:
-    static WebCompositor* fromIdentifier(int identifier);
-
-    static PassOwnPtr<WebCompositorImpl> create(WebCore::CCScrollController* scrollController)
-    {
-        return adoptPtr(new WebCompositorImpl(scrollController));
-    }
-
-    virtual ~WebCompositorImpl();
-
-    // WebCompositor implementation
-    virtual void setClient(WebCompositorClient*);
-    virtual void handleInputEvent(const WebInputEvent&);
-
-    // WebCore::CCInputHandler implementation
-    virtual int identifier() const;
+    static bool initialized();
 
 private:
-    explicit WebCompositorImpl(WebCore::CCScrollController*);
 
-    WebCompositorClient* m_client;
-    int m_identifier;
-    WebCore::CCScrollController* m_scrollController;
+    friend class WebCompositor;
+    static void initialize(WebThread* implThread);
+    static void shutdown();
 
-    static int s_nextAvailableIdentifier;
-    static HashSet<WebCompositorImpl*>* s_compositors;
+    static bool s_initialized;
+    static WebCore::CCThread* s_mainThread;
+    static WebCore::CCThread* s_implThread;
 };
 
 }

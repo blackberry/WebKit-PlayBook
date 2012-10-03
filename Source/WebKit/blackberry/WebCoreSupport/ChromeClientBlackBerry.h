@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,7 +23,6 @@
 
 namespace BlackBerry {
 namespace WebKit {
-class WebPage;
 class WebPagePrivate;
 }
 }
@@ -32,7 +31,7 @@ namespace WebCore {
 
 class ChromeClientBlackBerry : public ChromeClient {
 public:
-    ChromeClientBlackBerry(BlackBerry::WebKit::WebPage*);
+    ChromeClientBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
 
     virtual void chromeDestroyed();
     virtual void* webView() const { return 0; };
@@ -71,13 +70,13 @@ public:
     virtual bool shouldInterruptJavaScript();
     virtual KeyboardUIMode keyboardUIMode();
     virtual IntRect windowResizerRect() const;
-    virtual void invalidateWindow(const IntRect&, bool);
-    virtual void invalidateContentsAndWindow(const IntRect&, bool);
+    virtual void invalidateRootView(const IntRect&, bool);
+    virtual void invalidateContentsAndRootView(const IntRect&, bool);
     virtual void invalidateContentsForSlowScroll(const IntSize&, const IntRect&, bool, const ScrollView*);
     virtual void scroll(const IntSize&, const IntRect&, const IntRect&);
     virtual void scrollableAreasDidChange();
-    virtual IntPoint screenToWindow(const IntPoint&) const;
-    virtual IntRect windowToScreen(const IntRect&) const;
+    virtual IntPoint screenToRootView(const IntPoint&) const;
+    virtual IntRect rootViewToScreen(const IntRect&) const;
     virtual void contentsSizeChanged(Frame*, const IntSize&) const;
     virtual void scrollRectIntoView(const IntRect&, const ScrollView*) const;
     virtual void mouseDidMoveOverElement(const HitTestResult&, unsigned int);
@@ -87,13 +86,14 @@ public:
     virtual void didReceiveTouchEventMode(Frame*, TouchEventMode) const;
 #endif
     virtual void dispatchViewportPropertiesDidChange(const ViewportArguments&) const;
-    virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const { return true; }
+    virtual bool shouldRubberBandInDirection(ScrollDirection) const { return true; }
     virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void numTouchEventHandlersChanged(unsigned) { }
     virtual void print(Frame*);
     virtual void exceededDatabaseQuota(Frame*, const String&);
     virtual void requestGeolocationPermissionForFrame(Frame*, Geolocation*);
     virtual void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*);
-    virtual void runOpenPanel(Frame*, WTF::PassRefPtr<FileChooser>);
+    virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>);
     virtual void loadIconForFiles(const Vector<String>&, FileIconLoader*);
     virtual void setCursor(const Cursor&);
     virtual void setCursorHiddenUntilMouseMoves(bool) { }
@@ -106,6 +106,7 @@ public:
 #endif
 
 #if ENABLE(INPUT_COLOR)
+    virtual PassOwnPtr<ColorChooser> createColorChooser(ColorChooserClient*, const Color&);
     void openColorChooser(ColorChooser*, const Color&) { }
     void cleanupColorChooser(ColorChooser*) { }
     void setSelectedColorInColorChooser(ColorChooser*, const Color&) { }
@@ -129,18 +130,14 @@ public:
     virtual void requestWebGLPermission(Frame*);
 #endif
 
-#if ENABLE(NOTIFICATIONS)
-    virtual WebCore::NotificationPresenter* notificationPresenter() const;
-#endif
-
 #if ENABLE(SVG)
     virtual void didSetSVGZoomAndPan(Frame*, unsigned short zoomAndPan);
 #endif
     virtual bool selectItemWritingDirectionIsNatural();
     virtual bool selectItemAlignmentFollowsMenuWritingDirection();
-    virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const;
-    virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const;
-    virtual void showContextMenu() { }
+    virtual bool hasOpenedPopup() const;
+    virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
+    virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 
 #if USE(ACCELERATED_COMPOSITING)
     virtual void attachRootGraphicsLayer(Frame*, GraphicsLayer*);
@@ -149,13 +146,10 @@ public:
     virtual bool allowsAcceleratedCompositing() const;
 #endif
 
-    virtual void* platformWindow() const;
-    virtual void* platformCompositingWindow() const;
-
-    BlackBerry::WebKit::WebPage* webPage() const { return m_webPage; }
+    BlackBerry::WebKit::WebPagePrivate* webPagePrivate() const { return m_webPagePrivate; }
 
 private:
-    BlackBerry::WebKit::WebPage* m_webPage;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
 };
 
 } // WebCore

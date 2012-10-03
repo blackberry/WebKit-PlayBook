@@ -1,3 +1,181 @@
+2012-03-01  Nikolas Zimmermann  <nzimmermann@rim.com>
+
+        Unreviewed, rolling out r109255.
+        http://trac.webkit.org/changeset/109255
+        https://bugs.webkit.org/show_bug.cgi?id=79932
+
+        Breaks rounded rects with dashed strokes in SVG
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+
+2012-02-29  Tim Horton  <timothy_horton@apple.com>
+
+        Make use of CG rounded-rect primitives
+        https://bugs.webkit.org/show_bug.cgi?id=79932
+        <rdar://problem/9274953>
+
+        Reviewed by Simon Fraser.
+
+        Add wkCGPathAddRoundedRect.
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+
+2012-02-28  Jer Noble  <jer.noble@apple.com>
+
+        Full screen video volume slider has "progress bar"
+        https://bugs.webkit.org/show_bug.cgi?id=79812
+
+        Reviewed by Eric Carlson.
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * win/include/WebKitSystemInterface/WebKitSystemInterface.h:
+        * win/lib/WebKitSystemInterface.lib:
+
+2012-02-28  Simon Fraser  <simon.fraser@apple.com>
+
+        Update WebKitSystemInterface.
+
+        Reviewed by Sam Weinig.
+        
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+
+2012-02-28  Alexey Proskuryakov  <ap@apple.com>
+
+        [Mac] Add an experimental SPI for plug-ins to enter sandbox
+        https://bugs.webkit.org/show_bug.cgi?id=79709
+
+        This pulls a lot of WKSI changes at once, because the script that updates it didn't
+        work for a while.
+
+        * WebKitSystemInterface.h:
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+
+2012-02-10  Adam Klein  <adamk@chromium.org>
+
+        Enable MUTATION_OBSERVERS by default on all platforms
+        https://bugs.webkit.org/show_bug.cgi?id=78196
+
+        Reviewed by Ojan Vafai.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2012-02-06  Matthew Delaney  <mdelaney@apple.com>
+
+        toDataURL() uses stale data after putImageData()
+        https://bugs.webkit.org/show_bug.cgi?id=65767
+
+        Added WKCGContextResetClip for use in reseting clip for new putByteArray method.
+
+        Reviewed by Chris Marrin.
+        
+        * WebKitSystemInterface.h: Added WKCGContextResetClip.
+        * libWebKitSystemInterfaceLeopard.a:
+        * libWebKitSystemInterfaceSnowLeopard.a:
+        * libWebKitSystemInterfaceLion.a:
+
+2012-02-02  Chris Marrin  <cmarrin@apple.com>
+
+        Turn on CSS Filters on Windows
+        https://bugs.webkit.org/show_bug.cgi?id=76667
+
+        Turned on CSS_FILTERS for Windows
+
+        Reviewed by Adele Peterson.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2012-02-02  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r106566.
+        http://trac.webkit.org/changeset/106566
+        https://bugs.webkit.org/show_bug.cgi?id=77673
+
+        Broke the Windows build (Requested by jessieberlin on
+        #webkit).
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2012-02-02  Chris Marrin  <cmarrin@apple.com>
+
+        Turn on CSS Filters on Windows
+        https://bugs.webkit.org/show_bug.cgi?id=76667
+
+        Turned on CSS_FILTERS for Windows
+
+        Reviewed by Adele Peterson.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+
+2012-01-26  Nikolas Zimmermann  <nzimmermann@rim.com>
+
+        Not reviewed. Fix win build, by disabling ENABLE_SHADOW_DOM by default.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2012-01-25  Hajime Morita  <morrita@google.com>>
+
+        ENABLE_SHADOW_DOM should be available via build-webkit --shadow-dom
+        https://bugs.webkit.org/show_bug.cgi?id=76863
+
+        Reviewed by Dimitri Glazkov.
+
+        Added a feature flag.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2012-01-16  Brent Fulgham  <bfulgham@webkit.org>
+
+        [WinCairo] Build correction. Switch to Apple style builds without
+        the _debug postfix so that launching tools, etc., will work properly.
+
+        * win/tools/vsprops/debug_wincairo.vsprops: Remove use of _debug in
+        output files to be consistent with WebKit build/test tools.
+
+2012-01-05  Dan Bernstein  <mitz@apple.com>
+
+        <rdar://problem/10633760> Update copyright strings
+
+        Reviewed by Mark Rowe.
+
+        * win/tools/scripts/COPYRIGHT-END-YEAR:
+
+2011-12-06  Roland Steiner  <rolandsteiner@chromium.org>
+
+        <style scoped>: disable on Windows by default
+        https://bugs.webkit.org/show_bug.cgi?id=73893
+
+        Reviewed by Andreas Kling.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
+2011-11-20  Roland Steiner  <rolandsteiner@chromium.org>
+
+        <style scoped>: add ENABLE(STYLE_SCOPED) flag to WebKit
+        https://bugs.webkit.org/show_bug.cgi?id=72848
+
+        Reviewed by Dimitri Glazkov.
+
+        * win/tools/vsprops/FeatureDefines.vsprops:
+        * win/tools/vsprops/FeatureDefinesCairo.vsprops:
+
 2011-11-14  Julien Chaffraix  <jchaffraix@webkit.org>
 
         Add --css-grid-layout to build-webkit and the build systems

@@ -31,17 +31,20 @@
 #ifndef WebWidget_h
 #define WebWidget_h
 
-#include "WebCanvas.h"
-#include "WebCommon.h"
 #include "WebCompositionUnderline.h"
-#include "WebRect.h"
-#include "WebSize.h"
 #include "WebTextInputType.h"
 #include "WebTextDirection.h"
+#include "platform/WebCanvas.h"
+#include "platform/WebCommon.h"
+#include "platform/WebRect.h"
+#include "platform/WebSize.h"
+
+#define WEBKIT_HAS_NEW_FULLSCREEN_API 1
 
 namespace WebKit {
 
 class WebInputEvent;
+class WebMouseEvent;
 class WebString;
 struct WebPoint;
 template <typename T> class WebVector;
@@ -67,19 +70,27 @@ public:
     // willStartLiveResize.
     virtual void willEndLiveResize() { }
 
+    // Called to notify the WebWidget of entering/exiting fullscreen mode. The
+    // resize method may be called between will{Enter,Exit}FullScreen and
+    // did{Enter,Exit}FullScreen.
+    virtual void willEnterFullScreen() { }
+    virtual void didEnterFullScreen() { }
+    virtual void willExitFullScreen() { }
+    virtual void didExitFullScreen() { }
+
     // Called to update imperative animation state. This should be called before
     // paint, although the client can rate-limit these calls. When
     // frameBeginTime is 0.0, the WebWidget will determine the frame begin time
     // itself.
     virtual void animate(double frameBeginTime) { }
 
-    // Called to layout the WebWidget.  This MUST be called before Paint,
+    // Called to layout the WebWidget. This MUST be called before Paint,
     // and it may result in calls to WebWidgetClient::didInvalidateRect.
     virtual void layout() { }
 
     // Called to paint the rectangular region within the WebWidget
     // onto the specified canvas at (viewPort.x,viewPort.y). You MUST call
-    // Layout before calling this method.  It is okay to call paint
+    // Layout before calling this method. It is okay to call paint
     // multiple times once layout has been called, assuming no other
     // changes are made to the WebWidget (e.g., once events are
     // processed, it should be assumed that another call to layout is
@@ -87,8 +98,8 @@ public:
     virtual void paint(WebCanvas*, const WebRect& viewPort) { }
 
     // In non-threaded compositing mode, triggers compositing of the current
-    // layers onto the screen. You MUST call Layout before calling this method, for the same
-    // reasons described in the paint method above
+    // layers onto the screen. You MUST call Layout before calling this method,
+    // for the same reasons described in the paint method above
     //
     // In threaded compositing mode, indicates that the widget should update
     // itself, for example due to window damage. The redraw will begin
@@ -96,12 +107,17 @@ public:
     // animate or layout in this case.
     virtual void composite(bool finish) = 0;
 
+    // Temporary method for the embedder to notify the WebWidget that the widget
+    // has taken damage, e.g. due to a window expose. This method will be
+    // removed when the WebWidget inversion patch lands --- http://crbug.com/112837
+    virtual void setNeedsRedraw() { }
+
     // Called to inform the WebWidget of a change in theme.
     // Implementors that cache rendered copies of widgets need to re-render
     // on receiving this message
     virtual void themeChanged() { }
 
-    // Called to inform the WebWidget of an input event.  Returns true if
+    // Called to inform the WebWidget of an input event. Returns true if
     // the event has been processed, false otherwise.
     virtual bool handleInputEvent(const WebInputEvent&) { return false; }
 
@@ -159,6 +175,22 @@ public:
     // Returns true if the WebWidget uses GPU accelerated compositing
     // to render its contents.
     virtual bool isAcceleratedCompositingActive() const { return false; }
+
+    // Calling WebWidgetClient::requestPointerLock() will result in one
+    // return call to didAcquirePointerLock() or didNotAcquirePointerLock().
+    virtual void didAcquirePointerLock() { }
+    virtual void didNotAcquirePointerLock() { }
+
+    // Pointer lock was held, but has been lost. This may be due to a
+    // request via WebWidgetClient::requestPointerUnlock(), or for other
+    // reasons such as the user exiting lock, window focus changing, etc.
+    virtual void didLosePointerLock() { }
+
+    // Informs the WebWidget that the resizer rect changed. Happens for example
+    // on mac, when a widget appears below the WebWidget without changing the
+    // WebWidget's size (WebWidget::resize() automatically checks the resizer
+    // rect.)
+    virtual void didChangeWindowResizerRect() { }
 
 protected:
     ~WebWidget() { }

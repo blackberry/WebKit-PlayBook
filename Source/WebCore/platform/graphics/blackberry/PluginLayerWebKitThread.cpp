@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -54,6 +54,12 @@ void PluginLayerWebKitThread::setPluginView(PluginView* pluginView)
     }
 }
 
+void PluginLayerWebKitThread::setHolePunchRect(const IntRect& rect)
+{
+    m_holePunchRect = rect;
+    setNeedsCommit();
+}
+
 void PluginLayerWebKitThread::setNeedsDisplay()
 {
     m_needsDisplay = true;
@@ -70,7 +76,7 @@ void PluginLayerWebKitThread::updateTextureContentsIfNeeded()
     if (!m_pluginView)
         return;
 
-    m_pluginView->updateBuffer(IntRect(IntPoint(0, 0), m_pluginView->size()));
+    m_pluginView->updateBuffer(IntRect(IntPoint::zero(), m_pluginView->size()));
 }
 
 } // namespace WebCore

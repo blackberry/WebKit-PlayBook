@@ -58,25 +58,20 @@ void HTMLScriptElement::childrenChanged(bool changedByParser, Node* beforeChange
     HTMLElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
 }
 
-void HTMLScriptElement::attributeChanged(Attribute* attr, bool preserveDecls)
-{
-    if (attr->name() == asyncAttr)
-        handleAsyncAttribute();
-    HTMLElement::attributeChanged(attr, preserveDecls);
-}
-
-void HTMLScriptElement::parseMappedAttribute(Attribute* attr)
+void HTMLScriptElement::parseAttribute(Attribute* attr)
 {
     const QualifiedName& attrName = attr->name();
 
     if (attrName == srcAttr)
         handleSourceAttribute(attr->value());
+    else if (attr->name() == asyncAttr)
+        handleAsyncAttribute();
     else if (attrName == onloadAttr)
         setAttributeEventListener(eventNames().loadEvent, createAttributeEventListener(this, attr));
     else if (attrName == onbeforeloadAttr)
         setAttributeEventListener(eventNames().beforeloadEvent, createAttributeEventListener(this, attr));
     else
-        HTMLElement::parseMappedAttribute(attr);
+        HTMLElement::parseAttribute(attr);
 }
 
 void HTMLScriptElement::insertedIntoDocument()
@@ -85,19 +80,15 @@ void HTMLScriptElement::insertedIntoDocument()
     ScriptElement::insertedIntoDocument();
 }
 
-void HTMLScriptElement::removedFromDocument()
-{
-    HTMLElement::removedFromDocument();
-    ScriptElement::removedFromDocument();
-}
-
 void HTMLScriptElement::setText(const String &value)
 {
+    RefPtr<Node> protectFromMutationEvents(this);
+
     ExceptionCode ec = 0;
     int numChildren = childNodeCount();
 
     if (numChildren == 1 && firstChild()->isTextNode()) {
-        static_cast<Text*>(firstChild())->setData(value, ec);
+        toText(firstChild())->setData(value, ec);
         return;
     }
 

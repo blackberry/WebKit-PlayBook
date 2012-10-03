@@ -165,6 +165,8 @@ void PluginView::updatePluginWidget()
 void PluginView::setFocus(bool focused)
 {
     ASSERT(platformPluginWidget() == platformWidget());
+    if (focused && platformWidget())
+        gtk_widget_grab_focus(platformWidget());
     Widget::setFocus(focused);
 }
 
@@ -409,6 +411,9 @@ void PluginView::handleMouseEvent(MouseEvent* event)
     if (!m_isStarted || m_status != PluginStatusLoadedSuccessfully)
         return;
 
+    if (event->button() == RightButton && m_plugin->quirks().contains(PluginQuirkIgnoreRightClickInWindowlessMode))
+        return;
+
     if (event->type() == eventNames().mousedownEvent) {
         if (Page* page = m_parentFrame->page())
             page->focusController()->setActive(true);
@@ -573,17 +578,14 @@ void PluginView::updateWidgetAllocationAndClip()
 #endif
     }
 
-    GtkAllocation allocation(m_delayedAllocation);
-    m_delayedAllocation = IntRect();
-
-    // The goal is to avoid calling gtk_widget_size_allocate when necessary.
-    // It blocks the main loop and if the widget is offscreen or hasn't moved
-    // it isn't required.
+    // The goal is to try to avoid calling gtk_widget_size_allocate in the WebView's
+    // size-allocate method. It blocks the main loop and if the widget is offscreen
+    // or hasn't moved it isn't required.
 
     // Don't do anything if the allocation has not changed.
     GtkAllocation currentAllocation;
     gtk_widget_get_allocation(widget, &currentAllocation);
-    if (currentAllocation == allocation)
+    if (currentAllocation == m_delayedAllocation)
         return;
 
     // Don't do anything if both the old and the new allocations are outside the frame.
@@ -592,7 +594,7 @@ void PluginView::updateWidgetAllocationAndClip()
     if (currentAllocationRect.isEmpty() && m_clipRect.isEmpty())
         return;
 
-    gtk_widget_size_allocate(widget, &allocation);
+    g_object_set_data(G_OBJECT(widget), "delayed-allocation", &m_delayedAllocation);
 }
 
 void PluginView::setParentVisible(bool visible)
@@ -710,7 +712,12 @@ bool PluginView::platformGetValue(NPNVariable variable, void* value, NPError* re
         case NPNVnetscapeWindow: {
             GdkWindow* gdkWindow = gtk_widget_get_window(m_parentFrame->view()->hostWindow()->platformPageClient());
 #if defined(XP_UNIX)
-            *static_cast<Window*>(value) = GDK_WINDOW_XWINDOW(gdk_window_get_toplevel(gdkWindow));
+            GdkWindow* toplevelWindow = gdk_window_get_toplevel(gdkWindow);
+            if (!toplevelWindow) {
+                *result = NPERR_GENERIC_ERROR;
+                return true;
+            }
+            *static_cast<Window*>(value) = GDK_WINDOW_XWINDOW(toplevelWindow);
 #elif defined(GDK_WINDOWING_WIN32)
             *static_cast<HGDIOBJ*>(value) = GDK_WINDOW_HWND(gdkWindow);
 #endif
@@ -900,14 +907,14 @@ bool PluginView::platformStart()
         if (m_needsXEmbed) {
             GtkWidget* widget = platformPluginWidget();
             gtk_widget_realize(widget);
-            m_npWindow.window = (void*)gtk_socket_get_id(GTK_SOCKET(platformPluginWidget()));
+            m_npWindow.window = reinterpret_cast<void*>(gtk_socket_get_id(GTK_SOCKET(platformPluginWidget())));
             GdkWindow* window = gtk_widget_get_window(widget);
             ws->display = GDK_WINDOW_XDISPLAY(window);
             ws->visual = GDK_VISUAL_XVISUAL(gdk_window_get_visual(window));
             ws->depth = gdk_visual_get_depth(gdk_window_get_visual(window));
             ws->colormap = XCreateColormap(ws->display, GDK_ROOT_WINDOW(), ws->visual, AllocNone);
         } else {
-            m_npWindow.window = (void*)GTK_XTBIN(platformPluginWidget())->xtwindow;
+            m_npWindow.window = reinterpret_cast<void*>((GTK_XTBIN(platformPluginWidget())->xtwindow));
             ws->display = GTK_XTBIN(platformPluginWidget())->xtdisplay;
             ws->visual = GTK_XTBIN(platformPluginWidget())->xtclient.xtvisual;
             ws->depth = GTK_XTBIN(platformPluginWidget())->xtclient.xtdepth;

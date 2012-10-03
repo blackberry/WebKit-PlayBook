@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,10 +34,11 @@
 #include "WebHistoryItem.h"
 #include "WebMenuItemInfo.h"
 #include "WebNode.h"
-#include "WebPoint.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebVector.h"
+#include "WebReferrerPolicy.h"
+#include "platform/WebPoint.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebVector.h"
 
 #define WEBCONTEXT_MEDIATYPEFILE_DEFINED
 
@@ -101,6 +102,7 @@ struct WebContextMenuData {
         MediaHasVideo = 0x40,
         MediaControlRootElement = 0x80,
         MediaCanPrint = 0x100,
+        MediaCanRotate = 0x200,
     };
 
     // Extra attributes describing media elements.
@@ -154,6 +156,9 @@ struct WebContextMenuData {
 
     // Security information for the context.
     WebCString securityInfo;
+
+    // The referrer policy applicable to this context.
+    WebReferrerPolicy referrerPolicy;
 
     // Custom context menu items provided by the WebCore internals.
     WebVector<WebMenuItemInfo> customItems;

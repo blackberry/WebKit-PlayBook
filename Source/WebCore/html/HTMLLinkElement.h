@@ -37,7 +37,11 @@
 
 namespace WebCore {
 
+class HTMLLinkElement;
 class KURL;
+
+template<typename T> class EventSender;
+typedef EventSender<HTMLLinkElement> LinkEventSender;
 
 class HTMLLinkElement : public HTMLElement, public CachedStyleSheetClient, public LinkLoaderClient {
 public:
@@ -53,16 +57,18 @@ public:
 
     CSSStyleSheet* sheet() const { return m_sheet.get(); }
 
-    // FIXME: This should be renamed isStyleSheetLoading as this is only used for stylesheets.
-    bool isLoading() const;
+    bool styleSheetIsLoading() const;
 
     bool isDisabled() const { return m_disabledState == Disabled; }
     bool isEnabledViaScript() const { return m_disabledState == EnabledViaScript; }
     void setSizes(const String&);
     DOMSettableTokenList* sizes() const;
 
+    void dispatchPendingEvent(LinkEventSender*);
+    static void dispatchPendingLoadEvents();
+
 private:
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
     virtual bool shouldLoadLink();
     void process();
@@ -74,6 +80,7 @@ private:
     // from CachedResourceClient
     virtual void setCSSStyleSheet(const String& href, const KURL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet);
     virtual bool sheetLoaded();
+    virtual void notifyLoadedSheetAndAllCriticalSubresources(bool errorOccurred);
     virtual void startLoadingDynamicSheet();
 
     virtual void linkLoaded();
@@ -120,7 +127,9 @@ private:
     bool m_loading;
     bool m_createdByParser;
     bool m_isInShadowTree;
-    
+    bool m_firedLoad;
+    bool m_loadedSheet;
+
     PendingSheetType m_pendingSheetType;
 };
 

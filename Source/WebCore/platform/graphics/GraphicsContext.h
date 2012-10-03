@@ -1,5 +1,4 @@
 /*
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  * Copyright (C) 2003, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
  * Copyright (C) 2008-2009 Torch Mobile, Inc.
  *
@@ -125,6 +124,7 @@ namespace WebCore {
     class KURL;
     class GraphicsContext3D;
     class TextRun;
+    class TransformationMatrix;
 
     enum TextDrawingMode {
         TextModeInvisible = 0,
@@ -256,9 +256,6 @@ namespace WebCore {
 
         const GraphicsContextState& state() const;
 
-#if PLATFORM(BLACKBERRY)
-        void drawPath(const Path&);
-#endif
 #if USE(CG)
         void applyStrokePattern();
         void applyFillPattern();
@@ -273,7 +270,6 @@ namespace WebCore {
         bool isCALayerContext() const;
 
         void setIsAcceleratedContext(bool);
-        bool isAcceleratedContext() const;
 #endif
         bool isAcceleratedContext() const;
 
@@ -414,6 +410,12 @@ namespace WebCore {
         void setCTM(const AffineTransform&);
         AffineTransform getCTM() const;
 
+#if ENABLE(3D_RENDERING) && USE(TEXTURE_MAPPER)
+        // This is needed when using accelerated-compositing in software mode, like in TextureMapper.
+        void concat3DTransform(const TransformationMatrix&);
+        void set3DTransform(const TransformationMatrix&);
+        TransformationMatrix get3DTransform() const;
+#endif
         // Create an image buffer compatible with this context, with suitable resolution
         // for drawing into the buffer and then into this context.
         PassOwnPtr<ImageBuffer> createCompatibleBuffer(const IntSize&) const;

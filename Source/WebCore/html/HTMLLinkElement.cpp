@@ -31,6 +31,7 @@
 #include "CachedResourceLoader.h"
 #include "CSSStyleSelector.h"
 #include "Document.h"
+#include "EventSender.h"
 #include "Frame.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
@@ -51,6 +52,12 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
+static LinkEventSender& linkLoadEventSender()
+{
+    DEFINE_STATIC_LOCAL(LinkEventSender, sharedLoadEventSender, (eventNames().loadEvent));
+    return sharedLoadEventSender;
+}
+
 inline HTMLLinkElement::HTMLLinkElement(const QualifiedName& tagName, Document* document, bool createdByParser)
     : HTMLElement(tagName, document)
     , m_linkLoader(this)
@@ -59,6 +66,8 @@ inline HTMLLinkElement::HTMLLinkElement(const QualifiedName& tagName, Document* 
     , m_loading(false)
     , m_createdByParser(createdByParser)
     , m_isInShadowTree(false)
+    , m_firedLoad(false)
+    , m_loadedSheet(false)
     , m_pendingSheetType(None)
 {
     ASSERT(hasTagName(linkTag));
@@ -81,6 +90,8 @@ HTMLLinkElement::~HTMLLinkElement()
 
     if (inDocument())
         document()->removeStyleSheetCandidateNode(this);
+
+    linkLoadEventSender().cancelEvent(this);
 }
 
 void HTMLLinkElement::setDisabledState(bool disabled)
@@ -90,7 +101,7 @@ void HTMLLinkElement::setDisabledState(bool disabled)
     if (oldDisabledState != m_disabledState) {
         // If we change the disabled state while the sheet is still loading, then we have to
         // perform three checks:
-        if (isLoading()) {
+        if (styleSheetIsLoading()) {
             // Check #1: The sheet becomes disabled while loading.
             if (m_disabledState == Disabled)
                 removePendingSheet();
@@ -119,7 +130,7 @@ void HTMLLinkElement::setDisabledState(bool disabled)
     }
 }
 
-void HTMLLinkElement::parseMappedAttribute(Attribute* attr)
+void HTMLLinkElement::parseAttribute(Attribute* attr)
 {
     if (attr->name() == relAttr) {
         m_relAttribute = LinkRelAttribute(attr->value());
@@ -141,16 +152,14 @@ void HTMLLinkElement::parseMappedAttribute(Attribute* attr)
         setDisabledState(!attr->isNull());
     else if (attr->name() == onbeforeloadAttr)
         setAttributeEventListener(eventNames().beforeloadEvent, createAttributeEventListener(this, attr));
-#if ENABLE(LINK_PREFETCH)
     else if (attr->name() == onloadAttr)
         setAttributeEventListener(eventNames().loadEvent, createAttributeEventListener(this, attr));
     else if (attr->name() == onerrorAttr)
         setAttributeEventListener(eventNames().errorEvent, createAttributeEventListener(this, attr));
-#endif
     else {
         if (attr->name() == titleAttr && m_sheet)
             m_sheet->setTitle(attr->value());
-        HTMLElement::parseMappedAttribute(attr);
+        HTMLElement::parseAttribute(attr);
     }
 }
 
@@ -330,10 +339,11 @@ void HTMLLinkElement::setCSSStyleSheet(const String& href, const KURL& baseURL, 
     m_sheet->setMedia(media.get());
 
     m_loading = false;
+    m_sheet->notifyLoadedSheet(sheet);
     m_sheet->checkLoaded();
 }
 
-bool HTMLLinkElement::isLoading() const
+bool HTMLLinkElement::styleSheetIsLoading() const
 {
     if (m_loading)
         return true;
@@ -354,11 +364,34 @@ void HTMLLinkElement::linkLoadingErrored()
 
 bool HTMLLinkElement::sheetLoaded()
 {
-    if (!isLoading()) {
+    if (!styleSheetIsLoading()) {
         removePendingSheet();
         return true;
     }
     return false;
+}
+
+void HTMLLinkElement::dispatchPendingLoadEvents()
+{
+    linkLoadEventSender().dispatchPendingEvents();
+}
+
+void HTMLLinkElement::dispatchPendingEvent(LinkEventSender* eventSender)
+{
+    ASSERT_UNUSED(eventSender, eventSender == &linkLoadEventSender());
+    if (m_loadedSheet)
+        linkLoaded();
+    else
+        linkLoadingErrored();
+}
+
+void HTMLLinkElement::notifyLoadedSheetAndAllCriticalSubresources(bool errorOccurred)
+{
+    if (m_firedLoad)
+        return;
+    m_loadedSheet = !errorOccurred;
+    linkLoadEventSender().dispatchEventSoon(this);
+    m_firedLoad = true;
 }
 
 void HTMLLinkElement::startLoadingDynamicSheet()
@@ -454,9 +487,9 @@ String HTMLLinkElement::itemValueText() const
     return getURLAttribute(hrefAttr);
 }
 
-void HTMLLinkElement::setItemValueText(const String& value, ExceptionCode& ec)
+void HTMLLinkElement::setItemValueText(const String& value, ExceptionCode&)
 {
-    setAttribute(hrefAttr, value, ec);
+    setAttribute(hrefAttr, value);
 }
 #endif
 

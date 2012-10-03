@@ -50,7 +50,7 @@ struct WTREventQueue {
 
 static WTREventQueue eventQueue[1024];
 static unsigned endOfQueue;
-static unsigned startOfQueue;
+static bool isReplayingEvents;
 
 EventSenderProxy::EventSenderProxy(TestController* testController)
     : m_testController(testController)
@@ -68,7 +68,7 @@ EventSenderProxy::EventSenderProxy(TestController* testController)
 {
     memset(eventQueue, 0, sizeof(eventQueue));
     endOfQueue = 0;
-    startOfQueue = 0;
+    isReplayingEvents = false;
 }
 
 static Qt::MouseButton getMouseButton(unsigned button)
@@ -246,7 +246,7 @@ void EventSenderProxy::keyDown(WKStringRef keyRef, WKEventModifiers modifiersRef
 
 void EventSenderProxy::updateClickCountForButton(int button)
 {
-    if (m_time - m_clickTime < QApplication::doubleClickInterval() / 1000.0 && m_position == m_clickPosition && button == m_clickButton) {
+    if (m_time - m_clickTime < QApplication::doubleClickInterval() && m_position == m_clickPosition && button == m_clickButton) {
         ++m_clickCount;
         m_clickTime = m_time;
         return;
@@ -306,6 +306,7 @@ void EventSenderProxy::mouseScrollBy(int, int)
 void EventSenderProxy::leapForward(int ms)
 {
     eventQueue[endOfQueue].m_delay = ms;
+    m_time += ms;
 }
 
 #if ENABLE(TOUCH_EVENTS)
@@ -364,6 +365,12 @@ void EventSenderProxy::touchEnd()
     m_touchActive = false;
 }
 
+void EventSenderProxy::touchCancel()
+{
+    sendTouchEvent(QEvent::TouchCancel);
+    m_touchActive = false;
+}
+
 void EventSenderProxy::clearTouchPoints()
 {
     m_touchPoints.clear();
@@ -379,9 +386,24 @@ void EventSenderProxy::releaseTouchPoint(int index)
     m_touchPoints[index].setState(Qt::TouchPointReleased);
 }
 
+void EventSenderProxy::cancelTouchPoint(int index)
+{
+    // FIXME: No cancellation state in Qt 5, mapped to release instead.
+    // PlatformTouchEvent conversion later will map all touch points to
+    // cancelled.
+    releaseTouchPoint(index);
+}
+
 void EventSenderProxy::sendTouchEvent(QEvent::Type type)
 {
-    QTouchEvent event(type, QTouchEvent::TouchScreen, m_touchModifiers);
+    static QTouchDevice* device = 0;
+    if (!device) {
+        device = new QTouchDevice;
+        device->setType(QTouchDevice::TouchScreen);
+        QWindowSystemInterface::registerTouchDevice(device);
+    }
+
+    QTouchEvent event(type, device, m_touchModifiers);
     event.setTouchPoints(m_touchPoints);
     m_testController->mainWebView()->sendEvent(&event);
     QList<QTouchEvent::TouchPoint>::Iterator it = m_touchPoints.begin();
@@ -398,32 +420,36 @@ void EventSenderProxy::sendTouchEvent(QEvent::Type type)
 
 void EventSenderProxy::sendOrQueueEvent(QEvent* event)
 {
-    if (endOfQueue == startOfQueue && !eventQueue[endOfQueue].m_delay) {
+    if (!endOfQueue && !eventQueue[endOfQueue].m_delay) {
         m_testController->mainWebView()->sendEvent(event);
         delete event;
         return;
     }
 
     eventQueue[endOfQueue++].m_event = event;
-    eventQueue[endOfQueue].m_delay = 0;
     replaySavedEvents();
 }
 
 void EventSenderProxy::replaySavedEvents()
 {
-    if (startOfQueue < endOfQueue) {
-        while (!eventQueue[startOfQueue].m_delay && startOfQueue < endOfQueue) {
-            QEvent* ev = eventQueue[startOfQueue++].m_event;
-            m_testController->mainWebView()->postEvent(ev);
-        }
-        if (startOfQueue == endOfQueue) {
-            startOfQueue = 0;
-            endOfQueue = 0;
-        } else {
-            QTest::qWait(eventQueue[startOfQueue].m_delay);
-            eventQueue[startOfQueue].m_delay = 0;
-        }
+    if (isReplayingEvents)
+        return;
+
+    isReplayingEvents = true;
+    int i = 0;
+
+    while (i < endOfQueue) {
+        WTREventQueue& ev = eventQueue[i];
+        if (ev.m_delay)
+            QTest::qWait(ev.m_delay);
+        i++;
+        m_testController->mainWebView()->sendEvent(ev.m_event);
+        delete ev.m_event;
+        ev.m_delay = 0;
     }
+
+    endOfQueue = 0;
+    isReplayingEvents = false;
 }
 
 } // namespace WTR

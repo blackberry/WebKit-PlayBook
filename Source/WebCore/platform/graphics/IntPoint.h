@@ -121,13 +121,6 @@ public:
         return IntPoint(m_y, m_x);
     }
 
-#if PLATFORM(BLACKBERRY)
-    String toString() const
-    {
-        return String::format("(%i,%i)", m_x, m_y);
-    }
-#endif
-
 #if USE(CG) || USE(SKIA_ON_MAC_CHROMIUM)
     explicit IntPoint(const CGPoint&); // don't do this implicitly since it's lossy
     operator CGPoint() const;

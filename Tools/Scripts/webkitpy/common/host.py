@@ -27,26 +27,26 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import logging
+import os
+import sys
 
 from webkitpy.common.checkout import Checkout
-from webkitpy.common.checkout.scm import default_scm
+from webkitpy.common.checkout.scm.detection import SCMDetector
 from webkitpy.common.memoized import memoized
 from webkitpy.common.net import bugzilla, buildbot, web
 from webkitpy.common.net.buildbot.chromiumbuildbot import ChromiumBuildBot
-from webkitpy.common.system import executive, filesystem, platforminfo, user, workspace
+from webkitpy.common.system.systemhost import SystemHost
 from webkitpy.common.watchlist.watchlistloader import WatchListLoader
 from webkitpy.layout_tests.port.factory import PortFactory
 
 
-class Host(object):
+_log = logging.getLogger(__name__)
+
+
+class Host(SystemHost):
     def __init__(self):
-        # These basic environment abstractions should be a separate lower-level object.
-        # Alternatively the rest of the objects in Host should just move up to a higher abstraction.
-        self.executive = executive.Executive()
-        self.filesystem = filesystem.FileSystem()
-        self.user = user.User()
-        self.platform = platforminfo.PlatformInfo()
-        self.workspace = workspace.Workspace(self.filesystem, self.executive)
+        SystemHost.__init__(self)
         self.web = web.Web()
 
         # FIXME: Checkout should own the scm object.
@@ -63,8 +63,53 @@ class Host(object):
         # FIXME: PortFactory doesn't belong on this Host object if Port is going to have a Host (circular dependency).
         self.port_factory = PortFactory(self)
 
+        self._engage_awesome_locale_hacks()
+
+    # We call this from the Host constructor, as it's one of the
+    # earliest calls made for all webkitpy-based programs.
+    def _engage_awesome_locale_hacks(self):
+        # To make life easier on our non-english users, we override
+        # the locale environment variables inside webkitpy.
+        # If we don't do this, programs like SVN will output localized
+        # messages and svn.py will fail to parse them.
+        # FIXME: We should do these overrides *only* for the subprocesses we know need them!
+        # This hack only works in unix environments.
+        os.environ['LANGUAGE'] = 'en'
+        os.environ['LANG'] = 'en_US.UTF-8'
+        os.environ['LC_MESSAGES'] = 'en_US.UTF-8'
+        os.environ['LC_ALL'] = ''
+
+    # FIXME: This is a horrible, horrible hack for ChromiumWin and should be removed.
+    # Maybe this belongs in SVN in some more generic "find the svn binary" codepath?
+    # Or possibly Executive should have a way to emulate shell path-lookups?
+    # FIXME: Unclear how to test this, since it currently mutates global state on SVN.
+    def _engage_awesome_windows_hacks(self):
+        try:
+            self.executive.run_command(['svn', 'help'])
+        except OSError, e:
+            try:
+                self.executive.run_command(['svn.bat', 'help'])
+                # Chromium Win uses the depot_tools package, which contains a number
+                # of development tools, including Python and svn. Instead of using a
+                # real svn executable, depot_tools indirects via a batch file, called
+                # svn.bat. This batch file allows depot_tools to auto-update the real
+                # svn executable, which is contained in a subdirectory.
+                #
+                # That's all fine and good, except that subprocess.popen can detect
+                # the difference between a real svn executable and batch file when we
+                # don't provide use shell=True. Rather than use shell=True on Windows,
+                # We hack the svn.bat name into the SVN class.
+                _log.debug('Engaging svn.bat Windows hack.')
+                from webkitpy.common.checkout.scm.svn import SVN
+                SVN.executable_name = 'svn.bat'
+            except OSError, e:
+                _log.debug('Failed to engage svn.bat Windows hack.')
+
     def _initialize_scm(self, patch_directories=None):
-        self._scm = default_scm(patch_directories)
+        if sys.platform == "win32":
+            self._engage_awesome_windows_hacks()
+        detector = SCMDetector(self.filesystem, self.executive)
+        self._scm = detector.default_scm(patch_directories)
         self._checkout = Checkout(self.scm())
 
     def scm(self):

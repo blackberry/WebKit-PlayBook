@@ -32,20 +32,28 @@
 
 #include "WebDOMEvent.h"
 #include "WebMessagePortChannel.h"
+#include "platform/WebSerializedScriptValue.h"
 
 #if WEBKIT_IMPLEMENTATION
-namespace WebCore { class Event; }
+#include "Event.h"
+#include "MessageEvent.h"
 #endif
 
 namespace WebKit {
 
 class WebFrame;
 class WebString;
-class WebSerializedScriptValue;
 
 class WebDOMMessageEvent : public WebDOMEvent {
 public:
-    WEBKIT_EXPORT void initMessageEvent(const WebString& type, bool canBubble, bool cancelable, const WebSerializedScriptValue& messageData, const WebString& origin, const WebFrame& sourceFrame, const WebString& lastEventId);
+    WEBKIT_EXPORT void initMessageEvent(const WebString& type, bool canBubble, bool cancelable, const WebSerializedScriptValue& messageData, const WebString& origin, const WebFrame* sourceFrame, const WebString& lastEventId);
+
+    WEBKIT_EXPORT WebSerializedScriptValue data() const;
+    WEBKIT_EXPORT WebString origin() const;
+
+#if WEBKIT_IMPLEMENTATION
+    explicit WebDOMMessageEvent(const WTF::PassRefPtr<WebCore::MessageEvent>& e) : WebDOMEvent(e) { }
+#endif
 };
 
 } // namespace WebKit

@@ -29,11 +29,13 @@
 #include "RenderVideo.h"
 
 #include "Document.h"
+#include "Frame.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HTMLNames.h"
 #include "HTMLVideoElement.h"
 #include "MediaPlayer.h"
+#include "Page.h"
 #include "PaintInfo.h"
 #include "RenderView.h"
 
@@ -113,8 +115,11 @@ IntSize RenderVideo::calculateIntrinsicSize()
     // of the video resource, if that is available; otherwise it is the intrinsic 
     // height of the poster frame, if that is available; otherwise it is 150 CSS pixels.
     MediaPlayer* player = mediaElement()->player();
-    if (player && video->readyState() >= HTMLVideoElement::HAVE_METADATA)
-        return player->naturalSize();
+    if (player && video->readyState() >= HTMLVideoElement::HAVE_METADATA) {
+        IntSize size = player->naturalSize();
+        if (!size.isEmpty())
+            return size;
+    }
 
     if (video->shouldDisplayPosterImage() && !m_cachedImageSize.isEmpty() && !imageResource()->errorOccurred())
         return m_cachedImageSize;
@@ -142,7 +147,7 @@ void RenderVideo::imageChanged(WrappedImagePtr newImage, const IntRect* rect)
     // Cache the image intrinsic size so we can continue to use it to draw the image correctly
     // even if we know the video intrinsic size but aren't able to draw video frames yet
     // (we don't want to scale the poster to the video size without keeping aspect ratio).
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     // Always update the size on PlayBook. Sometimes shouldDisplayPosterImage() may return
     // false even when a poster should be there (because of HTMLMediaElement::prepareForLoad()
     // being called after the display mode has been set to Poster and resetting the display
@@ -201,16 +206,29 @@ void RenderVideo::paintReplaced(PaintInfo& paintInfo, const LayoutPoint& paintOf
     MediaPlayer* mediaPlayer = mediaElement()->player();
     bool displayingPoster = videoElement()->shouldDisplayPosterImage();
 
+    Page* page = 0;
+    if (Frame* frame = this->frame())
+        page = frame->page();
+
     if (!displayingPoster) {
-        if (!mediaPlayer)
+        if (!mediaPlayer) {
+            if (page && paintInfo.phase == PaintPhaseForeground)
+                page->addRelevantUnpaintedObject(this, visualOverflowRect());
             return;
+        }
         updatePlayer();
     }
 
     LayoutRect rect = videoBox();
-    if (rect.isEmpty())
+    if (rect.isEmpty()) {
+        if (page && paintInfo.phase == PaintPhaseForeground)
+            page->addRelevantUnpaintedObject(this, visualOverflowRect());
         return;
+    }
     rect.moveBy(paintOffset);
+
+    if (page && paintInfo.phase == PaintPhaseForeground)
+        page->addRelevantRepaintedObject(this, visualOverflowRect());
 
     if (displayingPoster)
         paintIntoRect(paintInfo.context, rect);

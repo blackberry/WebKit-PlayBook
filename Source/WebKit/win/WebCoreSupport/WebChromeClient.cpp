@@ -460,13 +460,13 @@ IntRect WebChromeClient::windowResizerRect() const
     return IntRect();
 }
 
-void WebChromeClient::invalidateWindow(const IntRect& windowRect, bool immediate)
+void WebChromeClient::invalidateRootView(const IntRect& windowRect, bool immediate)
 {
     ASSERT(core(m_webView->topLevelFrame()));
     m_webView->repaint(windowRect, false /*contentChanged*/, immediate, false /*repaintContentOnly*/);
 }
 
-void WebChromeClient::invalidateContentsAndWindow(const IntRect& windowRect, bool immediate)
+void WebChromeClient::invalidateContentsAndRootView(const IntRect& windowRect, bool immediate)
 {
     ASSERT(core(m_webView->topLevelFrame()));
     m_webView->repaint(windowRect, true /*contentChanged*/, immediate /*immediate*/, false /*repaintContentOnly*/);
@@ -485,7 +485,7 @@ void WebChromeClient::scroll(const IntSize& delta, const IntRect& scrollViewRect
     m_webView->scrollBackingStore(core(m_webView->topLevelFrame())->view(), delta.width(), delta.height(), scrollViewRect, clipRect);
 }
 
-IntRect WebChromeClient::windowToScreen(const IntRect& rect) const
+IntRect WebChromeClient::rootViewToScreen(const IntRect& rect) const
 {
     HWND viewWindow;
     if (FAILED(m_webView->viewWindow(reinterpret_cast<OLE_HANDLE*>(&viewWindow))))
@@ -501,7 +501,7 @@ IntRect WebChromeClient::windowToScreen(const IntRect& rect) const
     return result;
 }
 
-IntPoint WebChromeClient::screenToWindow(const IntPoint& point) const
+IntPoint WebChromeClient::screenToRootView(const IntPoint& point) const
 {
     POINT result = point;
 
@@ -783,6 +783,12 @@ bool WebChromeClient::selectItemWritingDirectionIsNatural()
 
 bool WebChromeClient::selectItemAlignmentFollowsMenuWritingDirection()
 {
+    return false;
+}
+
+bool WebChromeClient::hasOpenedPopup() const
+{
+    notImplemented();
     return false;
 }
 

@@ -1,5 +1,4 @@
 /*
- * Copyright (C) 2010 QNX Software Systems.
  * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
@@ -17,9 +16,6 @@
  * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
-// FIXME: THIS FILE SHOULD REPLACE MediaPlayerPrivateMMrenderer.h WHEN
-// REFACTOR COMPLETE.
-
 #ifndef MediaPlayerPrivateBlackBerry_h
 #define MediaPlayerPrivateBlackBerry_h
 
@@ -35,9 +31,6 @@ class WebPageClient;
 }
 
 namespace WebCore {
-
-#define PLAYBOOK_MIN_AUDIO_ELEMENT_WIDTH 300
-#define PLAYBOOK_MIN_AUDIO_ELEMENT_HEIGHT 32
 
 class MediaPlayerPrivate : public MediaPlayerPrivateInterface, public BlackBerry::Platform::IMMRPlayerListener {
 public:
@@ -99,20 +92,22 @@ public:
     virtual bool hasAvailableVideoFrame() const;
 
 #if USE(ACCELERATED_COMPOSITING)
-    // whether accelerated rendering is supported by the media engine for the current media.
+    // Whether accelerated rendering is supported by the media engine for the current media.
     virtual bool supportsAcceleratedRendering() const { return true; }
-    // called when the rendering system flips the into or out of accelerated rendering mode.
+    // Called when the rendering system flips the into or out of accelerated rendering mode.
     virtual void acceleratedRenderingStateChanged() { }
 #endif
 
     virtual bool hasSingleSecurityOrigin() const;
 
+    virtual MediaPlayer::MovieLoadType movieLoadType() const;
+
     void resizeSourceDimensions();
     void setFullscreenWebPageClient(BlackBerry::WebKit::WebPageClient*);
-    BlackBerry::Platform::Graphics::Window* windowGet();
+    BlackBerry::Platform::Graphics::Window* getWindow();
     BlackBerry::Platform::Graphics::Window* getPeerWindow(const char*) const;
-    int windowPositionGet(unsigned& x, unsigned& y, unsigned& width, unsigned& height) const;
-    const char* mmrContextNameGet();
+    int getWindowPosition(unsigned& x, unsigned& y, unsigned& width, unsigned& height) const;
+    const char* mmrContextName();
     float percentLoaded();
     unsigned sourceWidth();
     unsigned sourceHeight();
@@ -131,13 +126,18 @@ public:
     virtual void onSizeChanged();
     virtual void onPlayNotified();
     virtual void onPauseNotified();
+    virtual void onWaitMetadataNotified(bool hasFinished, int timeWaited);
 #if USE(ACCELERATED_COMPOSITING)
     virtual void onBuffering(bool);
 #endif
+    virtual bool onAuthenticationNeeded(BlackBerry::Platform::MMRAuthChallenge&);
+    virtual void onAuthenticationAccepted(const BlackBerry::Platform::MMRAuthChallenge&) const;
 
     virtual bool isFullscreen() const;
+    virtual bool isTabVisible() const;
     virtual int showErrorDialog(BlackBerry::Platform::MMRPlayer::Error);
     virtual BlackBerry::Platform::Graphics::Window* platformWindow();
+
 private:
     MediaPlayerPrivate(MediaPlayer*);
 
@@ -145,7 +145,6 @@ private:
     void updateStates();
     String userAgent(const String&) const;
 
-private:
     MediaPlayer* m_webCorePlayer;
     BlackBerry::Platform::MMRPlayer* m_platformPlayer;
 
@@ -166,6 +165,9 @@ private:
     void userDrivenSeekTimerFired(Timer<MediaPlayerPrivate>*);
     Timer<MediaPlayerPrivate> m_userDrivenSeekTimer;
     float m_lastSeekTime;
+    void waitMetadataTimerFired(Timer<MediaPlayerPrivate>*);
+    Timer<MediaPlayerPrivate> m_waitMetadataTimer;
+    int m_waitMetadataPopDialogCounter;
 };
 
 } // namespace WebCore

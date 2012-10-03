@@ -44,6 +44,11 @@ BackForwardController::~BackForwardController()
 {
 }
 
+PassOwnPtr<BackForwardController> BackForwardController::create(Page* page, PassRefPtr<BackForwardList> client)
+{
+    return adoptPtr(new BackForwardController(page, client));
+}
+
 bool BackForwardController::canGoBackOrForward(int distance) const
 {
     return m_page->canGoBackOrForward(distance);
@@ -111,7 +116,13 @@ void BackForwardController::markPagesForFullStyleRecalc()
     for (int i = first; i <= last; i++) {
         if (!i)
             continue;
-        itemAtIndex(i)->markForFullStyleRecalc();
+
+        // FIXME: itemAtIndex should never return null here, but due to the way the
+        // back/forward list is implemented in WebKit2 it sometimes can, when the
+        // session has been updated in the UI process but the session update message
+        // hasn't yet reached the web process.
+        if (HistoryItem* historyItem = itemAtIndex(i))
+            historyItem->markForFullStyleRecalc();
     }
 }
 

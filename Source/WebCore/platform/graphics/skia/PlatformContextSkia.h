@@ -31,8 +31,10 @@
 #ifndef PlatformContextSkia_h
 #define PlatformContextSkia_h
 
+#include "AffineTransform.h"
 #include "GraphicsContext.h"
 #include "Noncopyable.h"
+#include "OpaqueRegionSkia.h"
 
 #include "SkCanvas.h"
 #include "SkDashPathEffect.h"
@@ -45,7 +47,6 @@
 namespace WebCore {
 
 enum CompositeOperator;
-class DrawingBuffer;
 class GraphicsContext3D;
 class Texture;
 
@@ -150,6 +151,7 @@ public:
 
     // Returns the canvas used for painting, NOT guaranteed to be non-null.
     SkCanvas* canvas() { return m_canvas; }
+    const SkCanvas* canvas() const { return m_canvas; }
 
     InterpolationQuality interpolationQuality() const;
     void setInterpolationQuality(InterpolationQuality interpolationQuality);
@@ -171,6 +173,7 @@ public:
     // Returns if the context allows rendering of fonts using native platform
     // APIs. If false is returned font rendering is performed using the skia
     // text drawing APIs.
+    // if USE(SKIA_TEXT) is enabled, this always returns false
     bool isNativeFontRenderingAllowed();
 
     void getImageResamplingHint(IntSize* srcSize, FloatSize* dstSize) const;
@@ -178,15 +181,34 @@ public:
     void clearImageResamplingHint();
     bool hasImageResamplingHint() const;
 
-    bool useSkiaGPU() const { return m_gpuContext; }
-    void setGraphicsContext3D(GraphicsContext3D*, DrawingBuffer*, const IntSize&);
-    void makeGrContextCurrent();
+    bool isAccelerated() const { return m_gpuContext; }
+    void setGraphicsContext3D(GraphicsContext3D*);
+
+    // True if this context is deferring draw calls to be executed later.
+    // We need to know this for context-to-context draws, in order to know if
+    // the source bitmap needs to be copied.
+    bool isDeferred() const { return m_deferred; }
+    void setDeferred(bool deferred) { m_deferred = deferred; }
+
+    void setTrackOpaqueRegion(bool track) { m_trackOpaqueRegion = track; }
+    // A transform applied to all tracked opaque paints. This is applied at the time the painting is done.
+    void setOpaqueRegionTransform(const AffineTransform& transform) { m_opaqueRegionTransform = transform; }
+
+    // This will be an empty region unless tracking is enabled.
+    const OpaqueRegionSkia& opaqueRegion() const { return m_opaqueRegion; }
+
+    // After drawing in the context's canvas, use these functions to notify the context so it can track the opaque region.
+    void didDrawRect(const SkRect&, const SkPaint&, const SkBitmap* = 0);
+    void didDrawPath(const SkPath&, const SkPaint&);
+    void didDrawPoints(SkCanvas::PointMode, int numPoints, const SkPoint[], const SkPaint&);
+    // For drawing operations that do not fill the entire rect.
+    void didDrawBounded(const SkRect&, const SkPaint&);
 
 private:
     // Used when restoring and the state has an image clip. Only shows the pixels in
     // m_canvas that are also in imageBuffer.
-    void applyClipFromImage(const FloatRect&, const SkBitmap&);
-    void applyAntiAliasedClipPaths(WTF::Vector<SkPath>& paths);
+    // The clipping rectangle is given in absolute coordinates.
+    void applyClipFromImage(const SkRect&, const SkBitmap&);
 
     // common code between setupPaintFor[Filling,Stroking]
     void setupShader(SkPaint*, Gradient*, Pattern*, SkColor) const;
@@ -205,11 +227,17 @@ private:
     // mStateStack.back().
     State* m_state;
 
+    // Tracks the region painted opaque via the GraphicsContext.
+    OpaqueRegionSkia m_opaqueRegion;
+    bool m_trackOpaqueRegion;
+    AffineTransform m_opaqueRegionTransform;
+
     // Stores image sizes for a hint to compute image resampling modes.
     // Values are used in ImageSkia.cpp
     IntSize m_imageResamplingHintSrcSize;
     FloatSize m_imageResamplingHintDstSize;
     bool m_printing;
+    bool m_deferred;
     bool m_drawingToImageBuffer;
     GraphicsContext3D* m_gpuContext;
 };

@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 #include "BackingStoreClient.h"
 #include "BackingStore_p.h"
 #include "CString.h"
+#include "ColorChooser.h"
 #include "DatabaseTracker.h"
 #include "Document.h"
 #include "DumpRenderTreeClient.h"
@@ -61,13 +62,16 @@
 #include "WebSettings.h"
 #include "WebString.h"
 #include "WindowFeatures.h"
+
 #include <BlackBerryPlatformLog.h>
 #include <BlackBerryPlatformSettings.h>
+#include <BlackBerryPlatformWindow.h>
 
 #define DEBUG_OVERFLOW_DETECTION 0
 
-using BlackBerry::WebKit::WebString;
 using namespace BlackBerry::WebKit;
+
+using BlackBerry::Platform::Graphics::Window;
 
 namespace WebCore {
 
@@ -79,54 +83,60 @@ static CString frameOrigin(Frame* frame)
     return latinOrigin;
 }
 
-ChromeClientBlackBerry::ChromeClientBlackBerry(BlackBerry::WebKit::WebPage* page)
-    : m_webPage(page)
+ChromeClientBlackBerry::ChromeClientBlackBerry(WebPagePrivate* pagePrivate)
+    : m_webPagePrivate(pagePrivate)
 {
 }
 
-void ChromeClientBlackBerry::addMessageToConsole(MessageSource, MessageType, MessageLevel, const WTF::String& message, unsigned int lineNumber, const WTF::String& sourceID)
+void ChromeClientBlackBerry::addMessageToConsole(MessageSource, MessageType, MessageLevel, const String& message, unsigned int lineNumber, const String& sourceID)
 {
-    if (m_webPage->d->m_dumpRenderTree)
-        m_webPage->d->m_dumpRenderTree->addMessageToConsole(message, lineNumber, sourceID);
-    m_webPage->client()->addMessageToConsole(message.characters(), message.length(), sourceID.characters(), sourceID.length(), lineNumber);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->addMessageToConsole(message, lineNumber, sourceID);
+#endif
+
+    m_webPagePrivate->m_client->addMessageToConsole(message.characters(), message.length(), sourceID.characters(), sourceID.length(), lineNumber);
 }
 
-void ChromeClientBlackBerry::runJavaScriptAlert(Frame* frame, const WTF::String& message)
+void ChromeClientBlackBerry::runJavaScriptAlert(Frame* frame, const String& message)
 {
-    if (m_webPage->d->m_dumpRenderTree) {
-        m_webPage->d->m_dumpRenderTree->runJavaScriptAlert(message);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree) {
+        m_webPagePrivate->m_dumpRenderTree->runJavaScriptAlert(message);
         return;
     }
-    TimerBase::fireTimersInNestedEventLoop();
+#endif
 
+    TimerBase::fireTimersInNestedEventLoop();
     CString latinOrigin = frameOrigin(frame);
-    m_webPage->client()->runJavaScriptAlert(message.characters(), message.length(), latinOrigin.data(), latinOrigin.length());
+    m_webPagePrivate->m_client->runJavaScriptAlert(message.characters(), message.length(), latinOrigin.data(), latinOrigin.length());
 }
 
-bool ChromeClientBlackBerry::runJavaScriptConfirm(Frame* frame, const WTF::String& message)
+bool ChromeClientBlackBerry::runJavaScriptConfirm(Frame* frame, const String& message)
 {
-    if (m_webPage->d->m_dumpRenderTree)
-        return m_webPage->d->m_dumpRenderTree->runJavaScriptConfirm(message);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->runJavaScriptConfirm(message);
+#endif
+
     TimerBase::fireTimersInNestedEventLoop();
-
     CString latinOrigin = frameOrigin(frame);
-    return m_webPage->client()->runJavaScriptConfirm(message.characters(), message.length(), latinOrigin.data(), latinOrigin.length());
-
+    return m_webPagePrivate->m_client->runJavaScriptConfirm(message.characters(), message.length(), latinOrigin.data(), latinOrigin.length());
 }
 
-bool ChromeClientBlackBerry::runJavaScriptPrompt(Frame* frame, const WTF::String& message, const WTF::String& defaultValue, WTF::String& result)
+bool ChromeClientBlackBerry::runJavaScriptPrompt(Frame* frame, const String& message, const String& defaultValue, String& result)
 {
-    WebString clientResult;
-
-    if (m_webPage->d->m_dumpRenderTree) {
-        result = m_webPage->d->m_dumpRenderTree->runJavaScriptPrompt(message, defaultValue);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree) {
+        result = m_webPagePrivate->m_dumpRenderTree->runJavaScriptPrompt(message, defaultValue);
         return true;
     }
+#endif
 
     TimerBase::fireTimersInNestedEventLoop();
-
     CString latinOrigin = frameOrigin(frame);
-    if (m_webPage->client()->runJavaScriptPrompt(message.characters(), message.length(), defaultValue.characters(), defaultValue.length(), latinOrigin.data(), latinOrigin.length(), clientResult)) {
+    WebString clientResult;
+    if (m_webPagePrivate->m_client->runJavaScriptPrompt(message.characters(), message.length(), defaultValue.characters(), defaultValue.length(), latinOrigin.data(), latinOrigin.length(), clientResult)) {
         result = clientResult;
         return true;
     }
@@ -140,12 +150,16 @@ void ChromeClientBlackBerry::chromeDestroyed()
 
 void ChromeClientBlackBerry::setWindowRect(const FloatRect&)
 {
-    return; // The window dimensions are fixed in the RIM port.
+    // The window dimensions are fixed in the RIM port.
 }
 
 FloatRect ChromeClientBlackBerry::windowRect()
 {
-    const IntSize windowSize = m_webPage->client()->window()->windowSize();
+    IntSize windowSize;
+
+    if (Window* window = m_webPagePrivate->m_client->window())
+        windowSize = window->windowSize();
+
     return FloatRect(0, 0, windowSize.width(), windowSize.height());
 }
 
@@ -157,7 +171,7 @@ FloatRect ChromeClientBlackBerry::pageRect()
 
 float ChromeClientBlackBerry::scaleFactor()
 {
-    return 1.0f;
+    return 1;
 }
 
 void ChromeClientBlackBerry::focus()
@@ -181,85 +195,9 @@ void ChromeClientBlackBerry::takeFocus(FocusDirection)
     notImplemented();
 }
 
-void ChromeClientBlackBerry::focusedNodeChanged(Node* node)
+void ChromeClientBlackBerry::focusedNodeChanged(Node*)
 {
-    BlackBerry::WebKit::WebPageClient::FocusType type = BlackBerry::WebKit::WebPageClient::FocusUnknown;
-
-    if (!node)
-        type = BlackBerry::WebKit::WebPageClient::FocusNone;
-    else if (node->isSVGElement()) {
-        type = BlackBerry::WebKit::WebPageClient::FocusSVGElement;
-    } else if (node->isHTMLElement()) {
-        if (node->hasTagName(HTMLNames::aTag)) {
-            type = BlackBerry::WebKit::WebPageClient::FocusLink;
-        } else if (node->hasTagName(HTMLNames::inputTag)) {
-            HTMLInputElement* inputElement = static_cast<HTMLInputElement*>(node);
-            if (inputElement->hasTagName(HTMLNames::isindexTag) || inputElement->isInputTypeHidden())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputUnknown;
-            else if (inputElement->isTextButton())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputButton;
-            else if (inputElement->isCheckbox())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputCheckBox;
-#if ENABLE(INPUT_COLOR)
-            else if (inputElement->isColorControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputColor;
-#endif
-            else if (inputElement->isDateControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputDate;
-            else if (inputElement->isDateTimeControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputDateTime;
-            else if (inputElement->isDateTimeLocalControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputDateTimeLocal;
-            else if (inputElement->isEmailField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputEmail;
-            else if (inputElement->isFileUpload())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputFile;
-            else if (inputElement->isImageButton())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputImage;
-            else if (inputElement->isMonthControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputMonth;
-            else if (inputElement->isNumberField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputNumber;
-            else if (inputElement->isPasswordField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputPassword;
-            else if (inputElement->isRadioButton())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputRadio;
-            else if (inputElement->isRangeControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputRange;
-            else if (inputElement->isResetButton())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputReset;
-            else if (inputElement->isSearchField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputSearch;
-            else if (inputElement->isSubmitButton())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputSubmit;
-            else if (inputElement->isTelephoneField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputTelephone;
-            else if (inputElement->isURLField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputURL;
-            else if (inputElement->isTextField())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputText;
-            else if (inputElement->isTimeControl())
-                type = BlackBerry::WebKit::WebPageClient::FocusInputTime;
-    // FIXME: missing WEEK popup selector
-            else
-                type = BlackBerry::WebKit::WebPageClient::FocusInputUnknown;
-        } else if (node->hasTagName(HTMLNames::imgTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusImage;
-        else if (node->hasTagName(HTMLNames::objectTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusObject;
-        else if (node->hasTagName(HTMLNames::videoTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusVideo;
-        else if (node->hasTagName(HTMLNames::selectTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusSelect;
-        else if (node->hasTagName(HTMLNames::textareaTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusTextArea;
-        else if (node->hasTagName(HTMLNames::canvasTag))
-            type = BlackBerry::WebKit::WebPageClient::FocusCanvas;
-    }
-
-    m_webPage->d->m_inputHandler->nodeFocused(node);
-
-    m_webPage->client()->focusChanged(type, reinterpret_cast<int>(node));
+    m_webPagePrivate->m_inputHandler->focusedNodeChanged();
 }
 
 void ChromeClientBlackBerry::focusedFrameChanged(Frame*)
@@ -269,16 +207,17 @@ void ChromeClientBlackBerry::focusedFrameChanged(Frame*)
 
 bool ChromeClientBlackBerry::shouldForceDocumentStyleSelectorUpdate()
 {
-    return !m_webPage->settings()->isJavaScriptEnabled() && !m_webPage->d->m_inputHandler->processingChange();
+    return !m_webPagePrivate->m_webSettings->isJavaScriptEnabled() && !m_webPagePrivate->m_inputHandler->processingChange();
 }
 
 Page* ChromeClientBlackBerry::createWindow(Frame*, const FrameLoadRequest& request, const WindowFeatures& features, const NavigationAction&)
 {
-    if (m_webPage->d->m_dumpRenderTree) {
-        if (!m_webPage->d->m_dumpRenderTree->allowsOpeningWindow())
-            return 0;
-    }
-    PageGroupLoadDeferrer deferrer(m_webPage->d->m_page, true);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree && !m_webPagePrivate->m_dumpRenderTree->allowsOpeningWindow())
+        return 0;
+#endif
+
+    PageGroupLoadDeferrer deferrer(m_webPagePrivate->m_page, true);
     TimerBase::fireTimersInNestedEventLoop();
 
     int x = features.xSet ? features.x : 0;
@@ -288,28 +227,30 @@ Page* ChromeClientBlackBerry::createWindow(Frame*, const FrameLoadRequest& reque
     unsigned flags = 0;
 
     if (features.menuBarVisible)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowHasMenuBar;
+        flags |= WebPageClient::FlagWindowHasMenuBar;
     if (features.statusBarVisible)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowHasStatusBar;
+        flags |= WebPageClient::FlagWindowHasStatusBar;
     if (features.toolBarVisible)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowHasToolBar;
+        flags |= WebPageClient::FlagWindowHasToolBar;
     if (features.locationBarVisible)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowHasLocationBar;
+        flags |= WebPageClient::FlagWindowHasLocationBar;
     if (features.scrollbarsVisible)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowHasScrollBar;
+        flags |= WebPageClient::FlagWindowHasScrollBar;
     if (features.resizable)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowIsResizable;
+        flags |= WebPageClient::FlagWindowIsResizable;
     if (features.fullscreen)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowIsFullScreen;
+        flags |= WebPageClient::FlagWindowIsFullScreen;
     if (features.dialog)
-        flags |= BlackBerry::WebKit::WebPageClient::FlagWindowIsDialog;
+        flags |= WebPageClient::FlagWindowIsDialog;
 
-    BlackBerry::WebKit::WebPage* webPage = m_webPage->client()->createWindow(x, y, width, height, flags, WebString(request.resourceRequest().url().string()), WebString(request.frameName()));
+    WebPage* webPage = m_webPagePrivate->m_client->createWindow(x, y, width, height, flags, WebString(request.resourceRequest().url().string()), WebString(request.frameName()));
     if (!webPage)
         return 0;
 
-    if (m_webPage->d->m_dumpRenderTree)
-        m_webPage->d->m_dumpRenderTree->windowCreated(webPage);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->windowCreated(webPage);
+#endif
 
     return webPage->d->m_page;
 }
@@ -337,6 +278,12 @@ bool ChromeClientBlackBerry::selectItemWritingDirectionIsNatural()
 
 bool ChromeClientBlackBerry::selectItemAlignmentFollowsMenuWritingDirection()
 {
+    return true;
+}
+
+bool ChromeClientBlackBerry::hasOpenedPopup() const
+{
+    notImplemented();
     return false;
 }
 
@@ -406,10 +353,12 @@ bool ChromeClientBlackBerry::canRunBeforeUnloadConfirmPanel()
     return false;
 }
 
-bool ChromeClientBlackBerry::runBeforeUnloadConfirmPanel(const WTF::String& message, Frame*)
+bool ChromeClientBlackBerry::runBeforeUnloadConfirmPanel(const String& message, Frame*)
 {
-    if (m_webPage->d->m_dumpRenderTree)
-        return m_webPage->d->m_dumpRenderTree->runBeforeUnloadConfirmPanel(message);
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->runBeforeUnloadConfirmPanel(message);
+#endif
 
     notImplemented();
     return false;
@@ -417,18 +366,17 @@ bool ChromeClientBlackBerry::runBeforeUnloadConfirmPanel(const WTF::String& mess
 
 void ChromeClientBlackBerry::closeWindowSoon()
 {
-    m_webPage->client()->scheduleCloseWindow();
+    m_webPagePrivate->m_client->scheduleCloseWindow();
 }
 
-void ChromeClientBlackBerry::setStatusbarText(const WTF::String& status)
+void ChromeClientBlackBerry::setStatusbarText(const String& status)
 {
-#if OS(QNX)
-    m_webPage->client()->setStatus(status);
-#else
-    notImplemented();
+    m_webPagePrivate->m_client->setStatus(status);
+
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->setStatusText(status);
 #endif
-    if (m_webPage->d->m_dumpRenderTree)
-        m_webPage->d->m_dumpRenderTree->setStatusText(status);
 }
 
 IntRect ChromeClientBlackBerry::windowResizerRect() const
@@ -437,17 +385,23 @@ IntRect ChromeClientBlackBerry::windowResizerRect() const
     return IntRect();
 }
 
-IntPoint ChromeClientBlackBerry::screenToWindow(const IntPoint& screenPos) const
+IntPoint ChromeClientBlackBerry::screenToRootView(const IntPoint& screenPos) const
 {
-    IntPoint windowPoint = m_webPage->client()->window()->windowLocation();
+    IntPoint windowPoint;
+    if (Window* window = m_webPagePrivate->m_client->window())
+        windowPoint = window->windowLocation();
+
     windowPoint.move(-screenPos.x(), -screenPos.y());
     return windowPoint;
 }
 
-IntRect ChromeClientBlackBerry::windowToScreen(const IntRect& windowRect) const
+IntRect ChromeClientBlackBerry::rootViewToScreen(const IntRect& windowRect) const
 {
     IntRect windowPoint(windowRect);
-    IntPoint location(m_webPage->client()->window()->windowLocation());
+    IntPoint location;
+    if (Window* window = m_webPagePrivate->m_client->window())
+        location = window->windowLocation();
+
     windowPoint.move(location.x(), location.y());
     return windowPoint;
 }
@@ -457,36 +411,32 @@ void ChromeClientBlackBerry::mouseDidMoveOverElement(const HitTestResult& result
     notImplemented();
 }
 
-void ChromeClientBlackBerry::setToolTip(const WTF::String& tooltip, TextDirection)
+void ChromeClientBlackBerry::setToolTip(const String& tooltip, TextDirection)
 {
-#if OS(QNX)
-    m_webPage->client()->setToolTip(tooltip);
-#else
-    notImplemented();
-#endif
+    m_webPagePrivate->m_client->setToolTip(tooltip);
 }
 
 #if ENABLE(EVENT_MODE_METATAGS)
 void ChromeClientBlackBerry::didReceiveCursorEventMode(Frame* frame, CursorEventMode mode) const
 {
-    if (m_webPage->d->m_mainFrame != frame)
+    if (m_webPagePrivate->m_mainFrame != frame)
         return;
 
-    m_webPage->d->didReceiveCursorEventMode(mode);
+    m_webPagePrivate->didReceiveCursorEventMode(mode);
 }
 
 void ChromeClientBlackBerry::didReceiveTouchEventMode(Frame* frame, TouchEventMode mode) const
 {
-    if (m_webPage->d->m_mainFrame != frame)
+    if (m_webPagePrivate->m_mainFrame != frame)
         return;
 
-    m_webPage->d->didReceiveTouchEventMode(mode);
+    m_webPagePrivate->didReceiveTouchEventMode(mode);
 }
 #endif
 
 void ChromeClientBlackBerry::dispatchViewportPropertiesDidChange(const ViewportArguments& arguments) const
 {
-    m_webPage->d->dispatchViewportPropertiesDidChange(arguments);
+    m_webPagePrivate->dispatchViewportPropertiesDidChange(arguments);
 }
 
 void ChromeClientBlackBerry::print(Frame*)
@@ -494,7 +444,7 @@ void ChromeClientBlackBerry::print(Frame*)
     notImplemented();
 }
 
-void ChromeClientBlackBerry::exceededDatabaseQuota(Frame* frame, const WTF::String& name)
+void ChromeClientBlackBerry::exceededDatabaseQuota(Frame* frame, const String& name)
 {
 #if ENABLE(SQL_DATABASE)
     Document* document = frame->document();
@@ -502,10 +452,13 @@ void ChromeClientBlackBerry::exceededDatabaseQuota(Frame* frame, const WTF::Stri
         return;
 
     SecurityOrigin* origin = document->securityOrigin();
-    if (m_webPage->d->m_dumpRenderTree) {
-        m_webPage->d->m_dumpRenderTree->exceededDatabaseQuota(origin, name);
+
+#if ENABLE_DRT
+    if (m_webPagePrivate->m_dumpRenderTree) {
+        m_webPagePrivate->m_dumpRenderTree->exceededDatabaseQuota(origin, name);
         return;
     }
+#endif
 
     DatabaseTracker& tracker = DatabaseTracker::tracker();
 
@@ -514,11 +467,11 @@ void ChromeClientBlackBerry::exceededDatabaseQuota(Frame* frame, const WTF::Stri
 
     DatabaseDetails details = tracker.detailsForNameAndOrigin(name, origin);
     unsigned long long estimatedSize = details.expectedUsage();
-    const WTF::String& nameStr = details.displayName();
+    const String& nameStr = details.displayName();
 
-    WTF::String originStr = origin->databaseIdentifier();
+    String originStr = origin->databaseIdentifier();
 
-    unsigned long long quota = m_webPage->client()->databaseQuota(originStr.characters(), originStr.length(),
+    unsigned long long quota = m_webPagePrivate->m_client->databaseQuota(originStr.characters(), originStr.length(),
         nameStr.characters(), nameStr.length(), totalUsage, originUsage, estimatedSize);
 
     tracker.setQuota(origin, quota);
@@ -527,7 +480,7 @@ void ChromeClientBlackBerry::exceededDatabaseQuota(Frame* frame, const WTF::Stri
 
 void ChromeClientBlackBerry::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
 {
-    if (!m_webPage->settings()->isGeolocationEnabled()) {
+    if (!m_webPagePrivate->m_webSettings->isGeolocationEnabled()) {
         geolocation->setIsAllowed(false);
         return;
     }
@@ -537,15 +490,15 @@ void ChromeClientBlackBerry::requestGeolocationPermissionForFrame(Frame* frame, 
 
     CString latinOrigin = frameOrigin(frame);
 
-    m_webPage->client()->requestGeolocationPermission(m_webPage->d->m_geolocationClient, geolocation, latinOrigin.data(), latinOrigin.length());
+    m_webPagePrivate->m_client->requestGeolocationPermission(m_webPagePrivate->m_geolocationClient, geolocation, latinOrigin.data(), latinOrigin.length());
 }
 
 void ChromeClientBlackBerry::cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation* geolocation)
 {
-    m_webPage->client()->cancelGeolocationPermission(m_webPage->d->m_geolocationClient, geolocation);
+    m_webPagePrivate->m_client->cancelGeolocationPermission(m_webPagePrivate->m_geolocationClient, geolocation);
 }
 
-void ChromeClientBlackBerry::runOpenPanel(WebCore::Frame*, WTF::PassRefPtr<WebCore::FileChooser> chooser)
+void ChromeClientBlackBerry::runOpenPanel(Frame*, PassRefPtr<FileChooser> chooser)
 {
     SharedArray<WebString> initialFiles;
     unsigned int initialFileSize = chooser->settings().selectedFiles.size();
@@ -558,16 +511,15 @@ void ChromeClientBlackBerry::runOpenPanel(WebCore::Frame*, WTF::PassRefPtr<WebCo
     unsigned int chosenFileSize;
 
     {
-        PageGroupLoadDeferrer deferrer(m_webPage->d->m_page, true);
+        PageGroupLoadDeferrer deferrer(m_webPagePrivate->m_page, true);
         TimerBase::fireTimersInNestedEventLoop();
 
-        // FIXME
-        // if (!m_webPage->client()->chooseFilenames(chooser->settings().allowsMultipleFiles, chooser->settings().acceptMIMETypes, initialFiles, initialFileSize, chosenFiles, chosenFileSize))
-        if (!m_webPage->client()->chooseFilenames(chooser->settings().allowsMultipleFiles, WebString(), initialFiles, initialFileSize, chosenFiles, chosenFileSize))
+        // FIXME: Use chooser->settings().acceptMIMETypes instead of WebString() for the second parameter.
+        if (!m_webPagePrivate->m_client->chooseFilenames(chooser->settings().allowsMultipleFiles, WebString(), initialFiles, initialFileSize, chosenFiles, chosenFileSize))
             return;
     }
 
-    Vector<WTF::String> files(chosenFileSize);
+    Vector<String> files(chosenFileSize);
     for (unsigned i = 0; i < chosenFileSize; ++i)
         files[i] = chosenFiles[i];
     chooser->chooseFiles(files);
@@ -585,7 +537,7 @@ void ChromeClientBlackBerry::setCursor(const Cursor&)
 
 void ChromeClientBlackBerry::formStateDidChange(const Node* node)
 {
-    m_webPage->d->m_inputHandler->nodeTextChanged(node);
+    m_webPagePrivate->m_inputHandler->nodeTextChanged(node);
 }
 
 void ChromeClientBlackBerry::scrollbarsModeDidChange() const
@@ -593,34 +545,34 @@ void ChromeClientBlackBerry::scrollbarsModeDidChange() const
     notImplemented();
 }
 
-void ChromeClientBlackBerry::contentsSizeChanged(WebCore::Frame* frame, const WebCore::IntSize& size) const
+void ChromeClientBlackBerry::contentsSizeChanged(Frame* frame, const IntSize& size) const
 {
-    if (frame != m_webPage->d->m_mainFrame)
+    if (frame != m_webPagePrivate->m_mainFrame)
         return;
 
-    m_webPage->d->contentsSizeChanged(size);
+    m_webPagePrivate->contentsSizeChanged(size);
 }
 
-void ChromeClientBlackBerry::invalidateWindow(const IntRect& updateRect, bool immediate)
+void ChromeClientBlackBerry::invalidateRootView(const IntRect& updateRect, bool immediate)
 {
-    m_webPage->backingStore()->d->repaint(updateRect, false /*contentChanged*/, immediate);
+    m_webPagePrivate->m_backingStore->d->repaint(updateRect, false /*contentChanged*/, immediate);
 }
 
-void ChromeClientBlackBerry::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
+void ChromeClientBlackBerry::invalidateContentsAndRootView(const IntRect& updateRect, bool immediate)
 {
-    m_webPage->backingStore()->d->repaint(updateRect, true /*contentChanged*/, immediate);
+    m_webPagePrivate->m_backingStore->d->repaint(updateRect, true /*contentChanged*/, immediate);
 }
 
 void ChromeClientBlackBerry::invalidateContentsForSlowScroll(const IntSize& delta, const IntRect& updateRect, bool immediate, const ScrollView* scrollView)
 {
-    if (scrollView != m_webPage->d->m_mainFrame->view())
-        m_webPage->backingStore()->d->repaint(updateRect, true /*contentChanged*/, true /*immediate*/);
+    if (scrollView != m_webPagePrivate->m_mainFrame->view())
+        invalidateContentsAndRootView(updateRect, true /*immediate*/);
     else {
-        BackingStoreClient* backingStoreClientForFrame = m_webPage->d->backingStoreClientForFrame(m_webPage->d->m_mainFrame);
+        BackingStoreClient* backingStoreClientForFrame = m_webPagePrivate->backingStoreClientForFrame(m_webPagePrivate->m_mainFrame);
         ASSERT(backingStoreClientForFrame);
         backingStoreClientForFrame->checkOriginOfCurrentScrollOperation();
 
-        m_webPage->backingStore()->d->slowScroll(delta, updateRect, immediate);
+        m_webPagePrivate->m_backingStore->d->slowScroll(delta, updateRect, immediate);
     }
 }
 
@@ -629,49 +581,53 @@ void ChromeClientBlackBerry::scroll(const IntSize& delta, const IntRect& scrollV
     // FIXME: There's a chance the function is called indirectly by FrameView's dtor
     // when the Frame's view() is null. We probably want to fix it in another way, but
     // at this moment let's do a quick fix.
-    if (!m_webPage->d->m_mainFrame->view())
+    if (!m_webPagePrivate->m_mainFrame->view())
         return;
 
-    BackingStoreClient* backingStoreClientForFrame = m_webPage->d->backingStoreClientForFrame(m_webPage->d->m_mainFrame);
+    BackingStoreClient* backingStoreClientForFrame = m_webPagePrivate->backingStoreClientForFrame(m_webPagePrivate->m_mainFrame);
     ASSERT(backingStoreClientForFrame);
     backingStoreClientForFrame->checkOriginOfCurrentScrollOperation();
 
-    m_webPage->backingStore()->d->scroll(delta, scrollViewRect, clipRect);
+    m_webPagePrivate->m_backingStore->d->scroll(delta, scrollViewRect, clipRect);
 }
 
 void ChromeClientBlackBerry::scrollableAreasDidChange()
 {
-    typedef HashSet<ScrollableArea*> ScrollableAreaSet;
-    const ScrollableAreaSet* scrollableAreas = m_webPage->d->m_page->scrollableAreaSet();
-
     bool hasAtLeastOneInRegionScrollableArea = false;
-    ScrollableAreaSet::iterator end = scrollableAreas->end();
-    for (ScrollableAreaSet::iterator it = scrollableAreas->begin(); it != end; ++it) {
-        if ((*it) != m_webPage->d->m_page->mainFrame()->view()) {
-            hasAtLeastOneInRegionScrollableArea = true;
-            break;
-        }
+
+    Frame* frame = m_webPagePrivate->m_mainFrame;
+    if (!frame || !frame->view() || !frame->view()->scrollableAreas())
+        return;
+
+    hasAtLeastOneInRegionScrollableArea = frame->view()->scrollableAreas()->size();
+
+    for (frame = frame->tree()->firstChild(); frame && !hasAtLeastOneInRegionScrollableArea; frame = frame->tree()->nextSibling()) {
+        if (!frame->view() || !frame->view()->scrollableAreas())
+            continue;
+
+        hasAtLeastOneInRegionScrollableArea = frame->view()->scrollableAreas()->size();
     }
 
-    m_webPage->d->setHasInRegionScrollableAreas(hasAtLeastOneInRegionScrollableArea);
+    m_webPagePrivate->setHasInRegionScrollableAreas(hasAtLeastOneInRegionScrollableArea);
 }
 
 void ChromeClientBlackBerry::scrollRectIntoView(const IntRect&, const ScrollView*) const
 {
-    m_webPage->d->notifyTransformedScrollChanged();
+    m_webPagePrivate->notifyTransformedScrollChanged();
 }
 
 bool ChromeClientBlackBerry::shouldInterruptJavaScript()
 {
     TimerBase::fireTimersInNestedEventLoop();
-    return m_webPage->client()->shouldInterruptJavaScript();
+    return m_webPagePrivate->m_client->shouldInterruptJavaScript();
 }
 
 KeyboardUIMode ChromeClientBlackBerry::keyboardUIMode()
 {
     bool tabsToLinks = true;
+
 #if ENABLE_DRT
-    if (m_webPage->d->m_dumpRenderTree)
+    if (m_webPagePrivate->m_dumpRenderTree)
         tabsToLinks = DumpRenderTreeSupport::linksIncludedInFocusChain();
 #endif
 
@@ -680,13 +636,13 @@ KeyboardUIMode ChromeClientBlackBerry::keyboardUIMode()
 
 PlatformPageClient ChromeClientBlackBerry::platformPageClient() const
 {
-    return m_webPage->d;
+    return m_webPagePrivate;
 }
 
 #if ENABLE(TOUCH_EVENTS)
 void ChromeClientBlackBerry::needTouchEvents(bool value)
 {
-    m_webPage->d->setNeedTouchEvents(value);
+    m_webPagePrivate->setNeedTouchEvents(value);
 }
 #endif
 
@@ -695,17 +651,17 @@ void ChromeClientBlackBerry::reachedMaxAppCacheSize(int64_t spaceNeeded)
     notImplemented();
 }
 
-void ChromeClientBlackBerry::layoutUpdated(WebCore::Frame* frame) const
+void ChromeClientBlackBerry::layoutUpdated(Frame* frame) const
 {
-    if (frame != m_webPage->d->m_mainFrame)
+    if (frame != m_webPagePrivate->m_mainFrame)
         return;
 
-    m_webPage->d->layoutFinished();
+    m_webPagePrivate->layoutFinished();
 }
 
-void ChromeClientBlackBerry::overflowExceedsContentsSize(WebCore::Frame* frame) const
+void ChromeClientBlackBerry::overflowExceedsContentsSize(Frame* frame) const
 {
-    if (frame != m_webPage->d->m_mainFrame)
+    if (frame != m_webPagePrivate->m_mainFrame)
         return;
 
 #if DEBUG_OVERFLOW_DETECTION
@@ -715,27 +671,27 @@ void ChromeClientBlackBerry::overflowExceedsContentsSize(WebCore::Frame* frame) 
                            frame->contentRenderer()->rightAbsoluteVisibleOverflow(),
                            frame->contentRenderer()->bottomAbsoluteVisibleOverflow());
 #endif
-    m_webPage->d->overflowExceedsContentsSize();
+    m_webPagePrivate->overflowExceedsContentsSize();
 }
 
-void ChromeClientBlackBerry::didDiscoverFrameSet(WebCore::Frame* frame) const
+void ChromeClientBlackBerry::didDiscoverFrameSet(Frame* frame) const
 {
-    if (frame != m_webPage->d->m_mainFrame)
+    if (frame != m_webPagePrivate->m_mainFrame)
         return;
 
     BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "ChromeClientBlackBerry::didDiscoverFrameSet");
-    if (m_webPage->d->loadState() == BlackBerry::WebKit::WebPagePrivate::Committed) {
-        m_webPage->d->setShouldUseFixedDesktopMode(true);
-        m_webPage->d->zoomToInitialScaleOnLoad();
+    if (m_webPagePrivate->loadState() == WebPagePrivate::Committed) {
+        m_webPagePrivate->setShouldUseFixedDesktopMode(true);
+        m_webPagePrivate->zoomToInitialScaleOnLoad();
     }
 }
 
 int ChromeClientBlackBerry::reflowWidth() const
 {
-    return m_webPage->d->reflowWidth();
+    return m_webPagePrivate->reflowWidth();
 }
 
-void ChromeClientBlackBerry::chooseIconForFiles(const Vector<WTF::String>&, FileChooser*)
+void ChromeClientBlackBerry::chooseIconForFiles(const Vector<String>&, FileChooser*)
 {
     notImplemented();
 }
@@ -750,12 +706,12 @@ void ChromeClientBlackBerry::enterFullscreenForNode(Node* node)
     if (!supportsFullscreenForNode(node))
         return;
 
-    m_webPage->d->enterFullscreenForNode(node);
+    m_webPagePrivate->enterFullscreenForNode(node);
 }
 
 void ChromeClientBlackBerry::exitFullscreenForNode(Node* node)
 {
-    m_webPage->d->exitFullscreenForNode(node);
+    m_webPagePrivate->exitFullscreenForNode(node);
 }
 
 #if ENABLE(WEBGL)
@@ -763,7 +719,7 @@ void ChromeClientBlackBerry::requestWebGLPermission(Frame* frame)
 {
     if (frame) {
         CString latinOrigin = frameOrigin(frame);
-        m_webPage->client()->requestWebGLPermission(latinOrigin.data());
+        m_webPagePrivate->m_client->requestWebGLPermission(latinOrigin.data());
     }
 }
 #endif
@@ -774,7 +730,7 @@ void ChromeClientBlackBerry::didSetSVGZoomAndPan(Frame* frame, unsigned short zo
     // For top-level SVG document, there is no viewport tag, we use viewport's user-scalable
     // to enable/disable zoom when top-level SVG document's zoomAndPan changed. Because there is no viewport
     // tag, other fields with default value in ViewportArguments are ok.
-    if (frame == m_webPage->d->m_page->mainFrame()) {
+    if (frame == m_webPagePrivate->m_page->mainFrame()) {
         ViewportArguments arguments;
         switch (zoomAndPan) {
         case SVGZoomAndPan::SVG_ZOOMANDPAN_DISABLE:
@@ -791,29 +747,22 @@ void ChromeClientBlackBerry::didSetSVGZoomAndPan(Frame* frame, unsigned short zo
 }
 #endif
 
-#if ENABLE(NOTIFICATIONS)
-WebCore::NotificationPresenter* ChromeClientBlackBerry::notificationPresenter() const
-{
-    return WebKit::NotificationPresenterImpl::instance();
-}
-#endif
-
 #if USE(ACCELERATED_COMPOSITING)
 void ChromeClientBlackBerry::attachRootGraphicsLayer(Frame* frame, GraphicsLayer* graphicsLayer)
 {
     // If the graphicsLayer parameter is 0, WebCore is actually
     // trying to remove a previously attached layer.
-    m_webPage->d->setRootLayerWebKitThread(frame, graphicsLayer ? graphicsLayer->platformLayer() : 0);
+    m_webPagePrivate->setRootLayerWebKitThread(frame, graphicsLayer ? graphicsLayer->platformLayer() : 0);
 }
 
 void ChromeClientBlackBerry::setNeedsOneShotDrawingSynchronization()
 {
-    m_webPage->d->setNeedsOneShotDrawingSynchronization();
+    m_webPagePrivate->setNeedsOneShotDrawingSynchronization();
 }
 
 void ChromeClientBlackBerry::scheduleCompositingLayerSync()
 {
-    m_webPage->d->scheduleRootLayerCommit();
+    m_webPagePrivate->scheduleRootLayerCommit();
 }
 
 bool ChromeClientBlackBerry::allowsAcceleratedCompositing() const
@@ -822,14 +771,10 @@ bool ChromeClientBlackBerry::allowsAcceleratedCompositing() const
 }
 #endif
 
-void* ChromeClientBlackBerry::platformWindow() const
+PassOwnPtr<ColorChooser> ChromeClientBlackBerry::createColorChooser(ColorChooserClient*, const Color&)
 {
-    return m_webPage->d->m_client->window();
+    return nullptr;
 }
 
-void* ChromeClientBlackBerry::platformCompositingWindow() const
-{
-    return m_webPage->d->m_client->compositingWindow();
-}
 
 } // namespace WebCore

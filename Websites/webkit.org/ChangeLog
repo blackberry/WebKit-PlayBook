@@ -1,3 +1,119 @@
+2012-02-24  Tom Zakrajsek  <tomz@codeaurora.org>
+
+        team.html (on webkit.org) doesn't recognize codeaurora.org
+        https://bugs.webkit.org/show_bug.cgi?id=79529
+
+        Reviewed by Ryosuke Niwa.
+
+        * team.html:
+
+2012-02-16  Kent Tamura  <tkent@chromium.org>
+
+        Improve usability of coding-style.html
+        https://bugs.webkit.org/show_bug.cgi?id=78470
+
+        Reviewed by Eric Seidel.
+
+        * coding/coding-style.html:
+        - Do not add a title attribute to each of LI elements
+        - Do not add a click handler to each of them
+        - Add a SPAN element in order to show [id-name] and provide smaller clickable area.
+
+2012-01-23  Seo Sanghyeon  <sh4.seo@samsung.com>
+
+        website: Reword WEBKITOUTPUTDIR documentation on Building WebKit page
+        https://bugs.webkit.org/show_bug.cgi?id=76544
+
+        Reviewed by Darin Adler.
+
+        WEBKITOUTPUTDIR is not only for Windows.
+
+        * building/build.html:
+
+2012-01-20  Kent Tamura  <tkent@chromium.org>
+
+        Each style rule should have its own ID.
+        https://bugs.webkit.org/show_bug.cgi?id=76428
+
+        Reviewed by David Levin.
+
+        * coding/coding-style.html: Add an id attribute to each of li elements,
+        and add code to set title="#id-name" and to make li elements clickable.
+
+2012-01-19  Daniel Bates  <dbates@webkit.org>
+
+        Remove "Safari 5.1 shipped" text from debugging instructions; move misplaced </ol>
+
+        Rubber-stamped by Sam Weinig.
+
+        * building/debug.html:
+
+2012-01-19  Daniel Bates  <dbates@webkit.org>
+
+        Update Debugging on Mac OS X instructions for Safari 5.1/WebKit 2
+        https://bugs.webkit.org/show_bug.cgi?id=67102
+
+        Reviewed by Eric Seidel.
+
+        Add instructions for debugging UIProcess and WebProcess using Xcode 4.
+
+        * building/active-scheme-xcode4.png: Added.
+        * building/build-settings-tab-xcode4.png: Added.
+        * building/build-window.png: Removed.
+        * building/custom-executable-xcode4.png: Added.
+        * building/custom-executable.png: Removed.
+        * building/debug-mac-uiprocess.html: Added.
+        * building/debug.html:
+        * building/debug.png: Removed.
+        * building/info-tab.png: Removed.
+        * building/run-xcode4.png: Added.
+
+2012-01-11  Antti Koivisto  <antti@apple.com>
+
+        Remove S60 reference from webkit.org
+        https://bugs.webkit.org/show_bug.cgi?id=76044
+
+        Reviewed by Simon Hausmann.
+        
+        There is no S60.
+
+        * index.html:
+
+2012-01-10  Hajime Morrita  <morrita@chromium.org>
+
+        [Website] i-Bench is no longer available.
+        https://bugs.webkit.org/show_bug.cgi?id=76027
+
+        Reviewed by Ryosuke Niwa.
+
+        Updated the availability information of i-Bench.
+
+        * projects/performance/index.html:
+
+2011-12-07  Daniel Bates  <dbates@webkit.org>
+
+        ASSERT_UNREACHED() should be ASSERT_NOT_REACHED() on assertion-guidelines.html
+        https://bugs.webkit.org/show_bug.cgi?id=74006
+
+        Reviewed by Antonio Gomes.
+
+        As far I can tell, we've never had an ASSERT_UNREACHED(). We do have an
+        ASSERT_NOT_REACHED().
+
+        * coding/assertion-guidelines.html:
+
+2011-11-30  Ryosuke Niwa  <rniwa@webkit.org>
+
+        commit-review-policy.html should make clear committers shouldn't land patches without authors' consent
+        https://bugs.webkit.org/show_bug.cgi?id=73098
+
+        Reviewed by Antti Koivisto.
+
+        Revise the sentence about committers being allowed to land patches by others to explicitly state that
+        they can only land patches by others if asked by authors themselves.
+
+        * coding/commit-review-policy.html:
+
 2011-11-14  Mark Rowe  <mrowe@apple.com>
 
         Upgrade WordPress's Akismet plug-in to the latest version.

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,9 +27,6 @@
 #include <PageCache.h>
 #include <wtf/HashSet.h>
 #include <wtf/Vector.h>
-#include <wtf/text/CString.h>
-
-using namespace WTF;
 
 namespace BlackBerry {
 namespace WebKit {
@@ -55,6 +52,7 @@ DEFINE_STATIC_LOCAL(String, BlackBerryUserAgentString, ("BlackBerryUserAgentStri
 DEFINE_STATIC_LOCAL(String, BlackBerryUserScalableEnabled, ("BlackBerryUserScalableEnabled"));
 DEFINE_STATIC_LOCAL(String, BlackBerryViewportWidth, ("BlackBerryViewportWidth"));
 DEFINE_STATIC_LOCAL(String, BlackBerryZoomToFitOnLoadEnabled, ("BlackBerryZoomToFitOnLoadEnabled"));
+DEFINE_STATIC_LOCAL(String, SpatialNavigationEnabled, ("SpatialNavigationEnabled"));
 DEFINE_STATIC_LOCAL(String, WebKitDatabasePath, ("WebKitDatabasePath"));
 DEFINE_STATIC_LOCAL(String, WebKitDatabasesEnabled, ("WebKitDatabasesEnabled"));
 DEFINE_STATIC_LOCAL(String, WebKitDefaultFixedFontSize, ("WebKitDefaultFixedFontSize"));
@@ -85,7 +83,6 @@ DEFINE_STATIC_LOCAL(String, WebKitUserStyleSheet, ("WebKitUserStyleSheet"));
 DEFINE_STATIC_LOCAL(String, WebKitUserStyleSheetLocation, ("WebKitUserStyleSheetLocation"));
 DEFINE_STATIC_LOCAL(String, WebKitWebSocketsEnabled, ("WebKitWebSocketsEnabled"));
 DEFINE_STATIC_LOCAL(String, WebKitXSSAuditorEnabled, ("WebKitXSSAuditorEnabled"));
-DEFINE_STATIC_LOCAL(String, SpatialNavigationEnabled, ("SpatialNavigationEnabled"));
 
 // FIXME: We should consider moving all the mime type code into its own object.
 
@@ -96,6 +93,7 @@ static const MIMETypeAssociationMap& mimeTypeAssociationMap()
     static MIMETypeAssociationMap* mimeTypeMap = 0;
     if (mimeTypeMap)
         return *mimeTypeMap;
+
     mimeTypeMap = new MIMETypeAssociationMap;
     mimeTypeMap->add("image/x-ms-bmp", "image/bmp");
     mimeTypeMap->add("image/x-windows-bmp", "image/bmp");
@@ -140,6 +138,7 @@ static const MIMETypeAssociationMap& mimeTypeAssociationMap()
     mimeTypeMap->add("application/java", "application/java-archive");
     mimeTypeMap->add("application/x-java-archive", "application/java-archive");
     mimeTypeMap->add("application/x-zip-compressed", "application/zip");
+
     return *mimeTypeMap;
 }
 
@@ -192,6 +191,7 @@ WebSettings* WebSettings::createFromStandardSettings(WebSettingsDelegate* delega
     settings->m_private->sender = settings;
     if (delegate)
         delegate->didChangeSettings(settings);
+
     return settings;
 }
 
@@ -200,6 +200,7 @@ WebSettings* WebSettings::standardSettings()
     static WebSettings *settings = 0;
     if (settings)
         return settings;
+
     settings = new WebSettings;
     settings->m_private->impl = new WebSettingsPrivate::WebSettingsPrivateImpl();
     settings->m_private->copyOnWrite = false;
@@ -213,25 +214,26 @@ WebSettings* WebSettings::standardSettings()
     // FIXME: We should detect whether we are embedded in a browser or an email client and default to TextReflowEnabledOnlyForBlockZoom and TextReflowEnabled, respectively.
     settings->m_private->setTextReflowMode(BlackBerryTextReflowMode, TextReflowDisabled);
 
-    settings->m_private->setBoolean(BlackBerryUserScalableEnabled, true);
     settings->m_private->setBoolean(BlackBerryUseWebKitCache, true);
+    settings->m_private->setBoolean(BlackBerryUserScalableEnabled, true);
     settings->m_private->setBoolean(BlackBerryZoomToFitOnLoadEnabled, true);
+
     settings->m_private->setInteger(WebKitDefaultFontSize, 16);
     settings->m_private->setInteger(WebKitDefaultFixedFontSize, 13);
-    settings->m_private->setInteger(WebKitMinimumFontSize, 8);
     settings->m_private->setString(WebKitDefaultTextEncodingName, "iso-8859-1");
+    settings->m_private->setBoolean(WebKitDownloadableBinaryFontsEnabled, true);
     settings->m_private->setInteger(WebKitFirstScheduledLayoutDelay, 250); // Match Document::cLayoutScheduleThreshold.
+    settings->m_private->setString(WebKitFixedFontFamily, "Courier New");
     settings->m_private->setBoolean(WebKitJavaScriptEnabled, true);
     settings->m_private->setBoolean(WebKitLoadsImagesAutomatically, true);
-    settings->m_private->setBoolean(WebKitDownloadableBinaryFontsEnabled, true);
     settings->m_private->setUnsignedLongLong(WebKitLocalStorageQuota, 5 * 1024 * 1024);
     settings->m_private->setInteger(WebKitMaximumPagesInCache, 0);
-    settings->m_private->setBoolean(WebKitWebSocketsEnabled, true);
-    settings->m_private->setString(WebKitFixedFontFamily, "Courier New");
+    settings->m_private->setInteger(WebKitMinimumFontSize, 8);
     settings->m_private->setString(WebKitSansSeriffFontFamily, "Arial");
     settings->m_private->setString(WebKitSeriffFontFamily, "Times New Roman");
     settings->m_private->setString(WebKitStandardFontFamily, "Times New Roman");
-    settings->m_private->setBoolean(SpatialNavigationEnabled, false);
+    settings->m_private->setBoolean(WebKitWebSocketsEnabled, true);
+
     return settings;
 }
 
@@ -239,22 +241,25 @@ void WebSettings::addSupportedObjectPluginMIMEType(const char* type)
 {
     if (!s_supportedObjectMIMETypes)
         s_supportedObjectMIMETypes = new HashSet<String>;
+
     s_supportedObjectMIMETypes->add(type);
 }
 
-// FIXME: We shouldn't be using WTF::String as a function argument.
-bool WebSettings::isSupportedObjectMIMEType(const String& mimeType)
+bool WebSettings::isSupportedObjectMIMEType(const WebString& mimeType)
 {
     if (mimeType.isEmpty())
         return false;
+
     if (!s_supportedObjectMIMETypes)
         return false;
+
     return s_supportedObjectMIMETypes->contains(getNormalizedMIMEType(mimeType));
 }
 
 WebString WebSettings::getNormalizedMIMEType(const WebString& type)
 {
     MIMETypeAssociationMap::const_iterator i = mimeTypeAssociationMap().find(type);
+
     return i == mimeTypeAssociationMap().end() ? type : i->second;
 }
 
@@ -582,7 +587,7 @@ void WebSettings::setFirstScheduledLayoutDelay(int delay)
     m_private->setInteger(WebKitFirstScheduledLayoutDelay, delay);
 }
 
-// Whether to include pattern: in the list of string patterns
+// Whether to include pattern: in the list of string patterns.
 bool WebSettings::shouldHandlePatternUrls() const
 {
     return m_private->getBoolean(BlackBerryHandlePatternURLs);
@@ -645,7 +650,7 @@ void WebSettings::setLocalStorageQuota(unsigned long long quota)
 
 int WebSettings::maximumPagesInCache() const
 {
-    // FIXME: We shouldn't be calling into WebCore from here. This class should just be a state sto
+    // FIXME: We shouldn't be calling into WebCore from here. This class should just be a state store.
     return WebCore::pageCache()->capacity();
 }
 

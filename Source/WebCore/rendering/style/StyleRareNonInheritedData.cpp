@@ -35,6 +35,8 @@ namespace WebCore {
 
 StyleRareNonInheritedData::StyleRareNonInheritedData()
     : opacity(RenderStyle::initialOpacity())
+    , m_aspectRatioDenominator(RenderStyle::initialAspectRatioDenominator())
+    , m_aspectRatioNumerator(RenderStyle::initialAspectRatioNumerator())
     , m_counterIncrement(0)
     , m_counterReset(0)
     , m_perspective(RenderStyle::initialPerspective())
@@ -43,7 +45,10 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , lineClamp(RenderStyle::initialLineClamp())
     , m_mask(FillLayer(MaskFillLayer))
     , m_pageSize()
-    , m_wrapShape(RenderStyle::initialWrapShape())
+    , m_wrapShapeInside(RenderStyle::initialWrapShapeInside())
+    , m_wrapShapeOutside(RenderStyle::initialWrapShapeOutside())
+    , m_wrapMargin(RenderStyle::initialWrapMargin())
+    , m_wrapPadding(RenderStyle::initialWrapPadding())
     , m_visitedLinkBackgroundColor(RenderStyle::initialBackgroundColor())
     , m_flowThread(RenderStyle::initialFlowThread())
     , m_regionThread(RenderStyle::initialRegionThread())
@@ -62,6 +67,9 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
     , m_appearance(RenderStyle::initialAppearance())
     , m_borderFit(RenderStyle::initialBorderFit())
     , m_textCombine(RenderStyle::initialTextCombine())
+    , m_wrapFlow(RenderStyle::initialWrapFlow())
+    , m_wrapThrough(RenderStyle::initialWrapThrough())
+    , m_hasAspectRatio(false)
 #if USE(ACCELERATED_COMPOSITING)
     , m_runningAcceleratedAnimation(false)
 #endif
@@ -72,6 +80,8 @@ StyleRareNonInheritedData::StyleRareNonInheritedData()
 StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonInheritedData& o)
     : RefCounted<StyleRareNonInheritedData>()
     , opacity(o.opacity)
+    , m_aspectRatioDenominator(o.m_aspectRatioDenominator)
+    , m_aspectRatioNumerator(o.m_aspectRatioNumerator)
     , m_counterIncrement(o.m_counterIncrement)
     , m_counterReset(o.m_counterReset)
     , m_perspective(o.m_perspective)
@@ -86,6 +96,10 @@ StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonInherited
 #if ENABLE(CSS_FILTERS)
     , m_filter(o.m_filter)
 #endif
+#if ENABLE(CSS_GRID_LAYOUT)
+    , m_grid(o.m_grid)
+    , m_gridItem(o.m_gridItem)
+#endif
     , m_content(o.m_content ? o.m_content->clone() : nullptr)
     , m_counterDirectives(o.m_counterDirectives ? clone(*o.m_counterDirectives) : nullptr)
     , m_boxShadow(o.m_boxShadow ? adoptPtr(new ShadowData(*o.m_boxShadow)) : nullptr)
@@ -95,9 +109,12 @@ StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonInherited
     , m_mask(o.m_mask)
     , m_maskBoxImage(o.m_maskBoxImage)
     , m_pageSize(o.m_pageSize)
-    , m_wrapShape(o.m_wrapShape)
+    , m_wrapShapeInside(o.m_wrapShapeInside)
+    , m_wrapShapeOutside(o.m_wrapShapeOutside)
+    , m_wrapMargin(o.m_wrapMargin)
+    , m_wrapPadding(o.m_wrapPadding)
     , m_visitedLinkBackgroundColor(o.m_visitedLinkBackgroundColor)
-    , m_visitedLinkOutlineColor(o.m_visitedLinkBackgroundColor)
+    , m_visitedLinkOutlineColor(o.m_visitedLinkOutlineColor)
     , m_visitedLinkBorderLeftColor(o.m_visitedLinkBorderLeftColor)
     , m_visitedLinkBorderRightColor(o.m_visitedLinkBorderRightColor)
     , m_visitedLinkBorderTopColor(o.m_visitedLinkBorderTopColor)
@@ -119,6 +136,9 @@ StyleRareNonInheritedData::StyleRareNonInheritedData(const StyleRareNonInherited
     , m_appearance(o.m_appearance)
     , m_borderFit(o.m_borderFit)
     , m_textCombine(o.m_textCombine)
+    , m_wrapFlow(o.m_wrapFlow)
+    , m_wrapThrough(o.m_wrapThrough)
+    , m_hasAspectRatio(o.m_hasAspectRatio)
 #if USE(ACCELERATED_COMPOSITING)
     , m_runningAcceleratedAnimation(o.m_runningAcceleratedAnimation)
 #endif
@@ -144,6 +164,10 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
 #if ENABLE(CSS_FILTERS)
         && m_filter == o.m_filter
 #endif
+#if ENABLE(CSS_GRID_LAYOUT)
+        && m_grid == o.m_grid
+        && m_gridItem == o.m_gridItem
+#endif
         && contentDataEquivalent(o)
         && counterDataEquivalent(o)
         && userDrag == o.userDrag
@@ -154,8 +178,11 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && m_appearance == o.m_appearance
         && m_borderFit == o.m_borderFit
         && m_textCombine == o.m_textCombine
+        && m_aspectRatioDenominator == o.m_aspectRatioDenominator
+        && m_aspectRatioNumerator == o.m_aspectRatioNumerator
         && m_counterIncrement == o.m_counterIncrement
         && m_counterReset == o.m_counterReset
+        && m_hasAspectRatio == o.m_hasAspectRatio
 #if USE(ACCELERATED_COMPOSITING)
         && !m_runningAcceleratedAnimation && !o.m_runningAcceleratedAnimation
 #endif
@@ -175,7 +202,12 @@ bool StyleRareNonInheritedData::operator==(const StyleRareNonInheritedData& o) c
         && (m_flowThread == o.m_flowThread)
         && (m_regionThread == o.m_regionThread)
         && (m_regionOverflow == o.m_regionOverflow)
-        && (m_wrapShape == o.m_wrapShape)
+        && (m_wrapShapeInside == o.m_wrapShapeInside)
+        && (m_wrapShapeOutside == o.m_wrapShapeOutside)
+        && (m_wrapFlow == o.m_wrapFlow)
+        && (m_wrapThrough == o.m_wrapThrough)
+        && (m_wrapMargin == o.m_wrapMargin)
+        && (m_wrapPadding == o.m_wrapPadding)
         && m_visitedLinkBackgroundColor == o.m_visitedLinkBackgroundColor
         && m_visitedLinkOutlineColor == o.m_visitedLinkOutlineColor
         && m_visitedLinkBorderLeftColor == o.m_visitedLinkBorderLeftColor

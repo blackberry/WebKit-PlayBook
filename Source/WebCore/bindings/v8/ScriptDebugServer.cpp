@@ -40,6 +40,7 @@
 #include "V8Binding.h"
 #include "V8JavaScriptCallFrame.h"
 #include <wtf/StdLibExtras.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
@@ -213,6 +214,11 @@ void ScriptDebugServer::stepOutOfFunction()
     continueProgram();
 }
 
+bool ScriptDebugServer::canSetScriptSource()
+{
+    return true;
+}
+
 bool ScriptDebugServer::setScriptSource(const String& sourceID, const String& newContent, bool preview, String* error, ScriptValue* newCallFrames, ScriptObject* result)
 {
     ensureDebuggerScriptCompiled();
@@ -262,9 +268,9 @@ ScriptValue ScriptDebugServer::currentCallFrame()
     return ScriptValue(toV8(currentCallFrame.release()));
 }
 
-void ScriptDebugServer::interruptAndRun(PassOwnPtr<Task> task)
+void ScriptDebugServer::interruptAndRun(PassOwnPtr<Task> task, v8::Isolate* isolate)
 {
-    v8::Debug::DebugBreakForCommand(new ClientDataImpl(task));
+    v8::Debug::DebugBreakForCommand(new ClientDataImpl(task), isolate);
 }
 
 void ScriptDebugServer::runPendingTasks()

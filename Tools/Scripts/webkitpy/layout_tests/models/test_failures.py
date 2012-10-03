@@ -32,6 +32,10 @@ import cPickle
 from webkitpy.layout_tests.models import test_expectations
 
 
+def is_reftest_failure(failure_list):
+    failure_types = [type(f) for f in failure_list]
+    return set((FailureReftestMismatch, FailureReftestMismatchDidNotOccur, FailureReftestNoImagesGenerated)).intersection(failure_types)
+
 # FIXME: This is backwards.  Each TestFailure subclass should know what
 # test_expectation type it corresponds too.  Then this method just
 # collects them all from the failure list and returns the worst one.
@@ -59,14 +63,12 @@ def determine_result_type(failure_list):
         is_text_failure = FailureTextMismatch in failure_types
         is_image_failure = (FailureImageHashIncorrect in failure_types or
                             FailureImageHashMismatch in failure_types)
-        is_reftest_failure = (FailureReftestMismatch in failure_types or
-                              FailureReftestMismatchDidNotOccur in failure_types)
         is_audio_failure = (FailureAudioMismatch in failure_types)
         if is_text_failure and is_image_failure:
             return test_expectations.IMAGE_PLUS_TEXT
         elif is_text_failure:
             return test_expectations.TEXT
-        elif is_image_failure or is_reftest_failure:
+        elif is_image_failure or is_reftest_failure(failure_list):
             return test_expectations.IMAGE
         elif is_audio_failure:
             return test_expectations.AUDIO
@@ -205,6 +207,17 @@ class FailureReftestMismatchDidNotOccur(TestFailure):
         return "Mismatch with the reference did not occur"
 
 
+class FailureReftestNoImagesGenerated(TestFailure):
+    """Both the reftest and the -expected html file didn't generate pixel results."""
+
+    def __init__(self, reference_filename=None):
+        self.reference_filename = reference_filename
+
+    @staticmethod
+    def message():
+        return "Reftest didn't generate pixel results."
+
+
 class FailureMissingAudio(TestFailure):
     """Actual result image was missing."""
 
@@ -227,4 +240,4 @@ ALL_FAILURE_CLASSES = (FailureTimeout, FailureCrash, FailureMissingResult,
                        FailureTextMismatch, FailureMissingImageHash,
                        FailureMissingImage, FailureImageHashMismatch,
                        FailureImageHashIncorrect, FailureReftestMismatch,
-                       FailureReftestMismatchDidNotOccur)
+                       FailureReftestMismatchDidNotOccur, FailureReftestNoImagesGenerated)

@@ -26,18 +26,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import json
 import unittest
 
-try:
-    import json
-except ImportError:
-    # python 2.5 compatibility
-    import webkitpy.thirdparty.simplejson as json
-
-
-from webkitpy.common.checkout.scm.scm_mock import MockSCM
 from webkitpy.common.net import resultsjsonparser_unittest
-from webkitpy.common.system.filesystem_mock import MockFileSystem
 from webkitpy.common.host_mock import MockHost
 from webkitpy.layout_tests.layout_package.json_results_generator import strip_json_wrapper
 from webkitpy.layout_tests.port.webkit import WebKitPort
@@ -301,23 +293,19 @@ def get_test_config(test_files=[], result_files=[]):
     # We could grab this from port.layout_tests_dir(), but instantiating a fully mocked port is a pain.
     layout_tests_directory = "/mock-checkout/LayoutTests"
     results_directory = '/WebKitBuild/Debug/layout-test-results'
-    mock_filesystem = MockFileSystem()
+    host = MockHost()
     for file in test_files:
-        file_path = mock_filesystem.join(layout_tests_directory, file)
-        mock_filesystem.files[file_path] = ''
+        host.filesystem.write_binary_file(host.filesystem.join(layout_tests_directory, file), '')
     for file in result_files:
-        file_path = mock_filesystem.join(results_directory, file)
-        mock_filesystem.files[file_path] = ''
+        host.filesystem.write_binary_file(host.filesystem.join(results_directory, file), '')
 
     class TestMacPort(WebKitPort):
         port_name = "mac"
-        def __init__(self):
-            WebKitPort.__init__(self, filesystem=mock_filesystem, host=MockHost())
 
     return TestConfig(
-        TestMacPort(),
+        TestMacPort(host, 'mac'),
         layout_tests_directory,
         results_directory,
         ('mac', 'mac-leopard', 'win', 'linux'),
-        mock_filesystem,
-        MockSCM())
+        host.filesystem,
+        host.scm())

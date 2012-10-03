@@ -32,6 +32,8 @@
 #include "ChromiumDataObject.h"
 
 #include "ClipboardMimeTypes.h"
+#include "ClipboardUtilitiesChromium.h"
+#include "DataTransferItemListChromium.h"
 #include "Pasteboard.h"
 #include "PlatformSupport.h"
 
@@ -101,10 +103,10 @@ bool ChromiumDataObject::hasData() const
 
 HashSet<String> ChromiumDataObject::types() const
 {
-    if (m_clipboardType == Clipboard::CopyAndPaste) {
+    if (m_storageMode == Pasteboard) {
         bool ignoredContainsFilenames;
-        return PlatformSupport::clipboardReadAvailableTypes(PasteboardPrivate::StandardBuffer,
-                                                           &ignoredContainsFilenames);
+        return PlatformSupport::clipboardReadAvailableTypes(currentPasteboardBuffer(),
+                                                            &ignoredContainsFilenames);
     }
 
     HashSet<String> results;
@@ -114,27 +116,28 @@ HashSet<String> ChromiumDataObject::types() const
         results.add(mimeTypeTextPlain);
     }
 
-    if (m_url.isValid())
-        results.add(mimeTypeURL);
-
     if (!m_uriList.isEmpty())
         results.add(mimeTypeTextURIList);
 
     if (!m_textHtml.isEmpty())
         results.add(mimeTypeTextHTML);
 
+    if (!m_downloadMetadata.isEmpty())
+        results.add(mimeTypeDownloadURL);
+
+    for (HashMap<String, String>::const_iterator::Keys it = m_customData.begin().keys();
+         it != m_customData.end().keys(); ++it) {
+        results.add(*it);
+    }
+
     return results;
 }
 
-String ChromiumDataObject::getData(const String& type, bool& success)
+String ChromiumDataObject::getData(const String& type, bool& success) const
 {
     if (type == mimeTypeTextPlain) {
-        if (m_clipboardType == Clipboard::CopyAndPaste) {
-            PasteboardPrivate::ClipboardBuffer buffer =
-                Pasteboard::generalPasteboard()->isSelectionMode() ?
-                PasteboardPrivate::SelectionBuffer :
-                PasteboardPrivate::StandardBuffer;
-            String text = PlatformSupport::clipboardReadPlainText(buffer);
+        if (m_storageMode == Pasteboard) {
+            String text = PlatformSupport::clipboardReadPlainText(currentPasteboardBuffer());
             success = !text.isEmpty();
             return text;
         }
@@ -143,7 +146,7 @@ String ChromiumDataObject::getData(const String& type, bool& success)
     }
 
     if (type == mimeTypeURL) {
-        success = !m_url.isEmpty();
+        success = !m_uriList.isEmpty();
         return m_url.string();
     }
 
@@ -153,15 +156,11 @@ String ChromiumDataObject::getData(const String& type, bool& success)
     }
 
     if (type == mimeTypeTextHTML) {
-        if (m_clipboardType == Clipboard::CopyAndPaste) {
-            PasteboardPrivate::ClipboardBuffer buffer =
-                Pasteboard::generalPasteboard()->isSelectionMode() ?
-                PasteboardPrivate::SelectionBuffer :
-                PasteboardPrivate::StandardBuffer;
+        if (m_storageMode == Pasteboard) {
             String htmlText;
             KURL sourceURL;
             unsigned ignored;
-            PlatformSupport::clipboardReadHTML(buffer, &htmlText, &sourceURL, &ignored, &ignored);
+            PlatformSupport::clipboardReadHTML(currentPasteboardBuffer(), &htmlText, &sourceURL, &ignored, &ignored);
             success = !htmlText.isEmpty();
             return htmlText;
         }
@@ -172,6 +171,18 @@ String ChromiumDataObject::getData(const String& type, bool& success)
     if (type == mimeTypeDownloadURL) {
         success = !m_downloadMetadata.isEmpty();
         return m_downloadMetadata;
+    }
+
+    if (m_storageMode == Pasteboard) {
+        String data = PlatformSupport::clipboardReadCustomData(currentPasteboardBuffer(), type);
+        success = !data.isEmpty();
+        return data;
+    }
+
+    HashMap<String, String>::const_iterator it = m_customData.find(type);
+    if (it != m_customData.end()) {
+        success = true;
+        return it->second;
     }
 
     success = false;
@@ -224,34 +235,33 @@ bool ChromiumDataObject::setData(const String& type, const String& data)
         return true;
     }
 
-    return false;
-}
+    if (type.isEmpty())
+        return false;
 
-uint64_t ChromiumDataObject::getSequenceNumber()
-{
-    return PlatformSupport::clipboardGetSequenceNumber();
+    m_customData.set(type, data);
+    return true;
 }
 
 bool ChromiumDataObject::containsFilenames() const
 {
     bool containsFilenames;
-    if (m_clipboardType == Clipboard::CopyAndPaste) {
+    if (m_storageMode == Pasteboard) {
         HashSet<String> ignoredResults =
-            PlatformSupport::clipboardReadAvailableTypes(PasteboardPrivate::StandardBuffer,
-                                                        &containsFilenames);
+            PlatformSupport::clipboardReadAvailableTypes(currentPasteboardBuffer(),
+                                                         &containsFilenames);
     } else
         containsFilenames = !m_filenames.isEmpty();
     return containsFilenames;
 }
 
-ChromiumDataObject::ChromiumDataObject(Clipboard::ClipboardType clipboardType)
-    : m_clipboardType(clipboardType)
+ChromiumDataObject::ChromiumDataObject(StorageMode storageMode)
+    : m_storageMode(storageMode)
 {
 }
 
 ChromiumDataObject::ChromiumDataObject(const ChromiumDataObject& other)
     : RefCounted<ChromiumDataObject>()
-    , m_clipboardType(other.m_clipboardType)
+    , m_storageMode(other.m_storageMode)
     , m_urlTitle(other.m_urlTitle)
     , m_downloadMetadata(other.m_downloadMetadata)
     , m_fileExtension(other.m_fileExtension)
@@ -268,4 +278,3 @@ ChromiumDataObject::ChromiumDataObject(const ChromiumDataObject& other)
 }
 
 } // namespace WebCore
-

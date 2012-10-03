@@ -68,10 +68,6 @@ media/adopt-node-crash.html
 # https://bugs.webkit.org/show_bug.cgi?id=60055
 media/video-volume-slider.html
 
-# Timing out in all the GTK bots since r87605
-# https://bugs.webkit.org/show_bug.cgi?id=61919
-svg/wicd/test-scalable-background-image1.xhtml
-
 ###############################################################################
 # TESTS CRASHING
 ###############################################################################
@@ -105,12 +101,6 @@ fast/forms/multiple-form-submission-protection-mouse.html
 # This test crashes whatever test follows it. Perhaps it's related to the previous failure.
 fast/dom/gc-10.html
 
-# https://bugs.webkit.org/show_bug.cgi?id=50744
-inspector/debugger/open-close-open.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=55135
-http/tests/incremental/slow-utf8-html.pl
-
 # [GTK] fast/workers/storage/use-same-database-in-page-and-workers.html fails an ASSERT
 # https://bugs.webkit.org/show_bug.cgi?id=56147 
 # Fails assertion: ASSERT(m_workerContext->hasOneRef());
@@ -134,6 +124,9 @@ editing/pasteboard/paste-text-008.html
 editing/undo/undo-smart-delete-reversed-selection.html
 editing/selection/directionality-after-undo-replace.html
 
+# EditorClient::checkTextOfParagraph() is not implemented
+editing/spelling/spelling-marker-description.html
+
 # https://bugs.webkit.org/show_bug.cgi?id=64530
 editing/selection/editable-html-element.html
 
@@ -149,15 +142,12 @@ editing/pasteboard/drag-drop-input-in-svg.svg
 # https://bugs.webkit.org/show_bug.cgi?id=68700
 fast/workers/storage/interrupt-database.html
 
-# https://bugs.webkit.org/show_bug.cgi?id=69000
+# https://bugs.webkit.org/show_bug.cgi?id=69933
 fast/borders/inline-mask-overlay-image-outset-vertical-rl.html
+fast/borders/inline-mask-overlay-image-outset.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=69001
 plugins/js-from-destroy.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=71454
-fast/css/webkit-mask-crash-fieldset-legend.html
-fast/css/webkit-mask-crash-table.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=72245
 fast/images/size-failure.html
@@ -242,6 +232,7 @@ fast/events/touch
 
 # IndexedDB is not yet enabled.
 storage/indexeddb
+http/tests/inspector/indexeddb
 
 # StorageTracker is not enabled.
 storage/domstorage/localstorage/storagetracker
@@ -260,6 +251,9 @@ fast/forms/datetimelocal
 fast/forms/month
 fast/forms/time
 fast/forms/week
+
+# ENABLE_GAMEPAD not enabled.
+gamepad/
 
 # Speech input is not yet enabled.
 fast/speech
@@ -283,19 +277,30 @@ http/tests/misc/webtiming-two-redirects.php
 fast/filesystem
 http/tests/filesystem
 http/tests/security/filesystem-iframe-from-remote.html
+http/tests/websocket/tests/hybi/send-file-blob.html
+http/tests/websocket/tests/hybi/send-file-blob-fail.html
+http/tests/workers/terminate-during-sync-operation.html
+fast/mutation/filesystem-callback-delivery.html
 
 # Requires WebP support.
 fast/canvas/canvas-toDataURL-webp.html
 fast/images/webp-image-decoding.html
-
-# Request ENABLE(REQUEST_ANIMATION_FRAME) support
-fast/animation
 
 # Requires media engine closed caption support
 media/media-captions.html
 
 # DataTransferItems is not yet implemented.
 editing/pasteboard/data-transfer-items.html
+editing/pasteboard/data-transfer-items-image-png.html
+editing/pasteboard/data-transfer-items-drag-drop-file.html
+editing/pasteboard/data-transfer-items-drag-drop-string.html
+
+# Custom MIME type support in DataTransfer is not yet implemented.
+editing/pasteboard/clipboard-customData.html
+fast/events/drag-customData.html
+
+# PasteBoard::plainText() does not support file names.
+editing/pasteboard/drag-files-to-editable-element.html
 
 # Needs grammar checking.
 editing/spelling/markers.html
@@ -343,8 +348,14 @@ http/tests/security/webgl-remote-read-remote-image-allowed.html
 http/tests/security/webgl-remote-read-remote-image-allowed-with-credentials.html
 http/tests/security/webgl-remote-read-remote-image-blocked-no-crossorigin.html
 
-# New flexbox is not yet enabled. http://webkit.org/b/62048
-css3/flexbox
+# CSS Grid Layout is not yet enabled. http://webkit.org/b/60731
+fast/css-grid-layout
+
+# <style scoped> is not yet enabled. http://webkit.org/b/49142
+fast/css/style-scoped
+
+# ENABLE(SHADOW_DOM) is disabled.
+fast/dom/shadow
 
 # CSS Regions support not yet enabled. http://webkit.org/b/57312
 fast/regions
@@ -358,23 +369,38 @@ webaudio
 # VIDEO_TRACK is disabled for now
 media/track
 fast/events/constructors/track-event-constructor.html
+http/tests/security/text-track-crossorigin.html
 
 # CSS Filters is disabled
 css3/filters
 
-# MutationObservers are net yet enabled. http://webkit.org/b/68729
-fast/mutation
-
 # layoutTestController.overridePreference("WebKit*FontMap"...) is not
 # supported.
+fast/text/international/content-language-font-selection.html
+fast/text/international/content-language-with-subtags.html
 fast/text/international/locale-sensitive-fonts.html
+
+# Needs layoutTestController.enableAutoResizeMode()
+fast/autoresize
+
+# The GTK+ build bots don't yet have the muscle to run WebGL tests.
+compositing/webgl
+fast/canvas/webgl
+http/tests/canvas/webgl
+http/tests/security/webgl-remote-read-remote-image-allowed.html
+http/tests/security/webgl-remote-read-remote-image-blocked-no-crossorigin.html
+http/tests/security/webgl-remote-read-remote-image-allowed-with-credentials.html
+
+#Vibration API support not yet. http://webkit.org/b/72010
+fast/dom/navigator-vibration.html
 
 ###############################################################################
 # TESTS FAILING
 ###############################################################################
-accessibility/aria-help.html
+accessibility/aria-checkbox-sends-notification.html
 accessibility/aria-hidden.html
 accessibility/aria-hidden-with-elements.html
+accessibility/aria-invalid.html
 accessibility/aria-labelledby-on-input.html
 accessibility/aria-labelledby-overrides-label.html
 accessibility/aria-labelledby-stay-within.html
@@ -402,7 +428,9 @@ accessibility/label-for-control-hittest.html
 accessibility/language-attribute.html
 accessibility/legend.html
 accessibility/lists.html
+accessibility/loading-iframe-sends-notification.html
 accessibility/loading-iframe-updates-axtree.html
+accessibility/notification-listeners.html
 accessibility/onclick-handlers.html
 accessibility/placeholder.html
 accessibility/plugin.html
@@ -423,10 +451,6 @@ accessibility/th-as-title-ui.html
 accessibility/transformed-element.html
 accessibility/visible-elements.html
 
-# Need support for dumping selection rectangles in pixel output
-# https://bugs.webkit.org/show_bug.cgi?id=53647
-editing/selection/transformed-selection-rects.html
-
 # Blurring and focusing from LayoutTestController do not work.
 # https://bugs.webkit.org/show_bug.cgi?id=53646
 # Test results show a caret and focus ring when there shouldn't be.
@@ -441,18 +465,8 @@ fast/forms/select-double-onchange.html
 fast/forms/select-script-onchange.html
 fast/html/tab-order.html
 
-# The box isn't empty after a test run with this test.
-# https://bugs.webkit.org/show_bug.cgi?id=53644
- editing/deleting/5408255.html
-
 # Missing delegates:
-# Need proper frame loader callbacks reporting
-# See https://bugs.webkit.org/show_bug.cgi?id=32170
-http/tests/security/mixedContent/empty-url-plugin-in-frame.html
-fast/loader/file-protocol-fragment.html
-# Tests failing because of missing resource load delegate callbacks.
-fast/loader/main-document-url-for-non-http-loads.html
-http/tests/misc/link-rel-icon-beforeload.html
+
 # Tests failing because of missing policy delegate callbacks.
 fast/loader/onload-policy-ignore-for-frame.html
 fast/loader/policy-delegate-action-hit-test-zoomed.html
@@ -505,13 +519,6 @@ fast/dom/Window/window-resize.html
 # The background is not clipped in this test, as observed in the pixel output.
 fast/backgrounds/background-clip-text.html
 
-# These fast XMLHttpRequest tests fail because 3D_CANVAS is not enabled.
-fast/xmlhttprequest/xmlhttprequest-responsetype-abort.html
-fast/xmlhttprequest/xmlhttprequest-responsetype-arraybuffer.html
-fast/xmlhttprequest/xmlhttprequest-responsetype-document.html
-fast/xmlhttprequest/xmlhttprequest-responsetype-text.html
-http/tests/xmlhttprequest/send-array-buffer.html
-
 # Possible bug in eventSender.zoomPageOut() ? https://bugs.webkit.org/show_bug.cgi?id=30575
 fast/dom/elementFromPoint-relative-to-viewport.html
 
@@ -545,7 +552,6 @@ http/tests/appcache/origin-delete.html
 http/tests/appcache/origins-with-appcache.html
 # LayoutTestController::applicationCacheDiskUsageForOrigin isn't implemented - https://bugs.webkit.org/show_bug.cgi?id=57127
 http/tests/appcache/origin-usage.html
-http/tests/cookies/double-quoted-value-with-semi-colon.html
 http/tests/loading/bad-scheme-subframe.html
 http/tests/loading/bad-server-subframe.html
 # Needed to cover the fix for <rdar://problem/6727495>
@@ -618,42 +624,6 @@ plugins/clicking-missing-plugin-fires-delegate.html
 # Need to implement getFormValue().
 plugins/form-value.html
 
-# Tests in security/ directory
-#   Tests failing
-security/set-form-autocomplete-attribute.html
-
-# Tests in svg/ directory
-#   Tests failing
-svg/filters/feColorMatrix-values.svg
-# Failing only in 32-bits Release, 1 pixel difference
-svg/filters/feColorMatrix-saturate.svg
-svg/filters/sourceAlpha.svg
-svg/dom/altGlyph-dom.xhtml
-svg/custom/getSubStringLength.html
-svg/custom/getscreenctm-in-mixed-content2.xhtml
-svg/custom/glyph-setting-d-attribute.svg
-svg/custom/no-inherited-dashed-stroke.xhtml
-svg/custom/relative-sized-shadow-tree-content-with-symbol.xhtml
-svg/custom/relative-sized-use-on-symbol.xhtml
-svg/custom/stroke-width-click.svg
-svg/custom/svg-fonts-in-text-controls.html
-svg/custom/use-elementInstance-event-target.svg
-svg/custom/use-elementInstance-methods.svg
-svg/custom/use-on-symbol-inside-pattern.svg
-svg/custom/use-setAttribute-crash.svg
-svg/text/lengthAdjust-text-metrics.html
-
-# flaky test (see https://bugs.webkit.org/show_bug.cgi?id=53989)
-svg/custom/use-multiple-on-nested-disallowed-font.html
-
-# This test needs to be looked at: runs on other platforms,
-# may fail here due to debug output limitations.
-# https://bugs.webkit.org/show_bug.cgi?id=25645
-svg/custom/pattern-excessive-malloc.svg
-
-# https://bugs.webkit.org/show_bug.cgi?id=49065
-svg/animations/animate-path-nested-transforms.html
-
 # Tests that failed because we don't have an eventSender implementation
 http/tests/plugins/plugin-document-has-focus.html
 
@@ -697,6 +667,7 @@ svg/text/caret-in-svg-text.xhtml
 # No authentication challenge handling
 # https://bugs.webkit.org/show_bug.cgi?id=51104
 http/tests/loading/basic-credentials-sent-automatically.html
+http/tests/loading/authentication-after-redirect-stores-wrong-credentials/authentication-after-redirect-stores-wrong-credentials.html
 http/tests/cache/subresource-fragment-identifier.html
 http/tests/misc/authentication-redirect-1/authentication-sent-to-redirect-cross-origin.html
 http/tests/misc/authentication-redirect-2/authentication-sent-to-redirect-same-origin.html
@@ -724,21 +695,8 @@ http/tests/xmlhttprequest/origin-whitelisting-removal.html
 # https://bugs.webkit.org/show_bug.cgi?id=55682
 fast/images/support-broken-image-delegate.html
 
-# Fails because of new behaviour enforced by libsoup
-# See: https://bugzilla.gnome.org/show_bug.cgi?id=603825
-fast/cookies/local-file-can-set-cookies.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=32604
-# Fails on the release bot because of, apparently, rouding errors
-svg/custom/path-getTotalLength.svg
-
-# Fail due to an extra "CONSOLE MESSAGE: line 1: SyntaxError: Parse error"
-fast/loader/onload-willSendRequest-null-for-script.html
-fast/loader/willSendRequest-null-for-preload.html
-
 # Requires willSendRequestReturnsNullOnRedirect + willSendRequest + didFinishLoading
 http/tests/misc/will-send-request-returns-null-on-redirect.html
-http/tests/misc/favicon-loads-with-icon-loading-override.html
 # Requires willPerformClientRedirectToURL
 # https://bugs.webkit.org/show_bug.cgi?id=58526
 http/tests/loading/onload-vs-immediate-refresh.pl
@@ -749,10 +707,6 @@ http/tests/security/mixedContent/insecure-css-in-main-frame.html
 
 # GTK+ does not have layoutTestController.setDomainRelaxationForbiddenForURLScheme
 http/tests/security/setDomainRelaxationForbiddenForURLScheme.html
-
-# Only fails on Gtk bot - https://bugs.webkit.org/show_bug.cgi?id=33835
-svg/custom/use-instanceRoot-event-bubbling.xhtml
-
 # New failure after http://trac.webkit.org/changeset/53758
 scrollbars/scrollbar-middleclick-nopaste.html
 
@@ -829,9 +783,6 @@ inspector/styles/styles-source-lines-inline.html
 #https://bugs.webkit.org/show_bug.cgi?id=37537
 plugins/npruntime/round-trip-npobject.html
 
-# https://bugs.webkit.org/show_bug.cgi?id=37544
-svg/custom/use-instanceRoot-as-event-target.xhtml
-
 # https://bugs.webkit.org/show_bug.cgi?id=37613
 printing
 editing/execCommand/print.html
@@ -839,102 +790,8 @@ editing/execCommand/print.html
 # https://bugs.webkit.org/show_bug.cgi?id=38569
 http/tests/workers/text-encoding.html
 
-# The following tests differ between the 64-bit and 32-bit bots and sometimes
-# between debug and release builds. These failures are likely due to rounding
-# errors or differences in software versions between the bots.
-# https://bugs.webkit.org/show_bug.cgi?id=39022
-css1/box_properties/acid_test.html
-fast/css/zoom-body-scroll.html
-fast/css/text-rendering.html
-fast/css/percentage-non-integer.html
-fast/repaint/moving-shadow-on-container.html
-fast/repaint/moving-shadow-on-path.html
-fast/text/emphasis.html
-fast/text/international/hindi-whitespace.html
-svg/css/composite-shadow-example.html
-svg/css/composite-shadow-with-opacity.html
-svg/css/stars-with-shadow.html
-svg/custom/gradient-with-1d-boundingbox.svg
-svg/custom/recursive-filter.svg
-svg/custom/relative-sized-inner-svg.xhtml
-svg/custom/relative-sized-use-without-attributes-on-symbol.xhtml
-svg/custom/svg-fonts-with-no-element-reference.html
-svg/filters/filteredImage.svg
-svg/filters/parent-children-with-same-filter.svg
-svg/overflow/overflow-on-inner-svg-element.svg
-svg/W3C-SVG-1.1/animate-elem-36-t.svg
-svg/W3C-SVG-1.1/animate-elem-40-t.svg
-svg/W3C-SVG-1.1/animate-elem-80-t.svg
-svg/W3C-SVG-1.1/extend-namespace-01-f.svg
-svg/W3C-SVG-1.1/filters-conv-01-f.svg
-svg/W3C-SVG-1.1/metadata-example-01-b.svg
-svg/W3C-SVG-1.1/animate-elem-41-t.svg
-svg/W3C-SVG-1.1/animate-elem-37-t.svg
-svg/W3C-SVG-1.1/animate-elem-81-t.svg
-svg/W3C-SVG-1.1/animate-elem-06-t.svg
-# These two started to fail in 64bit debug bot
-svg/W3C-SVG-1.1-SE/types-dom-02-f.svg
-svg/W3C-SVG-1.1-SE/types-dom-05-b.svg
-svg/W3C-SVG-1.1/paths-data-03-f.svg
-svg/batik/filters/filterRegions.svg
-svg/batik/text/textOnPath3.svg
-svg/custom/empty-merge.svg
-svg/custom/feDisplacementMap-01.svg
-svg/as-image/img-preserveAspectRatio-support-1.html
-svg/zoom/page/zoom-img-preserveAspectRatio-support-1.html
-# Unfortunately, these started showing rounding errors after r78704.
-# https://bugs.webkit.org/show_bug.cgi?id=54474
-svg/W3C-SVG-1.1/coords-viewattr-01-b.svg
-svg/W3C-SVG-1.1/painting-marker-03-f.svg
-svg/W3C-SVG-1.1/struct-frag-02-t.svg
-svg/W3C-SVG-1.1/struct-frag-03-t.svg
-svg/custom/circular-marker-reference-1.svg
-svg/custom/circular-marker-reference-3.svg
-svg/custom/circular-marker-reference-4.svg
-svg/custom/non-scaling-stroke-markers.svg
-svg/custom/stroked-pattern.svg
-svg/custom/resource-invalidate-on-target-update.svg
-svg/custom/text-rotated-gradient.svg
-svg/custom/use-css-events.svg
-svg/custom/use-detach.svg
-svg/filters/feColorMatrix-default-type.svg
-svg/filters/filterRes.svg
-svg/hixie/links/001.xml
-svg/hixie/viewbox/preserveAspectRatio/001.xml
-svg/text/small-fonts-2.svg
-svg/text/text-align-04-b.svg
-svg/zoom/page/zoom-coords-viewattr-01-b.svg
-svg/zoom/text/zoom-coords-viewattr-01-b.svg
-# Fail on 32-bits Release
-svg/W3C-SVG-1.1/animate-elem-30-t.svg
-svg/W3C-SVG-1.1/animate-elem-03-t.svg
-svg/W3C-SVG-1.1/animate-elem-33-t.svg
-svg/filters/animate-fill.svg
-# Fail on 32-bits Debug
-svg/W3C-SVG-1.1/animate-elem-46-t.svg
-svg/W3C-SVG-1.1/animate-elem-82-t.svg
-# Different results on 32-bit and 64-bit bots because of signed zero values
-# https://bugs.webkit.org/show_bug.cgi?id=62003
-svg/custom/embedding-external-svgs.xhtml
-svg/W3C-SVG-1.1-SE/linking-uri-01-b.svg
-svg/W3C-SVG-1.1-SE/struct-dom-11-f.svg
-svg/W3C-SVG-1.1-SE/struct-use-11-f.svg
-svg/animations/svginteger-animation-1.html
-svg/custom/linking-uri-01-b.svg
-svg/custom/svg-fonts-word-spacing.html
-svg/custom/animation-currentColor.svg
-svg/custom/image-with-transform-clip-filter.svg
-
 # https://bugs.webkit.org/show_bug.cgi?id=57346
 fast/text/justify-ideograph-leading-expansion.html
-
-# The following 3 started to fail after r79592 when they were
-# unskipped. Seems that the underlying operation works fine but the
-# 32-bit release bot generates some results with 2 decimal places when
-# there should be none (50.00 vs 50)
-svg/batik/masking/maskRegions.svg
-svg/clip-path/deep-nested-clip-in-mask-different-unitTypes.svg
-svg/zoom/page/zoom-mask-with-percentages.svg
 
 # https://bugs.webkit.org/show_bug.cgi?id=54210
 fast/text/atsui-multiple-renderers.html
@@ -946,11 +803,6 @@ fast/text/midword-break-after-breakable-char.html
 fast/text/capitalize-boundaries.html
 # https://bugs.webkit.org/show_bug.cgi?id=54189
 fast/replaced/border-radius-clip.html
-
-# New test needs enhanced frameloader delegate logging in DRT
-# Discussed in https://bugs.webkit.org/show_bug.cgi?id=38928
-fast/loader/recursive-before-unload-crash.html 
-fast/loader/null-request-after-willSendRequest.html
 
 # Need to dump context menu items on eventSender.contextClick(true).
 # https://bugs.webkit.org/show_bug.cgi?id=39102
@@ -989,17 +841,8 @@ http/tests/mime/uppercase-mime-type.html
 http/tests/loading/preload-append-scan.php
 
 # SVG tests that seem to produce incorrect output
-svg/custom/marker-strokeWidth-changes.svg
 svg/zoom/text/zoom-hixie-mixed-009.xml
-svg/filters/shadow-on-rect-with-filter.svg
 svg/custom/mask-excessive-malloc.svg
-
-# There seem to be some bugs with path clipping.
-svg/clip-path/clip-path-use-as-child2.svg
-svg/clip-path/clip-path-use-as-child3.svg
-svg/clip-path/clip-path-use-as-child4.svg
-svg/clip-path/clip-path-with-different-unittypes.svg
-svg/clip-path/clip-path-with-different-unittypes2.svg
 
 # No matching language preference set
 svg/W3C-SVG-1.1/struct-cond-02-t.svg
@@ -1010,6 +853,9 @@ svg/batik/paints/gradientLimit.svg
 # The middle circle on both rectangles is missing in the pixel output.
 svg/custom/circular-marker-reference-2.svg
 svg/custom/non-circular-marker-reference.svg
+
+# Crashes due to debug assert until we fix issues with style elements in SVG
+svg/custom/use-referencing-style-crash.svg
 
 # Canvas tests
 
@@ -1036,7 +882,6 @@ canvas/philip/tests/2d.text.draw.baseline.hanging.html
 canvas/philip/tests/2d.text.draw.baseline.ideographic.html
 canvas/philip/tests/2d.text.draw.baseline.middle.html
 canvas/philip/tests/2d.text.draw.baseline.top.html
-canvas/philip/tests/2d.text.draw.fill.maxWidth.fontface.html
 canvas/philip/tests/2d.text.draw.space.collapse.end.html
 canvas/philip/tests/2d.text.draw.space.collapse.nonspace.html
 canvas/philip/tests/2d.text.draw.space.collapse.other.html
@@ -1089,6 +934,7 @@ canvas/philip/tests/2d.pattern.paint.repeaty.outside.html
 
 # Tests that user modal dialogs fail in the DRT for some reason.
 # https://bugs.webkit.org/show_bug.cgi?id=53600
+fast/animation/request-animation-frame-during-modal.html
 fast/events/show-modal-dialog-onblur-onfocus.html
 fast/events/scroll-event-during-modal-dialog.html
 fast/harness/show-modal-dialog.html
@@ -1129,10 +975,7 @@ fast/forms/file/input-file-directory-upload.html
 # Need setPrinting. See https://bugs.webkit.org/show_bug.cgi?id=20011
 printing/setPrinting.html
 printing/single-line-must-not-be-split-into-two-pages.html
-
-# Accuracy problems in the results
-# https://bugs.webkit.org/show_bug.cgi?id=42624
-svg/dom/path-parser.html
+printing/width-overflow.html
 
 # Advanced credential handling
 http/tests/security/401-logout/401-logout.php
@@ -1251,10 +1094,14 @@ sputnik/Unicode/Unicode_510/S7.6_A5.3_T2.html
 # https://bugs.webkit.org/show_bug.cgi?id=43332
 inspector/debugger/dom-breakpoints.html
 inspector/debugger/event-listener-breakpoints.html
+inspector/debugger/step-through-event-listeners.html
 inspector/debugger/xhr-breakpoints.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=40300
 inspector/debugger/live-edit.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=53003
+http/tests/inspector/compiler-source-mapping-debug.html
 
 # [GTK] r65681 broke a couple GTK+ a11y tests
 # https://bugs.webkit.org/show_bug.cgi?id=44316
@@ -1322,12 +1169,6 @@ fast/canvas/canvas-transforms-fillRect-shadow.html
 fast/canvas/canvas-scale-strokePath-shadow.html
 fast/canvas/rgba-parsing.html
 
-# While zooming we sometimes appear to have ~1 pixel differences
-# with font metrics to other ports
-# https://bugs.webkit.org/show_bug.cgi?id=50313
-css3/zoom-coords.xhtml
-svg/zoom/page/zoom-zoom-coords.xhtml
-
 # https://bugs.webkit.org/show_bug.cgi?id=50441
 media/controls-drag-timebar.html
 
@@ -1337,6 +1178,9 @@ media/event-attributes.html
 # https://bugs.webkit.org/show_bug.cgi?id=50740
 editing/spelling/spelling-backspace-between-lines.html
 editing/spelling/spellcheck-paste.html
+editing/spelling/spellcheck-queue.html
+editing/spelling/spellcheck-sequencenum.html
+editing/spelling/spellcheck-async-mutation.html
 
 # For https://bugs.webkit.org/show_bug.cgi?id=50758
 # These require DRT setSerializeHTTPLoads implementation to be reliable.
@@ -1365,7 +1209,6 @@ http/tests/security/local-user-CSS-from-remote.html
 
 # LayoutTestController needs layoutTestController.displayInvalidatedRegion
 # https://bugs.webkit.org/show_bug.cgi?id=54073
-plugins/invalidate_rect.html
 plugins/windowless_plugin_paint_test.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=54389
@@ -1384,15 +1227,6 @@ http/tests/security/xss-DENIED-xsl-external-entity-redirect.xml
 # https://bugs.webkit.org/show_bug.cgi?id=56081
 fast/js/large-expressions.html
 
-# https://bugs.webkit.org/show_bug.cgi?id=56465
-# failing on 32-bits Debug only.
-svg/W3C-I18N/g-dirLTR-ubNone.svg
-svg/W3C-I18N/g-dirLTR-ubOverride.svg
-svg/W3C-I18N/text-dirLTR-ubNone.svg
-svg/W3C-I18N/text-dirLTR-ubOverride.svg
-svg/W3C-I18N/tspan-dirLTR-ubEmbed-in-rtl-context.svg
-svg/W3C-I18N/tspan-dirLTR-ubNone-in-rtl-context.svg
-svg/W3C-I18N/tspan-dirLTR-ubOverride-in-rtl-context.svg
 
 # https://bugs.webkit.org/show_bug.cgi?id=56691
 http/tests/inspector/network/network-size-chunked.html
@@ -1405,6 +1239,7 @@ http/tests/inspector/network/network-disable-cache-xhrs.html
 
 # textInputController.hasGrammarMarker() is not implemented.
 editing/spelling/grammar.html
+editing/spelling/grammar-paste.html
 
 # layoutTestController::setTextDirection() is not implemented.
 fast/html/set-text-direction.html
@@ -1414,7 +1249,7 @@ fast/html/set-text-direction.html
 fast/harness/override-preferences-2.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=58020
-fast/forms/input-number-large-padding.html
+fast/forms/number/input-number-large-padding.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=58309
 fast/canvas/DrawImageSinglePixelStretch.html
@@ -1422,16 +1257,13 @@ fast/canvas/DrawImageSinglePixelStretch.html
 # Expose title direction in WebKit API
 # https://bugs.webkit.org/show_bug.cgi?id=58845
 fast/dom/title-directionality.html
+fast/dom/title-directionality-removeChild.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=58741
 fast/text/zero-width-characters-complex-script.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=59391
 editing/text-iterator/findString.html
-
-# Unskip when https://bugs.webkit.org/show_bug.cgi?id=59571 is fixed
-fast/dom/shadow/gc-shadow.html
-fast/dom/shadow/no-renderers-for-light-children.html
 
 # Skipping newly added tests while I'm finding out what is wrong.
 # https://bugs.webkit.org/show_bug.cgi?id=59706
@@ -1462,10 +1294,7 @@ http/tests/navigation/post-307-response.html
 
 # failing dropzone test(http://bugs.webkit.org/show_bug.cgi?id=61630)
 fast/events/dropzone-002.html
-
-# [GTK] DumpRenderTree doesn't block external requests
-# https://bugs.webkit.org/show_bug.cgi?id=62585
-fast/workers/worker-crash-with-invalid-location.html
+fast/events/dropzone-005.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=64085
 http/tests/misc/iframe-reparenting-id-collision.html
@@ -1477,9 +1306,6 @@ http/tests/misc/iframe-reparenting-id-collision.html
 http/tests/inspector
 http/tests/inspector-enabled
 inspector/
-
-# Skipped until new WebSocket protocol is implemented. http://webkit.org/b/50099
-http/tests/websocket/tests/hybi/
 
 # Text shadow extents are calculated incorrectly
 # https://bugs.webkit.org/show_bug.cgi?id=65035
@@ -1494,13 +1320,6 @@ fast/harness/sample-fail-mismatch-reftest.html
 # https://bugs.webkit.org/show_bug.cgi?id=67014
 # Need layoutTestController.setShouldStayOnPageAfterHandlingBeforeUnload
 fast/loader/form-submission-after-beforeunload-cancel.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=67398
-platform/gtk/accessibility/combo-box-collapsed-selection-changed.html
-platform/gtk/accessibility/document-reload-events.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=71665
-platform/gtk/accessibility/name-from-label.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=67713
 accessibility/textbox-role-reports-selection.html
@@ -1537,10 +1356,8 @@ http/tests/multipart/load-last-non-html-frame.php
 # https://bugs.webkit.org/show_bug.cgi?id=69587
 editing/pasteboard/smart-paste-008.html
 
-# Some tests fail with  "FAIL Unexpected response data received: Wrong method: GET"
-# https://bugs.webkit.org/show_bug.cgi?id=69219
-http/tests/local/fileapi/send-sliced-dragged-file.html  
-http/tests/local/blob/send-hybrid-blob.html
+# Fails because it does not throw a couple of expected exceptions
+http/tests/local/fileapi/send-sliced-dragged-file.html
 
 # Microdata DOM API is not yet enabled.
 fast/dom/MicroData
@@ -1551,10 +1368,7 @@ fast/events/drag-selects-image.html
 # https://bugs.webkit.org/show_bug.cgi?id=70606
 # Missing DRT AccessibilityController::addNotificationListener implementation
 accessibility/menu-list-sends-change-notification.html
-
-# https://bugs.webkit.org/show_bug.cgi?id=70720
-# [GTK] fast/events/event-creation.html fails creating MediaStreamEvent
-fast/events/event-creation.html
+accessibility/multiselect-list-reports-active-option.html
 
 # https://bugs.webkit.org/show_bug.cgi?id=71022
 fast/canvas/canvas-composite-image.html
@@ -1598,18 +1412,188 @@ http/tests/security/mixedContent/redirect-https-to-http-script-in-iframe.html
 fast/frames/flattening/iframe-flattening-nested.html
 fast/frames/flattening/iframe-flattening-fixed-width-and-height-no-scrolling.html
 
-# REGRESSION (r99924): broke 2 pasteboard tests on GTK
-# https://bugs.webkit.org/show_bug.cgi?id=72131
-editing/pasteboard/copy-backslash-with-euc.html
-editing/pasteboard/paste-text-events.html
-
 # https://bugs.webkit.org/show_bug.cgi?id=72248
 editing/spelling/spelling-unified-emulation.html
 
-# REGRESSION (r100158-r100162): 5 fast tests failing on GTK Linux 64-bit Debug
-# https://bugs.webkit.org/show_bug.cgi?id=72297
-fast/js/global-constructors.html
-fast/dom/Window/window-property-descriptors.html
-fast/dom/Window/window-properties.html
-fast/dom/prototype-inheritance-2.html
-fast/dom/constructed-objects-prototypes.html
+# Web Intents is not yet enabled.
+webintents/
+
+# Pointer Lock is not implemented.
+pointer-lock/
+
+# fast/dom/Window/window-postmessage-arrays.html fails on JSC platforms
+# https://bugs.webkit.org/show_bug.cgi?id=72363
+fast/dom/Window/window-postmessage-arrays.html
+
+# fast/forms/checkbox-appearance-change-by-checked.html is failing after enabling reftests
+# https://bugs.webkit.org/show_bug.cgi?id=72569
+fast/forms/checkbox-appearance-change-by-checked.html
+
+# [Qt][GTK] editing/spelling/spellcheck-async.html fails
+# https://bugs.webkit.org/show_bug.cgi?id=73003
+editing/spelling/spellcheck-async.html
+
+# [GTK] ClientRect failures
+# https://bugs.webkit.org/show_bug.cgi?id=73330
+fast/dom/Element/getBoundingClientRect.html
+fast/dom/Element/getClientRects.html
+fast/dom/Range/getBoundingClientRect.html
+fast/dom/Range/getClientRects.html
+
+# 1 pixel difference between 64-bits and 32-bits
+# Some of these also present rounding issues and xx.00 vs xx.
+# https://bugs.webkit.org/show_bug.cgi?id=62204
+svg/as-image/img-preserveAspectRatio-support-1.html
+svg/batik/text/smallFonts.svg
+svg/clip-path/deep-nested-clip-in-mask-different-unitTypes.svg
+svg/custom/circular-marker-reference-4.svg
+svg/custom/empty-merge.svg
+svg/custom/relative-sized-inner-svg.xhtml
+svg/custom/relative-sized-use-without-attributes-on-symbol.xhtml
+svg/custom/use-css-events.svg
+svg/custom/image-small-width-height.svg
+svg/custom/small-rect-scale.svg
+svg/custom/use-on-clip-path-with-transformation.svg
+svg/custom/use-on-symbol-inside-pattern.svg
+svg/filters/feColorMatrix-saturate.svg
+svg/zoom/page/zoom-img-preserveAspectRatio-support-1.html
+svg/W3C-SVG-1.1/animate-elem-40-t.svg
+svg/W3C-SVG-1.1/extend-namespace-01-f.svg
+svg/W3C-SVG-1.1/metadata-example-01-b.svg
+svg/W3C-SVG-1.1/paths-data-03-f.svg
+svg/W3C-SVG-1.1/text-align-08-b.svg
+svg/W3C-SVG-1.1/coords-units-02-b.svg
+svg/W3C-SVG-1.1/masking-path-02-b.svg
+svg/W3C-SVG-1.1-SE/coords-dom-03-f.svg
+svg/W3C-SVG-1.1-SE/coords-dom-04-f.svg
+svg/W3C-SVG-1.1-SE/coords-units-03-b.svg
+svg/W3C-SVG-1.1-SE/interact-pointer-03-t.svg
+svg/W3C-SVG-1.1-SE/linking-uri-01-b.svg
+svg/W3C-SVG-1.1-SE/styling-pres-02-f.svg
+svg/W3C-SVG-1.1-SE/text-tspan-02-b.svg
+svg/W3C-SVG-1.1-SE/types-dom-01-b.svg
+svg/W3C-SVG-1.1-SE/types-dom-02-f.svg
+svg/W3C-SVG-1.1-SE/types-dom-04-b.svg
+svg/W3C-SVG-1.1-SE/types-dom-07-f.svg
+
+# Floating point inconsistencies between 32-bit and 64-bit bots
+svg/css/composite-shadow-example.html
+svg/css/composite-shadow-with-opacity.html
+svg/css/stars-with-shadow.html
+svg/carto.net/tabgroup.svg
+
+# https://bugs.webkit.org/show_bug.cgi?id=78673
+svg/animations/animate-text-nested-transforms.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=73409
+fast/forms/placeholder-set-attribute.html
+fast/forms/search-placeholder-value-changed.html
+fast/forms/textarea-placeholder-set-attribute.html
+
+# Failing since font metrics change
+fast/block/float/overhanging-tall-block.html
+fast/css/percentage-non-integer.html
+fast/css/word-space-extra.html
+fast/css/zoom-body-scroll.html
+fast/repaint/moving-shadow-on-container.html
+fast/repaint/moving-shadow-on-path.html
+css3/flexbox/line-wrapping.html
+editing/selection/move-by-word-visually-multi-line.html
+fast/block/float/overhanging-tall-block.html
+fast/css/font-face-data-uri.html
+fast/css/font-face-download-error.html
+fast/events/keydown-1.html
+fast/forms/cursor-at-editable-content-boundary.html
+fast/text/glyph-reordering.html
+fast/text/ipa-tone-letters.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=73653
+fast/events/offsetX-offsetY.html
+fast/forms/number/spin-in-multi-column.html
+fast/forms/range/slider-in-multi-column.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=73583
+fullscreen/video-controls-override.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=73769
+svg/text/text-style-recalc-crash.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=73768
+fast/forms/file/file-input-reset.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=74276
+fast/events/dont-loose-last-event.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=74282
+editing/pasteboard/emacs-ctrl-k-with-move.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=74409
+plugins/netscape-plugin-page-cache-works.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=75785
+accessibility/textbox-role-reports-line-number.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=75833
+fast/text/international/spaces-combined-in-vertical-text.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=76048
+fast/text/font-kerning.html
+
+# Needs custom policy delegate enhancement to log downloads
+http/tests/download
+
+# https://bugs.webkit.org/show_bug.cgi?id=77015
+fast/events/clear-drag-state.html
+fast/events/clear-edit-drag-state.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=77019
+http/tests/media/video-buffering-repaints-controls.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=77413
+fast/parser/nested-fragment-parser-crash.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=77631
+fast/multicol/span/span-as-immediate-child-property-removal.html
+fast/multicol/span/span-as-immediate-columns-child-removal.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=77633
+fast/forms/listbox-clear-restore.html
+
+# Synthetic bold is illegible under some scaling transforms
+# https://bugs.webkit.org/show_bug.cgi?id=78044
+fast/text/synthetic-bold-transformed.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=78345
+security/block-test.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=78434
+fast/dom/Window/window-custom-prototype.html
+http/tests/security/cross-frame-access-object-getPrototypeOf.html
+
+# Let MemoryCache reuse cached XHRs (REGRESSION caused by r107672)
+# https://bugs.webkit.org/show_bug.cgi?id=76564
+fast/workers/worker-crash-with-invalid-location.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=78819
+fast/workers/shared-worker-load-error.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=78900
+tables/mozilla/bugs/bug27038-1.html
+tables/mozilla/bugs/bug27038-2.html
+
+# Removing an explicit grab focus on WebCore broke some tests
+# https://bugs.webkit.org/show_bug.cgi?id=79084
+fast/images/imagemap-focus-ring-zoom-style.html
+fast/forms/number/input-number-events.html
+fast/events/tabindex-focus-chain.html
+fast/events/tab-focus-hidden.html
+fast/events/tab-focus-anchor.html
+fast/events/media-element-focus-tab.html
+fast/events/keypress-insert-tab.html
+fast/images/imagemap-focus-ring-zoom-style.html
+editing/pasteboard/copy-element-with-conflicting-background-color-from-rule.html
+
+# https://bugs.webkit.org/show_bug.cgi?id=79203
+fast/dom/MediaStream/argument-types.html
+fast/mediastream/peerconnection-Attributes.html
+fast/mediastream/peerconnection-argument-types.html

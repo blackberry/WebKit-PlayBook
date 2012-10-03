@@ -63,19 +63,19 @@ public:
     virtual bool shouldInsertText(const String&, Range*, EditorInsertAction);
     virtual bool shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity, bool stillSelecting);
 
-    virtual bool shouldApplyStyle(CSSStyleDeclaration*, Range*);
+    virtual bool shouldApplyStyle(StylePropertySet*, Range*);
 
     virtual bool shouldMoveRangeAfterDelete(Range*, Range*);
 
     virtual void didBeginEditing();
     virtual void respondToChangedContents();
-    virtual void respondToChangedSelection();
+    virtual void respondToChangedSelection(Frame*);
     virtual void didEndEditing();
     virtual void didWriteSelectionToPasteboard();
     virtual void didSetSelectionTypesForPasteboard();
     
-    virtual void registerCommandForUndo(PassRefPtr<EditCommand>);
-    virtual void registerCommandForRedo(PassRefPtr<EditCommand>);
+    virtual void registerUndoStep(PassRefPtr<UndoStep>);
+    virtual void registerRedoStep(PassRefPtr<UndoStep>);
     virtual void clearUndoRedoOperations();
 
     virtual bool canCopyCut(Frame*, bool defaultValue) const;

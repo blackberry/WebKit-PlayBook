@@ -68,7 +68,8 @@ public:
     void restartWithNewText(unsigned lastTypedCharacterOffset)
     {
         m_lastTypedCharacterOffset = lastTypedCharacterOffset;
-        startOneShot(m_renderText->document()->settings()->passwordEchoDurationInSeconds());
+        if (Settings* settings = m_renderText->document()->settings())
+            startOneShot(settings->passwordEchoDurationInSeconds());
     }
     void invalidate() { m_lastTypedCharacterOffset = -1; }
     unsigned lastTypedCharacterOffset() { return m_lastTypedCharacterOffset; }
@@ -95,7 +96,7 @@ static void makeCapitalized(String* string, UChar previous)
     if (length >= numeric_limits<unsigned>::max())
         CRASH();
 
-    StringBuffer stringWithPrevious(length + 1);
+    StringBuffer<UChar> stringWithPrevious(length + 1);
     stringWithPrevious[0] = previous == noBreakSpace ? ' ' : previous;
     for (unsigned i = 1; i < length + 1; i++) {
         // Replace &nbsp with a real space since ICU no longer treats &nbsp as a word separator.
@@ -109,7 +110,7 @@ static void makeCapitalized(String* string, UChar previous)
     if (!boundary)
         return;
 
-    StringBuffer data(length);
+    StringBuffer<UChar> data(length);
 
     int32_t endOfWord;
     int32_t startOfWord = textBreakFirst(boundary);
@@ -188,18 +189,19 @@ void RenderText::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
         m_knownToHaveNoOverflowAndNoFallbackFonts = false;
     }
 
+    RenderStyle* newStyle = style();
     bool needsResetText = false;
     if (!oldStyle) {
         updateNeedsTranscoding();
         needsResetText = m_needsTranscoding;
-    } else if (oldStyle->font().needsTranscoding() != style()->font().needsTranscoding() || (style()->font().needsTranscoding() && oldStyle->font().family().family() != style()->font().family().family())) {
+    } else if (oldStyle->font().needsTranscoding() != newStyle->font().needsTranscoding() || (newStyle->font().needsTranscoding() && oldStyle->font().family().family() != newStyle->font().family().family())) {
         updateNeedsTranscoding();
         needsResetText = true;
     }
 
     ETextTransform oldTransform = oldStyle ? oldStyle->textTransform() : TTNONE;
     ETextSecurity oldSecurity = oldStyle ? oldStyle->textSecurity() : TSNONE;
-    if (needsResetText || oldTransform != style()->textTransform() || oldSecurity != style()->textSecurity()) {
+    if (needsResetText || oldTransform != newStyle->textTransform() || oldSecurity != newStyle->textSecurity()) {
         if (RefPtr<StringImpl> textToTransform = originalText())
             setText(textToTransform.release(), true);
     }
@@ -298,7 +300,7 @@ void RenderText::deleteTextBoxes()
 PassRefPtr<StringImpl> RenderText::originalText() const
 {
     Node* e = node();
-    return (e && e->isTextNode()) ? static_cast<Text*>(e)->dataImpl() : 0;
+    return (e && e->isTextNode()) ? toText(e)->dataImpl() : 0;
 }
 
 void RenderText::absoluteRects(Vector<LayoutRect>& rects, const LayoutPoint& accumulatedOffset) const
@@ -343,8 +345,9 @@ void RenderText::absoluteRectsForRange(Vector<LayoutRect>& rects, unsigned start
     for (InlineTextBox* box = firstTextBox(); box; box = box->nextTextBox()) {
         // Note: box->end() returns the index of the last character, not the index past it
         if (start <= box->start() && box->end() < end) {
-            IntRect r = box->calculateBoundaries();
+            FloatRect r = box->calculateBoundaries();
             if (useSelectionHeight) {
+                // FIXME: localSelectionRect should switch to return FloatRect soon with the subpixellayout branch.
                 IntRect selectionRect = box->localSelectionRect(start, end);
                 if (box->isHorizontal()) {
                     r.setHeight(selectionRect.height());
@@ -354,7 +357,7 @@ void RenderText::absoluteRectsForRange(Vector<LayoutRect>& rects, unsigned start
                     r.setX(selectionRect.x());
                 }
             }
-            rects.append(localToAbsoluteQuad(FloatQuad(r), false, wasFixed).enclosingBoundingBox());
+            rects.append(localToAbsoluteQuad(r, false, wasFixed).enclosingBoundingBox());
         } else {
             // FIXME: This code is wrong. It's converting local to absolute twice. http://webkit.org/b/65722
             FloatRect rect = localQuadForTextBox(box, start, end, useSelectionHeight);
@@ -391,9 +394,10 @@ static IntRect ellipsisRectForBox(InlineTextBox* box, unsigned startPos, unsigne
 void RenderText::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed, ClippingOption option) const
 {
     for (InlineTextBox* box = firstTextBox(); box; box = box->nextTextBox()) {
-        IntRect boundaries = box->calculateBoundaries();
+        FloatRect boundaries = box->calculateBoundaries();
 
         // Shorten the width of this text box if it ends in an ellipsis.
+        // FIXME: ellipsisRectForBox should switch to return FloatRect soon with the subpixellayout branch.
         IntRect ellipsisRect = (option == ClipToEllipsis) ? ellipsisRectForBox(box, 0, textLength()) : IntRect();
         if (!ellipsisRect.isEmpty()) {
             if (style()->isHorizontalWritingMode())
@@ -401,7 +405,7 @@ void RenderText::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed, Clippin
             else
                 boundaries.setHeight(ellipsisRect.maxY() - boundaries.y());
         }
-        quads.append(localToAbsoluteQuad(FloatRect(boundaries), false, wasFixed));
+        quads.append(localToAbsoluteQuad(boundaries, false, wasFixed));
     }
 }
     
@@ -425,8 +429,9 @@ void RenderText::absoluteQuadsForRange(Vector<FloatQuad>& quads, unsigned start,
     for (InlineTextBox* box = firstTextBox(); box; box = box->nextTextBox()) {
         // Note: box->end() returns the index of the last character, not the index past it
         if (start <= box->start() && box->end() < end) {
-            IntRect r(box->calculateBoundaries());
+            FloatRect r = box->calculateBoundaries();
             if (useSelectionHeight) {
+                // FIXME: localSelectionRect should switch to return FloatRect soon with the subpixellayout branch.
                 IntRect selectionRect = box->localSelectionRect(start, end);
                 if (box->isHorizontal()) {
                     r.setHeight(selectionRect.height());
@@ -436,7 +441,7 @@ void RenderText::absoluteQuadsForRange(Vector<FloatQuad>& quads, unsigned start,
                     r.setX(selectionRect.x());
                 }
             }
-            quads.append(localToAbsoluteQuad(FloatRect(r), false, wasFixed));
+            quads.append(localToAbsoluteQuad(r, false, wasFixed));
         } else {
             FloatRect rect = localQuadForTextBox(box, start, end, useSelectionHeight);
             if (!rect.isZero())
@@ -901,11 +906,12 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
     m_hasBeginWS = false;
     m_hasEndWS = false;
 
-    const Font& f = style()->font(); // FIXME: This ignores first-line.
-    float wordSpacing = style()->wordSpacing();
+    RenderStyle* styleToUse = style();
+    const Font& f = styleToUse->font(); // FIXME: This ignores first-line.
+    float wordSpacing = styleToUse->wordSpacing();
     int len = textLength();
     const UChar* txt = characters();
-    LazyLineBreakIterator breakIterator(txt, len, style()->locale());
+    LazyLineBreakIterator breakIterator(txt, len, styleToUse->locale());
     bool needsWordSpacing = false;
     bool ignoringSpaces = false;
     bool isSpace = false;
@@ -916,12 +922,12 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
 
     // Non-zero only when kerning is enabled, in which case we measure words with their trailing
     // space, then subtract its width.
-    float wordTrailingSpaceWidth = f.typesettingFeatures() & Kerning ? f.width(RenderBlock::constructTextRun(this, f, &space, 1, style())) : 0;
+    float wordTrailingSpaceWidth = f.typesettingFeatures() & Kerning ? f.width(RenderBlock::constructTextRun(this, f, &space, 1, styleToUse)) : 0;
 
     int firstGlyphLeftOverflow = -1;
 
-    bool breakNBSP = style()->autoWrap() && style()->nbspMode() == SPACE;
-    bool breakAll = (style()->wordBreak() == BreakAllWordBreak || style()->wordBreak() == BreakWordBreak) && style()->autoWrap();
+    bool breakNBSP = styleToUse->autoWrap() && styleToUse->nbspMode() == SPACE;
+    bool breakAll = (styleToUse->wordBreak() == BreakAllWordBreak || styleToUse->wordBreak() == BreakWordBreak) && styleToUse->autoWrap();
 
     for (int i = 0; i < len; i++) {
         UChar c = txt[i];
@@ -930,14 +936,14 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
 
         bool isNewline = false;
         if (c == '\n') {
-            if (style()->preserveNewline()) {
+            if (styleToUse->preserveNewline()) {
                 m_hasBreak = true;
                 isNewline = true;
                 isSpace = false;
             } else
                 isSpace = true;
         } else if (c == '\t') {
-            if (!style()->collapseWhiteSpace()) {
+            if (!styleToUse->collapseWhiteSpace()) {
                 m_hasTab = true;
                 isSpace = false;
             } else
@@ -950,7 +956,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
         if ((isSpace || isNewline) && i == len - 1)
             m_hasEndWS = true;
 
-        if (!ignoringSpaces && style()->collapseWhiteSpace() && previousCharacterIsSpace && isSpace)
+        if (!ignoringSpaces && styleToUse->collapseWhiteSpace() && previousCharacterIsSpace && isSpace)
             ignoringSpaces = true;
 
         if (ignoringSpaces && !isSpace)
@@ -972,7 +978,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
         bool hasBreak = breakAll || isBreakable(breakIterator, i, nextBreakable, breakNBSP);
         bool betweenWords = true;
         int j = i;
-        while (c != '\n' && !isSpaceAccordingToStyle(c, style()) && c != '\t' && c != softHyphen) {
+        while (c != '\n' && !isSpaceAccordingToStyle(c, styleToUse) && c != '\t' && c != softHyphen) {
             j++;
             if (j == len)
                 break;
@@ -987,7 +993,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
 
         int wordLen = j - i;
         if (wordLen) {
-            bool isSpace = (j < len) && isSpaceAccordingToStyle(c, style());
+            bool isSpace = (j < len) && isSpaceAccordingToStyle(c, styleToUse);
             float w;
             if (wordTrailingSpaceWidth && isSpace)
                 w = widthFromCache(f, i, wordLen + 1, leadWidth + currMaxWidth, &fallbackFonts, &glyphOverflow) - wordTrailingSpaceWidth;
@@ -1005,8 +1011,8 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
                 lastWordBoundary = j;
             }
 
-            bool isCollapsibleWhiteSpace = (j < len) && style()->isCollapsibleWhiteSpace(c);
-            if (j < len && style()->autoWrap())
+            bool isCollapsibleWhiteSpace = (j < len) && styleToUse->isCollapsibleWhiteSpace(c);
+            if (j < len && styleToUse->autoWrap())
                 m_hasBreakableChar = true;
 
             // Add in wordSpacing to our currMaxWidth, but not if this is the last word on a line or the
@@ -1044,7 +1050,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
                 if (firstLine) {
                     firstLine = false;
                     leadWidth = 0;
-                    if (!style()->autoWrap())
+                    if (!styleToUse->autoWrap())
                         m_beginMinWidth = currMaxWidth;
                 }
 
@@ -1052,7 +1058,7 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
                     m_maxWidth = currMaxWidth;
                 currMaxWidth = 0;
             } else {
-                TextRun run = RenderBlock::constructTextRun(this, f, txt + i, 1, style());
+                TextRun run = RenderBlock::constructTextRun(this, f, txt + i, 1, styleToUse);
                 run.setCharactersLength(len - i);
                 ASSERT(run.charactersLength() >= run.length());
 
@@ -1077,10 +1083,10 @@ void RenderText::computePreferredLogicalWidths(float leadWidth, HashSet<const Si
     m_minWidth = max(currMinWidth, m_minWidth);
     m_maxWidth = max(currMaxWidth, m_maxWidth);
 
-    if (!style()->autoWrap())
+    if (!styleToUse->autoWrap())
         m_minWidth = m_maxWidth;
 
-    if (style()->whiteSpace() == PRE) {
+    if (styleToUse->whiteSpace() == PRE) {
         if (firstLine)
             m_beginMinWidth = m_maxWidth;
         m_endMinWidth = currMaxWidth;

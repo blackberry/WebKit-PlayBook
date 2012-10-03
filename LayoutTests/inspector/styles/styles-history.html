@@ -5,14 +5,13 @@
 
 <script src="../../http/tests/inspector/inspector-test.js"></script>
 <script src="../../http/tests/inspector/elements-test.js"></script>
+<script src="../../http/tests/inspector/resources-test.js"></script>
 <script>
 
 function test()
 {
-    if (!WebInspector.mainResource)
-        WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded, runTestSuite);
-    else
-        runTestSuite();
+    var pendingCallbacks = [];
+    InspectorTest.runAfterCachedResourcesProcessed(runTestSuite);
 
     var styleResource;
     var styleSheetId;
@@ -27,6 +26,7 @@ function test()
                     if (resource.url.indexOf("styles-history.css") === -1)
                         return;
                     styleResource = resource;
+                    styleResource.addEventListener(WebInspector.Resource.Events.RevisionAdded, dumpHistory);
                     next();
                 }
                 WebInspector.resourceTreeModel.forAllResources(visitResource);
@@ -44,12 +44,8 @@ function test()
 
             function testSetResourceContentMajor(next)
             {
-                function callback()
-                {
-                    dumpHistory();
-                    next();
-                }
-                styleResource.setContent("body {\n  margin: 20px;\n  padding: 10px;\n}", true, callback);
+                waitForRevision(next);
+                styleResource.setContent("body {\n  margin: 20px;\n  padding: 10px;\n}", true);
             },
 
             function testSetContentViaModelMinor(next)
@@ -60,15 +56,16 @@ function test()
                 {
                     var style = styleSheet.rules[0].style;
                     var property = style.getLiveProperty("margin");
-                    property.setText("margin:25px;", false, step2);
+                    property.setText("margin:25px;", false, true, step2);
                 }
 
-                function step2(error)
+                function step2()
                 {
                     dumpHistory();
                     next();
-                }                
+                }
             },
+
             function testSetContentViaModelMajor(next)
             {
                 styleSheetForResource(step1);
@@ -77,14 +74,9 @@ function test()
                 {
                     var style = styleSheet.rules[0].style;
                     var property = style.getLiveProperty("margin");
-                    property.setText("margin:30px;", true, step2);
+                    waitForRevision(next);
+                    property.setText("margin:30px;", true, true);
                 }
-
-                function step2(error)
-                {
-                    dumpHistory();
-                    next();
-                }                
             }
         ]);
     }
@@ -118,12 +110,22 @@ function test()
         for (var i = 0; i < styleResource.history.length; ++i)
             styleResource.history[i].requestContent(dumpRevision.bind(this, i));
         styleResource.requestContent(dumpRevision.bind(this, "<tip>"));
+
+        var copy = pendingCallbacks.slice();
+        pendingCallbacks = [];
+        for (var i = 0; i < copy.length; ++i)
+            copy[i]();
     }
 
     function dumpRevision(index, content)
     {
         InspectorTest.addResult("Item " + index + ":");
         InspectorTest.addResult(content);
+    }
+
+    function waitForRevision(callback)
+    {
+        pendingCallbacks.push(callback);
     }
 }
 

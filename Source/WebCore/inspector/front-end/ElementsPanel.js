@@ -39,9 +39,16 @@ WebInspector.ElementsPanel = function()
     this.registerRequiredCSS("textPrompt.css");
     this.setHideOnDetach();
 
-    this.contentElement = document.createElement("div");
+    const initialSidebarWidth = 325;
+    const minimalContentWidthPercent = 34;
+    this.createSplitView(this.element, WebInspector.SplitView.SidebarPosition.Right, initialSidebarWidth);
+    this.splitView.minimalSidebarWidth = Preferences.minElementsSidebarWidth;
+    this.splitView.minimalMainWidthPercent = minimalContentWidthPercent;
+
+    this.contentElement = this.splitView.mainElement;
     this.contentElement.id = "elements-content";
-    this.contentElement.className = "outline-disclosure source-code";
+    this.contentElement.addStyleClass("outline-disclosure");
+    this.contentElement.addStyleClass("source-code");
     if (!WebInspector.settings.domWordWrap.get())
         this.contentElement.classList.add("nowrap");
     WebInspector.settings.domWordWrap.addChangeListener(this._domWordWrapSettingChanged.bind(this));
@@ -63,7 +70,7 @@ WebInspector.ElementsPanel = function()
     this.sidebarPanes.styles = new WebInspector.StylesSidebarPane(this.sidebarPanes.computedStyle);
     this.sidebarPanes.metrics = new WebInspector.MetricsSidebarPane();
     this.sidebarPanes.properties = new WebInspector.PropertiesSidebarPane();
-    if (Preferences.nativeInstrumentationEnabled)
+    if (Capabilities.nativeInstrumentationEnabled)
         this.sidebarPanes.domBreakpoints = WebInspector.domBreakpointsSidebarPane;
     this.sidebarPanes.eventListeners = new WebInspector.EventListenersSidebarPane();
 
@@ -78,27 +85,19 @@ WebInspector.ElementsPanel = function()
     this.sidebarPanes.styles.addEventListener("style property toggled", this._stylesPaneEdited, this);
     this.sidebarPanes.metrics.addEventListener("metrics edited", this._metricsPaneEdited, this);
 
-    this.sidebarElement = document.createElement("div");
-    this.sidebarElement.id = "elements-sidebar";
-
     for (var pane in this.sidebarPanes) {
         this.sidebarElement.appendChild(this.sidebarPanes[pane].element);
         if (this.sidebarPanes[pane].onattach)
             this.sidebarPanes[pane].onattach();
     }
 
-    this.sidebarResizeElement = document.createElement("div");
-    this.sidebarResizeElement.className = "sidebar-resizer-vertical";
-    this.sidebarResizeElement.addEventListener("mousedown", this.rightSidebarResizerDragStart.bind(this), false);
-
     this.nodeSearchButton = new WebInspector.StatusBarButton(WebInspector.UIString("Select an element in the page to inspect it."), "node-search-status-bar-item");
     this.nodeSearchButton.addEventListener("click", this.toggleSearchingForNode, this);
 
-    this.element.appendChild(this.contentElement);
-    this.element.appendChild(this.sidebarElement);
-    this.element.appendChild(this.sidebarResizeElement);
-
     this._registerShortcuts();
+
+    this._popoverHelper = new WebInspector.PopoverHelper(document.body, this._getPopoverAnchor.bind(this), this._showPopover.bind(this));
+    this._popoverHelper.setTimeout(0);
 
     WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.NodeRemoved, this._nodeRemoved, this);
     WebInspector.domAgent.addEventListener(WebInspector.DOMAgent.Events.DocumentUpdated, this._documentUpdated, this);
@@ -128,13 +127,12 @@ WebInspector.ElementsPanel.prototype = {
 
     wasShown: function()
     {
-        WebInspector.Panel.prototype.wasShown.call(this);
-
         // Attach heavy component lazily
         if (this.treeOutline.element.parentElement !== this.contentElement)
             this.contentElement.appendChild(this.treeOutline.element);
 
-        this.sidebarResizeElement.style.right = (this.sidebarElement.offsetWidth - 3) + "px";
+        WebInspector.Panel.prototype.wasShown.call(this);
+
         this.updateBreadcrumb();
         this.treeOutline.updateSelection();
         this.treeOutline.setVisible(true);
@@ -142,7 +140,7 @@ WebInspector.ElementsPanel.prototype = {
         if (!this.treeOutline.rootDOMNode)
             WebInspector.domAgent.requestDocument();
 
-        if (Preferences.nativeInstrumentationEnabled)
+        if (Capabilities.nativeInstrumentationEnabled)
             this.sidebarElement.insertBefore(this.sidebarPanes.domBreakpoints.element, this.sidebarPanes.eventListeners.element);
     },
 
@@ -151,9 +149,15 @@ WebInspector.ElementsPanel.prototype = {
         WebInspector.domAgent.hideDOMNodeHighlight();
         this.setSearchingForNode(false);
         this.treeOutline.setVisible(false);
+        this._popoverHelper.hidePopover();
 
         // Detach heavy component on hide
         this.contentElement.removeChild(this.treeOutline.element);
+
+        for (var pane in this.sidebarPanes) {
+            if (this.sidebarPanes[pane].willHide)
+                this.sidebarPanes[pane].willHide();
+        }
 
         WebInspector.Panel.prototype.willHide.call(this);
     },
@@ -172,6 +176,16 @@ WebInspector.ElementsPanel.prototype = {
 
         this.updateBreadcrumb(false);
 
+        this._updateSidebars();
+
+        if (selectedNode) {
+            ConsoleAgent.addInspectedNode(selectedNode.id);
+            this._lastValidSelectedNode = selectedNode;
+        }
+    },
+
+    _updateSidebars: function()
+    {
         for (var pane in this.sidebarPanes)
            this.sidebarPanes[pane].needsUpdate = true;
 
@@ -179,12 +193,6 @@ WebInspector.ElementsPanel.prototype = {
         this.updateMetrics();
         this.updateProperties();
         this.updateEventListeners();
-
-        if (selectedNode) {
-            ConsoleAgent.addInspectedNode(selectedNode.id);
-            WebInspector.extensionServer.notifyObjectSelected(this.name);
-            this._lastValidSelectedNode = selectedNode;
-        }
     },
 
     _reset: function()
@@ -207,7 +215,7 @@ WebInspector.ElementsPanel.prototype = {
             return;
         }
 
-        if (Preferences.nativeInstrumentationEnabled)
+        if (Capabilities.nativeInstrumentationEnabled)
             this.sidebarPanes.domBreakpoints.restoreBreakpoints();
 
         /**
@@ -325,11 +333,129 @@ WebInspector.ElementsPanel.prototype = {
 
     _populateContextMenu: function(contextMenu, node)
     {
-        if (Preferences.nativeInstrumentationEnabled) {
+        if (Capabilities.nativeInstrumentationEnabled) {
             // Add debbuging-related actions
             contextMenu.appendSeparator();
             var pane = this.sidebarPanes.domBreakpoints;
             pane.populateNodeContextMenu(node, contextMenu);
+        }
+    },
+
+    _getPopoverAnchor: function(element)
+    {
+        var anchor = element.enclosingNodeOrSelfWithClass("webkit-html-resource-link");
+        if (anchor) {
+            if (!anchor.href)
+                return null;
+
+            var resource = WebInspector.resourceTreeModel.resourceForURL(anchor.href);
+            if (!resource || resource.type !== WebInspector.Resource.Type.Image)
+                return null;
+
+            anchor.removeAttribute("title");
+        }
+        return anchor;
+    },
+    
+    _loadDimensionsForNode: function(treeElement, callback)
+    {
+        // We get here for CSS properties, too, so bail out early for non-DOM treeElements.
+        if (treeElement.treeOutline !== this.treeOutline) {
+            callback();
+            return;
+        }
+        
+        var node = /** @type {WebInspector.DOMNode} */ treeElement.representedObject;
+
+        if (!node.nodeName() || node.nodeName().toLowerCase() !== "img") {
+            callback();
+            return;
+        }
+
+        WebInspector.RemoteObject.resolveNode(node, "", resolvedNode);
+
+        function resolvedNode(object)
+        {
+            if (!object) {
+                callback();
+                return;
+            }
+
+            object.callFunctionJSON(dimensions, callback);
+            object.release();
+
+            function dimensions()
+            {
+                return { offsetWidth: this.offsetWidth, offsetHeight: this.offsetHeight, naturalWidth: this.naturalWidth, naturalHeight: this.naturalHeight };
+            }
+        }
+    },
+
+    _showPopover: function(anchor, popover)
+    {
+        var listItem = anchor.enclosingNodeOrSelfWithNodeNameInArray(["li"]);
+        if (listItem && listItem.treeElement)
+            this._loadDimensionsForNode(listItem.treeElement, dimensionsCallback);
+        else
+            dimensionsCallback();
+
+        /**
+         * @param {Object=} dimensions
+         */
+        function dimensionsCallback(dimensions)
+        {
+            var imageElement = document.createElement("img");
+            imageElement.addEventListener("load", showPopover.bind(null, imageElement, dimensions), false);
+            var resource = WebInspector.resourceTreeModel.resourceForURL(anchor.href);
+            if (!resource)
+                return;
+    
+            resource.populateImageSource(imageElement);
+        }
+
+        /**
+         * @param {Object=} dimensions
+         */
+        function showPopover(imageElement, dimensions)
+        {
+            var contents = buildPopoverContents(imageElement, dimensions);
+            popover.setCanShrink(false);
+            popover.show(contents, anchor);
+        }
+
+        /**
+         * @param {Object=} nodeDimensions
+         */
+        function buildPopoverContents(imageElement, nodeDimensions)
+        {
+            const maxImageWidth = 100;
+            const maxImageHeight = 100;
+            var container = document.createElement("table");
+            container.className = "image-preview-container";
+            var naturalWidth = nodeDimensions ? nodeDimensions.naturalWidth : imageElement.naturalWidth;
+            var naturalHeight = nodeDimensions ? nodeDimensions.naturalHeight : imageElement.naturalHeight;
+            var offsetWidth = nodeDimensions ? nodeDimensions.offsetWidth : naturalWidth;
+            var offsetHeight = nodeDimensions ? nodeDimensions.offsetHeight : naturalHeight;
+            var description;
+            if (offsetHeight === naturalHeight && offsetWidth === naturalWidth)
+                description = WebInspector.UIString("%d \xd7 %d pixels", offsetWidth, offsetHeight);
+            else
+                description = WebInspector.UIString("%d \xd7 %d pixels (Natural: %d \xd7 %d pixels)", offsetWidth, offsetHeight, naturalWidth, naturalHeight);
+
+            if (naturalWidth > naturalHeight) {
+                if (naturalWidth > maxImageWidth) {
+                    imageElement.style.width = maxImageWidth + "px";
+                    imageElement.style.height = (naturalHeight * maxImageWidth / naturalWidth) + "px";
+                }
+            } else {
+                if (naturalHeight > maxImageHeight) {
+                    imageElement.style.width = (naturalWidth * maxImageHeight / naturalHeight) + "px";
+                    imageElement.style.height = maxImageHeight + "px";
+                }
+            }
+            container.createChild("tr").createChild("td", "image-container").appendChild(imageElement);
+            container.createChild("tr").createChild("td").createChild("span", "description").textContent = description;
+            return container;
         }
     },
 
@@ -342,7 +468,7 @@ WebInspector.ElementsPanel.prototype = {
         if (++this._currentSearchResultIndex >= this._searchResults.length)
             this._currentSearchResultIndex = 0;
             
-        this._highlightCurrentSearchResult(true);
+        this._highlightCurrentSearchResult();
     },
 
     jumpToPreviousSearchResult: function()
@@ -354,7 +480,7 @@ WebInspector.ElementsPanel.prototype = {
         if (--this._currentSearchResultIndex < 0)
             this._currentSearchResultIndex = (this._searchResults.length - 1);
 
-        this._highlightCurrentSearchResult(false);
+        this._highlightCurrentSearchResult();
     },
 
     _highlightCurrentSearchResult: function()
@@ -905,6 +1031,7 @@ WebInspector.ElementsPanel.prototype = {
         ];
         section.addRelatedKeys(keys, WebInspector.UIString("Expand/collapse"));
         section.addKey(shortcut.shortcutToString(shortcut.Keys.Enter), WebInspector.UIString("Edit attribute"));
+        section.addKey(shortcut.shortcutToString(shortcut.Keys.F2), WebInspector.UIString("Toggle edit as HTML"));
 
         this.sidebarPanes.styles.registerShortcuts();
     },
@@ -913,7 +1040,7 @@ WebInspector.ElementsPanel.prototype = {
     {
         // Cmd/Control + Shift + C should be a shortcut to clicking the Node Search Button.
         // This shortcut matches Firebug.
-        if (event.keyIdentifier === "U+0043") {     // C key
+        if (event.keyIdentifier === "U+0043") { // C key
             if (WebInspector.isMac())
                 var isNodeSearchKey = event.metaKey && !event.ctrlKey && !event.altKey && event.shiftKey;
             else
@@ -924,7 +1051,24 @@ WebInspector.ElementsPanel.prototype = {
                 event.handled = true;
                 return;
             }
+            return;
         }
+
+        if (WebInspector.KeyboardShortcut.eventHasCtrlOrMeta(event) && !event.shiftKey && event.keyIdentifier === "U+005A") { // Z key
+            WebInspector.domAgent.undo(this._updateSidebars.bind(this));
+            event.handled = true;
+            return;
+        }
+
+        var isRedoKey = WebInspector.isMac() ? event.metaKey && event.shiftKey && event.keyIdentifier === "U+005A" : // Z key
+                                               event.ctrlKey && event.keyIdentifier === "U+0059"; // Y key
+        if (isRedoKey) {
+            DOMAgent.redo(this._updateSidebars.bind(this));
+            event.handled = true;
+            return;
+        }
+
+        this.treeOutline.handleShortcut(event);
     },
 
     handleCopyEvent: function(event)
@@ -937,30 +1081,8 @@ WebInspector.ElementsPanel.prototype = {
         this.selectedDOMNode().copyNode();
     },
 
-    rightSidebarResizerDragStart: function(event)
+    sidebarResized: function(event)
     {
-        WebInspector.elementDragStart(this.sidebarElement, this.rightSidebarResizerDrag.bind(this), this.rightSidebarResizerDragEnd.bind(this), event, "ew-resize");
-    },
-
-    rightSidebarResizerDragEnd: function(event)
-    {
-        WebInspector.elementDragEnd(event);
-        this.saveSidebarWidth();
-    },
-
-    rightSidebarResizerDrag: function(event)
-    {
-        var x = event.pageX;
-        var newWidth = Number.constrain(window.innerWidth - x, Preferences.minElementsSidebarWidth, window.innerWidth * 0.66);
-        this.setSidebarWidth(newWidth);
-        event.preventDefault();
-    },
-
-    setSidebarWidth: function(newWidth)
-    {
-        this.sidebarElement.style.width = newWidth + "px";
-        this.contentElement.style.right = newWidth + "px";
-        this.sidebarResizeElement.style.right = (newWidth - 3) + "px";
         this.treeOutline.updateSelection();
     },
 
@@ -999,11 +1121,6 @@ WebInspector.ElementsPanel.prototype = {
     toggleSearchingForNode: function()
     {
         this.setSearchingForNode(!this.nodeSearchButton.toggled);
-    },
-
-    elementsToRestoreScrollPositionsFor: function()
-    {
-        return [ this.contentElement, this.sidebarElement ];
     }
 }
 

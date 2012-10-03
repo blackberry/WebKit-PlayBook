@@ -31,12 +31,9 @@
 #include "ICOImageDecoder.h"
 #include "JPEGImageDecoder.h"
 #include "PNGImageDecoder.h"
+#if USE(WEBP)
 #include "WEBPImageDecoder.h"
-
-#if ENABLE(RXI_IMAGE_FORMAT)
-#include "RxIImageDecoder.h"
 #endif
-
 #include "SharedBuffer.h"
 
 using namespace std;
@@ -127,28 +124,10 @@ ImageDecoder* ImageDecoder::create(const SharedBuffer& data, ImageSource::AlphaO
     if (matchesICOSignature(contents) || matchesCURSignature(contents))
         return new ICOImageDecoder(alphaOption, gammaAndColorProfileOption);
 
-#if ENABLE(RXI_IMAGE_FORMAT)
-    // Tests for RDI.
-    if (!memcmp(contents, "\x89\x52\x44\x49", 4))
-        return new RxIImageDecoder(RxIImageDecoder::FormatRdi);
-
-    // Tests for RGI.
-    if (!memcmp(contents, "\x89\x52\x47\x49", 4))
-        return new RxIImageDecoder(RxIImageDecoder::FormatRgi);
-
-    // Tests for RPI.
-    if (!memcmp(contents, "\x89\x52\x50\x49", 4))
-        return new RxIImageDecoder(RxIImageDecoder::FormatRpi);
-
-    // Tests for RWI.
-    if (!memcmp(contents, "\x89\x52\x57\x49", 4))
-        return new RxIImageDecoder(RxIImageDecoder::FormatRwi);
-#endif
-
     return 0;
 }
 
-#if !USE(SKIA) && !USE(OPENVG)
+#if !USE(SKIA)
 
 ImageFrame::ImageFrame()
     : m_hasAlpha(false)
@@ -212,14 +191,15 @@ bool ImageFrame::copyBitmapData(const ImageFrame& other)
 
 bool ImageFrame::setSize(int newWidth, int newHeight)
 {
-    // NOTE: This has no way to check for allocation failure if the requested
-    // size was too big...
-    m_backingStore.resize(newWidth * newHeight);
+    ASSERT(!width() && !height());
+    size_t backingStoreSize = newWidth * newHeight;
+    if (!m_backingStore.tryReserveCapacity(backingStoreSize))
+        return false;
+    m_backingStore.resize(backingStoreSize);
     m_bytes = m_backingStore.data();
     m_size = IntSize(newWidth, newHeight);
 
     zeroFillPixelData();
-
     return true;
 }
 

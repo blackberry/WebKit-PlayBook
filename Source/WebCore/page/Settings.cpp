@@ -53,13 +53,21 @@ static void setLoadsImagesAutomaticallyInAllFrames(Page* page)
         frame->document()->cachedResourceLoader()->setAutoLoadImages(page->settings()->loadsImagesAutomatically());
 }
 
+// Sets the entry in the font map for the given script. If family is the empty string, removes the entry instead.
 static inline void setGenericFontFamilyMap(ScriptFontFamilyMap& fontMap, const AtomicString& family, UScriptCode script, Page* page)
 {
     ScriptFontFamilyMap::iterator it = fontMap.find(static_cast<int>(script));
-    if (it != fontMap.end() && it->second == family)
+    if (family.isEmpty()) {
+        if (it == fontMap.end())
+            return;
+        fontMap.remove(it);
+    } else if (it != fontMap.end() && it->second == family)
         return;
-    fontMap.set(static_cast<int>(script), family);
-    page->setNeedsRecalcStyleInAllFrames();
+    else
+        fontMap.set(static_cast<int>(script), family);
+
+    if (page)
+        page->setNeedsRecalcStyleInAllFrames();
 }
 
 static inline const AtomicString& getGenericFontFamilyForScript(const ScriptFontFamilyMap& fontMap, UScriptCode script)
@@ -108,7 +116,7 @@ static EditingBehaviorType editingBehaviorTypeForPlatform()
 }
 
 Settings::Settings(Page* page)
-    : m_page(page)
+    : m_page(0)
     , m_editableLinkBehavior(EditableLinkDefaultBehavior)
     , m_textDirectionSubmenuInclusionBehavior(TextDirectionSubmenuAutomaticallyIncluded)
     , m_passwordEchoDurationInSeconds(1)
@@ -116,6 +124,7 @@ Settings::Settings(Page* page)
     , m_minimumLogicalFontSize(0)
     , m_defaultFontSize(0)
     , m_defaultFixedFontSize(0)
+    , m_defaultDeviceScaleFactor(1)
     , m_validationMessageTimerMagnification(50)
     , m_minimumAccelerated2dCanvasSize(128 * 128)
     , m_layoutFallbackWidth(980)
@@ -154,6 +163,7 @@ Settings::Settings(Page* page)
     , m_isDOMPasteAllowed(false)
     , m_shrinksStandaloneImagesToFit(true)
     , m_usesPageCache(false)
+    , m_pageCacheSupportsPlugins(false)
     , m_showsURLsInToolTips(false)
     , m_showsToolTipOverTruncatedText(false)
     , m_forceFTPDirectoryListings(false)
@@ -171,6 +181,9 @@ Settings::Settings(Page* page)
     , m_allowScriptsToCloseWindows(false)
     , m_canvasUsesAcceleratedDrawing(false)
     , m_acceleratedDrawingEnabled(false)
+    , m_acceleratedFiltersEnabled(false)
+    , m_isCSSCustomFilterEnabled(false)
+    , m_cssRegionsEnabled(false)
     // FIXME: This should really be disabled by default as it makes platforms that don't support the feature download files
     // they can't use by. Leaving enabled for now to not change existing behavior.
     , m_downloadableBinaryFontsEnabled(true)
@@ -187,20 +200,18 @@ Settings::Settings(Page* page)
     , m_showRepaintCounter(false)
     , m_experimentalNotificationsEnabled(false)
     , m_webGLEnabled(false)
+    , m_webGLErrorsToConsoleEnabled(false)
     , m_openGLMultisamplingEnabled(true)
     , m_privilegedWebGLExtensionsEnabled(false)
     , m_webAudioEnabled(false)
     , m_acceleratedCanvas2dEnabled(false)
-    , m_legacyAcceleratedCanvas2dEnabled(false)
+    , m_deferredCanvas2dEnabled(false)
     , m_loadDeferringEnabled(true)
     , m_tiledBackingStoreEnabled(false)
     , m_paginateDuringLayoutEnabled(false)
     , m_dnsPrefetchingEnabled(false)
 #if ENABLE(FULLSCREEN_API)
     , m_fullScreenAPIEnabled(false)
-#endif
-#if ENABLE(POINTER_LOCK)
-    , m_pointerLockEnabled(false)
 #endif
     , m_asynchronousSpellCheckingEnabled(false)
 #if USE(UNIFIED_TEXT_CHECKING)
@@ -215,6 +226,7 @@ Settings::Settings(Page* page)
     , m_crossOriginCheckInGetMatchedCSSRulesDisabled(false)
     , m_forceCompositingMode(false)
     , m_shouldInjectUserScriptsInInitialEmptyDocument(false)
+    , m_fixedElementsLayoutRelativeToFrame(false)
     , m_allowDisplayOfInsecureContent(true)
     , m_allowRunningOfInsecureContent(true)
 #if ENABLE(SMOOTH_SCROLLING)
@@ -225,15 +237,25 @@ Settings::Settings(Page* page)
 #endif
     , m_mediaPlaybackRequiresUserGesture(false)
     , m_mediaPlaybackAllowsInline(true)
-#if OS(SYMBIAN)
-    , m_passwordEchoEnabled(true)
-#else
     , m_passwordEchoEnabled(false)
-#endif
-    , m_suppressIncrementalRendering(false)
+    , m_suppressesIncrementalRendering(false)
     , m_backspaceKeyNavigationEnabled(true)
     , m_visualWordMovementEnabled(false)
     , m_delegateSelectionPaint(false)
+#if ENABLE(VIDEO_TRACK)
+    , m_shouldDisplaySubtitles(false)
+    , m_shouldDisplayCaptions(false)
+    , m_shouldDisplayTextDescriptions(false)
+#endif
+    , m_perTileDrawingEnabled(false)
+    , m_partialSwapEnabled(false)
+    , m_scrollingCoordinatorEnabled(false)
+    , m_notificationsEnabled(true)
+    , m_needsIsLoadingInAPISenseQuirk(false)
+#if ENABLE(TOUCH_EVENTS)
+    , m_touchEventEmulationEnabled(false)
+#endif
+    , m_threadedAnimationEnabled(false)
     , m_loadsImagesAutomaticallyTimer(this, &Settings::loadsImagesAutomaticallyTimerFired)
 #if ENABLE(VIEWPORT_REFLOW)
     , m_isTextReflowEnabled(false)
@@ -250,7 +272,21 @@ Settings::Settings(Page* page)
     // A Frame may not have been created yet, so we initialize the AtomicString 
     // hash before trying to use it.
     AtomicString::init();
+    initializeDefaultFontFamilies();
+    m_page = page; // Page is not yet fully initialized wen constructing Settings, so keeping m_page null over initializeDefaultFontFamilies() call.
 }
+
+PassOwnPtr<Settings> Settings::create(Page* page)
+{
+    return adoptPtr(new Settings(page));
+} 
+
+#if !PLATFORM(MAC) && !PLATFORM(BLACKBERRY)
+void Settings::initializeDefaultFontFamilies()
+{
+    // Other platforms can set up fonts from a client, but on Mac, we want it in WebCore to share code between WebKit1 and WebKit2.
+}
+#endif
 
 const AtomicString& Settings::standardFontFamily(UScriptCode script) const
 {
@@ -356,6 +392,11 @@ void Settings::setDefaultFixedFontSize(int defaultFontSize)
 
     m_defaultFixedFontSize = defaultFontSize;
     m_page->setNeedsRecalcStyleInAllFrames();
+}
+
+void Settings::setDefaultDeviceScaleFactor(int defaultDeviceScaleFactor)
+{
+    m_defaultDeviceScaleFactor = defaultDeviceScaleFactor;
 }
 
 void Settings::setLoadsImagesAutomatically(bool loadsImagesAutomatically)
@@ -491,6 +532,11 @@ void Settings::setUserStyleSheetLocation(const KURL& userStyleSheetLocation)
     m_userStyleSheetLocation = userStyleSheetLocation;
 
     m_page->userStyleSheetLocationChanged();
+}
+
+void Settings::setFixedElementsLayoutRelativeToFrame(bool fixedElementsLayoutRelativeToFrame)
+{
+    m_fixedElementsLayoutRelativeToFrame = fixedElementsLayoutRelativeToFrame;
 }
 
 void Settings::setShouldPrintBackgrounds(bool shouldPrintBackgrounds)
@@ -803,6 +849,11 @@ void Settings::setWebGLEnabled(bool enabled)
     m_webGLEnabled = enabled;
 }
 
+void Settings::setWebGLErrorsToConsoleEnabled(bool enabled)
+{
+    m_webGLErrorsToConsoleEnabled = enabled;
+}
+
 void Settings::setOpenGLMultisamplingEnabled(bool enabled)
 {
     m_openGLMultisamplingEnabled = enabled;
@@ -818,9 +869,9 @@ void Settings::setAccelerated2dCanvasEnabled(bool enabled)
     m_acceleratedCanvas2dEnabled = enabled;
 }
 
-void Settings::setLegacyAccelerated2dCanvasEnabled(bool enabled)
+void Settings::setDeferred2dCanvasEnabled(bool enabled)
 {
-    m_legacyAcceleratedCanvas2dEnabled = enabled;
+    m_deferredCanvas2dEnabled = enabled;
 }
 
 void Settings::setMinimumAccelerated2dCanvasSize(int numPixels)

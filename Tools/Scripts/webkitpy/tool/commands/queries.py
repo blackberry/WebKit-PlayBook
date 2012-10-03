@@ -30,12 +30,14 @@
 
 from optparse import make_option
 
-import webkitpy.tool.steps as steps
+from webkitpy.tool import steps
 
 from webkitpy.common.checkout.commitinfo import CommitInfo
 from webkitpy.common.config.committers import CommitterList
+import webkitpy.common.config.urls as config_urls
 from webkitpy.common.net.buildbot import BuildBot
 from webkitpy.common.net.regressionwindow import RegressionWindow
+from webkitpy.common.system.crashlogs import CrashLogs
 from webkitpy.common.system.user import User
 from webkitpy.tool.grammar import pluralize
 from webkitpy.tool.multicommandtool import AbstractDeclarativeCommand
@@ -128,14 +130,15 @@ class PatchesToReview(AbstractDeclarativeCommand):
 class LastGreenRevision(AbstractDeclarativeCommand):
     name = "last-green-revision"
     help_text = "Prints the last known good revision"
+    argument_names = "BUILDER_NAME"
 
     def execute(self, options, args, tool):
-        print self._tool.buildbot.last_green_revision()
+        print self._tool.buildbot.last_green_revision(args[0])
 
 
 class WhatBroke(AbstractDeclarativeCommand):
     name = "what-broke"
-    help_text = "Print failing buildbots (%s) and what revisions broke them" % BuildBot.default_host
+    help_text = "Print failing buildbots (%s) and what revisions broke them" % config_urls.buildbot_url
 
     def _print_builder_line(self, builder_name, max_name_width, status_message):
         print "%s : %s" % (builder_name.ljust(max_name_width), status_message)
@@ -181,7 +184,7 @@ class WhatBroke(AbstractDeclarativeCommand):
 
 class ResultsFor(AbstractDeclarativeCommand):
     name = "results-for"
-    help_text = "Print a list of failures for the passed revision from bots on %s" % BuildBot.default_host
+    help_text = "Print a list of failures for the passed revision from bots on %s" % config_urls.buildbot_url
     argument_names = "REVISION"
 
     def _print_layout_test_results(self, results):
@@ -203,7 +206,7 @@ class ResultsFor(AbstractDeclarativeCommand):
 
 class FailureReason(AbstractDeclarativeCommand):
     name = "failure-reason"
-    help_text = "Lists revisions where individual test failures started at %s" % BuildBot.default_host
+    help_text = "Lists revisions where individual test failures started at %s" % config_urls.buildbot_url
 
     def _blame_line_for_revision(self, revision):
         try:
@@ -228,7 +231,7 @@ class FailureReason(AbstractDeclarativeCommand):
         layout_test_results = build.layout_test_results()
         if not layout_test_results:
             # FIXME: This could be made more user friendly.
-            print "Failed to load layout test results; can't continue. (start revision = r%s)" % start_revision
+            print "Failed to load layout test results from %s; can't continue. (start revision = r%s)" % (build.results_url(), start_revision)
             return 1
 
         results_to_explain = set(layout_test_results.failing_tests())
@@ -272,7 +275,7 @@ class FailureReason(AbstractDeclarativeCommand):
         print "%s failing" % (pluralize("builder", len(red_statuses)))
         builder_choices = [status["name"] for status in red_statuses]
         # We could offer an "All" choice here.
-        chosen_name = User.prompt_with_list("Which builder to diagnose:", builder_choices)
+        chosen_name = self._tool.user.prompt_with_list("Which builder to diagnose:", builder_choices)
         # FIXME: prompt_with_list should really take a set of objects and a set of names and then return the object.
         for status in red_statuses:
             if status["name"] == chosen_name:
@@ -289,7 +292,7 @@ class FailureReason(AbstractDeclarativeCommand):
 
 class FindFlakyTests(AbstractDeclarativeCommand):
     name = "find-flaky-tests"
-    help_text = "Lists tests that often fail for a single build at %s" % BuildBot.default_host
+    help_text = "Lists tests that often fail for a single build at %s" % config_urls.buildbot_url
 
     def _find_failures(self, builder, revision):
         build = builder.build_for_revision(revision, allow_failed_lookups=True)
@@ -345,7 +348,7 @@ class FindFlakyTests(AbstractDeclarativeCommand):
     def _builder_to_analyze(self):
         statuses = self._tool.buildbot.builder_statuses()
         choices = [status["name"] for status in statuses]
-        chosen_name = User.prompt_with_list("Which builder to analyze:", choices)
+        chosen_name = self._tool.user.prompt_with_list("Which builder to analyze:", choices)
         for status in statuses:
             if status["name"] == chosen_name:
                 return (self._tool.buildbot.builder_with_name(chosen_name), status["built_revision"])
@@ -358,7 +361,7 @@ class FindFlakyTests(AbstractDeclarativeCommand):
 
 class TreeStatus(AbstractDeclarativeCommand):
     name = "tree-status"
-    help_text = "Print the status of the %s buildbots" % BuildBot.default_host
+    help_text = "Print the status of the %s buildbots" % config_urls.buildbot_url
     long_help = """Fetches build status from http://build.webkit.org/one_box_per_builder
 and displayes the status of each builder."""
 
@@ -366,6 +369,21 @@ and displayes the status of each builder."""
         for builder in tool.buildbot.builder_statuses():
             status_string = "ok" if builder["is_green"] else "FAIL"
             print "%s : %s" % (status_string.ljust(4), builder["name"])
+
+
+class CrashLog(AbstractDeclarativeCommand):
+    name = "crash-log"
+    help_text = "Print the newest crash log for the given process"
+    long_help = """Finds the newest crash log matching the given process name
+and PID and prints it to stdout."""
+    argument_names = "PROCESS_NAME [PID]"
+
+    def execute(self, options, args, tool):
+        crash_logs = CrashLogs(tool.filesystem)
+        pid = None
+        if len(args) > 1:
+            pid = int(args[1])
+        print crash_logs.find_newest_log(args[0], pid)
 
 
 class SkippedPorts(AbstractDeclarativeCommand):
@@ -376,10 +394,6 @@ out what ports are skipping the test(s). Categories are taken in account too."""
     argument_names = "TEST_NAME"
 
     def execute(self, options, args, tool):
-        class Options:
-            # Required for chromium port.
-            use_drt = True
-
         results = dict([(test_name, []) for test_name in args])
         for port_name in tool.port_factory.all_port_names():
             port_object = tool.port_factory.get(port_name)

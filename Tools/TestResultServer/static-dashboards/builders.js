@@ -1,4 +1,4 @@
-// Copyright (C) 2011 Google Inc. All rights reserved.
+// Copyright (C) 2012 Google Inc. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -41,9 +41,19 @@ BuilderMaster.prototype.getLogPath = function(builder, buildNumber)
 };
 
 CHROMIUM_BUILDER_MASTER = new BuilderMaster('Chromium', 'http://build.chromium.org/p/chromium/builders/');
-CHROMIUM_WEBKIT_BUILDER_MASTER = new BuilderMaster('ChromiumWebkit', 'http://build.chromium.org/p/chromium.webkit/builders/');
+CHROMIUMOS_BUILDER_MASTER = new BuilderMaster('ChromiumChromiumOS', 'http://build.chromium.org/p/chromium.chromiumos/builders/');
 CHROMIUM_GPU_BUILDER_MASTER = new BuilderMaster('ChromiumGPU', 'http://build.chromium.org/p/chromium.gpu/builders/');
+CHROMIUM_GPU_FYI_BUILDER_MASTER = new BuilderMaster('ChromiumGPUFYI', 'http://build.chromium.org/p/chromium.gpu.fyi/builders/');
+CHROMIUM_WEBKIT_BUILDER_MASTER = new BuilderMaster('ChromiumWebkit', 'http://build.chromium.org/p/chromium.webkit/builders/');
 WEBKIT_BUILDER_MASTER = new BuilderMaster('webkit.org', 'http://build.webkit.org/builders/');
+
+var LEGACY_BUILDER_MASTERS_TO_GROUPS = {
+    'Chromium': '@DEPS - chromium.org',
+    'ChromiumChromiumOS': '@DEPS CrOS - chromium.org',
+    'ChromiumGPU': '@DEPS - chromium.org',
+    'ChromiumWebkit': '@ToT - chromium.org',
+    'webkit.org': '@ToT - webkit.org'
+};
 
 function BuilderGroup(isToTWebKit, builders)
 {
@@ -89,15 +99,14 @@ function associateBuildersWithMaster(builders, master)
     });
 }
 
-var CHROMIUM_DEPS_BUILDERS = [
+var CHROMIUM_LAYOUT_DEPS_BUILDERS = [
     ['Webkit Win (deps)', BuilderGroup.DEFAULT_BUILDER],
     ['Webkit Linux (deps)', BuilderGroup.EXPECTATIONS_BUILDER],
     ['Webkit Mac10.6 (deps)'],
-    ['Webkit Mac10.6 (CG)(deps)'],
 ];
-associateBuildersWithMaster(CHROMIUM_DEPS_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
+associateBuildersWithMaster(CHROMIUM_LAYOUT_DEPS_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
 
-var CHROMIUM_TOT_BUILDERS = [
+var CHROMIUM_LAYOUT_TOT_BUILDERS = [
     ['Webkit Win', BuilderGroup.DEFAULT_BUILDER],
     ['Webkit Vista'],
     ['Webkit Win7'],
@@ -111,19 +120,13 @@ var CHROMIUM_TOT_BUILDERS = [
     ['Webkit Mac10.5 (dbg)(2)'],
     ['Webkit Mac10.6'],
     ['Webkit Mac10.6 (dbg)'],
-    ['Webkit Mac10.5 (CG)'],
-    ['Webkit Mac10.5 (CG)(dbg)(1)'],
-    ['Webkit Mac10.5 (CG)(dbg)(2)'],
-    ['Webkit Mac10.6 (CG)'],
-    ['Webkit Mac10.6 (CG)(dbg)']
 ];
-associateBuildersWithMaster(CHROMIUM_TOT_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
+associateBuildersWithMaster(CHROMIUM_LAYOUT_TOT_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
 
 var WEBKIT_TOT_BUILDERS = [
     ['Chromium Win Release (Tests)', BuilderGroup.DEFAULT_BUILDER],
     ['Chromium Linux Release (Tests)', BuilderGroup.EXPECTATIONS_BUILDER],
     ['Chromium Mac Release (Tests)'],
-    ['Leopard Intel Debug (Tests)'],
     ['SnowLeopard Intel Release (Tests)'],
     ['SnowLeopard Intel Debug (Tests)'],
     ['GTK Linux 32-bit Release'],
@@ -147,53 +150,51 @@ var CHROMIUM_GPU_MESA_BUILDERS = [
     ['Webkit Mac10.5 (dbg)(2) - GPU'],
     ['Webkit Mac10.6 - GPU'],
     ['Webkit Mac10.6 (dbg) - GPU'],
-    ['Webkit Mac10.5 (CG) - GPU'],
-    ['Webkit Mac10.5 (CG)(dbg)(1) - GPU'],
-    ['Webkit Mac10.5 (CG)(dbg)(2) - GPU'],
-    ['Webkit Mac10.6 (CG) - GPU'],
-    ['Webkit Mac10.6 (CG)(dbg) - GPU']
 ];
 associateBuildersWithMaster(CHROMIUM_GPU_MESA_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
 
-var CHROMIUM_GPU_HARDWARE_BUILDERS = [
-    ['GPU Win7 Tests - GPU', BuilderGroup.DEFAULT_BUILDER | BuilderGroup.EXPECTATIONS_BUILDER],
-    ['GPU Win7 Tests (dbg)(1) - GPU'],
-    ['GPU Win7 Tests (dbg)(2) - GPU'],
-    ['GPU Win7 x64 Tests (dbg)(1) - GPU'],
-    ['GPU Win7 x64 Tests (dbg)(2) - GPU'],
-    
-    ['GPU Vista Tests (dbg)(1) - GPU'],
-    ['GPU Vista Tests (dbg)(2) - GPU'],
-    ['GPU Vista x64 Tests (dbg) - GPU'],
-    
-    ['GPU Mac 10.6 Tests - GPU'],
-    ['GPU Mac 10.6 Tests (dbg) - GPU'],
-    ['GPU Mac 10.5 Tests (dbg) - GPU'],
-    
-    ['GPU Linux Tests (dbg)(1) - GPU'],
-    ['GPU Linux Tests (dbg)(2) - GPU'],
-    
-    ['GPU Win7 Tests (dbg)(1) - GPU'],
-    ['GPU Win7 Tests (dbg)(2) - GPU'],
-    ['GPU Linux Tests x64 - GPU']
-];
-associateBuildersWithMaster(CHROMIUM_GPU_HARDWARE_BUILDERS, CHROMIUM_GPU_BUILDER_MASTER);
-
 var LAYOUT_TESTS_BUILDER_GROUPS = {
-    '@DEPS - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUM_DEPS_BUILDERS),
-    '@ToT - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_TOT_BUILDERS),
+    '@DEPS - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUM_LAYOUT_DEPS_BUILDERS),
+    '@ToT - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_LAYOUT_TOT_BUILDERS),
     '@ToT - webkit.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, WEBKIT_TOT_BUILDERS),
-    '@ToT GPU Mesa - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_GPU_MESA_BUILDERS),
-    '@ToT GPU Hardware - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_GPU_HARDWARE_BUILDERS)
+    '@ToT GPU Mesa - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_GPU_MESA_BUILDERS)
 };
 
-var LEGACY_BUILDER_MASTERS_TO_GROUPS = {
-    'Chromium': '@DEPS - chromium.org',
-    'ChromiumWebkit': '@ToT - chromium.org',
-    'webkit.org': '@ToT - webkit.org'
+var CHROMIUM_GPU_GTESTS_DEPS_BUILDERS = [
+    ['Win7 Release (NVIDIA)', BuilderGroup.DEFAULT_BUILDER],
+    ['Win7 Debug (NVIDIA)'],
+    ['Mac Release (Intel)'],
+    ['Mac Debug (Intel)'],
+    ['Linux Release (NVIDIA)'],
+    ['Linux Debug (NVIDIA)'],
+];
+associateBuildersWithMaster(CHROMIUM_GPU_GTESTS_DEPS_BUILDERS, CHROMIUM_GPU_BUILDER_MASTER);
+
+var CHROMIUM_GPU_FYI_GTESTS_DEPS_BUILDERS = [
+    ['Win7 Release (ATI)', BuilderGroup.DEFAULT_BUILDER],
+    ['Win7 Release (Intel)'],
+    ['WinXP Release (NVIDIA)'],
+    ['WinXP Debug (NVIDIA)'],
+    ['Mac Release (ATI)'],
+    ['Linux Release (ATI)'],
+    ['Linux Release (Intel)'],
+];
+associateBuildersWithMaster(CHROMIUM_GPU_FYI_GTESTS_DEPS_BUILDERS, CHROMIUM_GPU_FYI_BUILDER_MASTER);
+
+var CHROMIUM_GPU_GTESTS_TOT_BUILDERS = [
+    ['GPU Win7 (dbg) (NVIDIA)', BuilderGroup.DEFAULT_BUILDER],
+    ['GPU Mac (dbg)'],
+    ['GPU Linux (dbg) (NVIDIA)'],
+];
+associateBuildersWithMaster(CHROMIUM_GPU_GTESTS_TOT_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
+
+var CHROMIUM_GPU_TESTS_BUILDER_GROUPS = {
+    '@DEPS - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUM_GPU_GTESTS_DEPS_BUILDERS),
+    '@DEPS FYI - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUM_GPU_FYI_GTESTS_DEPS_BUILDERS),
+    '@ToT - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_GPU_GTESTS_TOT_BUILDERS)
 };
 
-var G_TESTS_BUILDERS = [
+var CHROMIUM_GTESTS_DEPS_BUILDERS = [
     ['Win', BuilderGroup.DEFAULT_BUILDER],
     ['Mac'],
     ['Linux'],
@@ -204,6 +205,9 @@ var G_TESTS_BUILDERS = [
     ['Vista Tests (1)'],
     ['Vista Tests (2)'],
     ['Vista Tests (3)'],
+    ['Win7 Tests (1)'],
+    ['Win7 Tests (2)'],
+    ['Win7 Tests (3)'],
     ['Win7 Sync'],
     ['XP Tests (dbg)(1)'],
     ['XP Tests (dbg)(2)'],
@@ -211,13 +215,14 @@ var G_TESTS_BUILDERS = [
     ['XP Tests (dbg)(4)'],
     ['XP Tests (dbg)(5)'],
     ['XP Tests (dbg)(6)'],
-    ['Vista Tests (dbg)(1)'],
-    ['Vista Tests (dbg)(2)'],
-    ['Vista Tests (dbg)(3)'],
-    ['Vista Tests (dbg)(4)'],
-    ['Vista Tests (dbg)(5)'],
-    ['Vista Tests (dbg)(6)'],
+    ['Win7 Tests (dbg)(1)'],
+    ['Win7 Tests (dbg)(2)'],
+    ['Win7 Tests (dbg)(3)'],
+    ['Win7 Tests (dbg)(4)'],
+    ['Win7 Tests (dbg)(5)'],
+    ['Win7 Tests (dbg)(6)'],
     ['Interactive Tests (dbg)'],
+    ['Win Aura'],
     ['Mac10.5 Tests (1)'],
     ['Mac10.5 Tests (2)'],
     ['Mac10.5 Tests (3)'],
@@ -234,21 +239,32 @@ var G_TESTS_BUILDERS = [
     ['Mac 10.6 Tests (dbg)(3)'],
     ['Mac 10.6 Tests (dbg)(4)'],
     ['Linux Tests x64'],
+    ['Linux Sync'],
     ['Linux Tests (dbg)(1)'],
     ['Linux Tests (dbg)(2)'],
     ['Linux Tests (dbg)(shared)'],
-    ['Linux Sync'],
-    ['Linux Builder (ChromiumOS)'],
-    ['Linux Builder (ChromiumOS dbg)'],
-    ['Linux Tests (ChromiumOS dbg)(1)'],
-    ['Linux Tests (ChromiumOS dbg)(2)'],
-    ['Linux Tests (ChromiumOS dbg)(3)'],
-    ['Linux Builder (ChromiumOS dbg)'],
-    ['Linux Builder (Views dbg)'],
-    ['Linux Tests (Views dbg)(1)'],
-    ['Linux Tests (Views dbg)(2)'],
-    ['Linux Tests (Views dbg)(3)'],
+    ['Linux Tests (Aura dbg)'],
 ];
-associateBuildersWithMaster(G_TESTS_BUILDERS, CHROMIUM_BUILDER_MASTER);
+associateBuildersWithMaster(CHROMIUM_GTESTS_DEPS_BUILDERS, CHROMIUM_BUILDER_MASTER);
 
-var G_TESTS_BUILDER_GROUP = new BuilderGroup(BuilderGroup.DEPS_WEBKIT, G_TESTS_BUILDERS);
+var CHROMIUMOS_GTESTS_DEPS_BUILDERS = [
+    ['Linux ChromiumOS Tester (1)', BuilderGroup.DEFAULT_BUILDER],
+    ['Linux ChromiumOS Tester (2)'],
+    ['Linux ChromiumOS GTK'],
+    ['Linux ChromiumOS Tests (dbg)'],
+];
+associateBuildersWithMaster(CHROMIUMOS_GTESTS_DEPS_BUILDERS, CHROMIUMOS_BUILDER_MASTER);
+
+var CHROMIUM_GTESTS_TOT_BUILDERS = [
+    ['Win (dbg)', BuilderGroup.DEFAULT_BUILDER],
+    ['Mac10.6 Tests'],
+    ['Linux Tests'],
+];
+associateBuildersWithMaster(CHROMIUM_GTESTS_TOT_BUILDERS, CHROMIUM_WEBKIT_BUILDER_MASTER);
+
+var CHROMIUM_GTESTS_BUILDER_GROUPS = {
+    '@DEPS - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUM_GTESTS_DEPS_BUILDERS),
+    '@DEPS CrOS - chromium.org': new BuilderGroup(BuilderGroup.DEPS_WEBKIT, CHROMIUMOS_GTESTS_DEPS_BUILDERS),
+    '@ToT - chromium.org': new BuilderGroup(BuilderGroup.TOT_WEBKIT, CHROMIUM_GTESTS_TOT_BUILDERS),
+};
+

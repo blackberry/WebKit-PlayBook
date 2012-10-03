@@ -30,8 +30,7 @@
 
 namespace WebCore {
 
-class JPEGDestinationManager : public jpeg_destination_mgr
-{
+class JPEGDestinationManager : public jpeg_destination_mgr {
 public:
     explicit JPEGDestinationManager(Vector<char>& toDump)
         : m_dump(toDump)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -32,9 +32,11 @@ namespace WebCore {
 class Element;
 class FloatQuad;
 class Frame;
+class HTMLInputElement;
 class HTMLTextFormControlElement;
 class Node;
 class Position;
+class QualifiedName;
 class Range;
 class VisibleSelection;
 }
@@ -54,7 +56,10 @@ bool isPasswordElement(const WebCore::Element*);
 bool isPopupInputField(const WebCore::Element*);
 bool isDateTimeInputField(const WebCore::Element*);
 bool isColorInputField(const WebCore::Element*);
+
+AttributeState elementAttributeState(const WebCore::Element*, const WebCore::QualifiedName&);
 AttributeState elementSupportsAutocorrect(const WebCore::Element*);
+AttributeState elementSupportsAutocomplete(const WebCore::Element*);
 
 WTF::String inputElementText(WebCore::Element*);
 
@@ -62,6 +67,7 @@ WebCore::HTMLTextFormControlElement* toTextControlElement(WebCore::Node*);
 
 WebCore::IntRect transformedBoundingBoxForRange(const WebCore::Range&);
 void visibleTextQuads(const WebCore::Range&, WTF::Vector<WebCore::FloatQuad>& quads, bool useSelectionHeight = false);
+void visibleTextQuads(const WebCore::VisibleSelection&, WTF::Vector<WebCore::FloatQuad>& quads);
 
 WebCore::VisibleSelection visibleSelectionForRangeInputElement(WebCore::Element*, int start, int end);
 WebCore::VisibleSelection visibleSelectionForInputElement(WebCore::Element*);
@@ -69,12 +75,20 @@ WebCore::VisibleSelection visibleSelectionForInputElement(WebCore::Element*);
 WebCore::Node* DOMContainerNodeForPosition(const WebCore::Position&);
 bool isPositionInNode(WebCore::Node*, const WebCore::Position&);
 
-AttributeState elementSupportsAutocomplete(const WebCore::Element*);
 bool elementIdOrNameIndicatesNoAutocomplete(const WebCore::Element*);
+bool elementIdOrNameIndicatesEmail(const WebCore::HTMLInputElement*);
+bool elementIdOrNameIndicatesUrl(const WebCore::HTMLInputElement*);
+bool elementPatternMatches(const char*, const WebCore::HTMLInputElement*);
+bool elementPatternIndicatesNumber(const WebCore::HTMLInputElement*);
+bool elementPatternIndicatesHexadecimal(const WebCore::HTMLInputElement*);
 
-WebCore::IntPoint convertPointToFrame(const WebCore::Frame* sourceFrame, const WebCore::Frame* targetFrame, const WebCore::IntPoint& sourcePoint);
+WebCore::IntPoint convertPointToFrame(const WebCore::Frame* sourceFrame, const WebCore::Frame* targetFrame, const WebCore::IntPoint& sourcePoint, const bool clampToTargetFrame = false);
 
 static const WebCore::IntPoint InvalidPoint = WebCore::IntPoint(-1, -1);
+
+WebCore::VisibleSelection visibleSelectionForClosestActualWordStart(const WebCore::VisibleSelection&);
+
+WebCore::Frame* incrementFrame(WebCore::Frame* curr, bool forward, bool wrapFlag);
 
 } // DOMSupport
 } // WebKit

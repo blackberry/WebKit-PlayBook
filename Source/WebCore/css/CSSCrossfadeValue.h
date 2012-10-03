@@ -26,38 +26,75 @@
 #ifndef CSSCrossfadeValue_h
 #define CSSCrossfadeValue_h
 
+#include "CachedImage.h"
 #include "CSSImageGeneratorValue.h"
-#include "CSSImageValue.h"
+#include "CSSPrimitiveValue.h"
 #include "Image.h"
 #include "ImageObserver.h"
 
 namespace WebCore {
 
+class CachedImage;
+class CrossfadeSubimageObserverProxy;
 class RenderObject;
+class Document;
 
 class CSSCrossfadeValue : public CSSImageGeneratorValue {
+    friend class CrossfadeSubimageObserverProxy;
 public:
-    static PassRefPtr<CSSCrossfadeValue> create(PassRefPtr<CSSImageValue> fromImage, PassRefPtr<CSSImageValue> toImage) { return adoptRef(new CSSCrossfadeValue(fromImage, toImage)); }
+    static PassRefPtr<CSSCrossfadeValue> create(PassRefPtr<CSSValue> fromValue, PassRefPtr<CSSValue> toValue)
+    {
+        return adoptRef(new CSSCrossfadeValue(fromValue, toValue));
+    }
+
+    ~CSSCrossfadeValue();
 
     String customCssText() const;
 
     PassRefPtr<Image> image(RenderObject*, const IntSize&);
-    bool isFixedSize() const { return false; }
+    bool isFixedSize() const { return true; }
     IntSize fixedSize(const RenderObject*);
 
-    void setPercentage(PassRefPtr<CSSPrimitiveValue> percentage) { m_percentage = percentage; }
+    bool isPending() const;
+    void loadSubimages(CachedResourceLoader*);
+
+    void setPercentage(PassRefPtr<CSSPrimitiveValue> percentageValue) { m_percentageValue = percentageValue; }
 
 private:
-    CSSCrossfadeValue(PassRefPtr<CSSImageValue> fromImage, PassRefPtr<CSSImageValue> toImage)
+    CSSCrossfadeValue(PassRefPtr<CSSValue> fromValue, PassRefPtr<CSSValue> toValue)
         : CSSImageGeneratorValue(CrossfadeClass)
-        , m_fromImage(fromImage)
-        , m_toImage(toImage)
-    {
-    }
+        , m_fromValue(fromValue)
+        , m_toValue(toValue)
+        , m_cachedFromImage(0)
+        , m_cachedToImage(0)
+        , m_crossfadeSubimageObserver(this) { }
 
-    RefPtr<CSSImageValue> m_fromImage;
-    RefPtr<CSSImageValue> m_toImage;
-    RefPtr<CSSPrimitiveValue> m_percentage;
+    class CrossfadeSubimageObserverProxy : public CachedImageClient {
+    public:
+        CrossfadeSubimageObserverProxy(CSSCrossfadeValue* ownerValue)
+        : m_ownerValue(ownerValue)
+        , m_ready(false) { }
+
+        virtual ~CrossfadeSubimageObserverProxy() { }
+        virtual void imageChanged(CachedImage*, const IntRect* = 0) OVERRIDE;
+        void setReady(bool ready) { m_ready = ready; }
+    private:
+        CSSCrossfadeValue* m_ownerValue;
+        bool m_ready;
+    };
+
+    void crossfadeChanged(const IntRect&);
+
+    RefPtr<CSSValue> m_fromValue;
+    RefPtr<CSSValue> m_toValue;
+    RefPtr<CSSPrimitiveValue> m_percentageValue;
+
+    CachedImage* m_cachedFromImage;
+    CachedImage* m_cachedToImage;
+
+    RefPtr<Image> m_generatedImage;
+
+    CrossfadeSubimageObserverProxy m_crossfadeSubimageObserver;
 };
 
 } // namespace WebCore

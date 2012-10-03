@@ -26,10 +26,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import with_statement
-
-"""WebKit Gtk implementation of the Port interface."""
-
 import logging
 import os
 import signal
@@ -44,8 +40,13 @@ _log = logging.getLogger(__name__)
 
 
 class GtkDriver(WebKitDriver):
-    def _start(self):
-        display_id = self._worker_number + 1
+    def _start(self, pixel_tests, per_test_args):
+        # Use even displays for pixel tests and odd ones otherwise. When pixel tests are disabled,
+        # DriverProxy creates two drivers, one for normal and the other for ref tests. Both have
+        # the same worker number, so this prevents them from using the same Xvfb instance.
+        display_id = self._worker_number * 2 + 1
+        if self._pixel_tests:
+            display_id += 1
         run_xvfb = ["Xvfb", ":%d" % (display_id), "-screen",  "0", "800x600x24", "-nolisten", "tcp"]
         with open(os.devnull, 'w') as devnull:
             self._xvfb_process = subprocess.Popen(run_xvfb, stderr=devnull)
@@ -53,35 +54,46 @@ class GtkDriver(WebKitDriver):
         environment = self._port.setup_environ_for_server(server_name)
         # We must do this here because the DISPLAY number depends on _worker_number
         environment['DISPLAY'] = ":%d" % (display_id)
-        self._server_process = ServerProcess(self._port, server_name, self.cmd_line(), environment)
+        self._server_process = ServerProcess(self._port, server_name, self.cmd_line(pixel_tests, per_test_args), environment)
 
     def stop(self):
         WebKitDriver.stop(self)
-        # FIXME: This should use Executive.kill_process
-        os.kill(self._xvfb_process.pid, signal.SIGTERM)
-        self._xvfb_process.wait()
+        if getattr(self, '_xvfb_process', None):
+            # FIXME: This should use Executive.kill_process
+            os.kill(self._xvfb_process.pid, signal.SIGTERM)
+            self._xvfb_process.wait()
+            self._xvfb_process = None
+
+    def cmd_line(self, pixel_tests, per_test_args):
+        wrapper_path = self._port.path_from_webkit_base("Tools", "gtk", "run-with-jhbuild")
+        return [wrapper_path] + WebKitDriver.cmd_line(self, pixel_tests, per_test_args)
 
 
 class GtkPort(WebKitPort):
     port_name = "gtk"
 
-    def __init__(self, host, **kwargs):
-        WebKitPort.__init__(self, host, **kwargs)
-        self._version = self.port_name
-
     def _port_flag_for_scripts(self):
         return "--gtk"
 
-    def create_driver(self, worker_number):
-        return GtkDriver(self, worker_number)
+    def _driver_class(self):
+        return GtkDriver
 
     def setup_environ_for_server(self, server_name=None):
         environment = WebKitPort.setup_environ_for_server(self, server_name)
         environment['GTK_MODULES'] = 'gail'
+        environment['GSETTINGS_BACKEND'] = 'memory'
         environment['LIBOVERLAY_SCROLLBAR'] = '0'
         environment['TEST_RUNNER_INJECTED_BUNDLE_FILENAME'] = self._build_path('Libraries', 'libTestRunnerInjectedBundle.la')
-        environment['TEST_RUNNER_TEST_PLUGIN_PATH'] = self._build_path('Libraries', 'TestNetscapePlugin')
+        environment['TEST_RUNNER_TEST_PLUGIN_PATH'] = self._build_path('TestNetscapePlugin', '.libs')
         environment['WEBKIT_INSPECTOR_PATH'] = self._build_path('Programs', 'resources', 'inspector')
+        environment['AUDIO_RESOURCES_PATH'] = self._filesystem.join(self._config.webkit_base_dir(),
+                                                                    'Source', 'WebCore', 'platform',
+                                                                    'audio', 'resources')
+        if self.get_option('webkit_test_runner'):
+            # FIXME: This is a workaround to ensure that testing with WebKitTestRunner is started with
+            # a non-existing cache. This should be removed when (and if) it will be possible to properly
+            # set the cache directory path through a WebKitWebContext.
+            environment['XDG_CACHE_HOME'] = self._filesystem.join(self.results_directory(), 'appcache')
         return environment
 
     def _generate_all_test_configurations(self):

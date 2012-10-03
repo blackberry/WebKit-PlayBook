@@ -1,3 +1,1707 @@
+2012-02-29  Tomasz Morawski  <t.morawski@samsung.com>
+
+        [EFL] Replace malloc/calloc/free to new/delete.
+        https://bugs.webkit.org/show_bug.cgi?id=75848
+
+        Reviewed by Hajime Morita.
+
+        Replaced almost all malloc/calloc/free to new/delete operator and where it was possible smart pointers were also
+        used. Left few c memory allocation by intention to not mix c and c++ memory managment. Left malloc for Ewk_Tile
+        object due to const fields present in Ewk_tile structure.
+
+        * ewk/ewk_auth_soup.cpp:
+        * ewk/ewk_contextmenu.cpp:
+        (ewk_context_menu_unref):
+        (ewk_context_menu_item_new):
+        (ewk_context_menu_item_free):
+        (ewk_context_menu_new):
+        * ewk/ewk_cookies.cpp:
+        (ewk_cookies_get_all):
+        (ewk_cookies_cookie_free):
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_hit_test_free):
+        (ewk_frame_hit_test_new):
+        * ewk/ewk_history.cpp:
+        (ewk_history_item_new_from_core):
+        (_ewk_history_item_free):
+        (ewk_history_new):
+        (ewk_history_free):
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_Ewk_Tiled_Backing_Store_Item):
+        (_ewk_tiled_backing_store_pre_render_request_add):
+        (_ewk_tiled_backing_store_pre_render_request_del):
+        (_ewk_tiled_backing_store_pre_render_request_flush):
+        (_ewk_tiled_backing_store_pre_render_request_clear):
+        (_ewk_tiled_backing_store_item_add):
+        (_ewk_tiled_backing_store_item_del):
+        * ewk/ewk_tiled_matrix.cpp:
+        (_ewk_tile_matrix_tile_free):
+        (ewk_tile_matrix_new):
+        (ewk_tile_matrix_zoom_level_set):
+        (ewk_tile_matrix_invalidate):
+        (ewk_tile_matrix_free):
+        * ewk/ewk_tiled_model.cpp:
+        (tile_account):
+        (ewk_tile_unused_cache_new):
+        (_ewk_tile_unused_cache_free):
+        (ewk_tile_unused_cache_clear):
+        (ewk_tile_unused_cache_flush):
+        (ewk_tile_unused_cache_tile_get):
+        (ewk_tile_unused_cache_tile_put):
+        * ewk/ewk_tiled_private.h:
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_core_frame_new):
+        (_ewk_view_priv_new):
+        (_ewk_view_priv_del):
+        (ewk_view_core_page_get):
+        (ewk_view_popup_new):
+        (ewk_view_popup_destroy):
+        (EWKPrivate::corePage):
+        * ewk/ewk_window_features.cpp:
+        (ewk_window_features_unref):
+        (ewk_window_features_new_from_core):
+
+2012-02-27  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Pairing up between evas_object_image_data_get and evas_object_image_data_set.
+        https://bugs.webkit.org/show_bug.cgi?id=79031
+
+        Reviewed by Zoltan Herczeg.
+
+        - Get the pixel data when the cairo surface is created.
+        - evas_object_image_data_get increases the reference count and returns the image buffer pointer.
+        evas_object_image_data_set decreases the reference count and when the ref count become zero,
+        the function releases the cached image inside evas engine.
+        We should make a pair between evas_object_image_data_set/get to return evas resource.
+
+        * ewk/ewk_tiled_backing_store.h:
+        (_Ewk_Tile):
+        * ewk/ewk_tiled_model.cpp:
+        (tile_account):
+        (ewk_tile_new):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_render_cb):
+
+2012-02-26  Hajime Morrita  <morrita@chromium.org>
+
+        Move ChromeClient::showContextMenu() to ContextMenuClient
+        https://bugs.webkit.org/show_bug.cgi?id=79427
+
+        Reviewed by Adam Barth.
+
+        * WebCoreSupport/ChromeClientEfl.h:
+        (ChromeClientEfl):
+
+2012-02-24  Grzegorz Czajkowski  <g.czajkowski@samsung.com>
+
+        [EFL][DRT] Implement setValueForUser and setAutofilled.
+        https://bugs.webkit.org/show_bug.cgi?id=79237
+
+        Reviewed by Andreas Kling.
+
+        Adds missing implementation setValueForUser and setAutofilled to EFL's DumpRenderTreeSupport.
+
+        * WebCoreSupport/DumpRenderTreeSupportEfl.cpp:
+        (DumpRenderTreeSupportEfl::setValueForUser):
+        (DumpRenderTreeSupportEfl::setAutofilled):
+        * WebCoreSupport/DumpRenderTreeSupportEfl.h:
+
+2012-02-24  Shinya Kawanaka  <shinyak@chromium.org>
+
+        SpellCheckRequest needs to know the context where the spellcheck happened.
+        https://bugs.webkit.org/show_bug.cgi?id=79320
+
+        Reviewed by Hajime Morita.
+
+        * WebCoreSupport/EditorClientEfl.h:
+        (WebCore::EditorClientEfl::requestCheckingOfString):
+
+2012-02-21  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebCoreSupport/EditorClientEfl.cpp:
+        (WebCore::EditorClientEfl::shouldApplyStyle):
+        * WebCoreSupport/EditorClientEfl.h:
+        (EditorClientEfl):
+
+2012-02-22  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebCoreSupport/EditorClientEfl.cpp:
+        (WebCore::EditorClientEfl::shouldApplyStyle):
+        * WebCoreSupport/EditorClientEfl.h:
+        (EditorClientEfl):
+
+2012-02-20  Kihong Kwon  <kihong.kwon@samsung.com>
+
+        Add a new API for the Vibration API(W3C).
+        https://bugs.webkit.org/show_bug.cgi?id=72010
+
+        Reviewed by Hajime Morita.
+
+        Implementation for the Vibration API feature to the EFL-port layer.
+        http://dev.w3.org/2009/dap/vibration/
+        There are two methods for vibration API.
+        - vibrate : Vibrate device for receiving as a parameter.
+        - cancelVibrate : Cancel current vibration.
+
+        * CMakeListsEfl.txt:
+        * WebCoreSupport/VibrationClientEfl.cpp: Added.
+        (WebCore):
+        (WebCore::VibrationClientEfl::VibrationClientEfl):
+        (WebCore::VibrationClientEfl::vibrate):
+        (WebCore::VibrationClientEfl::cancelVibration):
+        (WebCore::VibrationClientEfl::vibrationDestroyed):
+        * WebCoreSupport/VibrationClientEfl.h: Added.
+        (WebCore):
+        (VibrationClientEfl):
+        (WebCore::VibrationClientEfl::~VibrationClientEfl):
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_priv_new):
+
+2012-02-17  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Unreviewed, adapt to the changes introduced in r107973.
+
+        SVN r107973 moved some libsoup feature initialization code to
+        WebCore, but only changed the GTK+ bits in WebKit.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body): Do not initialize the content sniffer and the
+        decoder here, the initialization is now done in WebCore.
+
+2012-02-17  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        Unreviewed, fix the build with ENABLE(DEVICE_ORIENTATION) after
+        r107518. The EFL EWS bot doesn't enable that flag, so the breakage
+        was not spotted earlier.
+
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_priv_new):
+
+2012-01-31  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [soup] Add support for multiple SoupSessions.
+        https://bugs.webkit.org/show_bug.cgi?id=77341
+
+        Add the necessary infrastructure to support multiple SoupSessions. Each
+        WebView now has a "session" property, which defaults to
+        ResourceHandle::defaultSession() and can be changed to another
+        SoupSession by the user.
+
+        Some API in ewk_network and ewk_view which required SoupSession to be a
+        valid type in the headers has now been moved inside #if USE(SOUP)
+        ifdefs so we can actually the required Soup header and avoid build
+        problems with duplicate typedefs.
+
+        * CMakeListsEfl.txt:
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::createNetworkingContext):
+        * WebCoreSupport/FrameNetworkingContextEfl.cpp: Copied from Source/WebKit/efl/WebCoreSupport/FrameNetworkingContextEfl.h.
+        (WebCore):
+        (WebCore::FrameNetworkingContextEfl::create):
+        (WebCore::FrameNetworkingContextEfl::FrameNetworkingContextEfl):
+        (WebCore::FrameNetworkingContextEfl::soupSession):
+        * WebCoreSupport/FrameNetworkingContextEfl.h:
+        (FrameNetworkingContextEfl):
+        * ewk/ewk_cookies.h: Mention this API is only valid with the
+        default SoupSession.
+        * ewk/ewk_network.cpp:
+        (ewk_network_default_soup_session_get): Define only if USE(SOUP) is set.
+        * ewk/ewk_network.h: Ditto, and mention this API is only valid with the
+        default SoupSession.
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_priv_new):
+        (ewk_view_soup_session_get):
+        (ewk_view_soup_session_set):
+        * ewk/ewk_view.h:
+        ():
+
+2012-02-15  Sadrul Habib Chowdhury  <sadrul@chromium.org>
+
+        Notify ChromeClient when touch-event handlers are installed/removed.
+        https://bugs.webkit.org/show_bug.cgi?id=77440
+
+        Reviewed by Darin Fisher and Ryosuke Niwa.
+
+        * WebCoreSupport/ChromeClientEfl.h:
+        (WebCore::ChromeClientEfl::numTouchEventHandlersChanged):
+
+2012-02-15  Gustavo Lima Chaves  <glima@profusion.mobi>
+
+        [EFL] Add missing libsoup to (pkgconfig) dependency requirements
+        https://bugs.webkit.org/show_bug.cgi?id=78702
+
+        Unreviewed build fix.
+
+        * ewebkit.pc.in: Now that bug 77874 had its patch landed, we
+        always require libsoup as a dependency for the EFL port. The
+        'Require' session of this file has to contemplate that, otherwise
+        code linking with ewebkit will fail to lookup to libsoup's header
+        files.
+
+2012-02-13  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [CMake] Merge WebKitEfl.cmake into FindEFL.cmake.
+        https://bugs.webkit.org/show_bug.cgi?id=78566
+
+        Reviewed by Daniel Bates.
+
+        * CMakeListsEfl.txt: Do not include WebKitEfl.cmake.
+
+2012-02-11  Nikolas Zimmermann  <nzimmermann@rim.com>
+
+        Convert svg/animations to use SMIL methods for driving the timeline
+        https://bugs.webkit.org/show_bug.cgi?id=78422
+
+        Reviewed by Dirk Schulze.
+
+        Remove SVG animation sampling functionality provided for DRT, which no longer uses it.
+        Instead we switched the svg/animations tests to use SVGSVGElement.setCurrentTime.
+
+        * WebCoreSupport/DumpRenderTreeSupportEfl.cpp:
+        * WebCoreSupport/DumpRenderTreeSupportEfl.h:
+
+2012-02-06  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Drop support for the Curl network backend.
+        https://bugs.webkit.org/show_bug.cgi?id=77874
+
+        Reviewed by Eric Seidel.
+
+        Nobody seems to be maintaining the Curl backend in WebCore, the
+        EFL port developers all seem to be using the Soup backend and the
+        port itself has many features which are only implemented for the
+        latter.
+
+        * CMakeListsEfl.txt: Unconditionally build soup-dependent files
+        and always add the glib/soup include directories and libraries.
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::dispatchDidReceiveResponse):
+        Remove USE(SOUP) checks.
+        * ewk/ewk_auth.cpp:
+        (ewk_auth_show_dialog_callback_set): Ditto.
+        (ewk_auth_credentials_set): Ditto.
+        * ewk/ewk_cookies.cpp:
+        (ewk_cookies_file_set): Ditto.
+        (ewk_cookies_clear): Ditto.
+        (ewk_cookies_get_all): Ditto.
+        (ewk_cookies_cookie_del): Ditto.
+        (ewk_cookies_cookie_free): Ditto.
+        (ewk_cookies_policy_set): Ditto.
+        (ewk_cookies_policy_get): Ditto.
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_certificate_status_get): Ditto.
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body): Ditto.
+        * ewk/ewk_network.cpp:
+        (ewk_network_proxy_uri_set): Ditto.
+        (ewk_network_proxy_uri_get): Ditto.
+        (ewk_network_tls_certificate_check_get): Ditto.
+        (ewk_network_tls_certificate_check_set): Ditto.
+        (ewk_network_tls_ca_certificates_path_get): Ditto.
+        (ewk_network_tls_ca_certificates_path_set): Ditto.
+        (ewk_network_default_soup_session_get): Ditto.
+        * ewk/ewk_network.h: Update apidox for
+        ewk_network_default_soup_session_get() now that libsoup is the
+        only available backend.
+
+2012-02-09  Gustavo Lima Chaves  <glima@profusion.mobi>
+
+        [EFL] Introducing functions to set local storage db path and clear
+        those dbs.
+        https://bugs.webkit.org/show_bug.cgi?id=77107
+
+        This patch exposes the web local storage tracker database path
+        setting cabability, introduced on bug 77006, to the EFL port of
+        WebKit. Particularly, we have our own storage tracker client
+        object, to initialize the storage tracker backend on ewk_init().
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * CMakeListsEfl.txt:
+        * WebCoreSupport/StorageTrackerClientEfl.cpp: Added.
+        (WebCore):
+        (WebCore::StorageTrackerClientEfl::dispatchDidModifyOrigin):
+        (WebCore::StorageTrackerClientEfl::didFinishLoadingOrigins):
+        * WebCoreSupport/StorageTrackerClientEfl.h: Added.
+        (WebCore):
+        (StorageTrackerClientEfl):
+        * ewk/ewk_main.cpp:
+        (trackerClient):
+        (_ewk_init_body):
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_local_storage_path_set):
+        (ewk_settings_local_storage_path_get):
+        (ewk_settings_local_storage_database_clear):
+        (ewk_settings_local_storage_database_origin_clear):
+        * ewk/ewk_settings.h:
+
+2012-02-07  Krzysztof Czech  <k.czech@samsung.com>
+
+        [EFL] Add missing initialization of editable variable.
+        https://bugs.webkit.org/show_bug.cgi?id=77948
+
+        Reviewed by Eric Seidel.
+
+        The value of editable in Ewk_Frame_Smart_Data struct is not set.
+
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_editable_set):
+
+2012-02-06  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Define to prevent a single backing-store application from calling the tiled view function.
+        https://bugs.webkit.org/show_bug.cgi?id=77842
+
+        Reviewed by Andreas Kling.
+
+        The define prevents an application using single backing store from calling tiled cache function.
+        The tiled APIs opened to outer should check the view type before being called.
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (ewk_view_frame_view_creation_notify):
+        * ewk/ewk_view_tiled.cpp:
+        (ewk_view_tiled_unused_cache_get):
+        (ewk_view_tiled_unused_cache_set):
+
+2012-02-06  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Adopt C++ style using camelCase and full variable names.
+        https://bugs.webkit.org/show_bug.cgi?id=76378
+
+        Reviewed by Andreas Kling.
+
+        Modify the code to use camelCase and spell out variable names instead of using abbreviations.
+        Modify the comments which do not match with actual parameters and correct misspelled words.
+        Adopt EFL Coding style in header files.
+        The logic of the code is not changed.
+
+        * ewk/ewk_cookies.h:
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_selection_get):
+        (ewk_frame_feed_focus_in):
+        (EWKPrivate::coreFrame):
+        * ewk/ewk_frame.h:
+        * ewk/ewk_history.cpp:
+        (ewk_history_item_new):
+        (ewk_history_item_title_get):
+        (ewk_history_item_title_alternate_get):
+        (ewk_history_item_uri_get):
+        (ewk_history_item_uri_original_get):
+        * ewk/ewk_network.h:
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_Ewk_Tiled_Backing_Store_Item):
+        (_Ewk_Tiled_Backing_Store_Data):
+        (_ewk_tiled_backing_store_tile_associate):
+        (_ewk_tiled_backing_store_tile_dissociate):
+        (_ewk_tiled_backing_store_pre_render_request_clear):
+        (_ewk_tiled_backing_store_pre_render_request_process_single):
+        (_ewk_tiled_backing_store_item_fill):
+        (_ewk_tiled_backing_store_item_add):
+        (_ewk_tiled_backing_store_item_smooth_scale_set):
+        (_ewk_tiled_backing_store_view_cols_end_add):
+        (_ewk_tiled_backing_store_view_rows_all_del):
+        (_ewk_tiled_backing_store_render):
+        (_ewk_tiled_backing_store_mem_dbg):
+        (_ewk_tiled_backing_store_sig_usr):
+        (_ewk_tiled_backing_store_smart_add):
+        (_ewk_tiled_backing_store_smart_del):
+        (_ewk_tiled_backing_store_smart_move):
+        (_ewk_tiled_backing_store_smart_resize):
+        (_ewk_tiled_backing_store_recalc_renderers):
+        (_ewk_tiled_backing_store_view_dbg):
+        (_ewk_tiled_backing_store_view_wrap_up):
+        (_ewk_tiled_backing_store_view_wrap_down):
+        (_ewk_tiled_backing_store_view_wrap_left):
+        (_ewk_tiled_backing_store_view_refill):
+        (_ewk_tiled_backing_store_view_pos_apply):
+        (_ewk_tiled_backing_store_smart_calculate_offset_force):
+        (_ewk_tiled_backing_store_smart_calculate_offset):
+        (_ewk_tiled_backing_store_smart_calculate_pos):
+        (_ewk_tiled_backing_store_smart_calculate):
+        (_ewk_tiled_backing_store_scroll_full_offset_set_internal):
+        (ewk_tiled_backing_store_scroll_full_offset_set):
+        (ewk_tiled_backing_store_scroll_full_offset_add):
+        (_ewk_tiled_backing_store_zoom_set_internal):
+        (ewk_tiled_backing_store_zoom_set):
+        (ewk_tiled_backing_store_zoom_weak_set):
+        (ewk_tiled_backing_store_fix_offsets):
+        (ewk_tiled_backing_store_flush):
+        (ewk_tiled_backing_store_pre_render_region):
+        (ewk_tiled_backing_store_pre_render_relative_radius):
+        * ewk/ewk_tiled_backing_store.h:
+        (_Ewk_Tile):
+        * ewk/ewk_tiled_matrix.cpp:
+        (_Ewk_Tile_Matrix):
+        (_ewk_tile_matrix_cell_free):
+        (_ewk_tile_matrix_tile_free):
+        (ewk_tile_matrix_new):
+        (ewk_tile_matrix_free):
+        (ewk_tile_matrix_unused_cache_get):
+        (ewk_tile_matrix_tile_exact_get):
+        (ewk_tile_matrix_tile_new):
+        (ewk_tile_matrix_tile_put):
+        (ewk_tile_matrix_dbg):
+        (ewk_tile_matrix_freeze):
+        (ewk_tile_matrix_thaw):
+        * ewk/ewk_tiled_matrix.h:
+        * ewk/ewk_tiled_model.cpp:
+        (tile_account):
+        (ewk_tile_updates_process):
+        (ewk_tile_unused_cache_tile_put):
+        (ewk_tile_unused_cache_dbg):
+        * ewk/ewk_tiled_model.h:
+        * ewk/ewk_util.h:
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_smart_focus_in):
+        (_ewk_view_smart_pre_render_region):
+        (ewk_view_pre_render_region):
+        (ewk_view_toolbars_visible_get):
+        (ewk_view_statusbar_visible_get):
+        (ewk_view_scrollbars_visible_get):
+        (ewk_view_menubar_visible_get):
+        (ewk_view_zoom_range_set):
+        * ewk/ewk_view.h:
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_single_smart_repaints_process):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_backing_store_add):
+        (_ewk_view_tiled_smart_add):
+        (ewk_view_tiled_unused_cache_get):
+        (ewk_view_tiled_unused_cache_set):
+
+2012-02-05  ChangSeok Oh  <shivamidow@gmail.com>
+
+        [EFL] Enable WebGL with glx backend
+        https://bugs.webkit.org/show_bug.cgi?id=77308
+
+        Reviewed by Martin Robinson.
+
+        Activated WebGL feature.
+
+        * ewk/ewk_view.cpp:
+        (_Ewk_View_Private_Data):
+        (_ewk_view_priv_new):
+
+2012-02-05  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Remove g_thread_init() calls
+        https://bugs.webkit.org/show_bug.cgi?id=77828
+
+        Reviewed by Andreas Kling.
+
+        g_thread_init has been deprecated since glib 2.32. This function is no longer necessary.
+        The GLib threading system is automatically initialized at the start of your program.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body):
+
+2012-02-02  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Add contentsSize flag into ewk_tiled_backing_store's private data.
+        https://bugs.webkit.org/show_bug.cgi?id=77586
+
+        Reviewed by Andreas Kling.
+
+        As both zoom and content size change are identified by model flag,
+        ewk_tiled_backing_store can not detect the conflict between them.
+        In order to prevent conflict between zoom and contents size change,
+        contentsSize flag is newly added.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_Ewk_Tiled_Backing_Store_Item):
+        (_Ewk_Tiled_Backing_Store_Data):
+        (_ewk_tiled_backing_store_smart_calculate):
+        (ewk_tiled_backing_store_contents_resize):
+
+2012-02-02  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Remove check for ENABLE_GTK_PLUGINS_SUPPORT
+        https://bugs.webkit.org/show_bug.cgi?id=77647
+
+        Reviewed by Martin Robinson.
+
+        There is no clear reason why this check was in place (it came with the
+        upstreaming of the port), but ENABLE_GTK_PLUGINS_SUPPORT is not set
+        anywhere, and the build system does not even check for the presence of
+        GTK+ when building.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body):
+
+2012-01-31  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Add basic DRT/Efl implementation to support viewport test.
+        https://bugs.webkit.org/show_bug.cgi?id=77320
+
+        Reviewed by Andreas Kling.
+
+        Add dumpConfigurationForViewport.
+
+        * WebCoreSupport/DumpRenderTreeSupportEfl.cpp:
+        (DumpRenderTreeSupportEfl::dumpConfigurationForViewport):
+        * WebCoreSupport/DumpRenderTreeSupportEfl.h:
+
+2012-01-31  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Set content hint information for ewk_view_single.
+        https://bugs.webkit.org/show_bug.cgi?id=77319
+
+        Reviewed by Ryosuke Niwa.
+
+        The content hint information corresponding to opengl_x11 engine is set
+        for the image object which ewk_view_single owns when evas is based on
+        opengl_x11 engine.
+
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_single_smart_backing_store_add):
+
+2012-01-30  Eunsol Park  <eunsol47.park@samsung.com>
+
+        [EFL] Define the names of view smart class
+        https://bugs.webkit.org/show_bug.cgi?id=76370
+
+        Reviewed by Andreas Kling.
+
+        Strings of ewk_tiled_view's name were defined differently,
+        so the definitions were modified to make users not confused.
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_single_smart_class_new):
+        * ewk/ewk_view_tiled.cpp:
+        (ewk_view_tiled_smart_set):
+        (_ewk_view_tiled_smart_class_new):
+
+2012-01-26  Tomasz Morawski  <t.morawski@samsung.com>
+
+        [EFL] Added missing NETSCAPE_PLUGIN_API macro.
+        https://bugs.webkit.org/show_bug.cgi?id=77093
+
+        Reviewed by Andreas Kling.
+
+        The ewk_view_js_window_object_clear function should be inside ENABLE(NETSCAPE_PLUGIN_API) macro.
+
+        * ewk/ewk_view.cpp:
+
+2012-01-17  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Use static const insted of #define macro.
+        https://bugs.webkit.org/show_bug.cgi?id=76499
+
+        Reviewed by Hajime Morita.
+
+        WebKit coding style prefers const to #define. EFL port needs to use const insted of #define macro.
+        This patch replace global variables defined by #define with const.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_ewk_tiled_backing_store_smart_add):
+        (_ewk_tiled_backing_store_zoom_set_internal):
+        * ewk/ewk_tiled_backing_store.h:
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_new):
+        * ewk/ewk_view.cpp:
+        (_ewk_view_repaint_add):
+        (_ewk_view_repaints_flush):
+        (_ewk_view_scroll_add):
+        (_ewk_view_scrolls_flush):
+        (_ewk_view_priv_new):
+        (ewk_view_base_smart_set):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_pre_render_start):
+
+2012-01-13  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Emit "resource,request,willsend" from ewk_view.
+        https://bugs.webkit.org/show_bug.cgi?id=76292
+
+        Reviewed by Andreas Kling.
+
+        Make ewk_view dispatch the "resource,request,willsend" signal as well,
+        so that it is possible to know whether the request is for the main
+        frame itself or for anything else.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::dispatchWillSendRequest):
+        * ewk/ewk_view.h:
+
+2012-01-16  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Build fix when using pango as font backends.
+        https://bugs.webkit.org/show_bug.cgi?id=76368
+
+        Unreviewed build fix.
+
+        * ewk/ewk_view.cpp: include RefPtrCairo.h
+
+2012-01-13  Leandro Pereira  <leandro@profusion.mobi>
+
+        [EFL] SecurityPolicy whitelist interface should be exposed to EWebKit
+        https://bugs.webkit.org/show_bug.cgi?id=76082
+
+        Reviewed by Andreas Kling.
+
+        * CMakeListsEfl.txt: Added reference to ewk_security_policy.{cpp,h}.
+        * ewk/EWebKit.h: Include ewk_security_policy.h.
+        * ewk/ewk_security_policy.cpp: Added.
+        (ewk_security_policy_whitelist_origin_add): Implemented thin layer around SecurityPolicy::addOriginAccessWhitelistEntry().
+        (ewk_security_policy_whitelist_origin_del): Implemented thin layer around SecurityPolicy::removeOriginAccessWhitelistEntry().
+        (ewk_security_policy_whitelist_origin_reset): Implemented thin layer around SecurityPolicy::resetOriginAccessWhitelists().
+        * ewk/ewk_security_policy.h: Added.
+
+2012-01-13  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Remove extern "C" from ewk_private.h
+        https://bugs.webkit.org/show_bug.cgi?id=76250
+
+        Reviewed by Andreas Kling.
+
+        ewk_private.h defines internal functions used by WebKit itself. There is no chance to be used by C application.
+        So, extern "C" keyword is unneeded in ewk_private.h.
+
+        * ewk/ewk_private.h:
+
+2012-01-13  Grzegorz Czajkowski  <g.czajkowski@samsung.com>
+
+        [EFL] Add 'Copy Image Address' to context menu.
+        https://bugs.webkit.org/show_bug.cgi?id=76153
+
+        Reviewed by Andreas Kling.
+
+        Adds EWK_CONTEXT_MENU_ITEM_TAG_COPY_IMAGE_URL_TO_CLIPBOARD to Ewk_Context_Menu_Action to synchronize it with ContextMenuItem.h
+
+        * ewk/ewk_contextmenu.h:
+
+2012-01-13  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Add visible field into ewk_tiled_backing_store's data.
+        https://bugs.webkit.org/show_bug.cgi?id=76165
+
+        Reviewed by Nikolas Zimmermann.
+
+        Using of evas_object_visible_get() API can't gurantee the correctness of
+        evas_object's visible status if it's called inside of evas_object's
+        smart_show() method.
+        So, a visible flag for the ewk_tiled_backing_store is added.
+        In addition, as tiles are not visible, ewk_tiled_backing_store will push
+        its own tiles into the cache when it disapear.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_ewk_tiled_backing_store_updates_process):
+        (_ewk_tiled_backing_store_item_process_idler_start):
+        (_ewk_tiled_backing_store_item_fill):
+        (_ewk_tiled_backing_store_smart_member_add):
+        (_ewk_tiled_backing_store_smart_show):
+        (_ewk_tiled_backing_store_smart_hide):
+
+2012-01-13  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Unused code cleanup on ewk_tiled_model.cpp.
+        https://bugs.webkit.org/show_bug.cgi?id=76031
+
+        Reviewed by Ryosuke Niwa.
+
+        Remove unused code from ewk_tiled_model.cpp.
+
+        * ewk/ewk_tiled_model.cpp:
+
+2012-01-12  Grzegorz Czajkowski  <g.czajkowski@samsung.com>
+
+        [EFL] Move macro checking to functions' definition in ewk_js.cpp.
+        https://bugs.webkit.org/show_bug.cgi?id=76037
+
+        Reviewed by Andreas Kling.
+
+        Moves macro checking to functions' definition instead of duplicate them in source depending on macro value.
+        It's known practice in WebKit and EFL port.
+        Duplicating functions in the same file whose return value is different may confuse user,
+        especially if macro isn't included in a patch.
+
+        * ewk/ewk_js.cpp:
+        (ewk_js_object_new):
+        (ewk_js_object_free):
+        (ewk_js_object_view_get):
+        (ewk_js_object_properties_get):
+        (ewk_js_object_name_get):
+        (ewk_js_object_invoke):
+        (ewk_js_object_type_get):
+        (ewk_js_object_type_set):
+        (ewk_js_variant_free):
+        (ewk_js_variant_array_free):
+
+2012-01-12  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Modify some API's implementation to let it directly pass Eina_Rectangle into IntRect.
+        https://bugs.webkit.org/show_bug.cgi?id=75695
+
+        Reviewed by Andreas Kling.
+
+        Dereference Eina_Rectangle pointers so the shorter IntRect constructor can be used.
+
+        * ewk/ewk_view.cpp:
+        (ewk_view_paint_context_clip):
+        (ewk_view_paint_context_paint):
+        (ewk_view_paint_context_paint_contents):
+        (ewk_view_paint):
+        (ewk_view_paint_contents):
+
+2012-01-11  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Refactor single backing store scroll code.
+        https://bugs.webkit.org/show_bug.cgi?id=75243
+
+        Reviewed by Zoltan Herczeg.
+
+        Remove the duplicated code and refactor the scroll procedure.
+        Wherever the page is scrolled, there are one screen copy and two updates.
+        This patch optimises the scroll procedure by less calculation.
+
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_screen_move):
+        (_ewk_view_single_scroll_process_single):
+
+2012-01-11  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Fix page rendering issue on ewk_view_tiled.
+        https://bugs.webkit.org/show_bug.cgi?id=75686
+
+        Reviewed by Andreas Kling.
+
+        As for now the discard of ewk_tiled_backing_store doesn't reset its own contents size information
+        and ewk_tiled_backing_store just ignores the request if new contents size change request would contain
+        the same size compared to the one that it owns,
+        contents size change request coming from ChromeClientEfl::contentsSizeChanged() API can be skipped
+        and therefore web page can't be presented properly.
+        In order to resolve this, I just add code to reset contents size information which ewk_tiled_backing_store owns
+        when it discards its own data.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (ewk_tiled_backing_store_flush):
+
+2012-01-10  Tomasz Morawski  <t.morawski@samsung.com>
+
+        [EFL] Added smart pointers to Ewk_View_Paint_Context class and done minor refactoring.
+        https://bugs.webkit.org/show_bug.cgi?id=75837
+
+        Reviewed by Ryosuke Niwa.
+
+        Changed graphicContext raw pointer to OwnPtr smart pointer.
+        Renamed cr to cairo and made it a RefPtr.
+
+        * ewk/ewk_view.cpp:
+        (ewk_view_paint_context_new): Adjust to auto pointers use.
+        (ewk_view_paint_context_free): Removed explicit raw pointers delete.
+        Adjust to auto pointers use:
+        (ewk_view_paint_context_save):
+        (ewk_view_paint_context_restore):
+        (ewk_view_paint_context_clip):
+        (ewk_view_paint_context_paint):
+        (ewk_view_paint_context_paint_contents):
+
+2012-01-09  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add getter for Ewk_JS_Object::view.
+        https://bugs.webkit.org/show_bug.cgi?id=75868
+
+        Reviewed by Andreas Kling.
+
+        So far the view associated with a given JS object was a private
+        property only accessible to ewk itself. This does not make much sense,
+        as one often needs to know which view a certain method was invoked
+        from, for example.
+
+        * ewk/ewk_js.cpp:
+        (ewk_js_object_view_get):
+        * ewk/ewk_js.h:
+
+2012-01-06  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Add new pre-rendering code.
+        https://bugs.webkit.org/show_bug.cgi?id=73430
+
+        Reviewed by Zoltan Herczeg.
+
+        Add new pre-rendering code to pre-render the view area more efficiently.
+        At first find centered view position where backing store starts to queuing the render request from.
+        And append the request into the tiled backing store in spiral order.
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_tiled_backing_store.cpp:
+        (ewk_tiled_backing_store_pre_render_tile_add):
+        (ewk_tiled_backing_store_pre_render_spiral_queue):
+        * ewk/ewk_tiled_backing_store.h:
+        * ewk/ewk_view.cpp:
+        (_ewk_view_smart_pre_render_start):
+        (ewk_view_base_smart_set):
+        (ewk_view_pre_render_start):
+        * ewk/ewk_view.h:
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_rect_collision_check):
+        (_ewk_view_tiled_rect_collision_resolve):
+        (_ewk_view_tiled_smart_pre_render_start):
+        (ewk_view_tiled_smart_set):
+
+2012-01-05  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Invalidation request for ewk_view can be discarded without rendering.
+        https://bugs.webkit.org/show_bug.cgi?id=71564
+
+        Reviewed by Hajime Morita.
+
+        As ewk_view discards a queue for invalidation requests
+        as soon as it proceeds the repaint step, the newly produced invalidation requests
+        from ewk_view_layout_if_needed_recursive API can be discarded
+        and unpainted dirty area can occur.
+        As this issue is just caused by use of flush API in repaint step,
+        (internal API) ewk_view_repaints_get is replaced with ewk_view_repaints_pop
+        in order to make sure that old invalidation requests are removed from queue.
+        And in addition to that, ewk_view_repaint_add is modified
+        in order to let queue of invalidation requests keep a proper size.
+        As a result flush API won't be used for the repaint step.
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (_ewk_view_repaint_add):
+        (_ewk_view_smart_calculate):
+        (ewk_view_repaints_pop):
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_single_smart_repaints_process):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_repaints_process):
+
+2012-01-04  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Refactor the way using cairo in ewk_tiled_backing_store.
+        https://bugs.webkit.org/show_bug.cgi?id=74993
+
+        Reviewed by Nikolas Zimmermann.
+
+        For now there are cairo related code scattered around the ewk_tiled_backing_store.
+        From the point of code complexity view, it doesn't look good and I couldn't notice any benefit of it.
+        So, this patch will let cairo related code be used only for painting operation.
+
+        * ewk/ewk_tiled_backing_store.h:
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_tile_new):
+        * ewk/ewk_tiled_model.cpp:
+        (ewk_tile_new):
+        (ewk_tile_free):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_render_cb):
+
+2012-01-03  Jon Lee  <jonlee@apple.com>
+
+        Leak of WebNotificationClient when page is destroyed
+        https://bugs.webkit.org/show_bug.cgi?id=74980
+        <rdar://problem/10611231>
+
+        Reviewed by Mark Rowe.
+
+        * WebCoreSupport/NotificationPresenterClientEfl.cpp:
+        (WebCore::NotificationPresenterClientEfl::notificationControllerDestroyed): Stub implementation, because
+        the notification presenter is unimplemented.
+        * WebCoreSupport/NotificationPresenterClientEfl.h:
+
+2012-01-02  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Remove whitespace/declaration style exception
+        https://bugs.webkit.org/show_bug.cgi?id=75424
+
+        Reviewed by David Levin.
+
+        EFL port doesn't need to avoid *whitespace/declaration* exception because of coding
+        style change. However, EWebLauncher and MiniBrowser need to use EFL coding style because
+        they are EFL application.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_feed_touch_event):
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_invalidate):
+        * ewk/ewk_view.cpp:
+
+2012-01-01  Eunmi Lee  <eunmi15.lee@samsung.com>
+
+        [EFL] Move function to get dpi to the WebCore/platform/efl/EflScreenUtilities.cpp.
+        https://bugs.webkit.org/show_bug.cgi?id=75292
+
+        Reviewed by Andreas Kling.
+
+        Move ewk_util_dpi_get() function in the ewk_util.cpp to the
+        WebCore/platform/efl/EflScreenUtilities.cpp in order to use it in the WebKit2.
+        The function's name is changed to getDPI().
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_util.cpp:
+        (ewk_util_image_from_cairo_surface_add):
+        * ewk/ewk_view.cpp:
+        (_ewk_view_viewport_attributes_compute):
+
+2011-12-27  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Remove duplicate code and remove entry after freeing the matrix.
+        https://bugs.webkit.org/show_bug.cgi?id=75073
+
+        Reviewed by Ryosuke Niwa.
+
+        Remove duplicate ewk_tile_unused_cache_freeze code.
+        Entry matrix should free first before removing entry in inlist,
+        because in eina_matrixsparce_free callback entry pointer is referenced to decrease the reference count.
+
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_free):
+
+2011-12-26  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Last parameter of ewk_view_scroll is always true.
+        https://bugs.webkit.org/show_bug.cgi?id=75157
+
+        Reviewed by Andreas Kling.
+
+        Remove unnecessary parameter in ewk_view_scroll and related code, because
+        it's always true and ewk_view_tile can scroll when it is only true.
+
+        * WebCoreSupport/ChromeClientEfl.cpp:
+        (WebCore::ChromeClientEfl::scroll):
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (_ewk_view_scroll_add):
+        (ewk_view_scroll):
+        * ewk/ewk_view.h:
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_scrolls_process):
+
+2011-12-23  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        Unreviewed; fix build with ENABLE(NETSCAPE_PLUGIN_API).
+
+        * ewk/ewk_js.cpp: Include ewk_logging.h for ERR().
+
+2011-12-22  Mariusz Grzegorczyk  <mariusz.g@samsung.com>
+
+        [EFL] Missing plugins support for efl port
+        https://bugs.webkit.org/show_bug.cgi?id=44505
+
+        Reviewed by Anders Carlsson.
+
+        Implementation of ewk_frame_plugin_create() - creating PluginView.
+
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_plugin_create):
+
+2011-12-22  Eunmi Lee  <eunmi15.lee@samsung.com>
+
+        [EFL] Remove unused parameter names.
+        https://bugs.webkit.org/show_bug.cgi?id=74702
+
+        Reviewed by Eric Seidel.
+
+        * ewk/ewk_view.cpp:
+        (_ewk_view_on_focus_in):
+        (_ewk_view_on_focus_out):
+        (_ewk_view_on_mouse_wheel):
+        (_ewk_view_on_mouse_down):
+        (_ewk_view_on_mouse_up):
+        (_ewk_view_on_mouse_move):
+        (_ewk_view_on_key_down):
+        (_ewk_view_on_key_up):
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_single_on_del):
+
+2011-12-22  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Invalidation request for outside of visible area doesn't seem to occur when tiled view is used.
+        https://bugs.webkit.org/show_bug.cgi?id=70873
+
+        Reviewed by Anders Carlsson.
+
+        In order to guarantee the paint outside of viewport when ewk_view_tiled is used,
+        ewk_frame_paint_full_set should be called by ewk_frame_view_create_for_view
+        when frame is created because frame view can be created newly as soon as page is created.
+        But for the ewk_view_single, as it doesn't need to paint outside of viewport,
+        ewk_frame_paint_full_set must not be called for ewk_view_single.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::transitionToCommittedForNewPage):
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (ewk_view_frame_view_creation_notify):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_add):
+        (ewk_view_tiled_smart_set):
+
+2011-12-21  Michał Pakuła vel Rutka  <m.pakula@samsung.com>
+
+        [EFL] Add 'Select All' option to context menus in WebKit-EFL.
+        https://bugs.webkit.org/show_bug.cgi?id=74920
+
+        Reviewed by Eric Seidel.
+
+        Enable 'Select All' option to context menus called on input fields in WebKit-EFL
+        as it is enabled in GTK and QT ports.
+
+        * ewk/ewk_contextmenu.h: Add new context menu option 'Select All'.
+
+2011-12-19  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Change the behavior of ewk_view_scale_set.
+        https://bugs.webkit.org/show_bug.cgi?id=70078
+
+        Reviewed by Eric Seidel.
+
+        Remove center point basis zoom alignment from ewk_view_scale_set to call
+        Page::setPageScaleFactor without any adjustment.
+
+        * ewk/ewk_view.cpp:
+        (ewk_view_scale_set):
+        * ewk/ewk_view.h:
+
+2011-12-19  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        Unreviewed; fix the build with ENABLE(TOUCH_EVENTS) after r103167.
+
+        This partly reverts r102297: the Touch{Start,Move,End,Cancel} events
+        are not in a separate enum anymore (they are part of
+        WebCore::PlatformEvent), so the assertions in AssertMatchingEnums.cpp
+        always fail. Setting EWK_TOUCH_START to TouchStart feels even more
+        hackish, so we just convert the types manually again for now.
+
+        * WebCoreSupport/AssertMatchingEnums.cpp:
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_feed_touch_event):
+
+2011-12-17  Sam Weinig  <sam@webkit.org>
+
+        Make PlatformTouchEvent inherit from PlatformEvent
+        https://bugs.webkit.org/show_bug.cgi?id=74777
+
+        Reviewed by Andreas Kling.
+
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_feed_touch_event):
+        Rename TouchEventType to PlatformEvent::Type.
+
+2011-12-16  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Rename registerCommandFor(Undo|Redo) to register(Undo|Redo)Step
+        https://bugs.webkit.org/show_bug.cgi?id=74748
+
+        Reviewed by Eric Seidel.
+
+        * WebCoreSupport/EditorClientEfl.cpp:
+        (WebCore::EditorClientEfl::registerUndoStep):
+        (WebCore::EditorClientEfl::registerRedoStep):
+        * WebCoreSupport/EditorClientEfl.h:
+
+2011-12-16  Sam Weinig  <sam@webkit.org>
+
+        Give PlatformEvents a base class
+        https://bugs.webkit.org/show_bug.cgi?id=74685
+
+        Reviewed by Anders Carlsson.
+
+        Add a base class for PlatformMouseEvent, PlatformKeyboardEvent, PlatformWheelEvent
+        and PlatformGestureEvent and move Type enumeration and modifiers down to it.
+
+        * WebCoreSupport/EditorClientEfl.cpp:
+        (WebCore::EditorClientEfl::handleEditingKeyboardEvent):
+
+2011-12-16  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Only EditCommandComposition should implement unapply and reapply
+        https://bugs.webkit.org/show_bug.cgi?id=74490
+
+        Reviewed by Eric Seidel.
+
+        * WebCoreSupport/EditorClientEfl.cpp:
+        (WebCore::EditorClientEfl::registerCommandForUndo):
+        (WebCore::EditorClientEfl::registerCommandForRedo):
+        (WebCore::EditorClientEfl::undo):
+        (WebCore::EditorClientEfl::redo):
+        * WebCoreSupport/EditorClientEfl.h:
+
+2011-12-15  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Clean up and refactor the memory cache functions in ewk_settings.
+        https://bugs.webkit.org/show_bug.cgi?id=72140
+
+        Reviewed by Antonio Gomes.
+
+        Use a better naming prefix, as "ewk_settings_cache" was too general,
+        and make it possible to pass all parameters to
+        MemoryCache::setCapacities().
+
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_object_cache_capacity_set):
+        (ewk_settings_object_cache_enable_get):
+        (ewk_settings_object_cache_enable_set):
+        * ewk/ewk_settings.h:
+
+2011-12-15  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add a few more web database functions to ewk_settings.
+        https://bugs.webkit.org/show_bug.cgi?id=72148
+
+        Reviewed by Antonio Gomes.
+
+        Add code to change the default quota (there as only a getter so far)
+        and one to clear the databases.
+
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_web_database_default_quota_set):
+        (ewk_settings_web_database_clear):
+        * ewk/ewk_settings.h:
+
+2011-12-14  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Change efl style variable name with WebKit style for internal functions.
+        https://bugs.webkit.org/show_bug.cgi?id=74474
+
+        Reviewed by Ryosuke Niwa.
+
+        In order to be more compliant with WebKit coding style, variable names of internal functions
+        should be changed with WebKit coding style.
+
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (ewk_view_scroll):
+
+2011-12-14  Jing Zhao  <jingzhao@chromium.org>
+
+        Opening two popup menus by dispatchEvent() makes problems.
+        https://bugs.webkit.org/show_bug.cgi?id=73304
+
+        Reviewed by Kent Tamura.
+
+        * WebCoreSupport/ChromeClientEfl.cpp:
+        (WebCore::ChromeClientEfl::hasOpenedPopup): Not implemented.
+        * WebCoreSupport/ChromeClientEfl.h: Overrides hasOpenedPopup().
+
+2011-12-12  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add API to query the validity of a frame's SSL certificate.
+        https://bugs.webkit.org/show_bug.cgi?id=74302
+
+        Reviewed by Gustavo Noronha Silva.
+
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_certificate_status_get):
+        * ewk/ewk_frame.h:
+
+2011-12-12  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add API to notify that mixed content has been loaded.
+        https://bugs.webkit.org/show_bug.cgi?id=74301
+
+        Reviewed by Gustavo Noronha Silva.
+
+        When mixed content is displayed/run, both frames and views
+        emit the proper signals to notify API users.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::didDisplayInsecureContent):
+        (WebCore::FrameLoaderClientEfl::didRunInsecureContent):
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_view_create_for_view):
+        (ewk_frame_mixed_content_displayed_get):
+        (ewk_frame_mixed_content_run_get):
+        (ewk_frame_mixed_content_displayed_set):
+        (ewk_frame_mixed_content_run_set):
+        * ewk/ewk_frame.h:
+        * ewk/ewk_private.h:
+        * ewk/ewk_view.cpp:
+        (ewk_view_frame_main_cleared):
+        (ewk_view_mixed_content_displayed_get):
+        (ewk_view_mixed_content_run_get):
+        (ewk_view_mixed_content_displayed_set):
+        (ewk_view_mixed_content_run_set):
+        * ewk/ewk_view.h:
+
+2011-12-12  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add API to manage root X.509 CA certificates.
+        https://bugs.webkit.org/show_bug.cgi?id=74300
+
+        Reviewed by Martin Robinson.
+
+        * ewk/ewk_network.cpp:
+        (ewk_network_tls_ca_certificates_path_get):
+        (ewk_network_tls_ca_certificates_path_set):
+        * ewk/ewk_network.h:
+
+2011-12-12  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add API to control whether SSL certificates should be checked.
+        https://bugs.webkit.org/show_bug.cgi?id=74299
+
+        Reviewed by Martin Robinson.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body): Explicitly disable certificate checks by default.
+        * ewk/ewk_network.cpp:
+        (ewk_network_tls_certificate_check_get):
+        (ewk_network_tls_certificate_check_set):
+        * ewk/ewk_network.h:
+
+2011-12-07  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Introduce AssertMatchingEnums.cpp.
+        https://bugs.webkit.org/show_bug.cgi?id=65238
+
+        Reviewed by Filip Pizlo.
+
+        Add AssertMatchingEnums.cpp to assert that various WebKit API enum values
+        match to WebCore defined enum values.
+
+        * CMakeListsEfl.txt: add AssertMatchingEnums.cpp.
+        * WebCoreSupport/AssertMatchingEnums.cpp: Added.
+        * ewk/ewk_frame.cpp:
+        (ewk_frame_feed_touch_event): remove switch statement wichi convert WebKit API enum value to WebCore defined enum values.
+        (ewk_frame_text_selection_type_get): Ditto.
+        * ewk/ewk_view.cpp:
+        (ewk_view_mode_set): Ditto.
+        (ewk_view_mode_get): Ditto.
+        (ewk_view_visibility_state_set): Ditto.
+        (ewk_view_visibility_state_get): Ditto.
+        * ewk/ewk_frame.h: fix order of enum values.
+        * ewk/ewk_view.h: add missing enum value.
+
+2011-12-07  Mary Wu  <mary.wu@torchmobile.com.cn>
+
+        Change function name InitializeLoggingChannelsIfNecessary to follow coding style guideline
+        https://bugs.webkit.org/show_bug.cgi?id=73986
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body):
+
+2011-12-05  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Do not lose message flags when converting to/from Soup Requests/Responses
+        https://bugs.webkit.org/show_bug.cgi?id=73924
+
+        Reviewed by Gustavo Noronha Silva.
+
+        Apply the same change added to the GTK+ port in r55086 to prevent
+        soup message flags from being lost by updating the request flags when
+        a response is received.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::dispatchDidReceiveResponse):
+
+2011-12-04  Kangil Han  <kangil.han@samsung.com>
+
+        [EFL] Fix broken UTF-8 characters issue on editor command.
+        https://bugs.webkit.org/show_bug.cgi?id=73516
+
+        Reviewed by Ryosuke Niwa.
+
+        The issue has been described that Korean character is broken on pasting copied text.
+        In my analysis, this is from lack of format change between C style UTF-8 character pointer and C++ style String reference.
+        Therefore, this patch will convert types to resolve the problem.
+
+        * ewk/ewk_view.cpp:
+        (_ewk_view_editor_command):
+
+2011-12-03  ChangSeok Oh  <shivamidow@gmail.com>
+
+        [EFL] Revise ewk_view_fixed_layout_size_set
+        https://bugs.webkit.org/show_bug.cgi?id=73401
+
+        Reviewed by Eric Seidel.
+
+        Improve readability and replace forceLayout to setNeedsLayout,
+        since it sometimes causes double drawing.
+
+        * ewk/ewk_view.cpp:
+        (ewk_view_fixed_layout_size_set):
+
+2011-12-02  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Remove entry pointer before freeing it from matrix.
+        https://bugs.webkit.org/show_bug.cgi?id=73625
+
+        Reviewed by Ryosuke Niwa.
+
+        To prevent leaving dangling pointer on the matrix, remove the entry before freeing it.
+
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_free):
+
+2011-12-01  Ryuan Choi  <ryuan.choi@samsung.com>
+
+        [EFL] Cleanup includes to reduce code complexity.
+        https://bugs.webkit.org/show_bug.cgi?id=73540
+
+        Reviewed by Gustavo Noronha Silva.
+
+        EWebKit.h is a list of public header files for application to use WebKit/Efl.
+        This patch removes EWebKit.h in internal files to reduce unnecessary includes.
+        In addition, reorders optional includes to fix style.
+
+        * WebCoreSupport/ChromeClientEfl.cpp:
+        * WebCoreSupport/DumpRenderTreeSupportEfl.cpp:
+        * WebCoreSupport/EditorClientEfl.cpp:
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        * ewk/ewk_auth_soup.cpp:
+        * ewk/ewk_contextmenu.cpp:
+        * ewk/ewk_cookies.cpp:
+        * ewk/ewk_frame.cpp:
+        * ewk/ewk_history.cpp:
+        * ewk/ewk_main.cpp:
+        * ewk/ewk_private.h:
+        * ewk/ewk_settings.cpp:
+        * ewk/ewk_util.cpp:
+        * ewk/ewk_view.cpp:
+        * ewk/ewk_view_single.cpp:
+        * ewk/ewk_view_tiled.cpp:
+        * ewk/ewk_window_features.cpp:
+
+2011-12-01  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Remove the ewk_protocol_handler-related code
+        https://bugs.webkit.org/show_bug.cgi?id=73018
+
+        Reviewed by Martin Robinson.
+
+        This functionality has been broken since r99364, which stopped setting
+        the "webkit-resource" property needed by
+        ewk_protocol_handler_soup.cpp.
+
+        After giving it some thought, it looks clear that this code should not
+        be in ewk at all: it is very backend-specific (even in the function
+        signatures it expects), and it only allows callers to register schemes
+        once and provide a single handler to all of them, which does not make
+        much sense.
+
+        Client code using WebKit-EFL with the soup backend should be
+        responsible for creating their own request handlers (ie. subclass
+        SoupRequest) instead.
+
+        For that to be possible, a function which returns the default
+        SoupSession used by WebKit has been added.
+
+        * CMakeListsEfl.txt:
+        * ewk/ewk_network.cpp:
+        (ewk_network_default_soup_session_get):
+        * ewk/ewk_network.h:
+        * ewk/ewk_private.h:
+        * ewk/ewk_protocol_handler.cpp: Removed.
+        * ewk/ewk_protocol_handler.h: Removed.
+        * ewk/ewk_protocol_handler_soup.cpp: Removed.
+        * ewk/ewk_protocol_handler_soup.h: Removed.
+        * ewk/ewk_view.cpp:
+        * ewk/ewk_view.h:
+
+2011-11-30  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        Unreviewed. Fix build error when NOTIFICATIONS feature is enabled.
+
+        * WebCoreSupport/ChromeClientEfl.h:
+
+2011-11-30  Alexey Proskuryakov  <ap@apple.com>
+
+        Remove an unneeded argument from FrameLoaderClient::download
+        https://bugs.webkit.org/show_bug.cgi?id=73486
+
+        Reviewed by Andreas Kling.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::FrameLoaderClientEfl::download):
+        * WebCoreSupport/FrameLoaderClientEfl.h:
+        Updated for the change.
+
+2011-11-30  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Apply alpha channel into ewk_tiled_backing_store's tile objects.
+        https://bugs.webkit.org/show_bug.cgi?id=73015
+
+        Reviewed by Chang Shu.
+
+        Add alpha_set API to tiled backing store to apply alpha channel on tile objects.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_ewk_tiled_backing_store_tile_associate):
+        (ewk_tiled_backing_store_alpha_set):
+        * ewk/ewk_tiled_backing_store.h:
+        * ewk/ewk_view.h:
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_bg_color_set):
+        (ewk_view_tiled_smart_set):
+
+2011-11-30  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Remove duplicated UA information function.
+        https://bugs.webkit.org/show_bug.cgi?id=73104
+
+        Reviewed by Filip Pizlo.
+
+        Though ewk_setting already implemented an internal function for UA(user agent) information,
+        FrameLoaderClientEfl has used duplicated function for UA information. So, this patch removes
+        the UA information function of FrameLoaderClientEfl and uses an internal UA information function
+        of ewk_setting. In addition, UA infomation function is enhanced for other ports.
+
+        * WebCoreSupport/FrameLoaderClientEfl.cpp:
+        (WebCore::composeUserAgent):
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_default_user_agent_get):
+
+2011-11-30  Tomasz Morawski  <t.morawski@samsung.com>
+
+        [EFL] Added DEFAULT_CACHE_SIZE define.
+        https://bugs.webkit.org/show_bug.cgi?id=73120
+
+        Reviewed by Filip Pizlo.
+
+        Remove form code 40960000 value used in code directly and replaced it by DEFAULT_CACHE_SIZE define. The code
+        looks cleaner now.
+
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_new):
+
+2011-11-28  JungJik Lee  <jungjik.lee@samsung.com>
+
+        [EFL] Rename abbreviated value names to cpp style names.
+        https://bugs.webkit.org/show_bug.cgi?id=73193
+
+        Reviewed by Andreas Kling.
+
+        Rename abbreviated values name to cpp style names in ewk_single/tiled_view.cpp.
+
+        * ewk/ewk_view_single.cpp:
+        (_ewk_view_4b_move_region_up):
+        (_ewk_view_4b_move_region_down):
+        (_ewk_view_4b_move_line_left):
+        (_ewk_view_4b_move_line_right):
+        (_ewk_view_4b_move_region_left):
+        (_ewk_view_4b_move_region_right):
+        (_ewk_view_4b_move_region):
+        (_ewk_view_single_scroll_process_single):
+        (_ewk_view_single_smart_repaints_process):
+        * ewk/ewk_view_tiled.cpp:
+        (_ewk_view_tiled_smart_scrolls_process):
+        (_ewk_view_tiled_smart_repaints_process):
+
+2011-11-26  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r101193.
+        http://trac.webkit.org/changeset/101193
+        https://bugs.webkit.org/show_bug.cgi?id=73158
+
+        Breaks Windows and Qt minimal. (Requested by pfeldman on
+        #webkit).
+
+        * WebCoreSupport/InspectorClientEfl.cpp:
+        * WebCoreSupport/InspectorClientEfl.h:
+
+2011-11-24  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Add implementation considering ewk_tiled_backing_store's visible status.
+        https://bugs.webkit.org/show_bug.cgi?id=71791
+
+        Reviewed by Gustavo Noronha Silva.
+
+        In order to prevent rendering and pre-rendering while backing store is hidden,
+        its visibility is checked and pre-rendering is handled whenever backing store is shown or hidden.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_ewk_tiled_backing_store_item_process_idler_start):
+        (_ewk_tiled_backing_store_item_fill):
+        (_ewk_tiled_backing_store_smart_show):
+        (_ewk_tiled_backing_store_smart_hide):
+        (ewk_tiled_backing_store_add):
+
+2011-11-22  Pavel Feldman  <pfeldman@google.com>
+
+        Web Inspector: remove Inspector::bringToFront from the protocol.
+        https://bugs.webkit.org/show_bug.cgi?id=72937
+
+        Reviewed by Yury Semikhatsky.
+
+        * WebCoreSupport/InspectorClientEfl.cpp:
+        (WebCore::InspectorClientEfl::bringFrontendToFront):
+        * WebCoreSupport/InspectorClientEfl.h:
+
+2011-11-21  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add more appcache functions to ewk_settings.
+        https://bugs.webkit.org/show_bug.cgi?id=72143
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Add a few more functions to make it possible to have more control over
+        the offline web application features.
+
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_application_cache_max_quota_get):
+        (ewk_settings_application_cache_max_quota_set):
+        (ewk_settings_application_cache_clear):
+        * ewk/ewk_settings.h:
+
+2011-10-17  Antonio Gomes  <agomes@rim.com>
+
+        Pass a Frame* parameter in EditorClient::respondToChangedSelection
+        https://bugs.webkit.org/show_bug.cgi?id=70248
+
+        Reviewed by Ryosuke Niwa.
+
+        * WebCoreSupport/EditorClientEfl.cpp: Make use of the newly added Frame* parameter.
+        (WebCore::EditorClientEfl::respondToChangedSelection):
+        * WebCoreSupport/EditorClientEfl.h:
+
+2011-11-17  KwangHyuk Kim  <hyuki.kim@samsung.com>
+
+        [EFL] Add matrix list to reuse tile matrix for each different zoom level.
+        https://bugs.webkit.org/show_bug.cgi?id=68595
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Add matrix list to keep each tile matrix corresponding to each different zoom level when zoom level is changed.
+        Then backing store can reuse tile matrix by getting it from this matrix list.
+
+        * ewk/ewk_tiled_backing_store.cpp:
+        (_ewk_tiled_backing_store_model_matrix_create):
+        (_ewk_tiled_backing_store_smart_calculate):
+        (_ewk_tiled_backing_store_zoom_set_internal):
+        * ewk/ewk_tiled_matrix.cpp:
+        (ewk_tile_matrix_entry_get):
+        (_ewk_tile_matrix_cell_free):
+        (_ewk_tile_matrix_tile_free):
+        (ewk_tile_matrix_new):
+        (ewk_tile_matrix_zoom_level_set):
+        (ewk_tile_matrix_invalidate):
+        (ewk_tile_matrix_free):
+        (ewk_tile_matrix_tile_new):
+        * ewk/ewk_tiled_matrix.h:
+
+2011-11-17  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Clean up the use of DATA_DIR in the buildsystem
+        https://bugs.webkit.org/show_bug.cgi?id=72681
+
+        Reviewed by Daniel Bates.
+
+        Instead of messing with BUILD_DATA_DIR and PARENT_SCOPE, just use
+        THEME_BINARY_DIR as defined in OptionsEfl.cmake.
+
+        * CMakeListsEfl.txt:
+
+2011-11-16  Gyuyoung Kim  <gyuyoung.kim@samsung.com>
+
+        [EFL] Use standard booleand data type in struct.
+        https://bugs.webkit.org/show_bug.cgi?id=72565
+
+        Reviewed by Martin Robinson.
+
+        Change *Eina_Bool* usages with *bool* in member variables of internal struct.
+
+        * ewk/ewk_contextmenu.cpp:
+        * ewk/ewk_frame.cpp:
+        * ewk/ewk_tiled_backing_store.cpp:
+        * ewk/ewk_view.cpp:
+
+2011-11-16  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Add ewk_settings_memory_cache_clear().
+        https://bugs.webkit.org/show_bug.cgi?id=72141
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        This is the same as Qt's QWebSettings::clearMemoryCaches() and is
+        responsible for clearing, among others, the page, memory and font
+        caches.
+
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_memory_cache_clear):
+        * ewk/ewk_settings.h:
+
+2011-11-16  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Clean up the web database-related functions in ewk_settings.
+        https://bugs.webkit.org/show_bug.cgi?id=72139
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Mostly remove some unnecessary ENABLE(SQL_DATABASE) checks and use a
+        more standard naming scheme for the related static variables.
+
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_web_database_default_quota_get):
+        (ewk_settings_web_database_path_set):
+        (ewk_settings_web_database_path_get):
+        * ewk/ewk_settings.h: Document the default web database path on disk.
+
+2011-11-16  Raphael Kubo da Costa  <kubo@profusion.mobi>
+
+        [EFL] Clean up the offline apps-related functions in ewk_settings.
+        https://bugs.webkit.org/show_bug.cgi?id=72132
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        `ewk_settings_cache' and `ewk_view_setting_cache' are too common
+        prefixes for code that is related only to the HTML5 app cache
+        features.
+
+        Use `ewk_settings_application_cache' and
+        `ewk_view_setting_application_cache' instead.
+
+        While here, improve the documentation and use a more common naming
+        scheme for the static variable which holds the cache path.
+
+        * ewk/ewk_main.cpp:
+        (_ewk_init_body):
+        * ewk/ewk_settings.cpp:
+        (ewk_settings_application_cache_path_set):
+        (ewk_settings_application_cache_path_get):
+        * ewk/ewk_settings.h:
+        * ewk/ewk_view.cpp:
+        (ewk_view_setting_application_cache_get):
+        (ewk_view_setting_application_cache_set):
+        * ewk/ewk_view.h:
+
+2011-11-15  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow screenToWindow/windowToScreen should be screenToRootView/rootViewToScreen
+        https://bugs.webkit.org/show_bug.cgi?id=72397
+
+        Reviewed by Dan Bernstein.
+
+        * WebCoreSupport/ChromeClientEfl.cpp:
+        (WebCore::ChromeClientEfl::rootViewToScreen):
+        (WebCore::ChromeClientEfl::screenToRootView):
+        * WebCoreSupport/ChromeClientEfl.h:
+
+2011-11-14  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow invalidation functions should use root view coordinates
+        https://bugs.webkit.org/show_bug.cgi?id=72338
+
+        Reviewed by Dan Bernstein.
+
+        * WebCoreSupport/ChromeClientEfl.cpp:
+        (WebCore::ChromeClientEfl::invalidateRootView):
+        (WebCore::ChromeClientEfl::invalidateContentsAndRootView):
+        (WebCore::ChromeClientEfl::invalidateContentsForSlowScroll):
+        * WebCoreSupport/ChromeClientEfl.h:
+
 2011-11-15  Grzegorz Czajkowski  <g.czajkowski@samsung.com>
 
         [EFL] Use EINA_SAFETY_ON_NULL_RETURN_VAL for NULL checks instead of EINA_SAFETY_ON_FALSE_RETURN_VAL.

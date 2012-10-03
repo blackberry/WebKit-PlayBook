@@ -93,6 +93,7 @@ public:
     virtual void setIconURLForPageURL(const String& iconURL, const String& pageURL);
 
     virtual Image* synchronousIconForPageURL(const String&, const IntSize&);
+    virtual NativeImagePtr synchronousNativeIconForPageURL(const String& pageURLOriginal, const IntSize&);
     virtual String synchronousIconURLForPageURL(const String&);
     virtual bool synchronousIconDataKnownForIconURL(const String&);
     virtual IconLoadDecision synchronousLoadDecisionForIconURL(const String&, DocumentLoader*);    
@@ -183,15 +184,15 @@ public:
     virtual bool shouldStopThreadActivity() const;
 
 private:    
-    static void* iconDatabaseSyncThreadStart(void *);
-    void* iconDatabaseSyncThread();
+    static void iconDatabaseSyncThreadStart(void *);
+    void iconDatabaseSyncThread();
     
     // The following block of methods are called exclusively by the sync thread to manage i/o to and from the database
     // Each method should periodically monitor m_threadTerminationRequested when it makes sense to return early on shutdown
     void performOpenInitialization();
     bool checkIntegrity();
     void performURLImport();
-    void* syncThreadMainLoop();
+    void syncThreadMainLoop();
     bool readFromDatabase();
     bool writeToDatabase();
     void pruneUnretainedIcons();

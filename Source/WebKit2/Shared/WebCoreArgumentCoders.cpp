@@ -35,7 +35,9 @@
 #include <WebCore/Editor.h>
 #include <WebCore/FileChooser.h>
 #include <WebCore/GraphicsContext.h>
+#include <WebCore/GraphicsLayer.h>
 #include <WebCore/Image.h>
+#include <WebCore/KURL.h>
 #include <WebCore/PluginData.h>
 #include <WebCore/ProtectionSpace.h>
 #include <WebCore/TextCheckerClient.h>
@@ -623,6 +625,20 @@ bool ArgumentCoder<DragSession>::decode(ArgumentDecoder* decoder, DragSession& r
     return true;
 }
 
+void ArgumentCoder<KURL>::encode(ArgumentEncoder* encoder, const KURL& result)
+{
+    encoder->encode(result.string());
+}
+    
+bool ArgumentCoder<KURL>::decode(ArgumentDecoder* decoder, KURL& result)
+{
+    String urlAsString;
+    if (!decoder->decode(urlAsString))
+        return false;
+    result = KURL(WebCore::ParsedURLString, urlAsString);
+    return true;
+}
+
 #if PLATFORM(QT)
 
 void ArgumentCoder<FloatPoint3D>::encode(ArgumentEncoder* encoder, const FloatPoint3D& floatPoint3D)
@@ -646,7 +662,6 @@ bool ArgumentCoder<Length>::decode(ArgumentDecoder* decoder, Length& length)
     return SimpleArgumentCoder<Length>::decode(decoder, length);
 }
 
-
 void ArgumentCoder<TransformationMatrix>::encode(ArgumentEncoder* encoder, const TransformationMatrix& transformationMatrix)
 {
     SimpleArgumentCoder<TransformationMatrix>::encode(encoder, transformationMatrix);
@@ -658,93 +673,187 @@ bool ArgumentCoder<TransformationMatrix>::decode(ArgumentDecoder* decoder, Trans
 }
 
 
-void ArgumentCoder<MatrixTransformOperation>::encode(ArgumentEncoder* encoder, const MatrixTransformOperation& operation)
+void ArgumentCoder<RefPtr<MatrixTransformOperation> >::encode(ArgumentEncoder* encoder, const MatrixTransformOperation* operation)
 {
-    SimpleArgumentCoder<MatrixTransformOperation>::encode(encoder, operation);
+    ArgumentCoder<WebCore::TransformationMatrix>::encode(encoder, operation->matrix());
 }
 
-bool ArgumentCoder<MatrixTransformOperation>::decode(ArgumentDecoder* decoder, MatrixTransformOperation& operation)
+bool ArgumentCoder<RefPtr<MatrixTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<MatrixTransformOperation>& operation)
 {
-    return SimpleArgumentCoder<MatrixTransformOperation>::decode(decoder, operation);
+    TransformationMatrix matrix;
+    if (!ArgumentCoder<WebCore::TransformationMatrix>::decode(decoder, matrix))
+        return false;
+
+    operation = MatrixTransformOperation::create(matrix);
+    return true;
+}
+
+void ArgumentCoder<RefPtr<Matrix3DTransformOperation> >::encode(ArgumentEncoder* encoder, const Matrix3DTransformOperation* operation)
+{
+    ArgumentCoder<TransformationMatrix>::encode(encoder, operation->matrix());
+}
+
+bool ArgumentCoder<RefPtr<Matrix3DTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<Matrix3DTransformOperation>& operation)
+{
+
+    TransformationMatrix matrix;
+    if (!ArgumentCoder<WebCore::TransformationMatrix>::decode(decoder, matrix))
+        return false;
+
+    operation = Matrix3DTransformOperation::create(matrix);
+    return true;
+}
+
+void ArgumentCoder<RefPtr<PerspectiveTransformOperation> >::encode(ArgumentEncoder* encoder, const PerspectiveTransformOperation* operation)
+{
+    ArgumentCoder<Length>::encode(encoder, operation->perspective());
+}
+
+bool ArgumentCoder<RefPtr<PerspectiveTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<PerspectiveTransformOperation>& operation)
+{
+    Length perspective;
+    if (!ArgumentCoder<Length>::decode(decoder, perspective))
+        return false;
+
+    operation = PerspectiveTransformOperation::create(perspective);
+    return true;
+}
+
+void ArgumentCoder<RefPtr<RotateTransformOperation> >::encode(ArgumentEncoder* encoder, const RotateTransformOperation* operation)
+{
+    const TransformOperation* transformOperation = operation;
+    encoder->encodeEnum(transformOperation->getOperationType());
+    encoder->encode(operation->x());
+    encoder->encode(operation->y());
+    encoder->encode(operation->z());
+    encoder->encode(operation->angle());
+}
+
+bool ArgumentCoder<RefPtr<RotateTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<RotateTransformOperation>& operation)
+{
+    TransformOperation::OperationType operationType;
+    double x;
+    double y;
+    double z;
+    double angle;
+
+    if (!decoder->decodeEnum(operationType))
+        return false;
+    if (!decoder->decode(x))
+        return false;
+    if (!decoder->decode(y))
+        return false;
+    if (!decoder->decode(z))
+        return false;
+    if (!decoder->decode(angle))
+        return false;
+
+    operation = RotateTransformOperation::create(x, y, z, angle, operationType);
+    return true;
 }
 
 
-void ArgumentCoder<Matrix3DTransformOperation>::encode(ArgumentEncoder* encoder, const Matrix3DTransformOperation& operation)
+void ArgumentCoder<RefPtr<ScaleTransformOperation> >::encode(ArgumentEncoder* encoder, const ScaleTransformOperation* operation)
 {
-    SimpleArgumentCoder<Matrix3DTransformOperation>::encode(encoder, operation);
+    const TransformOperation* transformOperation = operation;
+    encoder->encodeEnum(transformOperation->getOperationType());
+    encoder->encode(operation->x());
+    encoder->encode(operation->y());
+    encoder->encode(operation->z());
 }
 
-bool ArgumentCoder<Matrix3DTransformOperation>::decode(ArgumentDecoder* decoder, Matrix3DTransformOperation& operation)
+bool ArgumentCoder<RefPtr<ScaleTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<ScaleTransformOperation>& operation)
 {
-    return SimpleArgumentCoder<Matrix3DTransformOperation>::decode(decoder, operation);
+    TransformOperation::OperationType operationType;
+    double x;
+    double y;
+    double z;
+
+    if (!decoder->decodeEnum(operationType))
+        return false;
+    if (!decoder->decode(x))
+        return false;
+    if (!decoder->decode(y))
+        return false;
+    if (!decoder->decode(z))
+        return false;
+
+    operation = ScaleTransformOperation::create(x, y, z, operationType);
+    return true;
 }
 
-
-void ArgumentCoder<PerspectiveTransformOperation>::encode(ArgumentEncoder* encoder, const PerspectiveTransformOperation& operation)
+void ArgumentCoder<RefPtr<SkewTransformOperation> >::encode(ArgumentEncoder* encoder, const SkewTransformOperation* operation)
 {
-    SimpleArgumentCoder<PerspectiveTransformOperation>::encode(encoder, operation);
+    const TransformOperation* transformOperation = operation;
+    encoder->encodeEnum(transformOperation->getOperationType());
+    encoder->encode(operation->angleX());
+    encoder->encode(operation->angleY());
 }
 
-bool ArgumentCoder<PerspectiveTransformOperation>::decode(ArgumentDecoder* decoder, PerspectiveTransformOperation& operation)
+bool ArgumentCoder<RefPtr<SkewTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<SkewTransformOperation>& operation)
 {
-    return SimpleArgumentCoder<PerspectiveTransformOperation>::decode(decoder, operation);
+    TransformOperation::OperationType operationType;
+    double angleX;
+    double angleY;
+
+    if (!decoder->decodeEnum(operationType))
+        return false;
+    if (!decoder->decode(angleX))
+        return false;
+    if (!decoder->decode(angleY))
+        return false;
+
+    operation = SkewTransformOperation::create(angleX, angleY, operationType);
+    return true;
 }
 
-
-void ArgumentCoder<RotateTransformOperation>::encode(ArgumentEncoder* encoder, const RotateTransformOperation& operation)
+void ArgumentCoder<RefPtr<TranslateTransformOperation> >::encode(ArgumentEncoder* encoder, const TranslateTransformOperation* operation)
 {
-    SimpleArgumentCoder<RotateTransformOperation>::encode(encoder, operation);
+    const TransformOperation* transformOperation = operation;
+    encoder->encodeEnum(transformOperation->getOperationType());
+    ArgumentCoder<Length>::encode(encoder, operation->x());
+    ArgumentCoder<Length>::encode(encoder, operation->y());
+    ArgumentCoder<Length>::encode(encoder, operation->z());
 }
 
-bool ArgumentCoder<RotateTransformOperation>::decode(ArgumentDecoder* decoder, RotateTransformOperation& operation)
+bool ArgumentCoder<RefPtr<TranslateTransformOperation> >::decode(ArgumentDecoder* decoder, RefPtr<TranslateTransformOperation>& operation)
 {
-    return SimpleArgumentCoder<RotateTransformOperation>::decode(decoder, operation);
-}
+    TransformOperation::OperationType operationType;
+    Length x;
+    Length y;
+    Length z;
 
+    if (!decoder->decodeEnum(operationType))
+        return false;
+    if (!ArgumentCoder<Length>::decode(decoder, x))
+        return false;
+    if (!ArgumentCoder<Length>::decode(decoder, y))
+        return false;
+    if (!ArgumentCoder<Length>::decode(decoder, z))
+        return false;
 
-void ArgumentCoder<ScaleTransformOperation>::encode(ArgumentEncoder* encoder, const ScaleTransformOperation& operation)
-{
-    SimpleArgumentCoder<ScaleTransformOperation>::encode(encoder, operation);
-}
-
-bool ArgumentCoder<ScaleTransformOperation>::decode(ArgumentDecoder* decoder, ScaleTransformOperation& operation)
-{
-    return SimpleArgumentCoder<ScaleTransformOperation>::decode(decoder, operation);
-}
-
-
-void ArgumentCoder<SkewTransformOperation>::encode(ArgumentEncoder* encoder, const SkewTransformOperation& operation)
-{
-    SimpleArgumentCoder<SkewTransformOperation>::encode(encoder, operation);
-}
-
-bool ArgumentCoder<SkewTransformOperation>::decode(ArgumentDecoder* decoder, SkewTransformOperation& operation)
-{
-    return SimpleArgumentCoder<SkewTransformOperation>::decode(decoder, operation);
-}
-
-
-void ArgumentCoder<TranslateTransformOperation>::encode(ArgumentEncoder* encoder, const TranslateTransformOperation& operation)
-{
-    SimpleArgumentCoder<TranslateTransformOperation>::encode(encoder, operation);
-}
-
-bool ArgumentCoder<TranslateTransformOperation>::decode(ArgumentDecoder* decoder, TranslateTransformOperation& operation)
-{
-    return SimpleArgumentCoder<TranslateTransformOperation>::decode(decoder, operation);
+    operation = TranslateTransformOperation::create(x, y, z, operationType);
+    return true;
 }
 
 void ArgumentCoder<RefPtr<TimingFunction> >::encode(ArgumentEncoder* encoder, const RefPtr<TimingFunction>& function)
 {
-    // We don't want to encode null-references.
-    ASSERT(function);
+    encode(encoder, function.get());
+}
+
+void ArgumentCoder<RefPtr<TimingFunction> >::encode(ArgumentEncoder* encoder, const WebCore::TimingFunction* function)
+{
+    if (!function) {
+        encoder->encodeEnum(WebCore::TimingFunction::LinearFunction);
+        return;
+    }
 
     encoder->encodeEnum(function->type());
     switch (function->type()) {
     case TimingFunction::LinearFunction:
         break;
     case TimingFunction::CubicBezierFunction: {
-        CubicBezierTimingFunction* cubicFunction = static_cast<CubicBezierTimingFunction*>(function.get());
+        const WebCore::CubicBezierTimingFunction* cubicFunction = static_cast<const WebCore::CubicBezierTimingFunction*>(function);
         encoder->encodeDouble(cubicFunction->x1());
         encoder->encodeDouble(cubicFunction->y1());
         encoder->encodeDouble(cubicFunction->x2());
@@ -752,7 +861,7 @@ void ArgumentCoder<RefPtr<TimingFunction> >::encode(ArgumentEncoder* encoder, co
         break;
     }
     case TimingFunction::StepsFunction: {
-        StepsTimingFunction* stepsFunction = static_cast<StepsTimingFunction*>(function.get());
+        const WebCore::StepsTimingFunction* stepsFunction = static_cast<const WebCore::StepsTimingFunction*>(function);
         encoder->encodeInt32(stepsFunction->numberOfSteps());
         encoder->encodeBool(stepsFunction->stepAtStart());
         break;
@@ -802,11 +911,10 @@ bool ArgumentCoder<RefPtr<TimingFunction> >::decode(ArgumentDecoder* decoder, Re
     return false;
 }
 
-
 template<typename T>
 void encodeOperation(ArgumentEncoder* encoder, const RefPtr<TransformOperation>& operation)
 {
-    encoder->encode(*static_cast<const T*>(operation.get()));
+    ArgumentCoder<RefPtr<T> >::encode(encoder, static_cast<const T*>(operation.get()));
 }
 
 void ArgumentCoder<RefPtr<TransformOperation> >::encode(ArgumentEncoder* encoder, const RefPtr<TransformOperation>& operation)
@@ -864,12 +972,13 @@ void ArgumentCoder<RefPtr<TransformOperation> >::encode(ArgumentEncoder* encoder
 }
 
 template<typename T>
-bool decodeOperation(ArgumentDecoder* decoder, RefPtr<TransformOperation>& operation, PassRefPtr<T> newOperation)
+bool decodeOperation(ArgumentDecoder* decoder, RefPtr<TransformOperation>& operation)
 {
-    if (!decoder->decode(*newOperation.get()))
+    RefPtr<T> newOperation;
+    if (!decoder->decode(newOperation))
         return false;
 
-    operation = newOperation.get();
+    operation = newOperation;
     return true;
 }
 
@@ -885,34 +994,34 @@ bool ArgumentCoder<RefPtr<TransformOperation> >::decode(ArgumentDecoder* decoder
     case TransformOperation::SCALE_Y:
     case TransformOperation::SCALE_Z:
     case TransformOperation::SCALE_3D:
-        return decodeOperation(decoder, operation, ScaleTransformOperation::create(1.0, 1.0, type));
+        return decodeOperation<ScaleTransformOperation>(decoder, operation);
 
     case TransformOperation::TRANSLATE:
     case TransformOperation::TRANSLATE_X:
     case TransformOperation::TRANSLATE_Y:
     case TransformOperation::TRANSLATE_Z:
     case TransformOperation::TRANSLATE_3D:
-        return decodeOperation(decoder, operation, TranslateTransformOperation::create(Length(0, WebCore::Fixed), Length(0, WebCore::Fixed), type));
+        return decodeOperation<TranslateTransformOperation>(decoder, operation);
 
     case TransformOperation::ROTATE:
     case TransformOperation::ROTATE_X:
     case TransformOperation::ROTATE_Y:
     case TransformOperation::ROTATE_3D:
-        return decodeOperation(decoder, operation, RotateTransformOperation::create(0.0, type));
+        return decodeOperation<RotateTransformOperation>(decoder, operation);
 
     case TransformOperation::SKEW:
     case TransformOperation::SKEW_X:
     case TransformOperation::SKEW_Y:
-        return decodeOperation(decoder, operation, SkewTransformOperation::create(0.0, 0.0, type));
+        return decodeOperation<SkewTransformOperation>(decoder, operation);
 
     case TransformOperation::MATRIX:
-        return decodeOperation(decoder, operation, MatrixTransformOperation::create(TransformationMatrix()));
+        return decodeOperation<MatrixTransformOperation>(decoder, operation);
 
     case TransformOperation::MATRIX_3D:
-        return decodeOperation(decoder, operation, Matrix3DTransformOperation::create(TransformationMatrix()));
+        return decodeOperation<Matrix3DTransformOperation>(decoder, operation);
 
     case TransformOperation::PERSPECTIVE:
-        return decodeOperation(decoder, operation, PerspectiveTransformOperation::create(Length(0, WebCore::Fixed)));
+        return decodeOperation<PerspectiveTransformOperation>(decoder, operation);
 
     case TransformOperation::IDENTITY:
     case TransformOperation::NONE:
@@ -967,18 +1076,18 @@ static void encodeBoolAndEnumValue(ArgumentEncoder* encoder, bool isSet, T value
         encoder->encodeEnum(value);
 }
 
-void ArgumentCoder<Animation>::encode(ArgumentEncoder* encoder, const Animation& animation)
+void ArgumentCoder<RefPtr<Animation> >::encode(ArgumentEncoder* encoder, const RefPtr<Animation>& animation)
 {
-    encodeBoolAndValue(encoder, animation.isDelaySet(), animation.delay());
-    encodeBoolAndEnumValue(encoder, animation.isDirectionSet(), animation.direction());
-    encodeBoolAndValue(encoder, animation.isDurationSet(), animation.duration());
-    encodeBoolAndValue(encoder, animation.isFillModeSet(), animation.fillMode());
-    encodeBoolAndValue(encoder, animation.isIterationCountSet(), animation.iterationCount());
-    encodeBoolAndValue(encoder, animation.isNameSet(), animation.name());
-    encodeBoolAndEnumValue(encoder, animation.isPlayStateSet(), animation.playState());
-    encodeBoolAndValue(encoder, animation.isPropertySet(), animation.property());
-    encodeBoolAndValue<RefPtr<TimingFunction> >(encoder, animation.isTimingFunctionSet(), animation.timingFunction());
-    encoder->encodeBool(animation.isNoneAnimation());
+    encodeBoolAndValue(encoder, animation->isDelaySet(), animation->delay());
+    encodeBoolAndEnumValue(encoder, animation->isDirectionSet(), animation->direction());
+    encodeBoolAndValue(encoder, animation->isDurationSet(), animation->duration());
+    encodeBoolAndValue(encoder, animation->isFillModeSet(), animation->fillMode());
+    encodeBoolAndValue(encoder, animation->isIterationCountSet(), animation->iterationCount());
+    encodeBoolAndValue(encoder, animation->isNameSet(), animation->name());
+    encodeBoolAndEnumValue(encoder, animation->isPlayStateSet(), animation->playState());
+    encodeBoolAndValue(encoder, animation->isPropertySet(), animation->property());
+    encodeBoolAndValue<RefPtr<TimingFunction> >(encoder, animation->isTimingFunctionSet(), animation->timingFunction());
+    encoder->encodeBool(animation->isNoneAnimation());
 }
 
 
@@ -1004,15 +1113,13 @@ static bool decodeBoolAndEnumValue(ArgumentDecoder* decoder, bool& isSet, T& val
     return decoder->decodeEnum(value);
 }
 
-bool ArgumentCoder<Animation>::decode(ArgumentDecoder* decoder, Animation& animation)
+bool ArgumentCoder<RefPtr<Animation> >::decode(ArgumentDecoder* decoder, RefPtr<Animation>& animation)
 {
     bool isDelaySet, isDirectionSet, isDurationSet, isFillModeSet, isIterationCountSet, isNameSet, isPlayStateSet, isPropertySet, isTimingFunctionSet;
     int property, iterationCount, fillMode;
     double duration;
     RefPtr<TimingFunction> timingFunction;
     String name;
-
-    animation.clearAll();
 
     double delay;
     if (!decodeBoolAndValue(decoder, isDelaySet, delay))
@@ -1038,27 +1145,103 @@ bool ArgumentCoder<Animation>::decode(ArgumentDecoder* decoder, Animation& anima
     if (!decodeBoolAndValue<RefPtr<TimingFunction> >(decoder, isTimingFunctionSet, timingFunction))
         return false;
 
+    animation = Animation::create();
+    animation->clearAll();
+
     if (isDelaySet)
-        animation.setDelay(delay);
+        animation->setDelay(delay);
     if (isDirectionSet)
-        animation.setDirection(direction);
+        animation->setDirection(direction);
     if (isDurationSet)
-        animation.setDuration(duration);
+        animation->setDuration(duration);
     if (isFillModeSet)
-        animation.setFillMode(fillMode);
+        animation->setFillMode(fillMode);
     if (isIterationCountSet)
-        animation.setIterationCount(iterationCount);
+        animation->setIterationCount(iterationCount);
     if (isNameSet)
-        animation.setName(name);
+        animation->setName(name);
     if (isPlayStateSet)
-        animation.setPlayState(playState);
+        animation->setPlayState(playState);
     if (isPropertySet)
-        animation.setProperty(property);
+        animation->setProperty(property);
     if (isTimingFunctionSet)
-        animation.setTimingFunction(timingFunction);
+        animation->setTimingFunction(timingFunction);
 
     return true;
 }
+
+#if USE(ACCELERATED_COMPOSITING)
+
+void ArgumentCoder<KeyframeValueList>::encode(ArgumentEncoder* encoder, const WebCore::KeyframeValueList& keyframes)
+{
+    encoder->encodeUInt32(keyframes.size());
+    encoder->encodeInt32(keyframes.property());
+    for (size_t i = 0; i < keyframes.size(); ++i) {
+        const WebCore::AnimationValue* value = keyframes.at(i);
+        encoder->encodeFloat(value->keyTime());
+        ArgumentCoder<RefPtr<WebCore::TimingFunction> >::encode(encoder, value->timingFunction());
+        switch (keyframes.property()) {
+        case WebCore::AnimatedPropertyOpacity: {
+            const WebCore::FloatAnimationValue* floatValue = static_cast<const WebCore::FloatAnimationValue*>(value);
+            encoder->encodeFloat(floatValue->value());
+            break;
+        }
+        case WebCore::AnimatedPropertyWebkitTransform: {
+            const WebCore::TransformAnimationValue* transformValue = static_cast<const WebCore::TransformAnimationValue*>(value);
+            ArgumentCoder<WebCore::TransformOperations>::encode(encoder, *transformValue->value());
+            break;
+        }
+        default:
+            break;
+        }
+    }
+}
+
+bool ArgumentCoder<KeyframeValueList>::decode(ArgumentDecoder* decoder, WebCore::KeyframeValueList& keyframes)
+{
+    uint32_t size;
+    int32_t property;
+    if (!decoder->decodeUInt32(size))
+        return false;
+    if (!decoder->decodeInt32(property))
+        return false;
+
+    keyframes = WebCore::KeyframeValueList(WebCore::AnimatedPropertyID(property));
+
+    for (size_t i = 0; i < size; ++i) {
+        float keyTime;
+   
+        RefPtr<WebCore::TimingFunction> timingFunction;
+        if (!decoder->decodeFloat(keyTime))
+            return false;
+        if (!ArgumentCoder<RefPtr<WebCore::TimingFunction> >::decode(decoder, timingFunction))
+            return false;
+
+        switch (property) {
+        case WebCore::AnimatedPropertyOpacity: {
+            float value;
+            if (!decoder->decodeFloat(value))
+                return false;
+            keyframes.insert(new WebCore::FloatAnimationValue(keyTime, value, timingFunction));
+            break;
+        }
+        case WebCore::AnimatedPropertyWebkitTransform: {
+            WebCore::TransformOperations value;
+            if (!ArgumentCoder<WebCore::TransformOperations>::decode(decoder, value))
+                return false;
+            keyframes.insert(new WebCore::TransformAnimationValue(keyTime, &value, timingFunction));
+            break;
+        }
+        default:
+            break;
+        }
+    }
+
+    return true;
+}
+
+#endif
+
 #endif
 
 } // namespace CoreIPC

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,67 +21,65 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "IntRect.h"
+#include "Color.h"
 #include "LayerTileIndex.h"
 #include "Texture.h"
 
-#include <SkBitmap.h>
-#include <memory>
 #include <wtf/HashMap.h>
 #include <wtf/ListHashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
-class GLES2Context;
+class IntRect;
 
-// An LRU cache for OpenGL textures
+// A LRU cache for OpenGL textures.
 class TextureCacheCompositingThread {
     WTF_MAKE_NONCOPYABLE(TextureCacheCompositingThread);
     WTF_MAKE_FAST_ALLOCATED;
 public:
     friend TextureCacheCompositingThread* textureCacheCompositingThread();
 
-    // Creates a new texture managed by this cache
-    PassRefPtr<Texture> createTexture(GLES2Context* context)
+    // Creates a new texture managed by this cache.
+    PassRefPtr<Texture> createTexture()
     {
-        return Texture::create(context);
+        return Texture::create();
     }
 
-    // Retrieve a texture from the cache
-    PassRefPtr<Texture> textureForTiledContents(GLES2Context*, const SkBitmap& contents, const IntRect& tileRect, const TileIndex&, bool isOpaque);
-    PassRefPtr<Texture> textureForColor(GLES2Context*, const Color&);
+    // Retrieve a texture from the cache.
+    PassRefPtr<Texture> textureForTiledContents(const SkBitmap& contents, const IntRect& tileRect, const TileIndex&, bool isOpaque);
+    PassRefPtr<Texture> textureForColor(const Color&);
 
     // Update contents of an existing texture, or create a new one if texture is 0.
-    PassRefPtr<Texture> updateContents(const RefPtr<Texture>&, GLES2Context*, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect);
+    PassRefPtr<Texture> updateContents(const RefPtr<Texture>&, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect, bool isOpaque);
 
     size_t memoryUsage() const { return m_memoryUsage; }
     size_t memoryLimit() const { return m_memoryLimit; }
     void setMemoryLimit(size_t limit) { m_memoryLimit = limit; }
 
-    // Evict unprotected textures until we reach the limit provided
+    // Evict unprotected textures until we reach the limit provided.
     void prune(size_t limit);
     void prune() { prune(memoryLimit()); }
 
-    // Evict all textures from the cache
-    void clear(GLES2Context*);
+    // Evict all textures from the cache.
+    void clear();
 
-    // Update the LRU list
+    // Update the LRU list.
     void textureAccessed(Texture*);
 
     // Deleting destroyed textures is provided as a separate method, because
     // there might not be an OpenGL context current when the texture destructor
     // was called. Calling this makes sure to free any such textures.
-    void collectGarbage(GLES2Context*);
+    void collectGarbage();
 
-    // The following methods are called by Texture class:
     void textureDestroyed(Texture*);
     void textureResized(Texture*, const IntSize& oldSize);
 
-    // Undo the effects of eviction, if possible
-    bool install(Texture*, GLES2Context*);
+    // Undo the effects of eviction, if possible.
+    bool install(Texture*);
 
 private:
     struct ZombieTexture {
@@ -102,8 +100,8 @@ private:
     TextureCacheCompositingThread();
     ~TextureCacheCompositingThread();
 
-    unsigned allocateTextureId(GLES2Context*);
-    void freeTextureId(GLES2Context*, unsigned id);
+    unsigned allocateTextureId();
+    void freeTextureId(unsigned id);
 
     void incMemoryUsage(int delta) { setMemoryUsage(memoryUsage() + delta); }
     void decMemoryUsage(int delta) { setMemoryUsage(memoryUsage() - delta); }
@@ -113,12 +111,12 @@ private:
 
     void evict(const TextureSet::iterator&);
 
-    // LRU set of weak pointers to textures
+    // LRU set of weak pointers to textures.
     TextureSet m_textures;
     size_t m_memoryUsage;
     size_t m_memoryLimit;
 
-    // Map of refcounted pointers to textures
+    // Map of refCounted pointers to textures.
     HashMap<ContentsKey, TextureMap> m_cache;
     struct ColorHash {
         static unsigned hash(const Color& key) { return WTF::intHash(key.rgb()); }

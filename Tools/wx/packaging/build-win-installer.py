@@ -31,8 +31,10 @@ import datetime
 import glob
 from subprocess import *
 
+import wx
+
 script_dir = os.path.abspath(os.path.dirname(__file__))
-sys.path.append(os.path.abspath(os.path.join(script_dir, "..", "build")))
+sys.path.append(os.path.abspath(os.path.join(script_dir, "..", "..", "waf", "build")))
 
 from build_utils import *
 
@@ -85,7 +87,17 @@ CopyMode: alwaysoverwrite; Source: *.py;        DestDir: "{app}"
 
     installerTemplate = open("wxWebKitInstaller.iss.in", "r").read()
 
+    wx_version = '%d.%d' % (wx.MAJOR_VERSION, wx.MINOR_VERSION)
+    if wx.MINOR_VERSION % 2 == 1:
+        wx_version += ".%d" % wx.RELEASE_VERSION
+        
+    # in 2.9/3.0, there are only unicode builds, so unicode has been removed
+    # from build names.
+    if wx.MAJOR_VERSION > 2 or wx.MINOR_VERSION > 8:
+        installerTemplate = installerTemplate.replace("msw-unicode", "msw")
+
     installerTemplate = installerTemplate.replace("<<VERSION>>", date)
+    installerTemplate = installerTemplate.replace("<<WXVERSION>>", wx_version)
     installerTemplate = installerTemplate.replace("<<ROOTDIR>>", wxwebkit_dir )
     installerTemplate = installerTemplate.replace("<<PYTHONVER>>", sys.version[0:3] )
     installerTemplate = installerTemplate.replace("<<FILES>>", fileList )

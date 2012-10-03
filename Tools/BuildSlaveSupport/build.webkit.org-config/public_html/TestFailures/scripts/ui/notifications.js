@@ -182,21 +182,13 @@ ui.notifications.FailingTests = base.extends(ui.notifications.Failure, {
     },
     _forEachTestGroup: function(callback)
     {
-        var testsByDirectory = {};
-        this._testNameList.forEach(function(testName) {
-            var directory = base.dirName(testName);
-            testsByDirectory[directory] = testsByDirectory[directory] || [];
-            testsByDirectory[directory].push(testName);
-        });
         var individualTests = [];
-        Object.keys(testsByDirectory).forEach(function(directory) {
-            var testsInDirectory = testsByDirectory[directory];
-            var count = testsInDirectory.length;
-            if (count <= kMaxTestsPerGroup) {
+        base.forEachDirectory(this._testNameList, function(groupLabel, testsInDirectory) {
+            if (testsInDirectory.length <= kMaxTestsPerGroup) {
                 individualTests = individualTests.concat(testsInDirectory);
                 return;
             }
-            callback(directory + ' (' + count + ' tests)', testsInDirectory);
+            callback(groupLabel, testsInDirectory);
         });
         individualTests.forEach(function(testName) {
             callback(testName, [testName]);
@@ -247,9 +239,9 @@ ui.notifications.FailingTestsSummary = base.extends(ui.notifications.FailingTest
 });
 
 ui.notifications.BuildersFailing = base.extends(ui.notifications.Failure, {
-    init: function()
+    init: function(message)
     {
-        this._problem.insertBefore(document.createTextNode('Build Failed:'), this._problem.firstChild);
+        this._problem.insertBefore(document.createTextNode(message + ':'), this._problem.firstChild);
     },
     setFailingBuilders: function(builderNameList)
     {

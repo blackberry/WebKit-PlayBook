@@ -1,5 +1,6 @@
 /*
  * Copyright 2008, The Android Open Source Project
+ * Copyright (C) 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,16 +42,17 @@ TouchEvent::TouchEvent()
 TouchEvent::TouchEvent(TouchList* touches, TouchList* targetTouches,
         TouchList* changedTouches, const AtomicString& type, 
         PassRefPtr<AbstractView> view, int screenX, int screenY, int pageX, int pageY,
-        bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
-        float scale, float rotation)
+        bool ctrlKey, bool altKey, bool shiftKey, bool metaKey)
     : MouseRelatedEvent(type, true, true, view, 0, IntPoint(screenX, screenY),
-                        IntPoint(pageX, pageY), ctrlKey, altKey, shiftKey, metaKey)
+                        IntPoint(pageX, pageY),
+#if ENABLE(POINTER_LOCK)
+                        IntPoint(0, 0),
+#endif
+                        ctrlKey, altKey, shiftKey, metaKey)
     , m_touches(touches)
     , m_targetTouches(targetTouches)
     , m_changedTouches(changedTouches)
-    , m_scale(scale)
-    , m_rotation(rotation)
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     , m_touchHold(false)
     , m_doubleTap(false)
 #endif
@@ -64,8 +66,7 @@ TouchEvent::~TouchEvent()
 void TouchEvent::initTouchEvent(TouchList* touches, TouchList* targetTouches,
         TouchList* changedTouches, const AtomicString& type, 
         PassRefPtr<AbstractView> view, int screenX, int screenY, int clientX, int clientY,
-        bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
-        float scale, float rotation)
+        bool ctrlKey, bool altKey, bool shiftKey, bool metaKey)
 {
     if (dispatched())
         return;
@@ -80,10 +81,8 @@ void TouchEvent::initTouchEvent(TouchList* touches, TouchList* targetTouches,
     m_altKey = altKey;
     m_shiftKey = shiftKey;
     m_metaKey = metaKey;
-    m_scale = scale;
-    m_rotation = rotation;
     initCoordinates(IntPoint(clientX, clientY));
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     m_doubleTap = false;
     m_touchHold = false;
 #endif

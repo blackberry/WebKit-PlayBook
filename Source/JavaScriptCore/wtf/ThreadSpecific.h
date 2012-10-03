@@ -42,20 +42,17 @@
 #define WTF_ThreadSpecific_h
 
 #include <wtf/Noncopyable.h>
+#include <wtf/StdLibExtras.h>
 
 #if USE(PTHREADS)
 #include <pthread.h>
-#elif PLATFORM(QT)
-#include <QThreadStorage>
-#elif PLATFORM(GTK)
-#include <glib.h>
 #elif OS(WINDOWS)
 #include <windows.h>
 #endif
 
 namespace WTF {
 
-#if !USE(PTHREADS) && !PLATFORM(QT) && !PLATFORM(GTK) && OS(WINDOWS)
+#if OS(WINDOWS)
 // ThreadSpecificThreadExit should be called each time when a thread is detached.
 // This is done automatically for threads created with WTF::createThread.
 void ThreadSpecificThreadExit();
@@ -71,7 +68,7 @@ public:
     T& operator*();
 
 private:
-#if !USE(PTHREADS) && !PLATFORM(QT) && !PLATFORM(GTK) && OS(WINDOWS)
+#if OS(WINDOWS)
     friend void ThreadSpecificThreadExit();
 #endif
 
@@ -80,34 +77,25 @@ private:
     // have exited). It's unlikely that any user of this call will be in that situation - and having
     // a destructor defined can be confusing, given that it has such strong pre-requisites to work correctly.
     ~ThreadSpecific();
-    
+
     T* get();
     void set(T*);
     void static destroy(void* ptr);
 
-#if USE(PTHREADS) || PLATFORM(QT) || PLATFORM(GTK) || OS(WINDOWS)
     struct Data {
         WTF_MAKE_NONCOPYABLE(Data);
     public:
         Data(T* value, ThreadSpecific<T>* owner) : value(value), owner(owner) {}
-#if PLATFORM(QT)
-        ~Data() { owner->destroy(this); }
-#endif
 
         T* value;
         ThreadSpecific<T>* owner;
-#if !USE(PTHREADS) && !PLATFORM(QT) && !PLATFORM(GTK)
+#if OS(WINDOWS)
         void (*destructor)(void*);
 #endif
     };
-#endif
 
 #if USE(PTHREADS)
     pthread_key_t m_key;
-#elif PLATFORM(QT)
-    QThreadStorage<Data*> m_key;
-#elif PLATFORM(GTK)
-    GStaticPrivate m_key;
 #elif OS(WINDOWS)
     int m_index;
 #endif
@@ -134,51 +122,6 @@ inline void ThreadSpecific<T>::set(T* ptr)
 {
     ASSERT(!get());
     pthread_setspecific(m_key, new Data(ptr, this));
-}
-
-#elif PLATFORM(QT)
-
-template<typename T>
-inline ThreadSpecific<T>::ThreadSpecific()
-{
-}
-
-template<typename T>
-inline T* ThreadSpecific<T>::get()
-{
-    Data* data = static_cast<Data*>(m_key.localData());
-    return data ? data->value : 0;
-}
-
-template<typename T>
-inline void ThreadSpecific<T>::set(T* ptr)
-{
-    ASSERT(!get());
-    Data* data = new Data(ptr, this);
-    m_key.setLocalData(data);
-}
-
-#elif PLATFORM(GTK)
-
-template<typename T>
-inline ThreadSpecific<T>::ThreadSpecific()
-{
-    g_static_private_init(&m_key);
-}
-
-template<typename T>
-inline T* ThreadSpecific<T>::get()
-{
-    Data* data = static_cast<Data*>(g_static_private_get(&m_key));
-    return data ? data->value : 0;
-}
-
-template<typename T>
-inline void ThreadSpecific<T>::set(T* ptr)
-{
-    ASSERT(!get());
-    Data* data = new Data(ptr, this);
-    g_static_private_set(&m_key, data, destroy);
 }
 
 #elif OS(WINDOWS)
@@ -246,13 +189,6 @@ inline void ThreadSpecific<T>::destroy(void* ptr)
     // We want get() to keep working while data destructor works, because it can be called indirectly by the destructor.
     // Some pthreads implementations zero out the pointer before calling destroy(), so we temporarily reset it.
     pthread_setspecific(data->owner->m_key, ptr);
-#elif PLATFORM(GTK)
-    // See comment as above
-    g_static_private_set(&data->owner->m_key, data, 0);
-#endif
-#if PLATFORM(QT)
-    // See comment as above
-    data->owner->m_key.setLocalData(data);
 #endif
 
     data->value->~T();
@@ -260,19 +196,13 @@ inline void ThreadSpecific<T>::destroy(void* ptr)
 
 #if USE(PTHREADS)
     pthread_setspecific(data->owner->m_key, 0);
-#elif PLATFORM(QT)
-    // Do nothing here
-#elif PLATFORM(GTK)
-    g_static_private_set(&data->owner->m_key, 0, 0);
 #elif OS(WINDOWS)
     TlsSetValue(tlsKeys()[data->owner->m_index], 0);
 #else
 #error ThreadSpecific is not implemented for this platform.
 #endif
 
-#if !PLATFORM(QT)
     delete data;
-#endif
 }
 
 template<typename T>
@@ -290,7 +220,7 @@ inline ThreadSpecific<T>::operator T*()
         // needs to access the value, to avoid recursion.
         ptr = static_cast<T*>(fastZeroedMalloc(sizeof(T)));
         set(ptr);
-        new (ptr) T;
+        new (NotNull, ptr) T;
     }
     return ptr;
 }
@@ -307,6 +237,6 @@ inline T& ThreadSpecific<T>::operator*()
     return *operator T*();
 }
 
-}
+} // namespace WTF
 
-#endif
+#endif // WTF_ThreadSpecific_h

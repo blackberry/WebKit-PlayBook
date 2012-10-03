@@ -44,6 +44,7 @@
 #import "AccessibilityTableRow.h"
 #import "Chrome.h"
 #import "ColorMac.h"
+#import "ContextMenuController.h"
 #import "Frame.h"
 #import "FrameLoaderClient.h"
 #import "FrameSelection.h"
@@ -259,6 +260,10 @@ using namespace std;
 #define NSAccessibilityHeadingSearchKey @"AXHeadingSearchKey"
 #endif
 
+#ifndef NSAccessibilityHighlightedSearchKey
+#define NSAccessibilityHighlightedSearchKey @"AXHighlightedSearchKey"
+#endif
+
 #ifndef NSAccessibilityItalicFontSearchKey
 #define NSAccessibilityItalicFontSearchKey @"AXItalicFontSearchKey"
 #endif
@@ -467,6 +472,7 @@ static AccessibilitySearchKeyMap* createAccessibilitySearchKeyMap()
         { NSAccessibilityHeadingLevel6SearchKey, HeadingLevel6SearchKey },
         { NSAccessibilityHeadingSameLevelSearchKey, HeadingSameLevelSearchKey },
         { NSAccessibilityHeadingSearchKey, HeadingSearchKey },
+        { NSAccessibilityHighlightedSearchKey, HighlightedSearchKey },
         { NSAccessibilityItalicFontSearchKey, ItalicFontSearchKey },
         { NSAccessibilityLandmarkSearchKey, LandmarkSearchKey },
         { NSAccessibilityLinkSearchKey, LinkSearchKey },
@@ -495,7 +501,8 @@ static AccessibilitySearchKeyMap* createAccessibilitySearchKeyMap()
 
 static AccessibilitySearchKey accessibilitySearchKeyForString(const String& value)
 {
-    ASSERT(!value.isEmpty());
+    if (value.isEmpty())
+        return AnyTypeSearchKey;
     
     static const AccessibilitySearchKeyMap* searchKeyMap = createAccessibilitySearchKeyMap();
     
@@ -675,6 +682,12 @@ static void AXAttributeStringSetStyle(NSMutableAttributedString* attrString, Ren
             AXAttributeStringSetColor(attrString, NSAccessibilityStrikethroughColorTextAttribute, nsColor(linethrough), range);
         }
     }
+    
+    // Indicate background highlighting.
+    for (Node* node = renderer->node(); node; node = node->parentNode()) {
+        if (node->hasTagName(markTag))
+            AXAttributeStringSetNumber(attrString, @"AXHighlight", [NSNumber numberWithBool:YES], range);
+    }
 }
 
 static void AXAttributeStringSetBlockquoteLevel(NSMutableAttributedString* attrString, RenderObject* renderer, NSRange range)
@@ -730,8 +743,15 @@ static void AXAttributeStringSetHeadingLevel(NSMutableAttributedString* attrStri
     if (!renderer)
         return;
     
+    // Sometimes there are objects between the text and the heading. 
+    // In those cases the parent hierarchy should be queried to see if there is a heading level.
+    int parentHeadingLevel = 0;
     AccessibilityObject* parentObject = renderer->document()->axObjectCache()->getOrCreate(renderer->parent());
-    int parentHeadingLevel = parentObject->headingLevel();
+    for (; parentObject; parentObject = parentObject->parentObject()) {
+        parentHeadingLevel = parentObject->headingLevel();
+        if (parentHeadingLevel)
+            break;
+    }
     
     if (parentHeadingLevel)
         [attrString addAttribute:@"AXHeadingLevel" value:[NSNumber numberWithInt:parentHeadingLevel] range:range];
@@ -1413,10 +1433,10 @@ static NSMutableArray* convertToNSArray(const AccessibilityObject::Accessibility
         }
 
         if (scrollView)
-            rect = scrollView->contentsToWindow(rect);
+            rect = scrollView->contentsToRootView(rect);
         
         if (m_object->page())
-            point = m_object->page()->chrome()->windowToScreen(rect).location();
+            point = m_object->page()->chrome()->rootViewToScreen(rect).location();
         else
             point = rect.location();
     }
@@ -1888,9 +1908,16 @@ static NSString* roleValueToNSString(AccessibilityRole value)
             // if selectionEnd > 0, then there is selected text and this question should not be answered
             if (m_object->isPasswordField() || m_object->selectionEnd() > 0)
                 return nil;
-            int lineNumber = m_object->lineForPosition(m_object->visiblePositionForIndex(m_object->selectionStart(), true));
+
+            AccessibilityObject* focusedObject = m_object->focusedUIElement();
+            if (focusedObject != m_object)
+                return nil;
+
+            VisiblePosition focusedPosition = focusedObject->visiblePositionForIndex(focusedObject->selectionStart(), true);
+            int lineNumber = m_object->lineForPosition(focusedPosition);
             if (lineNumber < 0)
                 return nil;
+
             return [NSNumber numberWithInt:lineNumber];
         }
     }
@@ -2217,30 +2244,17 @@ static NSString* roleValueToNSString(AccessibilityRole value)
     if ([attributeName isEqualToString: @"AXSelectedTextMarkerRange"])
         return [self textMarkerRangeForSelection];
     
-    if (m_object->isAccessibilityRenderObject()) {
-        RenderObject* renderer = static_cast<AccessibilityRenderObject*>(m_object)->renderer();
-        if (!renderer)
-            return nil;
-        
+    if (m_object->renderer()) {
         if ([attributeName isEqualToString: @"AXStartTextMarker"])
-            return [self textMarkerForVisiblePosition:startOfDocument(renderer->document())];
+            return [self textMarkerForVisiblePosition:startOfDocument(m_object->renderer()->document())];
         if ([attributeName isEqualToString: @"AXEndTextMarker"])
-            return [self textMarkerForVisiblePosition:endOfDocument(renderer->document())];
-
-        if ([attributeName isEqualToString:NSAccessibilityBlockQuoteLevelAttribute])
-            return [NSNumber numberWithInt:m_object->blockquoteLevel()];
-        if ([attributeName isEqualToString:@"AXTableLevel"])
-            return [NSNumber numberWithInt:m_object->tableLevel()];
-    } else {
-        AccessibilityObject* parent = m_object->parentObjectUnignored();
-        if (!parent)
-            return [NSNumber numberWithInt:0];
-        
-        if ([attributeName isEqualToString:NSAccessibilityBlockQuoteLevelAttribute])
-            return [parent->wrapper() accessibilityAttributeValue:NSAccessibilityBlockQuoteLevelAttribute];
-        if ([attributeName isEqualToString:@"AXTableLevel"])
-            return [parent->wrapper() accessibilityAttributeValue:@"AXTableLevel"];
+            return [self textMarkerForVisiblePosition:endOfDocument(m_object->renderer()->document())];
     }
+    
+    if ([attributeName isEqualToString:NSAccessibilityBlockQuoteLevelAttribute])
+        return [NSNumber numberWithInt:m_object->blockquoteLevel()];
+    if ([attributeName isEqualToString:@"AXTableLevel"])
+        return [NSNumber numberWithInt:m_object->tableLevel()];
     
     if ([attributeName isEqualToString: NSAccessibilityLinkedUIElementsAttribute]) {
         AccessibilityObject::AccessibilityChildrenVector linkedUIElements;
@@ -2260,6 +2274,9 @@ static NSString* roleValueToNSString(AccessibilityRole value)
     }
 
     if ([attributeName isEqualToString:NSAccessibilityTitleUIElementAttribute]) {
+        if (!m_object->exposesTitleUIElement())
+            return nil;
+        
         AccessibilityObject* obj = m_object->titleUIElement();
         if (obj)
             return obj->wrapper();
@@ -2598,14 +2615,7 @@ static NSString* roleValueToNSString(AccessibilityRole value)
     Page* page = frame->page();
     if (!page)
         return;
-
-    // Simulate a click in the middle of the object.
-    LayoutPoint clickPoint = m_object->clickPoint();
-    
-    PlatformMouseEvent mouseEvent(clickPoint, clickPoint, RightButton, MouseEventPressed, 1, false, false, false, false, currentTime());
-    bool handled = frame->eventHandler()->sendContextMenuEvent(mouseEvent);
-    if (handled)
-        page->chrome()->showContextMenu();
+    page->contextMenuController()->showContextMenuAt(frame, m_object->clickPoint());
 }
 
 - (void)accessibilityPerformAction:(NSString*)action
@@ -2801,17 +2811,17 @@ static RenderObject* rendererForView(NSView* view)
     
     // dispatch
     if ([attribute isEqualToString:NSAccessibilityUIElementsForSearchPredicateParameterizedAttribute]) {
-        AccessibilityObject* axStartObject = 0;
+        AccessibilityObject* startObject = 0;
         if ([[dictionary objectForKey:@"AXStartElement"] isKindOfClass:[WebAccessibilityObjectWrapper self]])
-            axStartObject = [(WebAccessibilityObjectWrapper*)[dictionary objectForKey:@"AXStartElement"] accessibilityObject];
+            startObject = [(WebAccessibilityObjectWrapper*)[dictionary objectForKey:@"AXStartElement"] accessibilityObject];
         
-        AccessibilitySearchDirection axSearchDirection = SearchDirectionNext;
+        AccessibilitySearchDirection searchDirection = SearchDirectionNext;
         if ([[dictionary objectForKey:@"AXDirection"] isKindOfClass:[NSString self]])
-            axSearchDirection = ([(NSString*)[dictionary objectForKey:@"AXDirection"] isEqualToString:@"AXDirectionNext"]) ? SearchDirectionNext : SearchDirectionPrevious;
+            searchDirection = ([(NSString*)[dictionary objectForKey:@"AXDirection"] isEqualToString:@"AXDirectionNext"]) ? SearchDirectionNext : SearchDirectionPrevious;
         
-        AccessibilitySearchKey axSearchKey = AnyTypeSearchKey;
+        AccessibilitySearchKey searchKey = AnyTypeSearchKey;
         if ([[dictionary objectForKey:@"AXSearchKey"] isKindOfClass:[NSString self]])
-            axSearchKey = accessibilitySearchKeyForString((CFStringRef)[dictionary objectForKey:@"AXSearchKey"]);
+            searchKey = accessibilitySearchKeyForString((CFStringRef)[dictionary objectForKey:@"AXSearchKey"]);
         
         String searchText;
         if ([[dictionary objectForKey:@"AXSearchText"] isKindOfClass:[NSString self]])
@@ -2821,11 +2831,12 @@ static RenderObject* rendererForView(NSView* view)
         if ([[dictionary objectForKey:@"AXResultsLimit"] isKindOfClass:[NSNumber self]])
             resultsLimit = [(NSNumber*)[dictionary objectForKey:@"AXResultsLimit"] unsignedIntValue];
         
-        AccessibilitySearchPredicate axSearchPredicate = {m_object, axStartObject, axSearchDirection, axSearchKey, &searchText, resultsLimit};
-        AccessibilityObject::AccessibilityChildrenVector axResults;
-        AccessibilityObject::accessibleObjectsWithAccessibilitySearchPredicate(&axSearchPredicate, axResults);
+        AccessibilitySearchCriteria criteria = {startObject, searchDirection, searchKey, &searchText, resultsLimit};
+
+        AccessibilityObject::AccessibilityChildrenVector results;
+        m_object->findMatchingObjects(&criteria, results);
         
-        return convertToNSArray(axResults);
+        return convertToNSArray(results);
     }
 
     if ([attribute isEqualToString:@"AXUIElementForTextMarker"]) {
@@ -3188,7 +3199,7 @@ static RenderObject* rendererForView(NSView* view)
 
 // This is set by DRT when it wants to listen for notifications.
 static BOOL accessibilityShouldRepostNotifications;
-- (void)accessibilitySetShouldRepostNotifications:(BOOL)repost
++ (void)accessibilitySetShouldRepostNotifications:(BOOL)repost
 {
     accessibilityShouldRepostNotifications = repost;
 }
@@ -3197,7 +3208,7 @@ static BOOL accessibilityShouldRepostNotifications;
 {
     if (accessibilityShouldRepostNotifications) {
         NSDictionary* userInfo = [NSDictionary dictionaryWithObjectsAndKeys:notificationName, @"notificationName", nil];
-        [[NSNotificationCenter defaultCenter] postNotificationName:@"AXDRTNotification" object:nil userInfo:userInfo];
+        [[NSNotificationCenter defaultCenter] postNotificationName:@"AXDRTNotification" object:self userInfo:userInfo];
     }
 }
 

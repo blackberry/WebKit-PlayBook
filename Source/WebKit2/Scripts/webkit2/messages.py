@@ -179,6 +179,7 @@ def struct_or_class(namespace, type):
         'WebCore::Length',
         'WebCore::MatrixTransformOperation',
         'WebCore::Matrix3DTransformOperation',
+        'WebCore::NotificationContents',
         'WebCore::PerspectiveTransformOperation',
         'WebCore::PluginInfo',
         'WebCore::PrintInfo',
@@ -310,18 +311,22 @@ def handler_function(receiver, message):
     return '%s::%s' % (receiver.name, message.name[0].lower() + message.name[1:])
 
 
-def async_case_statement(receiver, message, return_value=None):
+def async_case_statement(receiver, message):
+    dispatch_function_args = ['arguments', 'this', '&%s' % handler_function(receiver, message)]
     dispatch_function = 'handleMessage'
     if message_is_variadic(message):
         dispatch_function += 'Variadic'
-
+    if message.has_attribute(DISPATCH_ON_CONNECTION_QUEUE_ATTRIBUTE):
+        dispatch_function += 'OnConnectionQueue'
+        dispatch_function_args.insert(0, 'connection')
+        
     result = []
     result.append('    case Messages::%s::%s:\n' % (receiver.name, message.id()))
-    result.append('        CoreIPC::%s<Messages::%s::%s>(arguments, this, &%s);\n' % (dispatch_function, receiver.name, message.name, handler_function(receiver, message)))
-    if return_value:
-        result.append('        return %s;\n' % return_value)
-    else:
-        result.append('        return;\n')
+
+    result.append('        CoreIPC::%s<Messages::%s::%s>(%s);\n' % (dispatch_function, receiver.name, message.name, ', '.join(dispatch_function_args)))
+    if message.has_attribute(DISPATCH_ON_CONNECTION_QUEUE_ATTRIBUTE):
+        result.append('        didHandleMessage = true;\n')
+    result.append('        return;\n')
     return surround_in_condition(''.join(result), message.condition)
 
 
@@ -376,6 +381,7 @@ def headers_for_type(type):
         'WTF::String': ['<wtf/text/WTFString.h>'],
         'WebCore::CompositionUnderline': ['<WebCore/Editor.h>'],
         'WebCore::GrammarDetail': ['<WebCore/TextCheckerClient.h>'],
+        'WebCore::KeyframeValueList': ['<WebCore/GraphicsLayer.h>'],
         'WebCore::KeypressCommand': ['<WebCore/KeyboardEvent.h>'],
         'WebCore::FileChooserSettings': ['<WebCore/FileChooser.h>'],
         'WebCore::PluginInfo': ['<WebCore/PluginData.h>'],
@@ -532,16 +538,16 @@ def generate_message_handler(file):
                 async_messages.append(message)
 
     if async_dispatch_on_connection_queue_messages:
-        result.append('bool %s::willProcess%sMessageOnClientRunLoop(CoreIPC::Connection*, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments)\n' % (receiver.name, receiver.name))
+        result.append('void %s::didReceive%sMessageOnConnectionWorkQueue(CoreIPC::Connection* connection, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments, bool& didHandleMessage)\n' % (receiver.name, receiver.name))
         result.append('{\n')
         result.append('#if COMPILER(MSVC)\n')
         result.append('#pragma warning(push)\n')
         result.append('#pragma warning(disable: 4065)\n')
         result.append('#endif\n')
         result.append('    switch (messageID.get<Messages::%s::Kind>()) {\n' % receiver.name)
-        result += [async_case_statement(receiver, message, 'false') for message in async_dispatch_on_connection_queue_messages]
+        result += [async_case_statement(receiver, message) for message in async_dispatch_on_connection_queue_messages]
         result.append('    default:\n')
-        result.append('        return true;\n')
+        result.append('        return;\n')
         result.append('    }\n')
         result.append('#if COMPILER(MSVC)\n')
         result.append('#pragma warning(pop)\n')

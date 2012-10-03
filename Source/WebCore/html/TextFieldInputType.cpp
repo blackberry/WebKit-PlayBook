@@ -33,14 +33,17 @@
 #include "TextFieldInputType.h"
 
 #include "BeforeTextInsertedEvent.h"
+#include "FormDataList.h"
 #include "Frame.h"
 #include "HTMLInputElement.h"
+#include "HTMLNames.h"
 #include "KeyboardEvent.h"
 #include "Page.h"
 #include "RenderLayer.h"
 #include "RenderTextControlSingleLine.h"
 #include "RenderTheme.h"
 #include "ShadowRoot.h"
+#include "ShadowTree.h"
 #include "TextControlInnerElements.h"
 #include "TextEvent.h"
 #include "TextIterator.h"
@@ -48,6 +51,8 @@
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
+
+using namespace HTMLNames;
 
 TextFieldInputType::TextFieldInputType(HTMLInputElement* element)
     : InputType(element)
@@ -65,7 +70,7 @@ bool TextFieldInputType::isTextField() const
 
 bool TextFieldInputType::valueMissing(const String& value) const
 {
-    return value.isEmpty();
+    return element()->required() && value.isEmpty();
 }
 
 bool TextFieldInputType::canSetSuggestedValue()
@@ -73,30 +78,51 @@ bool TextFieldInputType::canSetSuggestedValue()
     return true;
 }
 
-void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChanged, bool sendChangeEvent)
+void TextFieldInputType::setValue(const String& sanitizedValue, bool valueChanged, TextFieldEventBehavior eventBehavior)
 {
-    InputType::setValue(sanitizedValue, valueChanged, sendChangeEvent);
-    element()->updatePlaceholderVisibility(false);
+    // Grab this input element to keep reference even if JS event handler
+    // changes input type.
+    RefPtr<HTMLInputElement> input(element());
+
+    // We don't ask InputType::setValue to dispatch events because
+    // TextFieldInputType dispatches events different way from InputType.
+    InputType::setValue(sanitizedValue, valueChanged, DispatchNoEvent);
 
     if (valueChanged)
-        element()->updateInnerTextValue();
+        input->updateInnerTextValue();
 
     unsigned max = visibleValue().length();
-    if (element()->focused())
-        element()->setSelectionRange(max, max);
+    if (input->focused())
+        input->setSelectionRange(max, max);
     else
-        element()->cacheSelectionInResponseToSetValue(max);
-}
+        input->cacheSelectionInResponseToSetValue(max);
 
-void TextFieldInputType::dispatchChangeEventInResponseToSetValue()
-{
-    // If the user is still editing this field, dispatch an input event rather than a change event.
-    // The change event will be dispatched when editing finishes.
-    if (element()->focused()) {
-        element()->dispatchFormControlInputEvent();
+    if (!valueChanged)
         return;
+
+    switch (eventBehavior) {
+    case DispatchChangeEvent:
+        // If the user is still editing this field, dispatch an input event rather than a change event.
+        // The change event will be dispatched when editing finishes.
+        if (input->focused())
+            input->dispatchFormControlInputEvent();
+        else
+            input->dispatchFormControlChangeEvent();
+        break;
+
+    case DispatchInputAndChangeEvent: {
+        input->dispatchFormControlInputEvent();
+        input->dispatchFormControlChangeEvent();
+        break;
     }
-    InputType::dispatchChangeEventInResponseToSetValue();
+
+    case DispatchNoEvent:
+        break;
+    }
+
+    // FIXME: Why do we do this when eventBehavior == DispatchNoEvent
+    if (!input->focused() || eventBehavior == DispatchNoEvent)
+        input->setTextAsOfLastFormControlChangeEvent(sanitizedValue);
 }
 
 void TextFieldInputType::handleKeydownEvent(KeyboardEvent* event)
@@ -158,6 +184,13 @@ void TextFieldInputType::forwardEvent(Event* event)
     }
 }
 
+void TextFieldInputType::handleBlurEvent()
+{
+    InputType::handleBlurEvent();
+    if (Frame* frame = element()->document()->frame())
+        frame->editor()->textFieldDidEndEditing(element());
+}
+
 bool TextFieldInputType::shouldSubmitImplicitly(Event* event)
 {
     return (event->type() == eventNames().textInputEvent && event->hasInterface(eventNames().interfaceForTextEvent) && static_cast<TextEvent*>(event)->data() == "\n") || InputType::shouldSubmitImplicitly(event);
@@ -179,6 +212,8 @@ bool TextFieldInputType::needsContainer() const
 
 void TextFieldInputType::createShadowSubtree()
 {
+    ASSERT(element()->hasShadowRoot());
+
     ASSERT(!m_innerText);
     ASSERT(!m_innerBlock);
     ASSERT(!m_innerSpinButton);
@@ -191,11 +226,11 @@ void TextFieldInputType::createShadowSubtree()
     ExceptionCode ec = 0;
     m_innerText = TextControlInnerTextElement::create(document);
     if (!createsContainer) {
-        element()->ensureShadowRoot()->appendChild(m_innerText, ec);
+        element()->shadowTree()->oldestShadowRoot()->appendChild(m_innerText, ec);
         return;
     }
 
-    ShadowRoot* shadowRoot = element()->ensureShadowRoot();
+    ShadowRoot* shadowRoot = element()->shadowTree()->oldestShadowRoot();
     m_container = HTMLDivElement::create(document);
     m_container->setShadowPseudoId("-webkit-textfield-decoration-container");
     shadowRoot->appendChild(m_container, ec);
@@ -357,11 +392,20 @@ void TextFieldInputType::updatePlaceholderText()
     if (!m_placeholder) {
         m_placeholder = HTMLDivElement::create(element()->document());
         m_placeholder->setShadowPseudoId("-webkit-input-placeholder");
-        element()->shadowRoot()->insertBefore(m_placeholder, m_container ? m_container->nextSibling() : innerTextElement()->nextSibling(), ec);
+        element()->shadowTree()->oldestShadowRoot()->insertBefore(m_placeholder, m_container ? m_container->nextSibling() : innerTextElement()->nextSibling(), ec);
         ASSERT(!ec);
     }
     m_placeholder->setInnerText(placeholderText, ec);
     ASSERT(!ec);
+}
+
+bool TextFieldInputType::appendFormData(FormDataList& list, bool multipart) const
+{
+    InputType::appendFormData(list, multipart);
+    const AtomicString& dirnameAttrValue = element()->fastGetAttribute(dirnameAttr);
+    if (!dirnameAttrValue.isNull())
+        list.appendData(dirnameAttrValue, element()->directionForFormData());
+    return true;
 }
 
 } // namespace WebCore

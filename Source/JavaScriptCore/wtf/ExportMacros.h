@@ -30,17 +30,69 @@
 #ifndef ExportMacros_h
 #define ExportMacros_h
 
-#include "Platform.h"
+#include <wtf/Platform.h>
+
+// See note in wtf/Platform.h for more info on EXPORT_MACROS.
+#if USE(EXPORT_MACROS)
 
 #if !PLATFORM(CHROMIUM) && OS(WINDOWS) && !COMPILER(GCC)
 #define WTF_EXPORT __declspec(dllexport)
 #define WTF_IMPORT __declspec(dllimport)
+#define WTF_HIDDEN
 #elif defined(__GNUC__) && !defined(__CC_ARM) && !defined(__ARMCC__)
 #define WTF_EXPORT __attribute__((visibility("default")))
 #define WTF_IMPORT WTF_EXPORT
+#define WTF_HIDDEN __attribute__((visibility("hidden")))
 #else
 #define WTF_EXPORT
 #define WTF_IMPORT
+#define WTF_HIDDEN
 #endif
 
-#endif /* ExportMacros_h */
+// FIXME: When all ports are using the export macros, we should replace
+// WTF_EXPORTDATA with WTF_EXPORT_PRIVATE macros.
+#if defined(BUILDING_WTF)
+#define WTF_EXPORTDATA WTF_EXPORT
+#else
+#define WTF_EXPORTDATA WTF_IMPORT
+#endif
+
+#else // !USE(EXPORT_MACROS)
+
+#if !PLATFORM(CHROMIUM) && OS(WINDOWS) && !COMPILER(GCC)
+#if defined(BUILDING_WTF)
+#define WTF_EXPORTDATA __declspec(dllexport)
+#else
+#define WTF_EXPORTDATA __declspec(dllimport)
+#endif
+#else // PLATFORM(CHROMIUM) || !OS(WINDOWS) || COMPILER(GCC)
+#define WTF_EXPORTDATA
+#endif // !PLATFORM(CHROMIUM)...
+
+#define WTF_EXPORTCLASS WTF_EXPORTDATA
+
+#define WTF_EXPORT
+#define WTF_IMPORT
+#define WTF_HIDDEN
+
+#endif // USE(EXPORT_MACROS)
+
+#if defined(BUILDING_WTF)
+#define WTF_EXPORT_PRIVATE WTF_EXPORT
+#else
+#define WTF_EXPORT_PRIVATE WTF_IMPORT
+#endif
+
+// wxWebKit uses RTTI because wx itself does, so use a special macro for
+// extra exports it needs.
+#if PLATFORM(WX)
+#define WTF_EXPORT_PRIVATE_RTTI WTF_EXPORT_PRIVATE
+#else
+#define WTF_EXPORT_PRIVATE_RTTI
+#endif
+
+#define WTF_EXPORT_HIDDEN WTF_HIDDEN
+
+#define HIDDEN_INLINE WTF_EXPORT_HIDDEN inline
+
+#endif // ExportMacros_h

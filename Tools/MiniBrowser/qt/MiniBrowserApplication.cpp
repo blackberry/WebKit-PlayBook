@@ -28,12 +28,13 @@
 
 #include "MiniBrowserApplication.h"
 
+#include "BrowserWindow.h"
+#include "qquickwebview_p.h"
 #include "utils.h"
 #include <QRegExp>
 #include <QEvent>
 #include <QMouseEvent>
 #include <QTouchEvent>
-#include <QApplication>
 
 static inline bool isTouchEvent(const QEvent* event)
 {
@@ -61,13 +62,14 @@ static inline bool isMouseEvent(const QEvent* event)
 }
 
 MiniBrowserApplication::MiniBrowserApplication(int& argc, char** argv)
-    : QApplication(argc, argv)
-    , m_windowOptions(this)
+    : QGuiApplication(argc, argv)
     , m_realTouchEventReceived(false)
     , m_pendingFakeTouchEventCount(0)
     , m_isRobotized(false)
     , m_robotTimeoutSeconds(0)
     , m_robotExtraTimeSeconds(0)
+    , m_windowOptions(this)
+    , m_holdingControl(false)
 {
     setOrganizationName("Nokia");
     setApplicationName("QtMiniBrowser");
@@ -78,36 +80,58 @@ MiniBrowserApplication::MiniBrowserApplication(int& argc, char** argv)
 
 bool MiniBrowserApplication::notify(QObject* target, QEvent* event)
 {
+    if(QInputEvent* ie = static_cast<QInputEvent*>(event))
+        m_holdingControl = ie->modifiers().testFlag(Qt::ControlModifier);
+    else
+        m_holdingControl = false;
+
     // We try to be smart, if we received real touch event, we are probably on a device
     // with touch screen, and we should not have touch mocking.
 
-    if (!event->spontaneous() || m_realTouchEventReceived)
-        return QApplication::notify(target, event);
+    if (!event->spontaneous() || m_realTouchEventReceived || !m_windowOptions.touchMockingEnabled())
+        return QGuiApplication::notify(target, event);
 
     if (isTouchEvent(event) && static_cast<QTouchEvent*>(event)->deviceType() == QTouchEvent::TouchScreen) {
         if (m_pendingFakeTouchEventCount)
             --m_pendingFakeTouchEventCount;
         else
             m_realTouchEventReceived = true;
-        return QApplication::notify(target, event);
+        return QGuiApplication::notify(target, event);
     }
 
-    QWindow* targetWindow = qobject_cast<QWindow*>(target);
+    BrowserWindow* browserWindow = qobject_cast<BrowserWindow*>(target);
+    if (!browserWindow)
+        return QGuiApplication::notify(target, event);
+
+    // In QML events are propagated through parents. But since the WebView
+    // may consume key events, a shortcut might never reach the top QQuickItem.
+    // Therefore we are checking here for shortcuts.
+    if (event->type() == QEvent::KeyPress) {
+        QKeyEvent* keyEvent = static_cast<QKeyEvent*>(event);
+        if ((keyEvent->key() == Qt::Key_R && keyEvent->modifiers() == Qt::ControlModifier) || keyEvent->key() == Qt::Key_F5) {
+            browserWindow->reload();
+            return true;
+        }
+        if ((keyEvent->key() == Qt::Key_L && keyEvent->modifiers() == Qt::ControlModifier) || keyEvent->key() == Qt::Key_F6) {
+            browserWindow->focusAddressBar();
+            return true;
+        }
+    }
+
     if (event->type() == QEvent::KeyRelease && static_cast<QKeyEvent*>(event)->key() == Qt::Key_Control) {
         foreach (int id, m_heldTouchPoints)
             if (m_touchPoints.contains(id))
                 m_touchPoints[id].state = Qt::TouchPointReleased;
         m_heldTouchPoints.clear();
-        sendTouchEvent(targetWindow);
+        sendTouchEvent(browserWindow);
     }
 
-    if (targetWindow && isMouseEvent(event)) {
+    if (isMouseEvent(event)) {
         const QMouseEvent* const mouseEvent = static_cast<QMouseEvent*>(event);
 
         QWindowSystemInterface::TouchPoint touchPoint;
-        touchPoint.area = QRectF(mouseEvent->globalPos(), QSizeF(1, 1));
+        touchPoint.area = QRectF(mouseEvent->globalPos() - QPointF(30, 40), QSizeF(60, 80));
         touchPoint.pressure = 1;
-        touchPoint.isPrimary = false;
 
         switch (mouseEvent->type()) {
         case QEvent::MouseButtonPress:
@@ -120,16 +144,16 @@ bool MiniBrowserApplication::notify(QObject* target, QEvent* event)
             break;
         case QEvent::MouseMove:
             if (!mouseEvent->buttons() || !m_touchPoints.contains(mouseEvent->buttons()))
-                return QApplication::notify(target, event);
+                return QGuiApplication::notify(target, event);
             touchPoint.id = mouseEvent->buttons();
             touchPoint.state = Qt::TouchPointMoved;
             break;
         case QEvent::MouseButtonRelease:
             touchPoint.state = Qt::TouchPointReleased;
             touchPoint.id = mouseEvent->button();
-            if (mouseEvent->modifiers().testFlag(Qt::ControlModifier)) {
+            if (m_holdingControl) {
                 m_heldTouchPoints.insert(touchPoint.id);
-                return QApplication::notify(target, event);
+                return QGuiApplication::notify(target, event);
             }
             break;
         default:
@@ -137,8 +161,6 @@ bool MiniBrowserApplication::notify(QObject* target, QEvent* event)
         }
 
         // Update current touch-point
-        if (m_touchPoints.isEmpty())
-            touchPoint.isPrimary = true;
         m_touchPoints.insert(touchPoint.id, touchPoint);
 
         // Update states for all other touch-points
@@ -147,33 +169,44 @@ bool MiniBrowserApplication::notify(QObject* target, QEvent* event)
                 it.value().state = Qt::TouchPointStationary;
         }
 
-        sendTouchEvent(targetWindow);
+        sendTouchEvent(browserWindow);
     }
 
-    return QApplication::notify(target, event);
+    return QGuiApplication::notify(target, event);
 }
 
-void MiniBrowserApplication::sendTouchEvent(QWindow* targetWindow)
+void MiniBrowserApplication::sendTouchEvent(BrowserWindow* browserWindow)
 {
+    static QTouchDevice* device = 0;
+    if (!device) {
+        device = new QTouchDevice;
+        device->setType(QTouchDevice::TouchScreen);
+        QWindowSystemInterface::registerTouchDevice(device);
+    }
+
     m_pendingFakeTouchEventCount++;
-    QWindowSystemInterface::handleTouchEvent(targetWindow, QEvent::None, QTouchEvent::TouchScreen, m_touchPoints.values());
+    QWindowSystemInterface::handleTouchEvent(browserWindow, device, m_touchPoints.values());
+
+    if (QQuickWebViewExperimental::flickableViewportEnabled())
+        browserWindow->updateVisualMockTouchPoints(m_holdingControl ? m_touchPoints.values() : QList<QWindowSystemInterface::TouchPoint>());
 
     // Get rid of touch-points that are no longer valid
     foreach (const QWindowSystemInterface::TouchPoint& touchPoint, m_touchPoints) {
-    if (touchPoint.state ==  Qt::TouchPointReleased)
-        m_touchPoints.remove(touchPoint.id);
+        if (touchPoint.state ==  Qt::TouchPointReleased)
+            m_touchPoints.remove(touchPoint.id);
     }
 }
 
 static void printHelp(const QString& programName)
 {
     qDebug() << "Usage:" << programName.toLatin1().data()
-         << "[--touch]"
-         << "[--maximize]"
-         << "[--window-size (width)x(height)]"
+         << "[--desktop]"
          << "[-r list]"
          << "[--robot-timeout seconds]"
          << "[--robot-extra-time seconds]"
+         << "[--window-size (width)x(height)]"
+         << "[--maximize]"
+         << "[-f]                                    Full screen mode."
          << "[-v]"
          << "URL";
 }
@@ -191,9 +224,13 @@ void MiniBrowserApplication::handleUserOptions()
         appQuit(0);
     }
 
-    m_windowOptions.setUseTouchWebView(takeOptionFlag(&args, "--touch"));
+    const bool useDesktopBehavior = takeOptionFlag(&args, "--desktop");
+    QQuickWebViewExperimental::setFlickableViewportEnabled(!useDesktopBehavior);
+    if (!useDesktopBehavior)
+        qputenv("QT_WEBKIT_USE_MOBILE_THEME", QByteArray("1"));
     m_windowOptions.setPrintLoadedUrls(takeOptionFlag(&args, "-v"));
     m_windowOptions.setStartMaximized(takeOptionFlag(&args, "--maximize"));
+    m_windowOptions.setStartFullScreen(takeOptionFlag(&args, "-f"));
 
     if (args.contains("--window-size")) {
         QString value = takeOptionValue(&args, "--window-size");
@@ -216,8 +253,9 @@ void MiniBrowserApplication::handleUserOptions()
         m_robotTimeoutSeconds = takeOptionValue(&args, "--robot-timeout").toInt();
         m_robotExtraTimeSeconds = takeOptionValue(&args, "--robot-extra-time").toInt();
     } else {
-        int urlArg = args.indexOf(QRegExp("^[^-].*"));
-        if (urlArg != -1)
+        int urlArg;
+
+        while ((urlArg = args.indexOf(QRegExp("^[^-].*"))) != -1)
             m_urls += args.takeAt(urlArg);
     }
 

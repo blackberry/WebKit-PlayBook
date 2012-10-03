@@ -47,8 +47,8 @@ class Page;
 class EditorClientEfl : public EditorClient, public TextCheckerClient {
 protected:
     bool m_isInRedo;
-    WTF::Deque<WTF::RefPtr<WebCore::EditCommand> > undoStack;
-    WTF::Deque<WTF::RefPtr<WebCore::EditCommand> > redoStack;
+    WTF::Deque<WTF::RefPtr<WebCore::UndoStep> > undoStack;
+    WTF::Deque<WTF::RefPtr<WebCore::UndoStep> > redoStack;
 
 public:
     EditorClientEfl(Evas_Object *view);
@@ -73,19 +73,19 @@ public:
     virtual bool shouldInsertText(const String&, Range*, EditorInsertAction);
     virtual bool shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity, bool stillSelecting);
 
-    virtual bool shouldApplyStyle(CSSStyleDeclaration*, Range*);
+    virtual bool shouldApplyStyle(StylePropertySet*, Range*);
 
     virtual bool shouldMoveRangeAfterDelete(Range*, Range*);
 
     virtual void didBeginEditing();
     virtual void respondToChangedContents();
-    virtual void respondToChangedSelection();
+    virtual void respondToChangedSelection(Frame*);
     virtual void didEndEditing();
     virtual void didWriteSelectionToPasteboard();
     virtual void didSetSelectionTypesForPasteboard();
 
-    virtual void registerCommandForUndo(WTF::PassRefPtr<EditCommand>);
-    virtual void registerCommandForRedo(WTF::PassRefPtr<EditCommand>);
+    virtual void registerUndoStep(WTF::PassRefPtr<UndoStep>);
+    virtual void registerRedoStep(WTF::PassRefPtr<UndoStep>);
     virtual void clearUndoRedoOperations();
 
     virtual bool canCopyCut(Frame*, bool defaultValue) const;
@@ -120,7 +120,7 @@ public:
     virtual void getGuessesForWord(const String& word, const String& context, WTF::Vector<String>& guesses);
     virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool enabled);
-    virtual void requestCheckingOfString(WebCore::SpellChecker*, int, WebCore::TextCheckingTypeMask, const WTF::String&) { }
+    virtual void requestCheckingOfString(WebCore::SpellChecker*, const WebCore::TextCheckingRequest&) { }
     virtual TextCheckerClient* textChecker() { return this; }
 
 private:

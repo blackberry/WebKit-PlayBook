@@ -18,29 +18,29 @@
 #include "NotImplemented.h"
 #include "RenderView.h"
 #include "TimeRanges.h"
+#include "VideoFrameChromium.h"
+#include "VideoFrameChromiumImpl.h"
 #include "VideoLayerChromium.h"
+#include "WebAudioSourceProvider.h"
+#include "WebFrameClient.h"
+#include "WebFrameImpl.h"
+#include "WebKit.h"
+#include "WebMediaElement.h"
+#include "WebMediaPlayer.h"
+#include "WebViewImpl.h"
+#include "cc/CCProxy.h"
+#include "platform/WebCString.h"
+#include "platform/WebCanvas.h"
+#include "platform/WebKitPlatformSupport.h"
+#include "platform/WebRect.h"
+#include "platform/WebSize.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include <public/WebMimeRegistry.h>
 
 #if USE(ACCELERATED_COMPOSITING)
 #include "RenderLayerCompositor.h"
 #endif
-
-#include "VideoFrameChromium.h"
-#include "VideoFrameChromiumImpl.h"
-#include "WebAudioSourceProvider.h"
-#include "WebCanvas.h"
-#include "WebCString.h"
-#include "WebFrameClient.h"
-#include "WebFrameImpl.h"
-#include "WebKit.h"
-#include "WebKitPlatformSupport.h"
-#include "WebMediaElement.h"
-#include "WebMediaPlayer.h"
-#include "WebMimeRegistry.h"
-#include "WebRect.h"
-#include "WebSize.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebViewImpl.h"
 
 // WebCommon.h defines WEBKIT_USING_SKIA so this has to be included last.
 #if WEBKIT_USING_SKIA
@@ -102,10 +102,12 @@ WebMediaPlayer* WebMediaPlayerClientImpl::mediaPlayer() const
 
 WebMediaPlayerClientImpl::~WebMediaPlayerClientImpl()
 {
-    // VideoLayerChromium may outlive this object so clear the back pointer.
 #if USE(ACCELERATED_COMPOSITING)
-    if (m_videoLayer)
-        m_videoLayer->releaseProvider();
+    MutexLocker locker(m_compositingMutex);
+    if (m_videoFrameProviderClient)
+        m_videoFrameProviderClient->stopUsingProvider();
+    if (m_webMediaPlayer)
+        m_webMediaPlayer->setStreamTextureClient(0);
 #endif
 }
 
@@ -120,8 +122,10 @@ void WebMediaPlayerClientImpl::readyStateChanged()
     ASSERT(m_mediaPlayer);
     m_mediaPlayer->readyStateChanged();
 #if USE(ACCELERATED_COMPOSITING)
-    if (hasVideo() && supportsAcceleratedRendering() && !m_videoLayer)
-        m_videoLayer = VideoLayerChromium::create(0, this);
+    if (hasVideo() && supportsAcceleratedRendering() && !m_videoLayer) {
+        m_videoLayer = VideoLayerChromium::create(this);
+        m_videoLayer->setOpaque(m_opaque);
+    }
 #endif
 }
 
@@ -148,7 +152,7 @@ void WebMediaPlayerClientImpl::repaint()
     ASSERT(m_mediaPlayer);
 #if USE(ACCELERATED_COMPOSITING)
     if (m_videoLayer && supportsAcceleratedRendering())
-        m_videoLayer->setNeedsDisplay(IntRect(0, 0, m_videoLayer->bounds().width(), m_videoLayer->bounds().height()));
+        m_videoLayer->setNeedsDisplay();
 #endif
     m_mediaPlayer->repaint();
 }
@@ -169,6 +173,15 @@ void WebMediaPlayerClientImpl::sizeChanged()
 {
     ASSERT(m_mediaPlayer);
     m_mediaPlayer->sizeChanged();
+}
+
+void WebMediaPlayerClientImpl::setOpaque(bool opaque)
+{
+#if USE(ACCELERATED_COMPOSITING)
+    m_opaque = opaque;
+    if (m_videoLayer)
+        m_videoLayer->setOpaque(m_opaque);
+#endif
 }
 
 void WebMediaPlayerClientImpl::sawUnsupportedTracks()
@@ -215,6 +228,11 @@ WebKit::WebURL WebMediaPlayerClientImpl::sourceURL() const
 #endif
 }
 
+void WebMediaPlayerClientImpl::disableAcceleratedCompositing()
+{
+    m_supportsAcceleratedCompositing = false;
+}
+
 // MediaPlayerPrivateInterface -------------------------------------------------
 
 void WebMediaPlayerClientImpl::load(const String& url)
@@ -222,6 +240,10 @@ void WebMediaPlayerClientImpl::load(const String& url)
     m_url = url;
 
     if (m_preload == MediaPlayer::None) {
+        MutexLocker locker(m_compositingMutex);
+#if ENABLE(WEB_AUDIO)
+        m_audioSourceProvider.wrap(0); // Clear weak reference to m_webMediaPlayer's WebAudioSourceProvider.
+#endif
         m_webMediaPlayer.clear();
         m_delayingLoad = true;
     } else
@@ -230,6 +252,11 @@ void WebMediaPlayerClientImpl::load(const String& url)
 
 void WebMediaPlayerClientImpl::loadInternal()
 {
+    MutexLocker locker(m_compositingMutex);
+#if ENABLE(WEB_AUDIO)
+    m_audioSourceProvider.wrap(0); // Clear weak reference to m_webMediaPlayer's WebAudioSourceProvider.
+#endif
+
     Frame* frame = static_cast<HTMLMediaElement*>(m_mediaPlayer->mediaPlayerClient())->document()->frame();
     m_webMediaPlayer = createWebMediaPlayer(this, frame);
     if (m_webMediaPlayer) {
@@ -571,10 +598,19 @@ bool WebMediaPlayerClientImpl::acceleratedRenderingInUse()
     return m_videoLayer && m_videoLayer->layerTreeHost();
 }
 
+void WebMediaPlayerClientImpl::setVideoFrameProviderClient(VideoFrameProvider::Client* client)
+{
+    MutexLocker locker(m_compositingMutex);
+    m_videoFrameProviderClient = client;
+    if (m_webMediaPlayer)
+        m_webMediaPlayer->setStreamTextureClient(client ? this : 0);
+}
+
 VideoFrameChromium* WebMediaPlayerClientImpl::getCurrentFrame()
 {
+    MutexLocker locker(m_compositingMutex);
     ASSERT(!m_currentVideoFrame);
-    if (m_webMediaPlayer && !m_currentVideoFrame) {
+    if (m_webMediaPlayer) {
         WebVideoFrame* webkitVideoFrame = m_webMediaPlayer->getCurrentFrame();
         if (webkitVideoFrame)
             m_currentVideoFrame = adoptPtr(new VideoFrameChromiumImpl(webkitVideoFrame));
@@ -584,14 +620,15 @@ VideoFrameChromium* WebMediaPlayerClientImpl::getCurrentFrame()
 
 void WebMediaPlayerClientImpl::putCurrentFrame(VideoFrameChromium* videoFrame)
 {
-    if (videoFrame && videoFrame == m_currentVideoFrame) {
-        if (m_webMediaPlayer) {
-            m_webMediaPlayer->putCurrentFrame(
-                VideoFrameChromiumImpl::toWebVideoFrame(videoFrame));
-        }
-        ASSERT(videoFrame == m_currentVideoFrame);
-        m_currentVideoFrame.clear();
+    MutexLocker locker(m_compositingMutex);
+    ASSERT(videoFrame == m_currentVideoFrame);
+    if (!videoFrame)
+        return;
+    if (m_webMediaPlayer) {
+        m_webMediaPlayer->putCurrentFrame(
+            VideoFrameChromiumImpl::toWebVideoFrame(videoFrame));
     }
+    m_currentVideoFrame.clear();
 }
 #endif
 
@@ -649,6 +686,20 @@ void WebMediaPlayerClientImpl::startDelayedLoad()
     loadInternal();
 }
 
+void WebMediaPlayerClientImpl::didReceiveFrame()
+{
+    // No lock since this gets called on the client's thread.
+    ASSERT(CCProxy::isImplThread());
+    m_videoFrameProviderClient->didReceiveFrame();
+}
+
+void WebMediaPlayerClientImpl::didUpdateMatrix(const float* matrix)
+{
+    // No lock since this gets called on the client's thread.
+    ASSERT(CCProxy::isImplThread());
+    m_videoFrameProviderClient->didUpdateMatrix(matrix);
+}
+
 WebMediaPlayerClientImpl::WebMediaPlayerClientImpl()
     : m_mediaPlayer(0)
     , m_delayingLoad(false)
@@ -656,6 +707,8 @@ WebMediaPlayerClientImpl::WebMediaPlayerClientImpl()
 #if USE(ACCELERATED_COMPOSITING)
     , m_videoLayer(0)
     , m_supportsAcceleratedCompositing(false)
+    , m_opaque(false)
+    , m_videoFrameProviderClient(0)
 #endif
 {
 }
@@ -663,18 +716,20 @@ WebMediaPlayerClientImpl::WebMediaPlayerClientImpl()
 #if ENABLE(WEB_AUDIO)
 void WebMediaPlayerClientImpl::AudioSourceProviderImpl::wrap(WebAudioSourceProvider* provider)
 {
-    if (m_webAudioSourceProvider && m_webAudioSourceProvider != provider)
-        m_webAudioSourceProvider->setClient(0);
     m_webAudioSourceProvider = provider;
     if (m_webAudioSourceProvider)
-        m_webAudioSourceProvider->setClient(&m_client);
+        m_webAudioSourceProvider->setClient(m_client.get());
 }
 
 void WebMediaPlayerClientImpl::AudioSourceProviderImpl::setClient(AudioSourceProviderClient* client)
 {
-    m_client.wrap(client);
+    if (client)
+        m_client = adoptPtr(new WebMediaPlayerClientImpl::AudioClientImpl(client));
+    else
+        m_client.clear();
+
     if (m_webAudioSourceProvider)
-        m_webAudioSourceProvider->setClient(&m_client);
+        m_webAudioSourceProvider->setClient(m_client.get());
 }
 
 void WebMediaPlayerClientImpl::AudioSourceProviderImpl::provideInput(AudioBus* bus, size_t framesToProcess)
@@ -692,7 +747,7 @@ void WebMediaPlayerClientImpl::AudioSourceProviderImpl::provideInput(AudioBus* b
     size_t n = bus->numberOfChannels();
     WebVector<float*> webAudioData(n);
     for (size_t i = 0; i < n; ++i)
-        webAudioData[i] = bus->channel(i)->data();
+        webAudioData[i] = bus->channel(i)->mutableData();
 
     m_webAudioSourceProvider->provideInput(webAudioData, framesToProcess);
 }

@@ -330,7 +330,7 @@ DocumentMarker* DocumentMarkerController::markerContainingPoint(const LayoutPoin
 }
 
 #if PLATFORM(BLACKBERRY)
-RenderedDocumentMarker* DocumentMarkerController::renderedMarkerContainingPoint(const IntPoint& point, DocumentMarker::MarkerType markerType)
+RenderedDocumentMarker* DocumentMarkerController::renderedMarkerContainingPoint(const LayoutPoint& point, DocumentMarker::MarkerType markerType)
 {
     if (!possiblyHasMarkers(markerType))
         return 0;
@@ -417,9 +417,9 @@ Vector<DocumentMarker*> DocumentMarkerController::markersInRange(Range* range, D
     return foundMarkers;
 }
 
-Vector<LayoutRect> DocumentMarkerController::renderedRectsForMarkers(DocumentMarker::MarkerType markerType)
+Vector<IntRect> DocumentMarkerController::renderedRectsForMarkers(DocumentMarker::MarkerType markerType)
 {
-    Vector<LayoutRect> result;
+    Vector<IntRect> result;
 
     if (!possiblyHasMarkers(markerType))
         return result;

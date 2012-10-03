@@ -20,8 +20,11 @@
 #ifndef Navigator_h
 #define Navigator_h
 
+#include "DOMWindowProperty.h"
 #include "NavigatorBase.h"
+#include "Supplementable.h"
 #include <wtf/Forward.h>
+#include <wtf/HashMap.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/RefPtr.h>
@@ -31,22 +34,15 @@ namespace WebCore {
 class DOMMimeTypeArray;
 class DOMPluginArray;
 class Frame;
-class Geolocation;
-class MouseLockable;
-class NavigatorUserMediaErrorCallback;
-class NavigatorUserMediaSuccessCallback;
+class PointerLock;
 class PluginData;
 
 typedef int ExceptionCode;
 
-class Navigator : public NavigatorBase, public RefCounted<Navigator> {
+class Navigator : public NavigatorBase, public RefCounted<Navigator>, public DOMWindowProperty, public Supplementable<Navigator> {
 public:
     static PassRefPtr<Navigator> create(Frame* frame) { return adoptRef(new Navigator(frame)); }
     virtual ~Navigator();
-
-    void resetGeolocation();
-    void disconnectFrame();
-    Frame* frame() const { return m_frame; }
 
     String appVersion() const;
     String language() const;
@@ -57,31 +53,20 @@ public:
 
     virtual String userAgent() const;
 
-    Geolocation* geolocation() const;
-
 #if ENABLE(POINTER_LOCK)
-    MouseLockable* webkitPointer() const;
+    PointerLock* webkitPointer() const;
 #endif
 
     // Relinquishes the storage lock, if one exists.
     void getStorageUpdates();
 
-#if ENABLE(REGISTER_PROTOCOL_HANDLER)
-    void registerProtocolHandler(const String& scheme, const String& url, const String& title, ExceptionCode&);
-#endif
-
-#if ENABLE(MEDIA_STREAM)
-    virtual void webkitGetUserMedia(const String& options, PassRefPtr<NavigatorUserMediaSuccessCallback>, PassRefPtr<NavigatorUserMediaErrorCallback>, ExceptionCode&);
-#endif
-
 private:
-    Navigator(Frame*);
-    Frame* m_frame;
+    explicit Navigator(Frame*);
+
     mutable RefPtr<DOMPluginArray> m_plugins;
     mutable RefPtr<DOMMimeTypeArray> m_mimeTypes;
-    mutable RefPtr<Geolocation> m_geolocation;
 #if ENABLE(POINTER_LOCK)
-    mutable RefPtr<MouseLockable> m_pointer;
+    mutable RefPtr<PointerLock> m_pointer;
 #endif
 };
 

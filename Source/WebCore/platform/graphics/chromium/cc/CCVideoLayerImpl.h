@@ -26,55 +26,78 @@
 #ifndef CCVideoLayerImpl_h
 #define CCVideoLayerImpl_h
 
-#include "ProgramBinding.h"
+#include "ManagedTexture.h"
 #include "ShaderChromium.h"
 #include "VideoFrameChromium.h"
+#include "VideoFrameProvider.h"
 #include "VideoLayerChromium.h"
 #include "cc/CCLayerImpl.h"
 
 namespace WebCore {
 
-class VideoFrameProvider;
+class CCLayerTreeHostImpl;
+class CCVideoLayerImpl;
 
-class CCVideoLayerImpl : public CCLayerImpl {
+template<class VertexShader, class FragmentShader> class ProgramBinding;
+
+class CCVideoLayerImpl : public CCLayerImpl
+                       , public VideoFrameProvider::Client {
 public:
-    static PassRefPtr<CCVideoLayerImpl> create(int id)
+    static PassOwnPtr<CCVideoLayerImpl> create(int id, VideoFrameProvider* provider)
     {
-        return adoptRef(new CCVideoLayerImpl(id));
+        return adoptPtr(new CCVideoLayerImpl(id, provider));
     }
     virtual ~CCVideoLayerImpl();
 
+    virtual void willDraw(LayerRendererChromium*);
+    virtual void appendQuads(CCQuadList&, const CCSharedQuadState*);
+    virtual void didDraw();
+
     typedef ProgramBinding<VertexShaderPosTexTransform, FragmentShaderRGBATexFlipAlpha> RGBAProgram;
     typedef ProgramBinding<VertexShaderPosTexYUVStretch, FragmentShaderYUVVideo> YUVProgram;
-
-    virtual void draw(LayerRendererChromium*);
+    typedef ProgramBinding<VertexShaderPosTexTransform, FragmentShaderRGBATexFlipAlpha> NativeTextureProgram;
+    typedef ProgramBinding<VertexShaderVideoTransform, FragmentShaderOESImageExternal> StreamTextureProgram;
 
     virtual void dumpLayerProperties(TextStream&, int indent) const;
 
-    void setSkipsDraw(bool skipsDraw) { m_skipsDraw = skipsDraw; }
-    void setFrameFormat(VideoFrameChromium::Format format) { m_frameFormat = format; }
-    void setTexture(size_t, Platform3DObject textureId, const IntSize&, const IntSize& visibleSize);
+    Mutex& providerMutex() { return m_providerMutex; }
+    VideoFrameProvider* provider() const { return m_provider; }
 
-private:
-    explicit CCVideoLayerImpl(int);
+    // VideoFrameProvider::Client implementation.
+    virtual void stopUsingProvider(); // Callable on any thread.
+    virtual void didReceiveFrame(); // Callable on impl thread.
+    virtual void didUpdateMatrix(const float*); // Callable on impl thread.
 
-    virtual const char* layerTypeAsString() const { return "VideoLayer"; }
-
-    struct Texture {
-        Platform3DObject id;
-        IntSize size;
-        IntSize visibleSize;
-    };
-
-    void drawYUV(LayerRendererChromium*) const;
-    void drawRGBA(LayerRendererChromium*) const;
+    void setNeedsRedraw();
 
     static const float yuv2RGB[9];
     static const float yuvAdjust[3];
+    static const float flipTransform[16];
 
-    bool m_skipsDraw;
-    VideoFrameChromium::Format m_frameFormat;
-    Texture m_textures[3];
+    struct Texture {
+        OwnPtr<ManagedTexture> m_texture;
+        IntSize m_visibleSize;
+    };
+    enum { MaxPlanes = 3 };
+
+private:
+    explicit CCVideoLayerImpl(int, VideoFrameProvider*);
+
+    static IntSize computeVisibleSize(const VideoFrameChromium*, unsigned plane);
+    virtual const char* layerTypeAsString() const { return "VideoLayer"; }
+
+    bool reserveTextures(const VideoFrameChromium*, GC3Denum format, LayerRendererChromium*);
+
+    Mutex m_providerMutex; // Guards m_provider below.
+    VideoFrameProvider* m_provider;
+
+    Texture m_textures[MaxPlanes];
+
+    float m_streamTextureMatrix[16];
+    CCLayerTreeHostImpl* m_layerTreeHostImpl;
+
+    VideoFrameChromium* m_frame;
+    GC3Denum m_format;
 };
 
 }

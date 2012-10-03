@@ -52,6 +52,12 @@ WKPreferencesRef WKPreferencesCreateWithIdentifier(WKStringRef identifierRef)
     return toAPI(preferences.release().leakRef());
 }
 
+WKPreferencesRef WKPreferencesCreateCopy(WKPreferencesRef preferencesRef)
+{
+    RefPtr<WebPreferences> preferences = WebPreferences::create(*toImpl(preferencesRef));
+    return toAPI(preferences.release().leakRef());
+}
+
 void WKPreferencesSetJavaScriptEnabled(WKPreferencesRef preferencesRef, bool javaScriptEnabled)
 {
     toImpl(preferencesRef)->setJavaScriptEnabled(javaScriptEnabled);
@@ -382,6 +388,16 @@ bool WKPreferencesGetCompositingRepaintCountersVisible(WKPreferencesRef preferen
     return toImpl(preferencesRef)->compositingRepaintCountersVisible();
 }
 
+void WKPreferencesSetCSSCustomFilterEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCSSCustomFilterEnabled(flag);
+}
+
+bool WKPreferencesGetCSSCustomFilterEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->cssCustomFilterEnabled();
+}
+
 void WKPreferencesSetWebGLEnabled(WKPreferencesRef preferencesRef, bool flag)
 {
     toImpl(preferencesRef)->setWebGLEnabled(flag);
@@ -390,6 +406,16 @@ void WKPreferencesSetWebGLEnabled(WKPreferencesRef preferencesRef, bool flag)
 bool WKPreferencesGetWebGLEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->webGLEnabled();
+}
+
+void WKPreferencesSetCSSRegionsEnabled(WKPreferencesRef preferencesRef, bool flag)
+{
+    toImpl(preferencesRef)->setCSSRegionsEnabled(flag);
+}
+
+bool WKPreferencesGetCSSRegionsEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->cssRegionsEnabled();
 }
 
 void WKPreferencesSetNeedsSiteSpecificQuirks(WKPreferencesRef preferencesRef, bool flag)
@@ -490,6 +516,16 @@ void WKPreferencesSetPageCacheEnabled(WKPreferencesRef preferencesRef, bool enab
 bool WKPreferencesGetPageCacheEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->usesPageCache();
+}
+
+void WKPreferencesSetPageCacheSupportsPlugins(WKPreferencesRef preferencesRef, bool pageCacheSupportsPlugins)
+{
+    toImpl(preferencesRef)->setPageCacheSupportsPlugins(pageCacheSupportsPlugins);
+}
+
+bool WKPreferencesGetPageCacheSupportsPlugins(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->pageCacheSupportsPlugins();
 }
 
 void WKPreferencesSetPaginateDuringLayoutEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -642,14 +678,24 @@ bool WKPreferencesGetApplicationChromeModeEnabled(WKPreferencesRef preferencesRe
     return toImpl(preferencesRef)->applicationChromeMode();
 }
 
+void WKPreferencesSetSuppressesIncrementalRendering(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setSuppressesIncrementalRendering(enabled);
+}
+
+bool WKPreferencesGetSuppressesIncrementalRendering(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->suppressesIncrementalRendering();
+}
+
 void WKPreferencesSetSuppressIncrementalRendering(WKPreferencesRef preferencesRef, bool enabled)
 {
-    toImpl(preferencesRef)->setSuppressIncrementalRendering(enabled);
+    WKPreferencesSetSuppressesIncrementalRendering(preferencesRef, enabled);
 }
 
 bool WKPreferencesGetSuppressIncrementalRendering(WKPreferencesRef preferencesRef)
 {
-    return toImpl(preferencesRef)->suppressIncrementalRendering();
+    return WKPreferencesGetSuppressesIncrementalRendering(preferencesRef);
 }
 
 void WKPreferencesSetBackspaceKeyNavigationEnabled(WKPreferencesRef preferencesRef, bool enabled)
@@ -670,4 +716,51 @@ void WKPreferencesSetCaretBrowsingEnabled(WKPreferencesRef preferencesRef, bool 
 bool WKPreferencesGetCaretBrowsingEnabled(WKPreferencesRef preferencesRef)
 {
     return toImpl(preferencesRef)->caretBrowsingEnabled();
+}
+
+void WKPreferencesSetShouldDisplaySubtitles(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setShouldDisplaySubtitles(enabled);
+}
+
+bool WKPreferencesGetShouldDisplaySubtitles(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->shouldDisplaySubtitles();
+}
+
+void WKPreferencesSetShouldDisplayCaptions(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setShouldDisplayCaptions(enabled);
+}
+
+bool WKPreferencesGetShouldDisplayCaptions(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->shouldDisplayCaptions();
+}
+
+void WKPreferencesSetShouldDisplayTextDescriptions(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setShouldDisplayTextDescriptions(enabled);
+}
+
+bool WKPreferencesGetShouldDisplayTextDescriptions(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->shouldDisplayTextDescriptions();
+}
+
+void WKPreferencesSetNotificationsEnabled(WKPreferencesRef preferencesRef, bool enabled)
+{
+    toImpl(preferencesRef)->setNotificationsEnabled(enabled);
+}
+
+bool WKPreferencesGetNotificationsEnabled(WKPreferencesRef preferencesRef)
+{
+    return toImpl(preferencesRef)->notificationsEnabled();
+}
+
+void WKPreferencesResetTestRunnerOverrides(WKPreferencesRef preferencesRef)
+{
+    // Currently we reset the overrides on the web process when preferencesDidChange() is called. Since WTR preferences
+    // are usually always the same (in the UI process), they are not sent to web process, not triggering the reset.
+    toImpl(preferencesRef)->forceUpdate();
 }

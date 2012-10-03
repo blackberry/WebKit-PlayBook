@@ -36,20 +36,23 @@ module core {
     ] InspectorFrontendHost {
         void loaded();
         void closeWindow();
-        void disconnectFromBackend();
         void bringToFront();
+        void setZoomFactor(in float zoom);
         void inspectedURLChanged(in DOMString newURL);
 
         void requestAttachWindow();
         void requestDetachWindow();
+        void requestSetDockSide(in DOMString side);
         void setAttachedWindowHeight(in unsigned long height);
         void moveWindowBy(in float x, in float y);
-        void setExtensionAPI(in DOMString script);
+        void setInjectedScriptForOrigin(in DOMString origin, in DOMString script);
 
         DOMString localizedStringsURL();
         DOMString hiddenPanels();
 
         void copyText(in DOMString text);
+        void openInNewTab(in DOMString url);
+        boolean canSaveAs();
         void saveAs(in DOMString fileName, in DOMString content);
 
         [Custom] DOMString platform();

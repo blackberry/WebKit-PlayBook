@@ -45,6 +45,10 @@
 #include <WebCore/NotImplemented.h>
 #include <wtf/text/WTFString.h>
 
+#if PLATFORM(MAC)
+#include "RemoteLayerClient.h"
+#endif
+
 using namespace WebCore;
 
 namespace WebKit {
@@ -371,10 +375,10 @@ float PluginControllerProxy::contentsScaleFactor()
 String PluginControllerProxy::proxiesForURL(const String& urlString)
 {
     String proxyString;
-    
-    if (!m_connection->connection()->sendSync(Messages::PluginProxy::CookiesForURL(urlString), Messages::PluginProxy::CookiesForURL::Reply(proxyString), m_pluginInstanceID))
+
+    if (!m_connection->connection()->sendSync(Messages::PluginProxy::ProxiesForURL(urlString), Messages::PluginProxy::ProxiesForURL::Reply(proxyString), m_pluginInstanceID))
         return String();
-    
+
     return proxyString;
 }
 

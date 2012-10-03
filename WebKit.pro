@@ -14,10 +14,13 @@ isEmpty(QMAKEPATH)|!exists($${QMAKEPATH}/mkspecs) {
     # Otherwise we won't pick up the feature prf files needed for the build
 }
 
-!CONFIG(v8) {
+WTF.file = Source/WTF/WTF.pro
+WTF.makefile = Makefile.WTF
+SUBDIRS += WTF
+
+!v8 {
     JavaScriptCore.file = Source/JavaScriptCore/JavaScriptCore.pro
     JavaScriptCore.makefile = Makefile.JavaScriptCore
-
     SUBDIRS += JavaScriptCore
 }
 
@@ -36,11 +39,3 @@ QtWebKit.makefile = Makefile.QtWebKit
 SUBDIRS += QtWebKit
 
 SUBDIRS += Tools
-
-OTHER_FILES = \
-    Tools/qmake/README \
-    Tools/qmake/qt_webkit.pri \
-    Tools/qmake/mkspecs/features/*.prf \
-    Tools/qmake/mkspecs/features/mac/*.prf \
-    Tools/qmake/mkspecs/features/unix/*.prf \
-    Tools/qmake/mkspecs/features/win32/*.prf

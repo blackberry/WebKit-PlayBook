@@ -33,16 +33,16 @@
 namespace JSC {
 
 class JSCell;
-class JettisonedCodeBlocks;
+class DFGCodeBlocks;
 class Heap;
 
 class ConservativeRoots {
 public:
-    ConservativeRoots(const MarkedBlockSet*);
+    ConservativeRoots(const MarkedBlockSet*, CopiedSpace*);
     ~ConservativeRoots();
 
     void add(void* begin, void* end);
-    void add(void* begin, void* end, JettisonedCodeBlocks&);
+    void add(void* begin, void* end, DFGCodeBlocks&);
     
     size_t size();
     JSCell** roots();
@@ -63,6 +63,7 @@ private:
     size_t m_size;
     size_t m_capacity;
     const MarkedBlockSet* m_blocks;
+    CopiedSpace* m_copiedSpace;
     JSCell* m_inlineRoots[inlineCapacity];
 };
 

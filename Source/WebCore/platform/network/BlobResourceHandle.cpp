@@ -35,21 +35,20 @@
 #include "BlobResourceHandle.h"
 
 #include "AsyncFileStream.h"
-#include "BlobRegistryImpl.h"
+#include "BlobStorageData.h"
 #include "FileStream.h"
 #include "FileSystem.h"
 #include "HTTPParsers.h"
 #include "KURL.h"
 #include "ResourceError.h"
-#include "ResourceLoader.h"
+#include "ResourceHandleClient.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
 #include <wtf/MainThread.h>
 
 namespace WebCore {
 
-static const unsigned bufferSize = 1024;
-static const int maxVectorLength = 0x7fffffff;
+static const unsigned bufferSize = 512 * 1024;
 static const long long positionNotSpecified = -1;
 
 static const int httpOK = 200;
@@ -65,10 +64,13 @@ static const char* httpNotFoundText = "Not Found";
 static const char* httpRequestedRangeNotSatisfiableText = "Requested Range Not Satisfiable";
 static const char* httpInternalErrorText = "Internal Server Error";
 
-static const int notFoundError = 1;
-static const int securityError = 2;
-static const int rangeError = 3;
-static const int notReadableError = 4;
+static const char* const webKitBlobResourceDomain = "WebKitBlobResource";
+enum {
+    notFoundError = 1,
+    securityError = 2,
+    rangeError = 3,
+    notReadableError = 4,
+};
 
 ///////////////////////////////////////////////////////////////////////////////
 // BlobResourceSynchronousLoader
@@ -100,9 +102,8 @@ BlobResourceSynchronousLoader::BlobResourceSynchronousLoader(ResourceError& erro
 void BlobResourceSynchronousLoader::didReceiveResponse(ResourceHandle* handle, const ResourceResponse& response)
 {
     // We cannot handle the size that is more than maximum integer.
-    const int intMaxForLength = 0x7fffffff;
-    if (response.expectedContentLength() > intMaxForLength) {
-        m_error = ResourceError(String(), notReadableError, response.url(), String());
+    if (response.expectedContentLength() > INT_MAX) {
+        m_error = ResourceError(webKitBlobResourceDomain, notReadableError, response.url(), "File is too large");
         return;
     }
 
@@ -486,6 +487,11 @@ void BlobResourceHandle::didOpen(bool success)
 
 void BlobResourceHandle::didRead(int bytesRead)
 {
+    if (bytesRead < 0) {
+        failed(notReadableError);
+        return;
+    }
+
     consumeData(m_buffer.data(), bytesRead);
 }
 
@@ -592,7 +598,7 @@ void BlobResourceHandle::notifyReceiveData(const char* data, int bytesRead)
 void BlobResourceHandle::notifyFail(int errorCode)
 {
     if (client())
-        client()->didFail(this, ResourceError(String(), errorCode, firstRequest().url(), String()));
+        client()->didFail(this, ResourceError(webKitBlobResourceDomain, errorCode, firstRequest().url(), String()));
 }
 
 static void doNotifyFinish(void* context)

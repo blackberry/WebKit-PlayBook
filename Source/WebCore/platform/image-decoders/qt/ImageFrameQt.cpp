@@ -30,10 +30,9 @@
 
 #include "NotImplemented.h"
 
-#include <QPixmap>
-#include <stdio.h>
-
 namespace WebCore {
+
+#if USE(QT_IMAGE_DECODER)
 
 ImageFrame::ImageFrame()
     : m_hasAlpha(false) 
@@ -93,9 +92,8 @@ bool ImageFrame::copyBitmapData(const ImageFrame& other)
 
 bool ImageFrame::setSize(int newWidth, int newHeight)
 {
-    // This function should only be called once, it will leak memory
-    // otherwise.
-    ASSERT(width() == 0 && height() == 0);
+    // setSize() should only be called once, it leaks memory otherwise.
+    ASSERT(!width() && !height());
 
     m_size = IntSize(newWidth, newHeight);
     m_image = QImage();
@@ -104,7 +102,6 @@ bool ImageFrame::setSize(int newWidth, int newHeight)
         return false;
 
     zeroFillPixelData();
-
     return true;
 }
 
@@ -155,5 +152,22 @@ int ImageFrame::height() const
 {
     return m_size.height();
 }
+
+#else
+
+QPixmap* ImageFrame::asNewNativeImage() const
+{
+    QImage::Format fmt;
+    if (m_hasAlpha)
+        fmt = m_premultiplyAlpha ?  QImage::Format_ARGB32_Premultiplied : QImage::Format_ARGB32;
+    else
+        fmt = QImage::Format_RGB32;
+
+    QImage img(reinterpret_cast<uchar*>(m_bytes), m_size.width(), m_size.height(), sizeof(PixelData) * m_size.width(), fmt);
+
+    return new QPixmap(QPixmap::fromImage(img));
+}
+
+#endif // USE(QT_IMAGE_DECODER)
 
 }

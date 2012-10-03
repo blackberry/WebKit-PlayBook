@@ -31,9 +31,8 @@
 #include "config.h"
 #include "EditorClientQt.h"
 
-#include "CSSStyleDeclaration.h"
 #include "Document.h"
-#include "EditCommandQt.h"
+#include "UndoStepQt.h"
 #include "Editor.h"
 #include "FocusController.h"
 #include "Frame.h"
@@ -48,6 +47,7 @@
 #include "Range.h"
 #include "Settings.h"
 #include "SpatialNavigation.h"
+#include "StylePropertySet.h"
 #include "WindowsKeyboardCodes.h"
 #include "qwebpage.h"
 #include "qwebpage_p.h"
@@ -170,12 +170,12 @@ bool EditorClientQt::shouldChangeSelectedRange(Range* currentRange, Range* propo
     return acceptsEditing;
 }
 
-bool EditorClientQt::shouldApplyStyle(WebCore::CSSStyleDeclaration* style,
+bool EditorClientQt::shouldApplyStyle(WebCore::StylePropertySet* style,
                                       WebCore::Range* range)
 {
     if (dumpEditingCallbacks)
         printf("EDITING DELEGATE: shouldApplyStyle:%s toElementsInDOMRange:%s\n",
-               QString(style->cssText()).toUtf8().constData(), dumpRange(range).toUtf8().constData());
+               QString(style->asText()).toUtf8().constData(), dumpRange(range).toUtf8().constData());
     return acceptsEditing;
 }
 
@@ -201,7 +201,7 @@ void EditorClientQt::respondToChangedContents()
     emit m_page->contentsChanged();
 }
 
-void EditorClientQt::respondToChangedSelection()
+void EditorClientQt::respondToChangedSelection(Frame* frame)
 {
     if (dumpEditingCallbacks)
         printf("EDITING DELEGATE: webViewDidChangeSelection:WebViewDidChangeSelectionNotification\n");
@@ -212,7 +212,6 @@ void EditorClientQt::respondToChangedSelection()
 
     m_page->d->updateEditorActions();
     emit m_page->selectionChanged();
-    Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
     if (!frame->editor()->ignoreCompositionSelectionChange())
         emit m_page->microFocusChanged();
 }
@@ -238,17 +237,17 @@ bool EditorClientQt::selectWordBeforeMenuEvent()
     return false;
 }
 
-void EditorClientQt::registerCommandForUndo(WTF::PassRefPtr<WebCore::EditCommand> cmd)
+void EditorClientQt::registerUndoStep(WTF::PassRefPtr<WebCore::UndoStep> step)
 {
 #ifndef QT_NO_UNDOSTACK
     Frame* frame = m_page->d->page->focusController()->focusedOrMainFrame();
     if (m_inUndoRedo || (frame && !frame->editor()->lastEditCommand() /* HACK!! Don't recreate undos */))
         return;
-    m_page->undoStack()->push(new EditCommandQt(cmd));
+    m_page->undoStack()->push(new UndoStepQt(step));
 #endif // QT_NO_UNDOSTACK
 }
 
-void EditorClientQt::registerCommandForRedo(WTF::PassRefPtr<WebCore::EditCommand>)
+void EditorClientQt::registerRedoStep(WTF::PassRefPtr<WebCore::UndoStep>)
 {
 }
 
@@ -412,7 +411,7 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
         return;
 
     const PlatformKeyboardEvent* kevent = event->keyEvent();
-    if (!kevent || kevent->type() == PlatformKeyboardEvent::KeyUp)
+    if (!kevent || kevent->type() == PlatformEvent::KeyUp)
         return;
 
     Node* start = frame->selection()->start().containerNode();
@@ -442,7 +441,7 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
             // so we leave it upon WebCore to either handle them immediately (e.g. Tab that changes focus) or let a keypress event be generated
             // (e.g. Tab that inserts a Tab character, or Enter).
             if (cmd && frame->editor()->command(cmd).isTextInsertion()
-                && kevent->type() == PlatformKeyboardEvent::RawKeyDown)
+                && kevent->type() == PlatformEvent::RawKeyDown)
                 return;
 
             m_page->triggerAction(action);
@@ -465,7 +464,7 @@ void EditorClientQt::handleKeyboardEvent(KeyboardEvent* event)
 
             // Text insertion.
             bool shouldInsertText = false;
-            if (kevent->type() != PlatformKeyboardEvent::KeyDown && !kevent->text().isEmpty()) {
+            if (kevent->type() != PlatformEvent::KeyDown && !kevent->text().isEmpty()) {
 
                 if (kevent->ctrlKey()) {
                     if (kevent->altKey())

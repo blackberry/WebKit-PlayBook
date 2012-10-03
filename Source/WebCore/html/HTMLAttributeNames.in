@@ -90,6 +90,7 @@ default
 defer
 dir
 direction
+dirname
 disabled
 download
 draggable
@@ -245,6 +246,7 @@ onwebkitanimationend
 onwebkitbeginfullscreen
 onwebkitendfullscreen
 onwebkitfullscreenchange
+onwebkitfullscreenerror
 onwebkittransitionend
 open
 optimum
@@ -265,6 +267,7 @@ rel
 required
 results
 rev
+reversed
 role
 rows
 rowspan
@@ -272,9 +275,11 @@ rules
 sandbox
 scheme
 scope
+scoped
 scrollamount
 scrolldelay
 scrolling
+select
 selected
 shape
 size
@@ -299,6 +304,7 @@ text
 title
 top
 topmargin
+translate
 truespeed
 type
 usemap

@@ -40,28 +40,39 @@ wxBitmap* transparentBitmap(int width, int height);
 class LocalDC {
 
 public:
-    LocalDC(wxDC* host, const IntRect& r)
+    LocalDC(wxDC* host, const IntRect& r, bool transparent = false)
     {
 #ifndef __WXMAC__
         m_host = host;
         int width = r.width();
         int height = r.height();
-        m_bitmap = new wxBitmap(width, height, 32);
-        wxAlphaPixelData pixData(*m_bitmap, wxPoint(0,0), wxSize(width, height));
-        ASSERT(pixData);
-        if (pixData) {
-            wxAlphaPixelData::Iterator p(pixData);
-            for (int y=0; y<height; y++) {
-                wxAlphaPixelData::Iterator rowStart = p;
-                for (int x=0; x<width; x++) {
-                    p.Alpha() = 0;
-                    ++p; 
+        // on MSW, some controls like scrollbars do not always draw properly when
+        // the bitmap is transparent. However, they draw into all pixels so this is
+        // not needed. So only make the bitmap transparent when needed.
+        int depth = 24;
+        if (transparent)
+            depth = 32;
+        m_bitmap = new wxBitmap(width, height, depth);
+        // we need the wxAlphaPixelData code to be in its own scope so that the
+        // pixData is deleted before we assign the bitmap to the wxMemoryDC,
+        // in order to avoid a copy.
+        if (transparent)
+        {
+            wxAlphaPixelData pixData(*m_bitmap, wxPoint(0,0), wxSize(width, height));
+            ASSERT(pixData);
+            if (pixData) {
+                wxAlphaPixelData::Iterator p(pixData);
+                for (int y=0; y<height; y++) {
+                    wxAlphaPixelData::Iterator rowStart = p;
+                    for (int x=0; x<width; x++) {
+                        p.Alpha() = 0;
+                        ++p; 
+                    }
+                    p = rowStart;
+                    p.OffsetY(pixData, 1);
                 }
-                p = rowStart;
-                p.OffsetY(pixData, 1);
             }
         }
-
         m_context = new wxMemoryDC(*m_bitmap);
         m_context->SetDeviceOrigin(-r.x(), -r.y());
         m_rect = r;

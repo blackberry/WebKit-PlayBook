@@ -38,6 +38,7 @@ FilterEffect::FilterEffect(Filter* filter)
     , m_hasY(false)
     , m_hasWidth(false)
     , m_hasHeight(false)
+    , m_clipsToBounds(true)
 {
     ASSERT(m_filter);
 }
@@ -61,8 +62,12 @@ void FilterEffect::determineAbsolutePaintRect()
     for (unsigned i = 0; i < size; ++i)
         m_absolutePaintRect.unite(m_inputEffects.at(i)->absolutePaintRect());
     
-    // SVG specification wants us to clip to primitive subregion.
-    m_absolutePaintRect.intersect(enclosingIntRect(m_maxEffectRect));
+    // Filters in SVG clip to primitive subregion, while CSS doesn't.
+    if (m_clipsToBounds)
+        m_absolutePaintRect.intersect(enclosingIntRect(m_maxEffectRect));
+    else
+        m_absolutePaintRect.unite(enclosingIntRect(m_maxEffectRect));
+    
 }
 
 IntRect FilterEffect::requestedRegionOfInputImageData(const IntRect& effectRect) const
@@ -99,6 +104,10 @@ void FilterEffect::apply()
     determineAbsolutePaintRect();
     
     // Add platform specific apply functions here and return earlier.
+#if USE(SKIA)
+    if (platformApplySkia())
+        return;
+#endif
     platformApplySoftware();
 }
 
@@ -118,12 +127,12 @@ ImageBuffer* FilterEffect::asImageBuffer()
         return 0;
     if (m_imageBufferResult)
         return m_imageBufferResult.get();
-    m_imageBufferResult = ImageBuffer::create(m_absolutePaintRect.size(), ColorSpaceLinearRGB);
+    m_imageBufferResult = ImageBuffer::create(m_absolutePaintRect.size(), 1, ColorSpaceLinearRGB, m_filter->renderingMode());
     IntRect destinationRect(IntPoint(), m_absolutePaintRect.size());
     if (m_premultipliedImageResult)
-        m_imageBufferResult->putPremultipliedImageData(m_premultipliedImageResult.get(), destinationRect.size(), destinationRect, IntPoint());
+        m_imageBufferResult->putByteArray(Premultiplied, m_premultipliedImageResult.get(), destinationRect.size(), destinationRect, IntPoint());
     else
-        m_imageBufferResult->putUnmultipliedImageData(m_unmultipliedImageResult.get(), destinationRect.size(), destinationRect, IntPoint());
+        m_imageBufferResult->putByteArray(Unmultiplied, m_unmultipliedImageResult.get(), destinationRect.size(), destinationRect, IntPoint());
     return m_imageBufferResult.get();
 }
 
@@ -255,7 +264,7 @@ ImageBuffer* FilterEffect::createImageBufferResult()
     ASSERT(!hasResult());
     if (m_absolutePaintRect.isEmpty())
         return 0;
-    m_imageBufferResult = ImageBuffer::create(m_absolutePaintRect.size(), ColorSpaceLinearRGB);
+    m_imageBufferResult = ImageBuffer::create(m_absolutePaintRect.size(), 1, ColorSpaceLinearRGB, m_filter->renderingMode());
     if (!m_imageBufferResult)
         return 0;
     ASSERT(m_imageBufferResult->context());

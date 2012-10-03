@@ -31,8 +31,8 @@
 #ifndef WebDevToolsAgentClient_h
 #define WebDevToolsAgentClient_h
 
-#include "WebCString.h"
-#include "WebCommon.h"
+#include "platform/WebCString.h"
+#include "platform/WebCommon.h"
 
 namespace WebKit {
 class WebString;
@@ -57,8 +57,6 @@ public:
         virtual void quitNow() = 0;
     };
     virtual WebKitClientMessageLoop* createClientMessageLoop() { return 0; }
-
-    virtual bool exposeV8DebuggerProtocol() { return false; }
 
     virtual void clearBrowserCache() { }
     virtual void clearBrowserCookies() { }

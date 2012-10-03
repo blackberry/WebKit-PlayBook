@@ -31,18 +31,59 @@ namespace WebCore {
 PlatformTouchEvent::PlatformTouchEvent(QTouchEvent* event)
 {
     switch (event->type()) {
-    case QEvent::TouchBegin: m_type = TouchStart; break;
-    case QEvent::TouchUpdate: m_type = TouchMove; break;
-    case QEvent::TouchEnd: m_type = TouchEnd; break;
+    case QEvent::TouchBegin:
+        m_type = PlatformEvent::TouchStart;
+        break;
+    case QEvent::TouchUpdate:
+        m_type = PlatformEvent::TouchMove;
+        break;
+    case QEvent::TouchEnd:
+        m_type = PlatformEvent::TouchEnd;
+        break;
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    case QEvent::TouchCancel:
+        m_type = PlatformEvent::TouchCancel;
+        break;
+#endif
     }
-    const QList<QTouchEvent::TouchPoint>& points = event->touchPoints();
-    for (int i = 0; i < points.count(); ++i)
-        m_touchPoints.append(PlatformTouchPoint(points.at(i)));
 
-    m_ctrlKey = (event->modifiers() & Qt::ControlModifier);
-    m_altKey = (event->modifiers() & Qt::AltModifier);
-    m_shiftKey = (event->modifiers() & Qt::ShiftModifier);
-    m_metaKey = (event->modifiers() & Qt::MetaModifier);
+    const QList<QTouchEvent::TouchPoint>& points = event->touchPoints();
+    for (int i = 0; i < points.count(); ++i) {
+        PlatformTouchPoint::State state = PlatformTouchPoint::TouchStateEnd;
+
+        switch (points.at(i).state()) {
+        case Qt::TouchPointReleased:
+            state = PlatformTouchPoint::TouchReleased;
+            break;
+        case Qt::TouchPointMoved:
+            state = PlatformTouchPoint::TouchMoved;
+            break;
+        case Qt::TouchPointPressed:
+            state = PlatformTouchPoint::TouchPressed;
+            break;
+        case Qt::TouchPointStationary:
+            state = PlatformTouchPoint::TouchStationary;
+            break;
+        }
+
+        // Qt does not have a Qt::TouchPointCancelled point state, so if we receive a touch cancel event,
+        // simply cancel all touch points here.
+        if (m_type == PlatformEvent::TouchCancel)
+            state = PlatformTouchPoint::TouchCancelled;
+
+        m_touchPoints.append(PlatformTouchPoint(points.at(i), state));
+    }
+
+    m_modifiers = 0;
+    if (event->modifiers()  & Qt::ShiftModifier)
+        m_modifiers |= ShiftKey;
+    if (event->modifiers()  & Qt::ControlModifier)
+        m_modifiers |= CtrlKey;
+    if (event->modifiers()  & Qt::AltModifier)
+        m_modifiers |= AltKey;
+    if (event->modifiers()  & Qt::MetaModifier)
+        m_modifiers |= MetaKey;
+
     m_timestamp = WTF::currentTime();
 }
 

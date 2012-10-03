@@ -52,6 +52,8 @@
  *    from 0.0 to 1.0, connect to individual frames for fine grained).
  *  - "load,provisional", void: frame started provisional load.
  *  - "load,started", void: frame started loading the document.
+ *  - "mixedcontent,displayed", void: frame has loaded and displayed mixed content.
+ *  - "mixedcontent,run", void: frame has loaded and run mixed content.
  *  - "navigation,first", void: first navigation was occurred.
  *  - "resource,request,new", Ewk_Frame_Resource_Request*: reports that
  *    there's a new resource request.
@@ -143,17 +145,19 @@ struct _Ewk_Hit_Test {
 /// Represents actions of touch events.
 typedef enum {
     EWK_TOUCH_START,
-    EWK_TOUCH_END,
     EWK_TOUCH_MOVE,
+    EWK_TOUCH_END,
     EWK_TOUCH_CANCEL
 } Ewk_Touch_Event_Type;
 
 /// Represents states of touch events.
 typedef enum {
-    EWK_TOUCH_POINT_PRESSED,
     EWK_TOUCH_POINT_RELEASED,
+    EWK_TOUCH_POINT_PRESSED,
     EWK_TOUCH_POINT_MOVED,
-    EWK_TOUCH_POINT_CANCELLED
+    EWK_TOUCH_POINT_STATIONARY,
+    EWK_TOUCH_POINT_CANCELLED,
+    EWK_TOUCH_POINT_END
 } Ewk_Touch_Point_Type;
 
 /// Creates a type name for _Ewk_Touch_Point.
@@ -171,6 +175,21 @@ typedef enum {
     EWK_TEXT_SELECTION_CARET,
     EWK_TEXT_SELECTION_RANGE
 } Ewk_Text_Selection_Type;
+
+/**
+ * Represents the validity of a X.509 certificate related to the current frame.
+ *
+ * A certificate is considered untrusted when any problem is found in it: it may have
+ * expired, the certificate's Common Name does not match the current host, the certificate
+ * does not validate against the current set of root CA certificates etc.
+ *
+ * @sa ewk_frame_certificate_status_get, ewk_network_tls_ca_certificates_path_set
+ */
+typedef enum {
+    EWK_CERTIFICATE_STATUS_NO_CERTIFICATE = 1 << 1, /**< No certificate provided (non-HTTPS connection). */
+    EWK_CERTIFICATE_STATUS_UNTRUSTED = 1 << 2, /**< The certificate provided is not trusted. */
+    EWK_CERTIFICATE_STATUS_TRUSTED = 1 << 3 /**< The certificate is valid and fully trusted. */
+} Ewk_Certificate_Status;
 
 /**
  * Retrieves the ewk_view object that owns this frame.
@@ -838,7 +857,42 @@ EAPI Eina_List *ewk_frame_resources_location_get(const Evas_Object *o);
  * @return A newly allocated string (which must be freed by the caller with @c free())
  *         or @c 0 in case of failure.
  */
-EAPI char* ewk_frame_plain_text_get(const Evas_Object* o);
+EAPI char *ewk_frame_plain_text_get(const Evas_Object *o);
+
+/**
+ * Returns whether the frame has displayed mixed content.
+ *
+ * When a frame has displayed mixed content, its current URI is an HTTPS one, but it has
+ * loaded and displayed a resource (such as an image) from an insecure (non-HTTPS) URI.
+ * Both the frame and the container view send a "mixedcontent,displayed" signal in this case.
+ *
+ * The status is reset only when a load event occurs (eg. the page is reloaded or a new page is loaded).
+ *
+ * @param o The frame to query.
+ *
+ * @sa ewk_view_mixed_content_displayed_get
+ */
+EAPI Eina_Bool ewk_frame_mixed_content_displayed_get(const Evas_Object *o);
+
+/**
+ * Returns whether the frame has run mixed content.
+ *
+ * When a frame has run mixed content, its current URI is an HTTPS one, but it has
+ * loaded and run a resource (such as an image) from an insecure (non-HTTPS) URI.
+ * Both the frame and the container view send a "mixedcontent,run" signal in this case.
+ *
+ * The status is reset only when a load event occurs (eg. the page is reloaded or a new page is loaded).
+ *
+ * @param o The frame to query.
+ *
+ * @sa ewk_view_mixed_content_run_get
+ */
+EAPI Eina_Bool ewk_frame_mixed_content_run_get(const Evas_Object *o);
+
+/**
+ * Returns the validity of the X.509 certificate related to the current frame.
+ */
+EAPI Ewk_Certificate_Status ewk_frame_certificate_status_get(Evas_Object *o);
 
 #ifdef __cplusplus
 }

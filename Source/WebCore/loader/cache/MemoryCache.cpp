@@ -105,7 +105,12 @@ void MemoryCache::revalidationSucceeded(CachedResource* revalidatingResource, co
     ASSERT(!resource->inCache());
     ASSERT(resource->isLoaded());
     ASSERT(revalidatingResource->inCache());
-    
+
+    // Calling evict() can potentially delete revalidatingResource, which we use
+    // below. This mustn't be the case since revalidation means it is loaded
+    // and so canDelete() is false.
+    ASSERT(!revalidatingResource->canDelete());
+
     evict(revalidatingResource);
 
     ASSERT(!m_resources.get(resource->url()));
@@ -120,6 +125,7 @@ void MemoryCache::revalidationSucceeded(CachedResource* revalidatingResource, co
         adjustSize(resource->hasClients(), delta);
     
     revalidatingResource->switchClientsToRevalidatedResource();
+    ASSERT(!revalidatingResource->m_deleted);
     // this deletes the revalidating resource
     revalidatingResource->clearResourceToRevalidate();
 }
@@ -481,7 +487,7 @@ void MemoryCache::insertInLRUList(CachedResource* resource)
     if (!resource->m_nextInAllResourcesList)
         list->m_tail = resource;
         
-#ifndef NDEBUG
+#if !ASSERT_DISABLED
     // Verify that we are in now in the list like we should be.
     list = lruListFor(resource);
     bool found = false;
@@ -537,7 +543,7 @@ void MemoryCache::getOriginsWithCache(SecurityOriginSet& origins)
 {
     CachedResourceMap::iterator e = m_resources.end();
     for (CachedResourceMap::iterator it = m_resources.begin(); it != e; ++it)
-        origins.add(SecurityOrigin::create(KURL(KURL(), it->second->url())));
+        origins.add(SecurityOrigin::createFromString(it->second->url()));
 }
 
 void MemoryCache::removeFromLiveDecodedResourcesList(CachedResource* resource)
@@ -547,7 +553,7 @@ void MemoryCache::removeFromLiveDecodedResourcesList(CachedResource* resource)
         return;
     resource->m_inLiveDecodedResourcesList = false;
 
-#ifndef NDEBUG
+#if !ASSERT_DISABLED
     // Verify that we are in fact in this list.
     bool found = false;
     for (CachedResource* current = m_liveDecodedResources.m_head; current; current = current->m_nextInLiveResourcesList) {
@@ -593,7 +599,7 @@ void MemoryCache::insertInLiveDecodedResourcesList(CachedResource* resource)
     if (!resource->m_nextInLiveResourcesList)
         m_liveDecodedResources.m_tail = resource;
         
-#ifndef NDEBUG
+#if !ASSERT_DISABLED
     // Verify that we are in now in the list like we should be.
     bool found = false;
     for (CachedResource* current = m_liveDecodedResources.m_head; current; current = current->m_nextInLiveResourcesList) {

@@ -243,8 +243,7 @@ void InspectorDatabaseAgent::clearResources()
 }
 
 InspectorDatabaseAgent::InspectorDatabaseAgent(InstrumentingAgents* instrumentingAgents, InspectorState* state)
-    : m_instrumentingAgents(instrumentingAgents)
-    , m_inspectorState(state)
+    : InspectorBaseAgent<InspectorDatabaseAgent>("Database", instrumentingAgents, state)
     , m_enabled(false)
 {
     m_instrumentingAgents->setInspectorDatabaseAgent(this);
@@ -272,7 +271,7 @@ void InspectorDatabaseAgent::enable(ErrorString*)
     if (m_enabled)
         return;
     m_enabled = true;
-    m_inspectorState->setBoolean(DatabaseAgentState::databaseAgentEnabled, m_enabled);
+    m_state->setBoolean(DatabaseAgentState::databaseAgentEnabled, m_enabled);
 
     DatabaseResourcesMap::iterator databasesEnd = m_resources.end();
     for (DatabaseResourcesMap::iterator it = m_resources.begin(); it != databasesEnd; ++it)
@@ -284,15 +283,15 @@ void InspectorDatabaseAgent::disable(ErrorString*)
     if (!m_enabled)
         return;
     m_enabled = false;
-    m_inspectorState->setBoolean(DatabaseAgentState::databaseAgentEnabled, m_enabled);
+    m_state->setBoolean(DatabaseAgentState::databaseAgentEnabled, m_enabled);
 }
 
 void InspectorDatabaseAgent::restore()
 {
-    m_enabled =  m_inspectorState->getBoolean(DatabaseAgentState::databaseAgentEnabled);
+    m_enabled =  m_state->getBoolean(DatabaseAgentState::databaseAgentEnabled);
 }
 
-void InspectorDatabaseAgent::getDatabaseTableNames(ErrorString* error, int databaseId, RefPtr<InspectorArray>* names)
+void InspectorDatabaseAgent::getDatabaseTableNames(ErrorString* error, int databaseId, RefPtr<InspectorArray>& names)
 {
     if (!m_enabled) {
         *error = "Database agent is not enabled";
@@ -304,7 +303,7 @@ void InspectorDatabaseAgent::getDatabaseTableNames(ErrorString* error, int datab
         Vector<String> tableNames = database->tableNames();
         unsigned length = tableNames.size();
         for (unsigned i = 0; i < length; ++i)
-            (*names)->pushString(tableNames[i]);
+            names->pushString(tableNames[i]);
     }
 }
 

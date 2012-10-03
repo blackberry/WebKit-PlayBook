@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,26 +21,22 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "Color.h"
 #include "FloatRect.h"
 #include "IntRect.h"
-#include "LayerTileData.h"
+#include "LayerTile.h"
 #include "LayerTileIndex.h"
 
 #include <SkBitmap.h>
 #include <wtf/Deque.h>
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
-#include <wtf/OwnPtr.h>
-#include <wtf/PassOwnPtr.h>
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace WebCore {
 
-class GLES2Context;
-class LayerTile;
 class LayerCompositingThread;
 class LayerWebKitThread;
-class TransformationMatrix;
 
 class LayerTiler : public ThreadSafeRefCounted<LayerTiler> {
 public:
@@ -65,10 +61,10 @@ public:
 
     // Compositing thread
     void layerCompositingThreadDestroyed();
-    void uploadTexturesIfNeeded(GLES2Context*);
-    void drawTextures(GLES2Context*, LayerCompositingThread*, int positionLocation, int texCoordLocation);
+    void uploadTexturesIfNeeded();
+    void drawTextures(LayerCompositingThread*, int positionLocation, int texCoordLocation);
     bool hasMissingTextures() const { return m_hasMissingTextures; }
-    void drawMissingTextures(GLES2Context*, LayerCompositingThread*, int positionLocation, int texCoordLocation);
+    void drawMissingTextures(LayerCompositingThread*, int positionLocation, int texCoordLocation);
     void deleteTextures();
     void commitPendingTextureUploads();
     void layerVisibilityChanged(bool visible);
@@ -84,68 +80,67 @@ private:
         enum Type { Unknown, SetContents, SetContentsToColor, UpdateContents, DiscardContents, ResizeContents, DirtyContents };
 
         TextureJob()
-            : type(Unknown)
+            : m_type(Unknown)
         {
         }
 
         TextureJob(Type type, const IntSize& newSize)
-            : type(type)
-            , isOpaque(false)
-            , dirtyRect(IntPoint(), newSize)
+            : m_type(type)
+            , m_isOpaque(false)
+            , m_dirtyRect(IntPoint::zero(), newSize)
         {
             ASSERT(type == ResizeContents);
         }
 
         TextureJob(Type type, const IntRect& dirtyRect)
-            : type(type)
-            , isOpaque(false)
-            , dirtyRect(dirtyRect)
+            : m_type(type)
+            , m_isOpaque(false)
+            , m_dirtyRect(dirtyRect)
         {
             ASSERT(type == DiscardContents || type == DirtyContents);
         }
 
-        TextureJob(Type type, const SkBitmap& contents, const IntRect& dirtyRect, bool isOpaque = false)
-            : type(type)
-            , contents(contents)
-            , isOpaque(isOpaque)
-            , dirtyRect(dirtyRect)
+        TextureJob(Type type, const SkBitmap& contents, const IntRect& dirtyRect, bool isOpaque)
+            : m_type(type)
+            , m_contents(contents)
+            , m_isOpaque(isOpaque)
+            , m_dirtyRect(dirtyRect)
         {
             ASSERT(type == UpdateContents || type == SetContents);
             ASSERT(!contents.isNull());
         }
 
         TextureJob(Type type, const Color& color, const TileIndex& index)
-            : type(type)
-            , isOpaque(false)
-            , color(color)
-            , index(index)
+            : m_type(type)
+            , m_isOpaque(false)
+            , m_color(color)
+            , m_index(index)
         {
             ASSERT(type == SetContentsToColor);
         }
 
-        static TextureJob setContents(const SkBitmap& contents, bool isOpaque) { return TextureJob(SetContents, contents, IntRect(IntPoint(), IntSize(contents.width(), contents.height())), isOpaque); }
+        static TextureJob setContents(const SkBitmap& contents, bool isOpaque) { return TextureJob(SetContents, contents, IntRect(IntPoint::zero(), IntSize(contents.width(), contents.height())), isOpaque); }
         static TextureJob setContentsToColor(const Color& color, const TileIndex& index) { return TextureJob(SetContentsToColor, color, index); }
-        static TextureJob updateContents(const SkBitmap& contents, const IntRect& dirtyRect) { return TextureJob(UpdateContents, contents, dirtyRect); }
+        static TextureJob updateContents(const SkBitmap& contents, const IntRect& dirtyRect, bool isOpaque) { return TextureJob(UpdateContents, contents, dirtyRect, isOpaque); }
         static TextureJob discardContents(const IntRect& dirtyRect) { return TextureJob(DiscardContents, dirtyRect); }
         static TextureJob resizeContents(const IntSize& newSize) { return TextureJob(ResizeContents, newSize); }
         static TextureJob dirtyContents(const IntRect& dirtyRect) { return TextureJob(DirtyContents, dirtyRect); }
 
-        bool isNull() { return type == Unknown; }
+        bool isNull() { return m_type == Unknown; }
 
-        Type type;
-        SkBitmap contents;
-        bool isOpaque;
-        IntRect dirtyRect;
-        Color color;
-        TileIndex index;
+        Type m_type;
+        SkBitmap m_contents;
+        bool m_isOpaque;
+        IntRect m_dirtyRect;
+        Color m_color;
+        TileIndex m_index;
     };
 
     typedef HashMap<TileIndex, LayerTile*> TileMap;
     typedef HashMap<TileIndex, LayerTileData> VisibilityMap;
     typedef HashMap<TileIndex, const TextureJob*> TileJobsMap;
 
-    static IntSize defaultTileSize();
-    IntSize tileSize() { return m_tileSize; }
+    IntSize tileSize() const { return m_tileSize; }
     void updateTileSize();
 
     LayerTiler(LayerWebKitThread*);
@@ -159,10 +154,10 @@ private:
     // Compositing thread
     void updateTileContents(const TextureJob&, const IntRect&);
     void addTileJob(const TileIndex&, const TextureJob&, TileJobsMap&);
-    void performTileJob(GLES2Context*, LayerTile*, const TextureJob&, const IntRect&);
-    void processTextureJob(GLES2Context*, const TextureJob&, TileJobsMap&);
-    void drawTexturesInternal(GLES2Context*, LayerCompositingThread*, int positionLocation, int texCoordLocation, bool missing);
-    void pruneTextures(GLES2Context*);
+    void performTileJob(LayerTile*, const TextureJob&, const IntRect&);
+    void processTextureJob(const TextureJob&, TileJobsMap&);
+    void drawTexturesInternal(LayerCompositingThread*, int positionLocation, int texCoordLocation, bool missing);
+    void pruneTextures();
     void visibilityChanged(bool needsDisplay);
 
     // Clear all pending update content texture jobs
@@ -172,7 +167,7 @@ private:
         // Clear all pending update content jobs
         T list;
         for (typename T::iterator it = jobs.begin(); it != jobs.end(); ++it) {
-            if ((*it).type != TextureJob::UpdateContents)
+            if ((*it).m_type != TextureJob::UpdateContents)
                 list.append(*it);
         }
         jobs = list;

@@ -29,6 +29,16 @@
 #import <WebKit2/WKViewPrivate.h>
 #import <Carbon/Carbon.h>
 
+@interface ActiveOffscreenWindow : NSWindow
+@end
+
+@implementation ActiveOffscreenWindow
+- (BOOL)isKeyWindow
+{
+    return YES;
+}
+@end
+
 namespace TestWebKitAPI {
 
 PlatformWebView::PlatformWebView(WKContextRef contextRef, WKPageGroupRef pageGroupRef)
@@ -37,17 +47,12 @@ PlatformWebView::PlatformWebView(WKContextRef contextRef, WKPageGroupRef pageGro
     m_view = [[WKView alloc] initWithFrame:rect contextRef:contextRef pageGroupRef:pageGroupRef];
 
     NSRect windowRect = NSOffsetRect(rect, -10000, [(NSScreen *)[[NSScreen screens] objectAtIndex:0] frame].size.height - rect.size.height + 10000);
-    m_window = [[NSWindow alloc] initWithContentRect:windowRect styleMask:NSBorderlessWindowMask backing:NSBackingStoreBuffered defer:YES];
+    m_window = [[ActiveOffscreenWindow alloc] initWithContentRect:windowRect styleMask:NSBorderlessWindowMask backing:NSBackingStoreBuffered defer:YES];
     [m_window setColorSpace:[[NSScreen mainScreen] colorSpace]];
     [[m_window contentView] addSubview:m_view];
     [m_window orderBack:nil];
     [m_window setAutodisplay:NO];
     [m_window setReleasedWhenClosed:NO];
-}
-
-void PlatformWebView::resizeTo(unsigned width, unsigned height)
-{
-    [m_view setFrame:NSMakeRect(0, 0, width, height)];
 }
 
 PlatformWebView::~PlatformWebView()
@@ -56,6 +61,12 @@ PlatformWebView::~PlatformWebView()
     [m_window release];
     [m_view release];
 }
+
+void PlatformWebView::resizeTo(unsigned width, unsigned height)
+{
+    [m_view setFrame:NSMakeRect(0, 0, width, height)];
+}
+
 
 WKPageRef PlatformWebView::page() const
 {

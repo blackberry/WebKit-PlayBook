@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 #include "Frame.h"
 #include "FrameView.h"
 #include "LayerWebKitThread.h"
+#include "Page.h"
 #include "RenderPart.h"
 #include "WebPage_p.h"
 #include <wtf/Assertions.h>
@@ -35,25 +36,13 @@ namespace WebKit {
 
 static FloatSize frameLayerAbsoluteOffset(Frame* frame)
 {
-    FloatSize result;
     ASSERT(frame);
-    const ScrollView* scrollView = frame->view();
-    if (!scrollView)
-        return result;
 
-    while (const ScrollView* parentScrollView = scrollView->parent()) {
-        if (scrollView->isFrameView()) {
-            RenderPart* renderer = static_cast<const FrameView*>(scrollView)->frame()->ownerRenderer();
-            if (!renderer)
-                return result;
-            FloatPoint point = FloatPoint(renderer->borderLeft() + renderer->paddingLeft(), renderer->borderTop() + renderer->paddingTop());
-            point = renderer->localToAbsolute(point);
-            result += FloatSize(point.x(), point.y());
-        } else
-            result += FloatSize(scrollView->x(), scrollView->y());
-        scrollView = parentScrollView;
-    }
-    return result;
+    if (!frame->view() || !frame->page() || !frame->page()->mainFrame() || !frame->page()->mainFrame()->view())
+        return FloatSize();
+
+    IntPoint offset = frame->page()->mainFrame()->view()->windowToContents(frame->view()->contentsToWindow(IntPoint::zero()));
+    return FloatSize(offset.x(), offset.y());
 }
 
 FrameLayers::FrameLayers(WebPagePrivate* page)

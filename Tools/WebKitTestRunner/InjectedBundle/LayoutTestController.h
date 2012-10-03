@@ -28,17 +28,21 @@
 
 #include "JSWrappable.h"
 #include <JavaScriptCore/JSRetainPtr.h>
+#include <WebKit2/WKBundleScriptWorld.h>
 #include <string>
 #include <wtf/PassRefPtr.h>
 
 #if PLATFORM(MAC)
 #include <wtf/RetainPtr.h>
+#include <CoreFoundation/CFRunLoop.h>
 typedef RetainPtr<CFRunLoopTimerRef> PlatformTimerRef;
 #elif PLATFORM(WIN)
 typedef UINT_PTR PlatformTimerRef;
 #elif PLATFORM(QT)
 #include <QTimer>
 typedef QTimer PlatformTimerRef;
+#elif PLATFORM(GTK)
+typedef unsigned int PlatformTimerRef;
 #endif
 
 namespace WTR {
@@ -61,6 +65,7 @@ public:
     void notifyDone();
 
     // Other dumping.
+    void dumpBackForwardList() { m_shouldDumpBackForwardListsForAllWindows = true; }
     void dumpChildFrameScrollPositions() { m_shouldDumpAllFrameScrollPositions = true; }
     void dumpEditingCallbacks() { m_dumpEditingCallbacks = true; }
     void dumpSelectionRect() { } // Will need to do something when we support pixel tests.
@@ -78,8 +83,10 @@ public:
     void setAllowUniversalAccessFromFileURLs(bool);
     void setAllowFileAccessFromFileURLs(bool);
     void setFrameFlatteningEnabled(bool);
+    void setGeolocationPermission(bool);
     void setJavaScriptCanAccessClipboard(bool);
     void setPrivateBrowsingEnabled(bool);
+    void setPopupBlockingEnabled(bool);
     void setAuthorAndUserStylesEnabled(bool);
     void setCustomPolicyDelegate(bool enabled, bool permissive = false);
     void addOriginAccessWhitelistEntry(JSStringRef sourceOrigin, JSStringRef destinationProtocol, JSStringRef destinationHost, bool allowDestinationSubdomains);
@@ -88,9 +95,11 @@ public:
     // Special DOM functions.
     JSValueRef computedStyleIncludingVisitedInfo(JSValueRef element);
     JSRetainPtr<JSStringRef> counterValueForElementById(JSStringRef elementId);
-    JSRetainPtr<JSStringRef> markerTextForListItem(JSValueRef element);
+    void clearBackForwardList();
     void execCommand(JSStringRef name, JSStringRef argument);
     bool isCommandEnabled(JSStringRef name);
+    JSRetainPtr<JSStringRef> markerTextForListItem(JSValueRef element);
+    unsigned windowCount();
 
     // Repaint testing.
     void testRepaint() { m_testRepaint = true; }
@@ -100,7 +109,13 @@ public:
     // Animation testing.
     unsigned numberOfActiveAnimations() const;
     bool pauseAnimationAtTimeOnElementWithId(JSStringRef animationName, double time, JSStringRef elementId);
-
+    bool pauseTransitionAtTimeOnElementWithId(JSStringRef propertyName, double time, JSStringRef elementId);
+    void suspendAnimations();
+    void resumeAnimations();
+    
+    // Compositing testing.
+    JSRetainPtr<JSStringRef> layerTreeAsText() const;
+    
     // UserContent testing.
     void addUserScript(JSStringRef source, bool runAtStart, bool allFrames);
     void addUserStyleSheet(JSStringRef source, bool allFrames);
@@ -127,9 +142,9 @@ public:
     WhatToDump whatToDump() const { return m_whatToDump; }
 
     bool shouldDumpAllFrameScrollPositions() const { return m_shouldDumpAllFrameScrollPositions; }
+    bool shouldDumpBackForwardListsForAllWindows() const { return m_shouldDumpBackForwardListsForAllWindows; }
     bool shouldDumpEditingCallbacks() const { return m_dumpEditingCallbacks; }
     bool shouldDumpMainFrameScrollPosition() const { return m_whatToDump == RenderTree; }
-
     bool shouldDumpStatusCallbacks() const { return m_dumpStatusCallbacks; }
     bool shouldDumpTitleChanges() const { return m_dumpTitleChanges; }
     bool shouldDumpPixels() const { return m_dumpPixels; }
@@ -177,6 +192,10 @@ public:
     void callFocusWebViewCallback();
     void callSetBackingScaleFactorCallback();
 
+    void overridePreference(JSStringRef preference, bool value);
+
+    JSRetainPtr<JSStringRef> platformName();
+    
 private:
     static const double waitToDumpWatchdogTimerInterval;
 
@@ -187,6 +206,7 @@ private:
 
     WhatToDump m_whatToDump;
     bool m_shouldDumpAllFrameScrollPositions;
+    bool m_shouldDumpBackForwardListsForAllWindows;
 
     bool m_shouldAllowEditing;
     bool m_shouldCloseExtraWindows;
@@ -194,6 +214,8 @@ private:
     bool m_dumpEditingCallbacks;
     bool m_dumpStatusCallbacks;
     bool m_dumpTitleChanges;
+    bool m_dumpPixels;
+    bool m_dumpFullScreenCallbacks;
     bool m_waitToDump; // True if waitUntilDone() has been called, but notifyDone() has not yet been called.
     bool m_testRepaint;
     bool m_testRepaintSweepHorizontally;

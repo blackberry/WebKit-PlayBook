@@ -179,12 +179,6 @@ JSValueRef LayoutTestController::computedStyleIncludingVisitedInfo(JSContextRef 
     return JSValueMakeUndefined(context);
 }
 
-JSValueRef LayoutTestController::nodesFromRect(JSContextRef context, JSValueRef value, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping)
-{
-    // FIXME: Implement this.
-    return JSValueMakeUndefined(context);
-}
-
 JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
 {
     COMPtr<IWebFramePrivate> framePrivate(Query, frame);
@@ -445,6 +439,12 @@ int LayoutTestController::numberOfPendingGeolocationPermissionRequests()
 }
 
 void LayoutTestController::addMockSpeechInputResult(JSStringRef result, double confidence, JSStringRef language)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
+}
+
+void LayoutTestController::setMockSpeechInputDumpRect(bool flag)
 {
     // FIXME: Implement for speech input layout tests.
     // See https://bugs.webkit.org/show_bug.cgi?id=39485.
@@ -1091,31 +1091,6 @@ bool LayoutTestController::pauseTransitionAtTimeOnElementWithId(JSStringRef prop
     return SUCCEEDED(hr) && wasRunning;
 }
 
-bool LayoutTestController::sampleSVGAnimationForElementAtTime(JSStringRef animationId, double time, JSStringRef elementId)
-{
-    COMPtr<IDOMDocument> document;
-    if (FAILED(frame->DOMDocument(&document)))
-        return false;
-
-    BSTR idBSTR = JSStringCopyBSTR(animationId);
-    COMPtr<IDOMElement> element;
-    HRESULT hr = document->getElementById(idBSTR, &element);
-    SysFreeString(idBSTR);
-    if (FAILED(hr))
-        return false;
-
-    COMPtr<IWebFramePrivate> framePrivate(Query, frame);
-    if (!framePrivate)
-        return false;
-
-    BSTR elementIdBSTR = JSStringCopyBSTR(elementId);
-    BOOL wasRunning = FALSE;
-    hr = framePrivate->pauseSVGAnimation(elementIdBSTR, element.get(), time, &wasRunning);
-    SysFreeString(elementIdBSTR);
-
-    return SUCCEEDED(hr) && wasRunning;
-}
-
 unsigned LayoutTestController::numberOfActiveAnimations() const
 {
     COMPtr<IWebFramePrivate> framePrivate(Query, frame);
@@ -1555,4 +1530,9 @@ void LayoutTestController::focusWebView()
 
 void LayoutTestController::setBackingScaleFactor(double)
 {
+}
+
+void LayoutTestController::simulateDesktopNotificationClick(JSStringRef title)
+{
+    // FIXME: Implement.
 }

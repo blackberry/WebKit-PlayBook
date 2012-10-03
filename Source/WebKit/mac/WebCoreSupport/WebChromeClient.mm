@@ -67,6 +67,7 @@
 #import <WebCore/IntPoint.h>
 #import <WebCore/IntRect.h>
 #import <WebCore/NavigationAction.h>
+#import <WebCore/NotImplemented.h>
 #import <WebCore/Page.h>
 #import <WebCore/PlatformScreen.h>
 #import <WebCore/PlatformString.h>
@@ -524,7 +525,7 @@ bool WebChromeClient::runJavaScriptPrompt(Frame* frame, const String& prompt, co
 
 bool WebChromeClient::shouldInterruptJavaScript()
 {
-    return CallUIDelegate(m_webView, @selector(webViewShouldInterruptJavaScript:));
+    return CallUIDelegateReturningBoolean(NO, m_webView, @selector(webViewShouldInterruptJavaScript:));
 }
 
 void WebChromeClient::setStatusbarText(const String& status)
@@ -541,7 +542,7 @@ IntRect WebChromeClient::windowResizerRect() const
     return enclosingIntRect([[m_webView window] _growBoxRect]);
 }
 
-void WebChromeClient::invalidateWindow(const IntRect&, bool immediate)
+void WebChromeClient::invalidateRootView(const IntRect&, bool immediate)
 {
     if (immediate) {
         [[m_webView window] displayIfNeeded];
@@ -549,26 +550,28 @@ void WebChromeClient::invalidateWindow(const IntRect&, bool immediate)
     }
 }
 
-void WebChromeClient::invalidateContentsAndWindow(const IntRect& rect, bool immediate)
+void WebChromeClient::invalidateContentsAndRootView(const IntRect& rect, bool immediate)
 {
 }
 
 void WebChromeClient::invalidateContentsForSlowScroll(const IntRect& rect, bool immediate)
 {
-    invalidateContentsAndWindow(rect, immediate);
+    invalidateContentsAndRootView(rect, immediate);
 }
 
 void WebChromeClient::scroll(const IntSize&, const IntRect&, const IntRect&)
 {
 }
 
-IntPoint WebChromeClient::screenToWindow(const IntPoint& p) const
+IntPoint WebChromeClient::screenToRootView(const IntPoint& p) const
 {
+    // FIXME: Implement this.
     return p;
 }
 
-IntRect WebChromeClient::windowToScreen(const IntRect& r) const
+IntRect WebChromeClient::rootViewToScreen(const IntRect& r) const
 {
+    // FIXME: Implement this.
     return r;
 }
 
@@ -838,6 +841,12 @@ bool WebChromeClient::selectItemAlignmentFollowsMenuWritingDirection()
 #endif
 }
 
+bool WebChromeClient::hasOpenedPopup() const
+{
+    notImplemented();
+    return false;
+}
+
 PassRefPtr<WebCore::PopupMenu> WebChromeClient::createPopupMenu(WebCore::PopupMenuClient* client) const
 {
     return adoptRef(new PopupMenuMac(client));
@@ -847,35 +856,6 @@ PassRefPtr<WebCore::SearchPopupMenu> WebChromeClient::createSearchPopupMenu(WebC
 {
     return adoptRef(new SearchPopupMenuMac(client));
 }
-
-#if ENABLE(CONTEXT_MENUS)
-void WebChromeClient::showContextMenu()
-{
-    Page* page = [m_webView page];
-    if (!page)
-        return;
-
-    ContextMenuController* controller = page->contextMenuController();
-    Node* node = controller->hitTestResult().innerNonSharedNode();
-    if (!node)
-        return;
-    Frame* frame = node->document()->frame();
-    if (!frame)
-        return;
-    FrameView* frameView = frame->view();
-    if (!frameView)
-        return;
-    NSView* view = frameView->documentView();
-    
-    IntPoint point = frameView->contentsToWindow(controller->hitTestResult().point());
-    NSPoint nsScreenPoint = [view convertPoint:point toView:nil];
-    // Show the contextual menu for this event.
-    NSEvent* event = [NSEvent mouseEventWithType:NSRightMouseDown location:nsScreenPoint modifierFlags:0 timestamp:0 windowNumber:[[view window] windowNumber] context:0 eventNumber:0 clickCount:1 pressure:1];
-    NSMenu* nsMenu = [view menuForEvent:event];
-    if (nsMenu)
-        [NSMenu popUpContextMenu:nsMenu withEvent:event forView:view];    
-}
-#endif
 
 #if USE(ACCELERATED_COMPOSITING)
 

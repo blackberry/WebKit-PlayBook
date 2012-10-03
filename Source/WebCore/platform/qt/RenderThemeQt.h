@@ -53,7 +53,7 @@ public:
     virtual bool supportsHover(const RenderStyle*) const;
     virtual bool supportsFocusRing(const RenderStyle*) const;
 
-    virtual int baselinePosition(const RenderObject*) const;
+    virtual LayoutUnit baselinePosition(const RenderObject*) const;
 
     // A method asking if the control changes its tint when the window has focus or not.
     virtual bool controlSupportsTints(const RenderObject*) const;
@@ -151,7 +151,7 @@ protected:
 #endif
     virtual void computeSizeBasedOnStyle(RenderStyle*) const = 0;
 
-    virtual String fileListNameForWidth(const Vector<String>& filenames, const Font&, int width);
+    virtual String fileListNameForWidth(const Vector<String>& filenames, const Font&, int width) const;
 
     virtual QRect inflateButtonRect(const QRect& originalRect) const;
 
@@ -185,8 +185,8 @@ protected:
     void init(GraphicsContext*);
 
 private:
-    QBrush oldBrush;
-    bool oldAntialiasing;
+    QBrush m_previousBrush;
+    bool m_previousAntialiasing;
 
 };
 

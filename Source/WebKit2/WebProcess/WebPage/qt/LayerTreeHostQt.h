@@ -33,9 +33,7 @@ class UpdateInfo;
 class WebPage;
 
 class LayerTreeHostQt : public LayerTreeHost, WebCore::GraphicsLayerClient
-#if USE(TILED_BACKING_STORE)
-                      , public WebLayerTreeTileClient
-#endif
+                      , public WebGraphicsLayerClient
 {
 public:
     static PassRefPtr<LayerTreeHostQt> create(WebPage*);
@@ -62,21 +60,21 @@ public:
     virtual void pauseRendering() { m_isSuspended = true; }
     virtual void resumeRendering() { m_isSuspended = false; scheduleLayerFlush(); }
     virtual void deviceScaleFactorDidChange() { }
-    virtual int64_t adoptImageBackingStore(Image*);
+    virtual int64_t adoptImageBackingStore(WebCore::Image*);
     virtual void releaseImageBackingStore(int64_t);
 
-#if USE(TILED_BACKING_STORE)
     virtual void createTile(WebLayerID, int tileID, const UpdateInfo&);
     virtual void updateTile(WebLayerID, int tileID, const UpdateInfo&);
     virtual void removeTile(WebLayerID, int tileID);
-    virtual void setVisibleContentRectForLayer(int layerID, const WebCore::IntRect&);
+    virtual WebCore::IntRect visibleContentsRect() const;
     virtual void renderNextFrame();
+    virtual void purgeBackingStores();
     virtual bool layerTreeTileUpdatesAllowed() const;
-    virtual void setVisibleContentRectAndScale(const IntRect&, float scale);
-    virtual void setVisibleContentRectTrajectoryVector(const FloatPoint&);
+    virtual void setVisibleContentsRectForScaling(const WebCore::IntRect&, float scale);
+    virtual void setVisibleContentsRectForPanning(const WebCore::IntRect&, const WebCore::FloatPoint&);
     virtual void didSyncCompositingStateForLayer(const WebLayerInfo&);
-    virtual void didDeleteLayer(WebLayerID);
-#endif
+    virtual void attachLayer(WebCore::WebGraphicsLayer*);
+    virtual void detachLayer(WebCore::WebGraphicsLayer*);
 
 protected:
     explicit LayerTreeHostQt(WebPage*);
@@ -86,8 +84,8 @@ private:
     virtual void notifyAnimationStarted(const WebCore::GraphicsLayer*, double time);
     virtual void notifySyncRequired(const WebCore::GraphicsLayer*);
     virtual void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::IntRect& clipRect);
-    virtual bool showDebugBorders() const;
-    virtual bool showRepaintCounter() const;
+    virtual bool showDebugBorders(const WebCore::GraphicsLayer*) const;
+    virtual bool showRepaintCounter(const WebCore::GraphicsLayer*) const;
 
     // LayerTreeHostQt
     void createPageOverlayLayer();
@@ -105,14 +103,17 @@ private:
     // The page overlay layer. Will be null if there's no page overlay.
     OwnPtr<WebCore::GraphicsLayer> m_pageOverlayLayer;
 
+    HashSet<WebCore::WebGraphicsLayer*> m_registeredLayers;
     HashMap<int64_t, int> m_directlyCompositedImageRefCounts;
 
     bool m_notifyAfterScheduledLayerFlush;
     bool m_isValid;
-#if USE(TILED_BACKING_STORE)
+
     bool m_waitingForUIProcess;
     bool m_isSuspended;
-#endif
+    WebCore::IntRect m_visibleContentsRect;
+    float m_contentsScale;
+
     LayerTreeContext m_layerTreeContext;
     bool m_shouldSyncFrame;
     bool m_shouldSyncRootLayer;

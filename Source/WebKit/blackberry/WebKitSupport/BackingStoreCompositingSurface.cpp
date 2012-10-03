@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,16 +23,8 @@
 #include "SurfacePool.h"
 
 #if USE(ACCELERATED_COMPOSITING)
-#if USE(OPENVG)
-#include "EGLDisplayOpenVG.h"
-#include "EGLUtils.h"
-#include "VGUtils.h"
-#endif
 
 #include <BlackBerryPlatformGraphics.h>
-
-using namespace BlackBerry::Platform;
-using namespace BlackBerry::Platform::Graphics;
 
 namespace BlackBerry {
 namespace WebKit {
@@ -53,12 +45,12 @@ Platform::IntSize CompositingSurfaceBuffer::surfaceSize() const
     return m_size;
 }
 
-Buffer* CompositingSurfaceBuffer::nativeBuffer() const
+Platform::Graphics::Buffer* CompositingSurfaceBuffer::nativeBuffer() const
 {
     if (!m_buffer) {
         m_buffer = createBuffer(m_size,
-                                BlackBerry::Platform::Graphics::TileBuffer,
-                                BlackBerry::Platform::Graphics::GLES2);
+                                Platform::Graphics::TileBuffer,
+                                Platform::Graphics::GLES2);
     }
     return m_buffer;
 }
@@ -67,25 +59,23 @@ BackingStoreCompositingSurface::BackingStoreCompositingSurface(const Platform::I
     : m_isDoubleBuffered(doubleBuffered)
     , m_needsSync(true)
 {
-    m_frontBuffer = reinterpret_cast<unsigned>(new CompositingSurfaceBuffer(size));
-    m_backBuffer = !doubleBuffered ? 0 : reinterpret_cast<unsigned>(new CompositingSurfaceBuffer(size));
+    m_frontBuffer = new CompositingSurfaceBuffer(size);
+    m_backBuffer = !doubleBuffered ? 0 : new CompositingSurfaceBuffer(size);
 }
 
 BackingStoreCompositingSurface::~BackingStoreCompositingSurface()
 {
-    CompositingSurfaceBuffer* front = reinterpret_cast<CompositingSurfaceBuffer*>(m_frontBuffer);
-    delete front;
+    delete m_frontBuffer;
     m_frontBuffer = 0;
 
-    CompositingSurfaceBuffer* back = reinterpret_cast<CompositingSurfaceBuffer*>(m_backBuffer);
-    delete back;
+    delete m_backBuffer;
     m_backBuffer = 0;
 }
 
 CompositingSurfaceBuffer* BackingStoreCompositingSurface::frontBuffer() const
 {
     ASSERT(m_frontBuffer);
-    return reinterpret_cast<CompositingSurfaceBuffer*>(m_frontBuffer);
+    return m_frontBuffer;
 }
 
 CompositingSurfaceBuffer* BackingStoreCompositingSurface::backBuffer() const
@@ -94,7 +84,7 @@ CompositingSurfaceBuffer* BackingStoreCompositingSurface::backBuffer() const
         return frontBuffer();
 
     ASSERT(m_backBuffer);
-    return reinterpret_cast<CompositingSurfaceBuffer*>(m_backBuffer);
+    return m_backBuffer;
 }
 
 void BackingStoreCompositingSurface::swapBuffers()
@@ -102,19 +92,15 @@ void BackingStoreCompositingSurface::swapBuffers()
     if (!m_isDoubleBuffered)
         return;
 
-#if OS(QNX)
-    // store temps
+    // Store temps.
     unsigned front = reinterpret_cast<unsigned>(frontBuffer());
     unsigned back = reinterpret_cast<unsigned>(backBuffer());
 
-    // atomic change
-    _smp_xchg(&m_frontBuffer, back);
-    _smp_xchg(&m_backBuffer, front);
-#else
-#error "implement me!"
-#endif
+    // Atomic change.
+    _smp_xchg(reinterpret_cast<unsigned*>(&m_frontBuffer), back);
+    _smp_xchg(reinterpret_cast<unsigned*>(&m_backBuffer), front);
 }
 
-}
-}
+} // namespace WebKit
+} // namespace BlackBerry
 #endif // USE(ACCELERATED_COMPOSITING)

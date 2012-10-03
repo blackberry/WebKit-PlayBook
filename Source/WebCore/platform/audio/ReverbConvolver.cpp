@@ -53,11 +53,10 @@ const size_t RealtimeFrameLimit = 8192  + 4096; // ~278msec @ 44.1KHz
 const size_t MinFFTSize = 256;
 const size_t MaxRealtimeFFTSize = 2048;
 
-static void* backgroundThreadEntry(void* threadData)
+static void backgroundThreadEntry(void* threadData)
 {
     ReverbConvolver* reverbConvolver = static_cast<ReverbConvolver*>(threadData);
     reverbConvolver->backgroundThreadEntry();
-    return 0;
 }
 
 ReverbConvolver::ReverbConvolver(AudioChannel* impulseResponse, size_t renderSliceSize, size_t maxFFTSize, size_t convolverRenderPhase, bool useBackgroundThreads)
@@ -82,7 +81,7 @@ ReverbConvolver::ReverbConvolver(AudioChannel* impulseResponse, size_t renderSli
     // Otherwise, assume we're being run from a command-line tool.
     bool hasRealtimeConstraint = useBackgroundThreads;
 
-    float* response = impulseResponse->data();
+    const float* response = impulseResponse->data();
     size_t totalResponseLength = impulseResponse->length();
 
     // Because we're not using direct-convolution in the leading portion, the reverb has an overall latency of half the first-stage FFT size
@@ -142,7 +141,7 @@ ReverbConvolver::~ReverbConvolver()
             m_backgroundThreadCondition.signal();
         }
 
-        waitForThreadCompletion(m_backgroundThread, 0);
+        waitForThreadCompletion(m_backgroundThread);
     }
 }
 
@@ -175,15 +174,15 @@ void ReverbConvolver::backgroundThreadEntry()
     }
 }
 
-void ReverbConvolver::process(AudioChannel* sourceChannel, AudioChannel* destinationChannel, size_t framesToProcess)
+void ReverbConvolver::process(const AudioChannel* sourceChannel, AudioChannel* destinationChannel, size_t framesToProcess)
 {
     bool isSafe = sourceChannel && destinationChannel && sourceChannel->length() >= framesToProcess && destinationChannel->length() >= framesToProcess;
     ASSERT(isSafe);
     if (!isSafe)
         return;
         
-    float* source = sourceChannel->data();
-    float* destination = destinationChannel->data();
+    const float* source = sourceChannel->data();
+    float* destination = destinationChannel->mutableData();
     bool isDataSafe = source && destination;
     ASSERT(isDataSafe);
     if (!isDataSafe)

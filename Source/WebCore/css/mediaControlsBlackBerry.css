@@ -1,8 +1,8 @@
 /*
- * QNX Neutrino WebKit specific overrides for HTML5 media elements.
+ * BlackBerry specific overrides for HTML5 media elements.
  *
  * Copyright (C) 2009 Apple Inc.  All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -25,7 +25,7 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-/* media controls */
+ /* BlackBerry default media controls. */
 
 audio {
     width: 300px;
@@ -130,7 +130,6 @@ audio::-webkit-media-controls-volume-slider-container, video::-webkit-media-cont
     width: 32px;
     position: absolute;
     right: 0px;
-
     background-color: rgba(0, 0, 0, 0.6);
 }
 
@@ -145,20 +144,9 @@ audio::-webkit-media-controls-volume-slider, video::-webkit-media-controls-volum
 audio::-webkit-media-controls-seek-back-button, video::-webkit-media-controls-seek-back-button {
     -webkit-appearance: media-seek-back-button;
     display: none;
-/*
-    display: -webkit-box;
-    width: 32px;
-    height: 32px;
-*/
 }
 
 audio::-webkit-media-controls-seek-forward-button, video::-webkit-media-controls-seek-forward-button {
     -webkit-appearance: media-seek-forward-button;
     display: none;
-/*
-    display: -webkit-box;
-    width: 32px;
-    height: 32px;
-*/
 }
-

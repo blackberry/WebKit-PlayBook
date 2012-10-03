@@ -31,12 +31,13 @@
 #include "config.h"
 #include "FrameTestHelpers.h"
 
+#include "StdLibExtras.h"
 #include "WebFrame.h"
 #include "WebFrameClient.h"
 #include "WebSettings.h"
-#include "WebString.h"
-#include "WebURLRequest.h"
-#include "WebURLResponse.h"
+#include "platform/WebString.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebURLResponse.h"
 #include "WebView.h"
 #include "WebViewClient.h"
 #include <googleurl/src/gurl.h>
@@ -71,7 +72,7 @@ class TestWebFrameClient : public WebFrameClient {
 
 static WebFrameClient* defaultWebFrameClient()
 {
-    static TestWebFrameClient client;
+    DEFINE_STATIC_LOCAL(TestWebFrameClient, client, ());
     return &client;
 }
 
@@ -80,15 +81,17 @@ class TestWebViewClient : public WebViewClient {
 
 static WebViewClient* defaultWebViewClient()
 {
-    static TestWebViewClient client;
+    DEFINE_STATIC_LOCAL(TestWebViewClient,  client, ());
     return &client;
 }
 
-WebView* createWebViewAndLoad(const std::string& url, bool enableJavascript, WebFrameClient* webFrameClient)
+WebView* createWebViewAndLoad(const std::string& url, bool enableJavascript, WebFrameClient* webFrameClient, WebViewClient* webViewClient)
 {
     if (!webFrameClient)
         webFrameClient = defaultWebFrameClient();
-    WebView* webView = WebView::create(defaultWebViewClient());
+    if (!webViewClient)
+        webViewClient = defaultWebViewClient();
+    WebView* webView = WebView::create(webViewClient);
     webView->settings()->setJavaScriptEnabled(enableJavascript);
     webView->initializeMainFrame(webFrameClient);
 

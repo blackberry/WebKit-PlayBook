@@ -132,25 +132,28 @@ void WorkerRunLoop::run(WorkerContext* context)
     ModePredicate modePredicate(defaultMode());
     MessageQueueWaitResult result;
     do {
-        result = runInMode(context, modePredicate);
+        result = runInMode(context, modePredicate, WaitForMessage);
     } while (result != MessageQueueTerminated);
+    runCleanupTasks(context);
 }
 
-MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const String& mode)
+MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const String& mode, WaitMode waitMode)
 {
     RunLoopSetup setup(*this);
     ModePredicate modePredicate(mode);
-    MessageQueueWaitResult result = runInMode(context, modePredicate);
+    MessageQueueWaitResult result = runInMode(context, modePredicate, waitMode);
     return result;
 }
 
-MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const ModePredicate& predicate)
+MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const ModePredicate& predicate, WaitMode waitMode)
 {
     ASSERT(context);
     ASSERT(context->thread());
     ASSERT(context->thread()->threadID() == currentThread());
 
-    double absoluteTime = (predicate.isDefaultMode() && m_sharedTimer->isActive()) ? m_sharedTimer->fireTime() : MessageQueue<Task>::infiniteTime();
+    double absoluteTime = 0.0;
+    if (waitMode == WaitForMessage)
+        absoluteTime = (predicate.isDefaultMode() && m_sharedTimer->isActive()) ? m_sharedTimer->fireTime() : MessageQueue<Task>::infiniteTime();
     MessageQueueWaitResult result;
     OwnPtr<WorkerRunLoop::Task> task = m_messageQueue.waitForMessageFilteredWithTimeout(result, predicate, absoluteTime);
 
@@ -161,7 +164,7 @@ MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const Mo
         break;
 
     case MessageQueueMessageReceived:
-        task->performTask(context);
+        task->performTask(*this, context);
         break;
 
     case MessageQueueTimeout:
@@ -171,6 +174,21 @@ MessageQueueWaitResult WorkerRunLoop::runInMode(WorkerContext* context, const Mo
     }
 
     return result;
+}
+
+void WorkerRunLoop::runCleanupTasks(WorkerContext* context)
+{
+    ASSERT(context);
+    ASSERT(context->thread());
+    ASSERT(context->thread()->threadID() == currentThread());
+    ASSERT(m_messageQueue.killed());
+
+    while (true) {
+        OwnPtr<WorkerRunLoop::Task> task = m_messageQueue.tryGetMessageIgnoringKilled();
+        if (!task)
+            return;
+        task->performTask(*this, context);
+    }
 }
 
 void WorkerRunLoop::terminate()
@@ -193,10 +211,10 @@ PassOwnPtr<WorkerRunLoop::Task> WorkerRunLoop::Task::create(PassOwnPtr<ScriptExe
     return adoptPtr(new Task(task, mode));
 }
 
-void WorkerRunLoop::Task::performTask(ScriptExecutionContext* context)
+void WorkerRunLoop::Task::performTask(const WorkerRunLoop& runLoop, ScriptExecutionContext* context)
 {
     WorkerContext* workerContext = static_cast<WorkerContext *>(context);
-    if (!workerContext->isClosing() || m_task->isCleanupTask())
+    if ((!workerContext->isClosing() && !runLoop.terminated()) || m_task->isCleanupTask())
         m_task->performTask(context);
 }
 
@@ -205,7 +223,6 @@ WorkerRunLoop::Task::Task(PassOwnPtr<ScriptExecutionContext::Task> task, const S
     , m_mode(mode.isolatedCopy())
 {
 }
-
 
 } // namespace WebCore
 

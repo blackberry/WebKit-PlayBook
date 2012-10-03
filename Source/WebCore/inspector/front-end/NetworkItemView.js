@@ -47,23 +47,23 @@ WebInspector.NetworkItemView = function(resource)
     this.appendTab("preview", WebInspector.UIString("Preview"), previewView);
     this.appendTab("response", WebInspector.UIString("Response"), responseView);
 
-    if (Preferences.showCookiesTab) {
+    if (resource.requestCookies || resource.responseCookies) {
         this._cookiesView = new WebInspector.ResourceCookiesView(resource);
         this.appendTab("cookies", WebInspector.UIString("Cookies"), this._cookiesView);
     }
 
-    if (Preferences.showTimingTab) {
+    if (resource.timing) {
         var timingView = new WebInspector.ResourceTimingView(resource);
         this.appendTab("timing", WebInspector.UIString("Timing"), timingView);
     }
 
-    this.addEventListener("tab-selected", this._tabSelected, this);
+    this.addEventListener(WebInspector.TabbedPane.EventTypes.TabSelected, this._tabSelected, this);
 }
 
 WebInspector.NetworkItemView.prototype = {
     wasShown: function()
     {
-        WebInspector.TabbedPane.prototype.wasShown.call();
+        WebInspector.TabbedPane.prototype.wasShown.call(this);
         this._selectTab();
     },
 

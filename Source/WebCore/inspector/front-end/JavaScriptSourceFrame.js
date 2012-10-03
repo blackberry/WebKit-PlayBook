@@ -37,15 +37,15 @@
  */
 WebInspector.JavaScriptSourceFrame = function(scriptsPanel, model, uiSourceCode)
 {
-    WebInspector.SourceFrame.call(this, uiSourceCode.url);
-
     this._scriptsPanel = scriptsPanel;
     this._model = model;
     this._uiSourceCode = uiSourceCode;
-    this._popoverObjectGroup = "popover";
     this._breakpoints = {};
+
+    WebInspector.SourceFrame.call(this, uiSourceCode.url);
+
     this._popoverHelper = new WebInspector.ObjectPopoverHelper(this.textViewer.element,
-            this._getPopoverAnchor.bind(this), this._onShowPopover.bind(this), this._onHidePopover.bind(this), true);
+            this._getPopoverAnchor.bind(this), this._resolveObjectForPopover.bind(this), this._onHidePopover.bind(this), true);
 
     this.textViewer.element.addEventListener("mousedown", this._onMouseDown.bind(this), true);
     this._uiSourceCode.addEventListener(WebInspector.UISourceCode.Events.ContentChanged, this._onContentChanged, this);
@@ -53,6 +53,11 @@ WebInspector.JavaScriptSourceFrame = function(scriptsPanel, model, uiSourceCode)
 }
 
 WebInspector.JavaScriptSourceFrame.prototype = {
+    get uiSourceCode()
+    {
+        return this._uiSourceCode;
+    },
+
     // View events
     willHide: function()
     {
@@ -73,8 +78,7 @@ WebInspector.JavaScriptSourceFrame.prototype = {
 
     suggestedFileName: function()
     {
-        var names = this._scriptsPanel.folderAndDisplayNameForScriptURL(this._uiSourceCode.url);
-        return names.displayName || "untitled.js";
+        return this._uiSourceCode.fileName || "untitled.js";
     },
 
     editContent: function(newContent, callback)
@@ -91,14 +95,14 @@ WebInspector.JavaScriptSourceFrame.prototype = {
 
     setReadOnly: function(readOnly)
     {
-        if (!readOnly)
+        if (this._popoverHelper && !readOnly)
             this._popoverHelper.hidePopover();
         WebInspector.SourceFrame.prototype.setReadOnly.call(this, readOnly);
         if (readOnly)
             this._scriptsPanel.setScriptSourceIsBeingEdited(this._uiSourceCode, false);
     },
 
-    populateLineGutterContextMenu: function(lineNumber, contextMenu)
+    populateLineGutterContextMenu: function(contextMenu, lineNumber)
     {
         contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Continue to here" : "Continue to Here"), this._model.continueToLine.bind(this._model, this._uiSourceCode, lineNumber));
 
@@ -144,15 +148,16 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         }
     },
 
-    populateTextAreaContextMenu: function(contextMenu)
+    populateTextAreaContextMenu: function(contextMenu, lineNumber)
     {
+        WebInspector.SourceFrame.prototype.populateTextAreaContextMenu.call(this, contextMenu, lineNumber);
         var selection = window.getSelection();
-        if (selection.type !== "Range" || selection.isCollapsed)
-            return;
-        contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Add to watch" : "Add to Watch"),
-                this._scriptsPanel.addToWatch.bind(this._scriptsPanel, selection.toString()));
-
-        contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Evaluate in console" : "Evaluate in Console"), WebInspector.evaluateInConsole.bind(WebInspector, selection.toString()));
+        if (selection.type === "Range" && !selection.isCollapsed) {
+            var addToWatchLabel = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Add to watch" : "Add to Watch");
+            contextMenu.appendItem(addToWatchLabel, this._scriptsPanel.addToWatch.bind(this._scriptsPanel, selection.toString()));
+            var evaluateLabel = WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Evaluate in console" : "Evaluate in Console");
+            contextMenu.appendItem(evaluateLabel, WebInspector.evaluateInConsole.bind(WebInspector, selection.toString()));
+        }
     },
 
     afterTextChanged: function(oldRange, newRange)
@@ -197,10 +202,13 @@ WebInspector.JavaScriptSourceFrame.prototype = {
 
     cancelEditing: function()
     {
+        if (WebInspector.experimentsSettings.sourceFrameAlwaysEditable.isEnabled())
+            return false;
+
         WebInspector.SourceFrame.prototype.cancelEditing.call(this);
-        
+
         if (!this._javaScriptSourceFrameState)
-            return;
+            return true;
 
         if (typeof this._javaScriptSourceFrameState.executionLineNumber === "number") {
             this.clearExecutionLine();
@@ -220,6 +228,7 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         }
 
         delete this._javaScriptSourceFrameState;
+        return true;
     },
 
     didEditContent: function(error)
@@ -245,31 +254,54 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         delete this._javaScriptSourceFrameState;
     },
 
-    // Popover callbacks
-    _shouldShowPopover: function(element)
+    _getPopoverAnchor: function(element, event)
     {
         if (!this._model.paused)
-            return false;
-        if (!element.enclosingNodeOrSelfWithClass("webkit-line-content"))
-            return false;
+            return null;
         if (window.getSelection().type === "Range")
-            return false;
+            return null;
+        var lineElement = element.enclosingNodeOrSelfWithClass("webkit-line-content");
+        if (!lineElement)
+            return null;
+
+        if (element.hasStyleClass("webkit-javascript-ident"))
+            return element;
+
+        if (element.hasStyleClass("source-frame-token"))
+            return element;
 
         // We are interested in identifiers and "this" keyword.
         if (element.hasStyleClass("webkit-javascript-keyword"))
-            return element.textContent === "this";
+            return element.textContent === "this" ? element : null;
 
-        return element.hasStyleClass("webkit-javascript-ident");
+        if (element !== lineElement || lineElement.childElementCount)
+            return null;
+
+        // Handle non-highlighted case
+        // 1. Collect ranges of identifier suspects
+        var lineContent = lineElement.textContent;
+        var ranges = [];
+        var regex = new RegExp("[a-zA-Z_\$0-9]+", "g");
+        var match;
+        while (regex.lastIndex < lineContent.length && (match = regex.exec(lineContent)))
+            ranges.push({offset: match.index, length: regex.lastIndex - match.index});
+
+        // 2. 'highlight' them with artificial style to detect word boundaries
+        var changes = [];
+        highlightRangesWithStyleClass(lineElement, ranges, "source-frame-token", changes);
+        var lineOffsetLeft = lineElement.totalOffsetLeft();
+        for (var child = lineElement.firstChild; child; child = child.nextSibling) {
+            if (child.nodeType !== Node.ELEMENT_NODE || !child.hasStyleClass("source-frame-token"))
+                continue;
+            if (event.x > lineOffsetLeft + child.offsetLeft && event.x < lineOffsetLeft + child.offsetLeft + child.offsetWidth) {
+                var text = child.textContent;
+                return (text === "this" || !WebInspector.SourceJavaScriptTokenizer.Keywords[text]) ? child : null;
+            }
+        }
+        return null;
     },
 
-    _getPopoverAnchor: function(element)
-    {
-        if (!this._shouldShowPopover(element))
-            return;
-        return element;
-    },
-
-    _onShowPopover: function(element, showCallback)
+    _resolveObjectForPopover: function(element, showCallback, objectGroupName)
     {
         if (!this.readOnly) {
             this._popoverHelper.hidePopover();
@@ -290,7 +322,7 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         }
 
         var selectedCallFrame = this._model.selectedCallFrame;
-        selectedCallFrame.evaluate(this._highlightElement.textContent, this._popoverObjectGroup, false, false, showObjectPopover.bind(this));
+        selectedCallFrame.evaluate(this._highlightElement.textContent, objectGroupName, false, false, showObjectPopover.bind(this));
     },
 
     _onHidePopover: function()
@@ -299,16 +331,19 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         var highlightElement = this._highlightElement;
         if (!highlightElement)
             return;
+        // FIXME: the text editor should maintain highlight on its own. The check below is a workaround for
+        // the case when highlight element is detached from DOM by the TextViewer when re-building the DOM.
         var parentElement = highlightElement.parentElement;
-        var child = highlightElement.firstChild;
-        while (child) {
-            var nextSibling = child.nextSibling;
-            parentElement.insertBefore(child, highlightElement);
-            child = nextSibling;
+        if (parentElement) {
+            var child = highlightElement.firstChild;
+            while (child) {
+                var nextSibling = child.nextSibling;
+                parentElement.insertBefore(child, highlightElement);
+                child = nextSibling;
+            }
+            parentElement.removeChild(highlightElement);
         }
-        parentElement.removeChild(highlightElement);
         delete this._highlightElement;
-        RuntimeAgent.releaseObjectGroup(this._popoverObjectGroup);
     },
 
     _highlightExpression: function(element)
@@ -316,7 +351,7 @@ WebInspector.JavaScriptSourceFrame.prototype = {
         // Collect tokens belonging to evaluated expression.
         var tokens = [ element ];
         var token = element.previousSibling;
-        while (token && (token.className === "webkit-javascript-ident" || token.className === "webkit-javascript-keyword" || token.textContent.trim() === ".")) {
+        while (token && (token.className === "webkit-javascript-ident" || token.className === "source-frame-token" || token.className === "webkit-javascript-keyword" || token.textContent.trim() === ".")) {
             tokens.push(token);
             token = token.previousSibling;
         }

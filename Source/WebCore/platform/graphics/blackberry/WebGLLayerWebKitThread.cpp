@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -29,7 +29,7 @@ namespace WebCore {
 WebGLLayerWebKitThread::WebGLLayerWebKitThread()
     : LayerWebKitThread(WebGLLayer, 0)
     , m_webGLContext(0)
-    , m_needsDisplay(0)
+    , m_needsDisplay(false)
 {
     setLayerProgramShader(LayerProgramShaderRGBA);
 }
@@ -54,8 +54,7 @@ void WebGLLayerWebKitThread::updateTextureContentsIfNeeded()
     if (!m_frontBufferLock)
         createFrontBufferLock();
 
-    // Lock copied GL texture so that the UI thread won't access it
-    // while we are drawing into it
+    // Lock copied GL texture so that the UI thread won't access it while we are drawing into it.
     pthread_mutex_lock(m_frontBufferLock);
     m_webGLContext->prepareTexture();
     pthread_mutex_unlock(m_frontBufferLock);

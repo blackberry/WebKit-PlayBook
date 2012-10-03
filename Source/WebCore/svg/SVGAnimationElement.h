@@ -85,7 +85,7 @@ protected:
     SVGAnimationElement(const QualifiedName&, Document*);
 
     bool isSupportedAttribute(const QualifiedName&);
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
     enum AttributeType {
         AttributeTypeCSS,
@@ -104,10 +104,11 @@ protected:
     // from SVGSMILElement
     virtual void startedActiveInterval();
     virtual void updateAnimation(float percent, unsigned repeat, SVGSMILElement* resultElement);
-    virtual void endedActiveInterval();
+
+    void resetAnimationState(const String& baseValue);
 
 private:
-    virtual void attributeChanged(Attribute*, bool preserveDecls);
+    virtual void attributeChanged(Attribute*) OVERRIDE;
 
     virtual bool calculateFromAndToValues(const String& fromString, const String& toString) = 0;
     virtual bool calculateFromAndByValues(const String& fromString, const String& byString) = 0;
@@ -122,6 +123,14 @@ private:
     float calculatePercentForSpline(float percent, unsigned splineIndex) const;
     float calculatePercentForFromTo(float percent) const;
     unsigned calculateKeyTimesIndex(float percent) const;
+
+    enum ShouldApplyAnimation {
+        DontApplyAnimation,
+        ApplyCSSAnimation,
+        ApplyXMLAnimation
+    };
+
+    ShouldApplyAnimation shouldApplyAnimation(SVGElement* targetElement, const QualifiedName& attributeName);
 
     BEGIN_DECLARE_ANIMATED_PROPERTIES(SVGAnimationElement)
         DECLARE_ANIMATED_BOOLEAN(ExternalResourcesRequired, externalResourcesRequired)

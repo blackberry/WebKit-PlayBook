@@ -340,7 +340,7 @@ IntRect ChromeClientWx::windowResizerRect() const
     return IntRect();
 }
 
-void ChromeClientWx::invalidateWindow(const IntRect& rect, bool immediate)
+void ChromeClientWx::invalidateRootView(const IntRect& rect, bool immediate)
 {
     if (immediate)
         m_webView->Update();
@@ -348,10 +348,10 @@ void ChromeClientWx::invalidateWindow(const IntRect& rect, bool immediate)
 
 void ChromeClientWx::invalidateContentsForSlowScroll(const IntRect& rect, bool immediate)
 {
-    invalidateContentsAndWindow(rect, immediate);
+    invalidateContentsAndRootView(rect, immediate);
 }
 
-void ChromeClientWx::invalidateContentsAndWindow(const IntRect& rect, bool immediate)
+void ChromeClientWx::invalidateContentsAndRootView(const IntRect& rect, bool immediate)
 {
     if (!m_webView)
         return;
@@ -363,13 +363,13 @@ void ChromeClientWx::invalidateContentsAndWindow(const IntRect& rect, bool immed
     }
 }
 
-IntRect ChromeClientWx::windowToScreen(const IntRect& rect) const
+IntRect ChromeClientWx::rootViewToScreen(const IntRect& rect) const
 {
     notImplemented();
     return rect;
 }
 
-IntPoint ChromeClientWx::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClientWx::screenToRootView(const IntPoint& point) const
 {
     notImplemented();
     return point;
@@ -489,6 +489,12 @@ PassRefPtr<PopupMenu> ChromeClientWx::createPopupMenu(PopupMenuClient* client) c
 PassRefPtr<SearchPopupMenu> ChromeClientWx::createSearchPopupMenu(PopupMenuClient* client) const
 {
     return adoptRef(new SearchPopupMenuWx(client));
+}
+    
+bool ChromeClientWx::hasOpenedPopup() const
+{
+    notImplemented();
+    return false;
 }
 
 }

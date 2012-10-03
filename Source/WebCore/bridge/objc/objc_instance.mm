@@ -53,6 +53,11 @@ static NSString *s_exception;
 static JSGlobalObject* s_exceptionEnvironment; // No need to protect this value, since we just use it for a pointer comparison.
 static NSMapTable *s_instanceWrapperCache;
 
+#if COMPILER(CLANG)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif    
+
 static NSMapTable *createInstanceWrapperCache()
 {
     // NSMapTable with zeroing weak pointers is the recommended way to build caches like this under garbage collection.
@@ -60,6 +65,10 @@ static NSMapTable *createInstanceWrapperCache()
     NSPointerFunctionsOptions valueOptions = NSPointerFunctionsOpaqueMemory | NSPointerFunctionsOpaquePersonality;
     return [[NSMapTable alloc] initWithKeyOptions:keyOptions valueOptions:valueOptions capacity:0];
 }
+
+#if COMPILER(CLANG)
+#pragma clang diagnostic pop
+#endif
 
 RuntimeObject* ObjcInstance::newRuntimeObject(ExecState* exec)
 {
@@ -177,7 +186,7 @@ public:
         // FIXME: deprecatedGetDOMStructure uses the prototype off of the wrong global object
         // We need to pass in the right global object for "i".
         Structure* domStructure = WebCore::deprecatedGetDOMStructure<ObjCRuntimeMethod>(exec);
-        ObjCRuntimeMethod* method = new (allocateCell<ObjCRuntimeMethod>(*exec->heap())) ObjCRuntimeMethod(globalObject, domStructure, list);
+        ObjCRuntimeMethod* method = new (NotNull, allocateCell<ObjCRuntimeMethod>(*exec->heap())) ObjCRuntimeMethod(globalObject, domStructure, list);
         method->finishCreation(exec->globalData(), name);
         return method;
     }

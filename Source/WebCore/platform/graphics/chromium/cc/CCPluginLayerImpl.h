@@ -35,31 +35,44 @@ namespace WebCore {
 
 class CCPluginLayerImpl : public CCLayerImpl {
 public:
-    static PassRefPtr<CCPluginLayerImpl> create(int id)
+    static PassOwnPtr<CCPluginLayerImpl> create(int id)
     {
-        return adoptRef(new CCPluginLayerImpl(id));
+        return adoptPtr(new CCPluginLayerImpl(id));
     }
     virtual ~CCPluginLayerImpl();
 
+    virtual void willDraw(LayerRendererChromium*);
+    virtual void appendQuads(CCQuadList&, const CCSharedQuadState*);
+
     typedef ProgramBinding<VertexShaderPosTexStretch, FragmentShaderRGBATexAlpha> Program;
     typedef ProgramBinding<VertexShaderPosTexStretch, FragmentShaderRGBATexFlipAlpha> ProgramFlip;
-
-    virtual void draw(LayerRendererChromium*);
+    typedef ProgramBinding<VertexShaderPosTexTransform, FragmentShaderRGBATexRectAlpha> TexRectProgram;
+    typedef ProgramBinding<VertexShaderPosTexTransform, FragmentShaderRGBATexRectFlipAlpha> TexRectProgramFlip;
 
     virtual void dumpLayerProperties(TextStream&, int indent) const;
 
     void setTextureId(unsigned id) { m_textureId = id; }
     void setFlipped(bool flipped) { m_flipped = flipped; }
     void setUVRect(const FloatRect& rect) { m_uvRect = rect; }
+    void setIOSurfaceProperties(int width, int height, uint32_t ioSurfaceId);
 
 private:
     explicit CCPluginLayerImpl(int);
 
     virtual const char* layerTypeAsString() const { return "PluginLayer"; }
 
+    void cleanupResources();
+
     unsigned m_textureId;
     bool m_flipped;
     FloatRect m_uvRect;
+    uint32_t m_ioSurfaceId;
+    int m_ioSurfaceWidth;
+    int m_ioSurfaceHeight;
+
+    // Internals for the IOSurface rendering path.
+    bool m_ioSurfaceChanged;
+    unsigned m_ioSurfaceTextureId;
 };
 
 }

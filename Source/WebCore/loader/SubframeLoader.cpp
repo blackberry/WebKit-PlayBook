@@ -122,7 +122,7 @@ bool SubframeLoader::requestPlugin(HTMLPlugInImageElement* ownerElement, const K
          // as opposed to third-party code such as Flash. The user agent decides whether or not they are
          // permitted, rather than WebKit.
          && !MIMETypeRegistry::isApplicationPluginMIMEType(mimeType))
-        || (!settings->isJavaEnabled() && MIMETypeRegistry::isJavaAppletMIMEType(mimeType)))
+        || ((!settings || !settings->isJavaEnabled()) && MIMETypeRegistry::isJavaAppletMIMEType(mimeType)))
         return false;
 
     if (m_frame->document()) {
@@ -204,7 +204,7 @@ PassRefPtr<Widget> SubframeLoader::loadMediaPlayerProxyPlugin(Node* node, const 
 }
 #endif // ENABLE(PLUGIN_PROXY_FOR_VIDEO)
 
-PassRefPtr<Widget> SubframeLoader::createJavaAppletWidget(const IntSize& size, HTMLAppletElement* element, const HashMap<String, String>& args)
+PassRefPtr<Widget> SubframeLoader::createJavaAppletWidget(const LayoutSize& size, HTMLAppletElement* element, const HashMap<String, String>& args)
 {
     String baseURLString;
     String codeBaseURLString;
@@ -257,6 +257,8 @@ Frame* SubframeLoader::loadOrRedirectSubframe(HTMLFrameOwnerElement* ownerElemen
 
 Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement* ownerElement, const KURL& url, const String& name, const String& referrer)
 {
+    RefPtr<Frame> protect(m_frame);
+
     bool allowsScrolling = true;
     int marginWidth = -1;
     int marginHeight = -1;
@@ -275,8 +277,8 @@ Frame* SubframeLoader::loadSubframe(HTMLFrameOwnerElement* ownerElement, const K
     if (!ownerElement->document()->contentSecurityPolicy()->allowChildFrameFromSource(url))
         return 0;
 
-    bool hideReferrer = SecurityPolicy::shouldHideReferrer(url, referrer);
-    RefPtr<Frame> frame = m_frame->loader()->client()->createFrame(url, name, ownerElement, hideReferrer ? String() : referrer, allowsScrolling, marginWidth, marginHeight);
+    String referrerToUse = SecurityPolicy::generateReferrerHeader(ownerElement->document()->referrerPolicy(), url, referrer);
+    RefPtr<Frame> frame = m_frame->loader()->client()->createFrame(url, name, ownerElement, referrerToUse, allowsScrolling, marginWidth, marginHeight);
 
     if (!frame)  {
         m_frame->loader()->checkCallImplicitClose();

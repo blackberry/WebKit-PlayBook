@@ -74,7 +74,7 @@ public:
         m_pendingTask = task;
         m_pendingTaskDelay = delay;
     }
-    virtual WTF::ThreadIdentifier threadID() const { ASSERT_NOT_REACHED(); return 0; }
+    virtual WTF::ThreadIdentifier threadID() const { return 0; }
 
 protected:
     OwnPtr<Task> m_pendingTask;
@@ -91,6 +91,7 @@ public:
 
     virtual void setClient(WebCore::CCTimeSourceClient* client) { m_client = client; }
     virtual void setActive(bool b) { m_active = b; }
+    virtual bool active() const { return m_active; }
 
     void tick()
     {

@@ -35,21 +35,21 @@
 #include "ChromeClientImpl.h"
 #include "PluginLayerChromium.h"
 #include "ScrollbarGroup.h"
-#include "WebClipboard.h"
+#include "platform/WebClipboard.h"
 #include "WebCursorInfo.h"
 #include "WebDataSourceImpl.h"
 #include "WebElement.h"
 #include "WebInputEvent.h"
 #include "WebInputEventConversion.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
+#include "platform/WebKitPlatformSupport.h"
 #include "WebPlugin.h"
-#include "WebRect.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLError.h"
-#include "WebURLRequest.h"
-#include "WebVector.h"
+#include "platform/WebRect.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLError.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebVector.h"
 #include "WebViewImpl.h"
 #include "WrappedResourceResponse.h"
 
@@ -60,6 +60,7 @@
 #include "FrameLoadRequest.h"
 #include "FrameView.h"
 #include "GraphicsContext.h"
+#include "HitTestResult.h"
 #include "HostWindow.h"
 #include "HTMLFormElement.h"
 #include "HTMLNames.h"
@@ -347,11 +348,30 @@ void WebPluginContainerImpl::setBackingTextureId(unsigned id)
 #endif
 }
 
+void WebPluginContainerImpl::setBackingIOSurfaceId(int width,
+                                                   int height,
+                                                   uint32_t ioSurfaceId)
+{
+#if OS(DARWIN) && USE(ACCELERATED_COMPOSITING)
+    uint32_t currentId = m_platformLayer->getIOSurfaceId();
+    if (ioSurfaceId == currentId)
+        return;
+
+    m_platformLayer->setIOSurfaceProperties(width, height, ioSurfaceId);
+
+    // If anyone of the IDs is zero we need to switch between hardware
+    // and software compositing. This is done by triggering a style recalc
+    // on the container element.
+    if (!(ioSurfaceId * currentId))
+        m_element->setNeedsStyleRecalc(WebCore::SyntheticStyleChange);
+#endif
+}
+
 void WebPluginContainerImpl::commitBackingTexture()
 {
 #if USE(ACCELERATED_COMPOSITING)
-    if (platformLayer())
-        platformLayer()->setNeedsDisplay();
+    if (m_platformLayer)
+        m_platformLayer->setNeedsDisplay();
 #endif
 }
 
@@ -406,13 +426,33 @@ void WebPluginContainerImpl::loadFrameRequest(const WebURLRequest& request, cons
 
     FrameLoadRequest frameRequest(frame->document()->securityOrigin(), request.toResourceRequest(), target);
     UserGestureIndicator gestureIndicator(request.hasUserGesture() ? DefinitelyProcessingUserGesture : PossiblyProcessingUserGesture);
-    frame->loader()->loadFrameRequest(frameRequest, false, false, 0, 0, SendReferrer);
+    frame->loader()->loadFrameRequest(frameRequest, false, false, 0, 0, MaybeSendReferrer);
 }
 
 void WebPluginContainerImpl::zoomLevelChanged(double zoomLevel)
 {
     WebViewImpl* view = WebViewImpl::fromPage(m_element->document()->frame()->page());
     view->fullFramePluginZoomLevelChanged(zoomLevel);
+}
+ 
+bool WebPluginContainerImpl::isRectTopmost(const WebRect& rect)
+{
+    Page* page = m_element->document()->page();
+    if (!page)
+        return false;
+
+    // hitTestResultAtPoint() takes a padding rectangle.
+    // FIXME: We'll be off by 1 when the width or height is even.
+    IntRect windowRect = convertToContainingWindow(static_cast<IntRect>(rect));
+    LayoutPoint center = windowRect.center();
+    // Make the rect we're checking (the point surrounded by padding rects) contained inside the requested rect. (Note that -1/2 is 0.)
+    LayoutSize padding((windowRect.width() - 1) / 2, (windowRect.height() - 1) / 2);
+    HitTestResult result =
+        page->mainFrame()->eventHandler()->hitTestResultAtPoint(center, false, false, DontHitTestScrollbars, HitTestRequest::ReadOnly | HitTestRequest::Active, padding);
+    const HitTestResult::NodeSet& nodes = result.rectBasedTestResult();
+    if (nodes.size() != 1)
+        return false;
+    return (nodes.first().get() == m_element);
 }
 
 void WebPluginContainerImpl::didReceiveResponse(const ResourceResponse& response)
@@ -445,6 +485,16 @@ NPObject* WebPluginContainerImpl::scriptableObject()
     return m_webPlugin->scriptableObject();
 }
 
+bool WebPluginContainerImpl::getFormValue(String& value)
+{
+    WebString webValue;
+    if (m_webPlugin->getFormValue(webValue)) {
+        value = webValue;
+        return true;
+    }
+    return false;
+}
+
 void WebPluginContainerImpl::willDestroyPluginLoadObserver(WebPluginLoadObserver* observer)
 {
     size_t pos = m_pluginLoadObservers.find(observer);
@@ -456,7 +506,7 @@ void WebPluginContainerImpl::willDestroyPluginLoadObserver(WebPluginLoadObserver
 #if USE(ACCELERATED_COMPOSITING)
 WebCore::LayerChromium* WebPluginContainerImpl::platformLayer() const
 {
-    return m_platformLayer->textureId() ? m_platformLayer.get() : 0;
+    return (m_platformLayer->textureId() || m_platformLayer->getIOSurfaceId()) ? m_platformLayer.get() : 0;
 }
 #endif
 
@@ -464,7 +514,7 @@ WebCore::LayerChromium* WebPluginContainerImpl::platformLayer() const
 ScrollbarGroup* WebPluginContainerImpl::scrollbarGroup()
 {
     if (!m_scrollbarGroup)
-        m_scrollbarGroup = adoptPtr(new ScrollbarGroup(m_element->document()->frame()->page()));
+        m_scrollbarGroup = adoptPtr(new ScrollbarGroup(m_element->document()->frame()->view()));
     return m_scrollbarGroup.get();
 }
 
@@ -490,17 +540,6 @@ bool WebPluginContainerImpl::paintCustomOverhangArea(GraphicsContext* context, c
     return true;
 }
 
-#if ENABLE(GESTURE_EVENTS)
-bool WebPluginContainerImpl::handleGestureEvent(const WebCore::PlatformGestureEvent& gestureEvent)
-{
-    if (m_scrollbarGroup) {
-        m_scrollbarGroup->handleGestureEvent(gestureEvent);
-        return true;
-    }
-    return false;
-}
-#endif
-
 // Private methods -------------------------------------------------------------
 
 WebPluginContainerImpl::WebPluginContainerImpl(WebCore::HTMLPlugInElement* element, WebPlugin* webPlugin)
@@ -508,7 +547,7 @@ WebPluginContainerImpl::WebPluginContainerImpl(WebCore::HTMLPlugInElement* eleme
     , m_element(element)
     , m_webPlugin(webPlugin)
 #if USE(ACCELERATED_COMPOSITING)
-    , m_platformLayer(PluginLayerChromium::create(0))
+    , m_platformLayer(PluginLayerChromium::create())
 #endif
 {
 }
@@ -585,7 +624,7 @@ void WebPluginContainerImpl::handleKeyboardEvent(KeyboardEvent* event)
         return;
 
     if (webEvent.type == WebInputEvent::KeyDown) {
-#if defined(OS_MACOSX)
+#if OS(DARWIN)
         if (webEvent.modifiers == WebInputEvent::MetaKey
 #else
         if (webEvent.modifiers == WebInputEvent::ControlKey

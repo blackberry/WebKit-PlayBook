@@ -28,6 +28,10 @@
 #include "KURL.h"
 #include "PopupMenu.h"
 
+#if ENABLE(NOTIFICATIONS)
+#include "NotificationPresenter.h"
+#endif
+
 typedef struct _Evas_Object Evas_Object;
 
 namespace WebCore {
@@ -95,8 +99,8 @@ public:
     virtual IntRect windowResizerRect() const;
 
     virtual void contentsSizeChanged(Frame*, const IntSize&) const;
-    virtual IntPoint screenToWindow(const IntPoint&) const;
-    virtual IntRect windowToScreen(const IntRect&) const;
+    virtual IntPoint screenToRootView(const IntPoint&) const;
+    virtual IntRect rootViewToScreen(const IntRect&) const;
     virtual PlatformPageClient platformPageClient() const;
 
     virtual void scrollbarsModeDidChange() const;
@@ -111,15 +115,11 @@ public:
 #endif
 
 #if ENABLE(NOTIFICATIONS)
-    virtual NotificationPresenter* notificationPresenter() const;
+    virtual WebCore::NotificationPresenter* notificationPresenter() const;
 #endif
 
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t totalSpaceNeeded);
-
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() { }
-#endif
 
 #if ENABLE(TOUCH_EVENTS)
     virtual void needTouchEvents(bool);
@@ -152,8 +152,8 @@ public:
     virtual void cancelGeolocationPermissionForFrame(Frame*, Geolocation*);
 
     virtual void invalidateContents(const IntRect&, bool);
-    virtual void invalidateWindow(const IntRect&, bool);
-    virtual void invalidateContentsAndWindow(const IntRect&, bool);
+    virtual void invalidateRootView(const IntRect&, bool);
+    virtual void invalidateContentsAndRootView(const IntRect&, bool);
     virtual void invalidateContentsForSlowScroll(const IntRect&, bool);
     virtual void scroll(const IntSize&, const IntRect&, const IntRect&);
     virtual void cancelGeolocationPermissionRequestForFrame(Frame*);
@@ -163,11 +163,13 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural();
     virtual bool selectItemAlignmentFollowsMenuWritingDirection();
+    virtual bool hasOpenedPopup() const;
     virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
     virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const { return true; }
     virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void numTouchEventHandlersChanged(unsigned) { }
 
     Evas_Object* m_view;
     KURL m_hoveredLinkURL;

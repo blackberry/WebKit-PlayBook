@@ -38,6 +38,9 @@ using namespace JSC;
 
 namespace WebCore {
 
+ASSERT_HAS_TRIVIAL_DESTRUCTOR(DOMConstructorObject);
+ASSERT_HAS_TRIVIAL_DESTRUCTOR(DOMConstructorWithDocument);
+
 const JSC::HashTable* getHashTableForGlobalData(JSGlobalData& globalData, const JSC::HashTable* staticTable)
 {
     return DOMObjectHashTableMap::mapFor(globalData).get(staticTable);
@@ -46,7 +49,7 @@ const JSC::HashTable* getHashTableForGlobalData(JSGlobalData& globalData, const 
 JSValue jsStringSlowCase(ExecState* exec, JSStringCache& stringCache, StringImpl* stringImpl)
 {
     JSString* wrapper = jsString(exec, UString(stringImpl));
-    stringCache.add(stringImpl, Weak<JSString>(exec->globalData(), wrapper, currentWorld(exec)->stringWrapperOwner(), stringImpl));
+    stringCache.add(stringImpl, PassWeak<JSString>(exec->globalData(), wrapper, currentWorld(exec)->stringWrapperOwner(), stringImpl));
     return wrapper;
 }
 
@@ -117,14 +120,14 @@ String valueToStringWithNullCheck(ExecState* exec, JSValue value)
 {
     if (value.isNull())
         return String();
-    return ustringToString(value.toString(exec));
+    return ustringToString(value.toString(exec)->value(exec));
 }
 
 String valueToStringWithUndefinedOrNullCheck(ExecState* exec, JSValue value)
 {
     if (value.isUndefinedOrNull())
         return String();
-    return ustringToString(value.toString(exec));
+    return ustringToString(value.toString(exec)->value(exec));
 }
 
 JSValue jsDateOrNull(ExecState* exec, double value)
@@ -148,10 +151,10 @@ void reportException(ExecState* exec, JSValue exception)
     if (isTerminatedExecutionException(exception))
         return;
 
-    UString errorMessage = exception.toString(exec);
+    UString errorMessage = exception.toString(exec)->value(exec);
     JSObject* exceptionObject = exception.toObject(exec);
     int lineNumber = exceptionObject->get(exec, Identifier(exec, "line")).toInt32(exec);
-    UString exceptionSourceURL = exceptionObject->get(exec, Identifier(exec, "sourceURL")).toString(exec);
+    UString exceptionSourceURL = exceptionObject->get(exec, Identifier(exec, "sourceURL")).toString(exec)->value(exec);
     exec->clearException();
 
     if (ExceptionBase* exceptionBase = toExceptionBase(exception))
@@ -213,12 +216,12 @@ DOMWindow* firstDOMWindow(ExecState* exec)
     return asJSDOMWindow(exec->dynamicGlobalObject())->impl();
 }
 
-bool checkNodeSecurity(ExecState* exec, Node* node)
+bool shouldAllowAccessToNode(ExecState* exec, Node* node)
 {
-    return node && allowsAccessFromFrame(exec, node->document()->frame());
+    return node && shouldAllowAccessToFrame(exec, node->document()->frame());
 }
 
-bool allowsAccessFromFrame(ExecState* exec, Frame* frame)
+bool shouldAllowAccessToFrame(ExecState* exec, Frame* frame)
 {
     if (!frame)
         return false;
@@ -226,7 +229,7 @@ bool allowsAccessFromFrame(ExecState* exec, Frame* frame)
     return window && window->allowsAccessFrom(exec);
 }
 
-bool allowsAccessFromFrame(ExecState* exec, Frame* frame, String& message)
+bool shouldAllowAccessToFrame(ExecState* exec, Frame* frame, String& message)
 {
     if (!frame)
         return false;
@@ -239,12 +242,6 @@ void printErrorMessageForFrame(Frame* frame, const String& message)
     if (!frame)
         return;
     frame->domWindow()->printErrorMessage(message);
-}
-
-// FIXME: We should remove or at least deprecate this function. Callers can use firstDOMWindow directly.
-Frame* toDynamicFrame(ExecState* exec)
-{
-    return firstDOMWindow(exec)->frame();
 }
 
 JSValue objectToStringFunctionGetter(ExecState* exec, JSValue, const Identifier& propertyName)

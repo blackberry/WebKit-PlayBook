@@ -32,8 +32,20 @@ from webkitpy.common.system.deprecated_logging import log
 from webkitpy.common.system.executive import ScriptError
 
 
+class MockProcess(object):
+    def __init__(self):
+        self.pid = 42
+
+
 # FIXME: This should be unified with MockExecutive2
 class MockExecutive(object):
+    PIPE = "MOCK PIPE"
+    STDOUT = "MOCK STDOUT"
+
+    @staticmethod
+    def ignore_error(error):
+        pass
+
     def __init__(self, should_log=False, should_throw=False, should_throw_when_run=None):
         self._should_log = should_log
         self._should_throw = should_throw
@@ -44,11 +56,14 @@ class MockExecutive(object):
     def check_running_pid(self, pid):
         return pid in self._running_pids
 
-    def run_and_throw_if_fail(self, args, quiet=False, cwd=None):
+    def run_and_throw_if_fail(self, args, quiet=False, cwd=None, env=None):
         if self._should_log:
-            log("MOCK run_and_throw_if_fail: %s, cwd=%s" % (args, cwd))
+            env_string = ""
+            if env:
+                env_string = ", env=%s" % env
+            log("MOCK run_and_throw_if_fail: %s, cwd=%s%s" % (args, cwd, env_string))
         if self._should_throw_when_run.intersection(args):
-            raise ScriptError("Exception for %s" % args)
+            raise ScriptError("Exception for %s" % args, output="MOCK command output")
         return "MOCK output of child process"
 
     def run_command(self,
@@ -58,16 +73,32 @@ class MockExecutive(object):
                     error_handler=None,
                     return_exit_code=False,
                     return_stderr=True,
-                    decode_output=False):
+                    decode_output=False,
+                    env=None):
         assert(isinstance(args, list) or isinstance(args, tuple))
         if self._should_log:
-            log("MOCK run_command: %s, cwd=%s" % (args, cwd))
+            env_string = ""
+            if env:
+                env_string = ", env=%s" % env
+            log("MOCK run_command: %s, cwd=%s%s" % (args, cwd, env_string))
+        output = "MOCK output of child process"
         if self._should_throw:
-            raise ScriptError("MOCK ScriptError")
-        return "MOCK output of child process"
+            raise ScriptError("MOCK ScriptError", output=output)
+        return output
+
+    def cpu_count(self):
+        return 2
+
+    def popen(self, *args, **kwargs):
+        # FIXME: Implement logging when self._should_log is set.
+        return MockProcess()
 
 
 class MockExecutive2(object):
+    @staticmethod
+    def ignore_error(error):
+        pass
+
     def __init__(self, output='', exit_code=0, exception=None,
                  run_command_fn=None, stderr=''):
         self._output = output
@@ -92,7 +123,8 @@ class MockExecutive2(object):
                     error_handler=None,
                     return_exit_code=False,
                     return_stderr=True,
-                    decode_output=False):
+                    decode_output=False,
+                    env=None):
         assert(isinstance(args, list) or isinstance(args, tuple))
         if self._exception:
             raise self._exception

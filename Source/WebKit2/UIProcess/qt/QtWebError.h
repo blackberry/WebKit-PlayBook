@@ -21,7 +21,7 @@
 #ifndef QtWebError_h
 #define QtWebError_h
 
-#include "qwebdownloaditem.h"
+#include "qwebdownloaditem_p.h"
 #include "qwebkitglobal.h"
 #include <QtNetwork/QNetworkReply>
 #include <WKError.h>
@@ -34,7 +34,8 @@ QT_END_NAMESPACE
 class QtWebError {
 public:
     enum Type {
-        EngineError,
+        NoError,
+        InternalError,
         NetworkError,
         HttpError,
         DownloadError

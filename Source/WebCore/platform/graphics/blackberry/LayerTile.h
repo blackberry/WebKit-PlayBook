@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,19 +21,30 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "Color.h"
-#include "FloatRect.h"
-#include "IntRect.h"
-#include "IntSize.h"
-#include "LayerTileData.h"
-#include "LayerTileIndex.h"
 #include "Texture.h"
 
-#include <SkBitmap.h>
+#include <wtf/RefPtr.h>
+
+class SkBitmap;
 
 namespace WebCore {
 
-class GLES2Context;
+class Color;
+class IntRect;
+class TileIndex;
+
+class LayerTileData {
+public:
+    LayerTileData()
+        : m_visible(false)
+    {
+    }
+
+    bool isVisible() const { return m_visible; }
+
+protected:
+    bool m_visible;
+};
 
 class LayerTile : public LayerTileData {
     WTF_MAKE_FAST_ALLOCATED;
@@ -50,9 +61,9 @@ public:
 
     bool hasTexture() const { return m_texture && m_texture->hasTexture(); }
 
-    void setContents(GLES2Context*, const SkBitmap& contents, const IntRect& tileRect, const TileIndex&, bool isOpaque);
-    void setContentsToColor(GLES2Context*, const Color&);
-    void updateContents(GLES2Context*, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect);
+    void setContents(const SkBitmap& contents, const IntRect& tileRect, const TileIndex&, bool isOpaque);
+    void setContentsToColor(const Color&);
+    void updateContents(const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect, bool isOpaque);
     void discardContents();
 
     // The current texture is an accurate preview of this layer, but a more
@@ -63,7 +74,8 @@ public:
 private:
     void setTexture(PassRefPtr<Texture>);
 
-    RefPtr<Texture> m_texture; // Never assign to m_texture directly, use setTexture() above
+    // Never assign to m_texture directly, use setTexture() above.
+    RefPtr<Texture> m_texture;
     bool m_contentsDirty;
 };
 

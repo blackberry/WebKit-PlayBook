@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2008 Apple Inc. All rights reserved.
+ * Copyright (C) 2008, 2011, 2012 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -151,14 +151,14 @@ HTMLTableRowElement* HTMLTableRowsCollection::lastRow(HTMLTableElement* table)
 // Must call get() on the table in case that argument is compiled before dereferencing the
 // table to get at the collection cache. Order of argument evaluation is undefined and can
 // differ between compilers.
-HTMLTableRowsCollection::HTMLTableRowsCollection(PassRefPtr<HTMLTableElement> table)
-    : HTMLCollection(table.get(), OtherCollection, table->collectionCache())
+HTMLTableRowsCollection::HTMLTableRowsCollection(HTMLTableElement* table)
+    : HTMLCollection(table, OtherCollection)
 {
 }
 
-PassRefPtr<HTMLTableRowsCollection> HTMLTableRowsCollection::create(PassRefPtr<HTMLTableElement> table)
+PassOwnPtr<HTMLTableRowsCollection> HTMLTableRowsCollection::create(HTMLTableElement* table)
 {
-    return adoptRef(new HTMLTableRowsCollection(table));
+    return adoptPtr(new HTMLTableRowsCollection(table));
 }
 
 Element* HTMLTableRowsCollection::itemAfter(Element* previous) const

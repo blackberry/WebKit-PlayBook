@@ -25,7 +25,6 @@
 #include "DateInstance.h"
 #include "DateMath.h"
 #include "DatePrototype.h"
-#include "DumpRenderTreeSupportQt.h"
 #include "FunctionPrototype.h"
 #include "Interpreter.h"
 #include "JSArray.h"
@@ -52,7 +51,6 @@
 #include "qt_instance.h"
 #include "qt_pixmapruntime.h"
 #include "qvarlengtharray.h"
-#include "qwebelement.h"
 #include <limits.h>
 #include <runtime/Error.h>
 #include <runtime_array.h>
@@ -121,36 +119,21 @@ QDebug operator<<(QDebug dbg, const JSRealType &c)
 }
 #endif
 
-// this is here as a proxy, so we'd have a class to friend in QWebElement,
-// as getting/setting a WebCore in QWebElement is private
-class QtWebElementRuntime {
-public:
-    static QWebElement create(Element* element)
-    {
-        return QWebElement(element);
-    }
-
-    static Element* get(const QWebElement& element)
-    {
-        return element.m_element;
-    }
+struct RuntimeConversion {
+    ConvertToJSValueFunction toJSValueFunc;
+    ConvertToVariantFunction toVariantFunc;
 };
 
-// this is here as a proxy, so we'd have a class to friend in QDRTNode,
-// as getting/setting a WebCore in QDRTNode is private.
-// We only need to pass WebCore Nodes for layout tests.
-class QtDRTNodeRuntime {
-public:
-    static QDRTNode create(Node* node)
-    {
-        return QDRTNode(node);
-    }
+typedef QHash<int, RuntimeConversion> RuntimeConversionTable;
+Q_GLOBAL_STATIC(RuntimeConversionTable, customRuntimeConversions)
 
-    static Node* get(const QDRTNode& node)
-    {
-        return node.m_node;
-    }
-};
+void registerCustomType(int qtMetaTypeId, ConvertToVariantFunction toVariantFunc, ConvertToJSValueFunction toJSValueFunc)
+{
+    RuntimeConversion conversion;
+    conversion.toJSValueFunc = toJSValueFunc;
+    conversion.toVariantFunc = toVariantFunc;
+    customRuntimeConversions()->insert(qtMetaTypeId, conversion);
+}
 
 static JSRealType valueRealType(ExecState* exec, JSValue val)
 {
@@ -162,7 +145,7 @@ static JSRealType valueRealType(ExecState* exec, JSValue val)
         return Boolean;
     else if (val.isNull())
         return Null;
-    else if (isJSByteArray(&exec->globalData(), val))
+    else if (isJSByteArray(val))
         return JSByteArray;
     else if (val.isObject()) {
         JSObject *object = val.toObject(exec);
@@ -360,7 +343,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 else
                     dist = 6;
             } else {
-                UString str = value.toString(exec);
+                UString str = value.toString(exec)->value(exec);
                 ret = QVariant(QChar(str.length() ? *(const ushort*)str.impl()->characters() : 0));
                 if (type == String)
                     dist = 3;
@@ -375,7 +358,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                     *distance = 1;
                 return QString();
             } else {
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 ret = QVariant(QString((const QChar*)ustring.impl()->characters(), ustring.length()));
                 if (type == String)
                     dist = 0;
@@ -456,7 +439,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 int len = rtarray->getLength();
                 for (int i = 0; i < len; ++i) {
                     JSValue val = rtarray->getConcreteArray()->valueAt(exec, i);
-                    UString ustring = val.toString(exec);
+                    UString ustring = val.toString(exec)->value(exec);
                     QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
 
                     result.append(qstring);
@@ -470,7 +453,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 int len = array->length();
                 for (int i = 0; i < len; ++i) {
                     JSValue val = array->get(exec, i);
-                    UString ustring = val.toString(exec);
+                    UString ustring = val.toString(exec)->value(exec);
                     QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
 
                     result.append(qstring);
@@ -479,7 +462,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 ret = QVariant(result);
             } else {
                 // Make a single length array
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
                 QStringList result;
                 result.append(qstring);
@@ -495,7 +478,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 ret = QVariant(QByteArray(reinterpret_cast<const char*>(arr->data()), arr->length()));
                 dist = 0;
             } else {
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 ret = QVariant(QString((const QChar*)ustring.impl()->characters(), ustring.length()).toLatin1());
                 if (type == String)
                     dist = 5;
@@ -538,7 +521,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 }
 #ifndef QT_NO_DATESTRING
             } else if (type == String) {
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
 
                 if (hint == QMetaType::QDateTime) {
@@ -588,7 +571,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 RegExpObject *re = static_cast<RegExpObject*>(object);
 */
                 // Attempt to convert.. a bit risky
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
 
                 // this is of the form '/xxxxxx/i'
@@ -608,7 +591,7 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                     qConvDebug() << "couldn't parse a JS regexp";
                 }
             } else if (type == String) {
-                UString ustring = value.toString(exec);
+                UString ustring = value.toString(exec)->value(exec);
                 QString qstring = QString((const QChar*)ustring.impl()->characters(), ustring.length());
 
                 QRegExp re(qstring);
@@ -777,26 +760,10 @@ QVariant convertValueToQVariant(ExecState* exec, JSValue value, QMetaType::Type 
                 break;
             } else if (QtPixmapInstance::canHandle(static_cast<QMetaType::Type>(hint))) {
                 ret = QtPixmapInstance::variantFromObject(object, static_cast<QMetaType::Type>(hint));
-            } else if (hint == (QMetaType::Type) qMetaTypeId<QWebElement>()) {
-                if (object && object->inherits(&JSElement::s_info)) {
-                    ret = QVariant::fromValue<QWebElement>(QtWebElementRuntime::create((static_cast<JSElement*>(object))->impl()));
-                    dist = 0;
-                    // Allow other objects to reach this one. This won't cause our algorithm to
-                    // loop since when we find an Element we do not recurse.
-                    visitedObjects->remove(object);
+            } else if (customRuntimeConversions()->contains(hint)) {
+                ret = customRuntimeConversions()->value(hint).toVariantFunc(object, &dist, visitedObjects);
+                if (dist == 0)
                     break;
-                }
-                if (object && object->inherits(&JSDocument::s_info)) {
-                    // To support LayoutTestControllerQt::nodesFromRect(), used in DRT, we do an implicit
-                    // conversion from 'document' to the QWebElement representing the 'document.documentElement'.
-                    // We can't simply use a QVariantMap in nodesFromRect() because it currently times out
-                    // when serializing DOMMimeType and DOMPlugin, even if we limit the recursion.
-                    ret = QVariant::fromValue<QWebElement>(QtWebElementRuntime::create((static_cast<JSDocument*>(object))->impl()->documentElement()));
-                } else
-                    ret = QVariant::fromValue<QWebElement>(QWebElement());
-            } else if (hint == (QMetaType::Type) qMetaTypeId<QDRTNode>()) {
-                if (object && object->inherits(&JSNode::s_info))
-                    ret = QVariant::fromValue<QDRTNode>(QtDRTNodeRuntime::create((static_cast<JSNode*>(object))->impl()));
             } else if (hint == (QMetaType::Type) qMetaTypeId<QVariant>()) {
                 if (value.isUndefinedOrNull()) {
                     if (distance)
@@ -928,26 +895,14 @@ JSValue convertQVariantToValue(ExecState* exec, PassRefPtr<RootObject> root, con
     if (QtPixmapInstance::canHandle(static_cast<QMetaType::Type>(variant.type())))
         return QtPixmapInstance::createPixmapRuntimeObject(exec, root, variant);
 
-    if (type == qMetaTypeId<QWebElement>()) {
+    if (customRuntimeConversions()->contains(type)) {
         if (!root->globalObject()->inherits(&JSDOMWindow::s_info))
             return jsUndefined();
 
         Document* document = (static_cast<JSDOMWindow*>(root->globalObject()))->impl()->document();
         if (!document)
             return jsUndefined();
-
-        return toJS(exec, toJSDOMGlobalObject(document, exec), QtWebElementRuntime::get(variant.value<QWebElement>()));
-    }
-
-    if (type == qMetaTypeId<QDRTNode>()) {
-        if (!root->globalObject()->inherits(&JSDOMWindow::s_info))
-            return jsUndefined();
-
-        Document* document = (static_cast<JSDOMWindow*>(root->globalObject()))->impl()->document();
-        if (!document)
-            return jsUndefined();
-
-        return toJS(exec, toJSDOMGlobalObject(document, exec), QtDRTNodeRuntime::get(variant.value<QDRTNode>()));
+        return customRuntimeConversions()->value(type).toJSValueFunc(exec, toJSDOMGlobalObject(document, exec), variant);
     }
 
     if (type == QMetaType::QVariantMap) {
@@ -1017,12 +972,17 @@ void QtRuntimeMethod::finishCreation(ExecState* exec, const Identifier& identifi
     Base::finishCreation(exec->globalData(), identifier);
     QW_D(QtRuntimeMethod);
     d->m_instance = instance;
-    d->m_finalizer.set(exec->globalData(), this, d);
+    d->m_finalizer = PassWeak<QtRuntimeMethod>(exec->globalData(), this, d);
 }
 
 QtRuntimeMethod::~QtRuntimeMethod()
 {
     delete d_ptr;
+}
+
+void QtRuntimeMethod::destroy(JSCell* cell)
+{
+    jsCast<QtRuntimeMethod*>(cell)->QtRuntimeMethod::~QtRuntimeMethod();
 }
 
 // ===============
@@ -1639,7 +1599,7 @@ EncodedJSValue QtRuntimeConnectionMethod::call(ExecState* exec)
                         funcObject = asObj;
                     } else {
                         // Convert it to a string
-                        UString funcName = exec->argument(1).toString(exec);
+                        UString funcName = exec->argument(1).toString(exec)->value(exec);
                         Identifier funcIdent(exec, funcName);
 
                         // ### DropAllLocks

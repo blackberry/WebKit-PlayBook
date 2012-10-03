@@ -29,22 +29,57 @@
 #include "TextureManager.h"
 
 #include "LayerRendererChromium.h"
+#include "ManagedTexture.h"
+
+using namespace std;
 
 namespace WebCore {
 
-size_t TextureManager::highLimitBytes()
+
+namespace {
+size_t memoryLimitBytes(size_t viewportMultiplier, const IntSize& viewportSize, size_t minMegabytes, size_t maxMegabytes)
 {
-    return 128 * 1024 * 1024;
+    if (viewportSize.isEmpty())
+        return minMegabytes * 1024 * 1024;
+    return max(minMegabytes * 1024 * 1024, min(maxMegabytes * 1024 * 1024, viewportMultiplier * TextureManager::memoryUseBytes(viewportSize, GraphicsContext3D::RGBA)));
+}
 }
 
-size_t TextureManager::reclaimLimitBytes()
+size_t TextureManager::highLimitBytes(const IntSize& viewportSize)
 {
-    return 64 * 1024 * 1024;
+    size_t viewportMultiplier, minMegabytes, maxMegabytes;
+    viewportMultiplier = 12;
+#if OS(ANDROID)
+    minMegabytes = 24;
+    maxMegabytes = 40;
+#else
+    minMegabytes = 64;
+    maxMegabytes = 128;
+#endif
+    return memoryLimitBytes(viewportMultiplier, viewportSize, minMegabytes, maxMegabytes);
 }
 
-size_t TextureManager::lowLimitBytes()
+size_t TextureManager::reclaimLimitBytes(const IntSize& viewportSize)
 {
-    return 3 * 1024 * 1024;
+    size_t viewportMultiplier, minMegabytes, maxMegabytes;
+    viewportMultiplier = 6;
+#if OS(ANDROID)
+    minMegabytes = 9;
+    maxMegabytes = 32;
+#else
+    minMegabytes = 32;
+    maxMegabytes = 64;
+#endif
+    return memoryLimitBytes(viewportMultiplier, viewportSize, minMegabytes, maxMegabytes);
+}
+
+size_t TextureManager::lowLimitBytes(const IntSize& viewportSize)
+{
+    size_t viewportMultiplier, minMegabytes, maxMegabytes;
+    viewportMultiplier = 1;
+    minMegabytes = 2;
+    maxMegabytes = 3;
+    return memoryLimitBytes(viewportMultiplier, viewportSize, minMegabytes, maxMegabytes);
 }
 
 size_t TextureManager::memoryUseBytes(const IntSize& size, GC3Denum textureFormat)
@@ -60,19 +95,47 @@ size_t TextureManager::memoryUseBytes(const IntSize& size, GC3Denum textureForma
 }
 
 
-TextureManager::TextureManager(size_t memoryLimitBytes, int maxTextureSize)
-    : m_memoryLimitBytes(memoryLimitBytes)
+TextureManager::TextureManager(size_t maxMemoryLimitBytes, size_t preferredMemoryLimitBytes, int maxTextureSize)
+    : m_maxMemoryLimitBytes(maxMemoryLimitBytes)
+    , m_preferredMemoryLimitBytes(preferredMemoryLimitBytes)
     , m_memoryUseBytes(0)
     , m_maxTextureSize(maxTextureSize)
     , m_nextToken(1)
 {
 }
 
-void TextureManager::setMemoryLimitBytes(size_t memoryLimitBytes)
+TextureManager::~TextureManager()
+{
+    for (HashSet<ManagedTexture*>::iterator it = m_registeredTextures.begin(); it != m_registeredTextures.end(); ++it)
+        (*it)->clearManager();
+}
+
+void TextureManager::setMaxMemoryLimitBytes(size_t memoryLimitBytes)
 {
     reduceMemoryToLimit(memoryLimitBytes);
-    ASSERT(currentMemoryUseBytes() < memoryLimitBytes);
-    m_memoryLimitBytes = memoryLimitBytes;
+    ASSERT(currentMemoryUseBytes() <= memoryLimitBytes);
+    m_maxMemoryLimitBytes = memoryLimitBytes;
+}
+
+void TextureManager::setPreferredMemoryLimitBytes(size_t memoryLimitBytes)
+{
+    m_preferredMemoryLimitBytes = memoryLimitBytes;
+}
+
+void TextureManager::registerTexture(ManagedTexture* texture)
+{
+    ASSERT(texture);
+    ASSERT(!m_registeredTextures.contains(texture));
+
+    m_registeredTextures.add(texture);
+}
+
+void TextureManager::unregisterTexture(ManagedTexture* texture)
+{
+    ASSERT(texture);
+    ASSERT(m_registeredTextures.contains(texture));
+
+    m_registeredTextures.remove(texture);
 }
 
 TextureToken TextureManager::getToken()
@@ -89,13 +152,7 @@ void TextureManager::releaseToken(TextureToken token)
 
 bool TextureManager::hasTexture(TextureToken token)
 {
-    if (m_textures.contains(token)) {
-        // If someone asks about a texture put it at the end of the LRU list.
-        m_textureLRUSet.remove(token);
-        m_textureLRUSet.add(token);
-        return true;
-    }
-    return false;
+    return m_textures.contains(token);
 }
 
 bool TextureManager::isProtected(TextureToken token)
@@ -106,10 +163,12 @@ bool TextureManager::isProtected(TextureToken token)
 void TextureManager::protectTexture(TextureToken token)
 {
     ASSERT(hasTexture(token));
-    ASSERT(!m_textures.get(token).isProtected);
     TextureInfo info = m_textures.take(token);
     info.isProtected = true;
     m_textures.add(token, info);
+    // If someone protects a texture, put it at the end of the LRU list.
+    m_textureLRUSet.remove(token);
+    m_textureLRUSet.add(token);
 }
 
 void TextureManager::unprotectTexture(TextureToken token)
@@ -125,6 +184,12 @@ void TextureManager::unprotectAllTextures()
         it->second.isProtected = false;
 }
 
+void TextureManager::evictTexture(TextureToken token, TextureInfo info)
+{
+    TRACE_EVENT("TextureManager::evictTexture", this, 0);
+    removeTexture(token, info);
+}
+
 void TextureManager::reduceMemoryToLimit(size_t limit)
 {
     while (m_memoryUseBytes > limit) {
@@ -135,7 +200,7 @@ void TextureManager::reduceMemoryToLimit(size_t limit)
             TextureInfo info = m_textures.get(token);
             if (info.isProtected)
                 continue;
-            removeTexture(token, info);
+            evictTexture(token, info);
             foundCandidate = true;
             break;
         }
@@ -220,11 +285,11 @@ bool TextureManager::requestTexture(TextureToken token, IntSize size, unsigned f
     }
 
     size_t memoryRequiredBytes = memoryUseBytes(size, format);
-    if (memoryRequiredBytes > m_memoryLimitBytes)
+    if (memoryRequiredBytes > m_maxMemoryLimitBytes)
         return false;
 
-    reduceMemoryToLimit(m_memoryLimitBytes - memoryRequiredBytes);
-    if (m_memoryUseBytes + memoryRequiredBytes > m_memoryLimitBytes)
+    reduceMemoryToLimit(m_maxMemoryLimitBytes - memoryRequiredBytes);
+    if (m_memoryUseBytes + memoryRequiredBytes > m_maxMemoryLimitBytes)
         return false;
 
     TextureInfo info;

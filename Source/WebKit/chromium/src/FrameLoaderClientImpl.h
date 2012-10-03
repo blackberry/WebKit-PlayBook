@@ -62,13 +62,13 @@ public:
     virtual void documentElementAvailable();
 
 #if USE(V8)
-    virtual void didCreateScriptContext(v8::Handle<v8::Context>, int worldId);
+    virtual void didCreateScriptContext(v8::Handle<v8::Context>, int extensionGroup, int worldId);
     virtual void willReleaseScriptContext(v8::Handle<v8::Context>, int worldId);
 #endif
 
     // Returns true if we should allow the given V8 extension to be added to
     // the script context at the currently loading page and given extension group.
-    virtual bool allowScriptExtension(const String& extensionName, int extensionGroup);
+    virtual bool allowScriptExtension(const String& extensionName, int extensionGroup, int worldId);
 
     virtual bool hasWebView() const;
     virtual bool hasFrameView() const;
@@ -171,7 +171,6 @@ public:
     virtual bool canCachePage() const;
     virtual void download(
         WebCore::ResourceHandle*, const WebCore::ResourceRequest&,
-        const WebCore::ResourceRequest& initialRequest,
         const WebCore::ResourceResponse&);
     virtual PassRefPtr<WebCore::Frame> createFrame(
         const WebCore::KURL& url, const WTF::String& name,
@@ -207,6 +206,11 @@ public:
     virtual void didNotAllowPlugins();
 
     virtual PassRefPtr<WebCore::FrameNetworkingContext> createNetworkingContext();
+    virtual bool willCheckAndDispatchMessageEvent(WebCore::SecurityOrigin* target, WebCore::MessageEvent*) const;
+
+#if ENABLE(WEB_INTENTS)
+    virtual void dispatchIntent(PassRefPtr<WebCore::IntentRequest>) OVERRIDE;
+#endif
 
 private:
     void makeDocumentView();

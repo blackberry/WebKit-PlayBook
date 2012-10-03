@@ -129,10 +129,6 @@ CString TextEncoding::encode(const UChar* characters, size_t length, Unencodable
     // normalization will be done by Windows CE API
     OwnPtr<TextCodec> textCodec = newTextCodec(*this);
     return textCodec.get() ? textCodec->encode(characters, length, handling) : CString();
-#elif PLATFORM(BLACKBERRY)
-    // FIXME: not sure if Brew MP / BlackBerry normalizes the input string automatically
-    OwnPtr<TextCodec> textCodec = newTextCodec(*this);
-    return textCodec.get() ? textCodec->encode(characters, length, handling) : CString();
 #endif
 }
 

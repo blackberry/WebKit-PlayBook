@@ -33,6 +33,7 @@
 
 #if ENABLE(WORKERS)
 
+#include "InspectorBaseAgent.h"
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
 
@@ -46,14 +47,14 @@ class WorkerContextProxy;
 
 typedef String ErrorString;
 
-class InspectorWorkerAgent {
+class InspectorWorkerAgent : public InspectorBaseAgent<InspectorWorkerAgent>, public InspectorBackendDispatcher::WorkerCommandHandler {
 public:
     static PassOwnPtr<InspectorWorkerAgent> create(InstrumentingAgents*, InspectorState*);
     ~InspectorWorkerAgent();
 
-    void setFrontend(InspectorFrontend*);
-    void restore();
-    void clearFrontend();
+    virtual void setFrontend(InspectorFrontend*);
+    virtual void restore();
+    virtual void clearFrontend();
 
     // Called from InspectorInstrumentation
     bool shouldPauseDedicatedWorkerOnStart();
@@ -61,11 +62,11 @@ public:
     void workerContextTerminated(WorkerContextProxy*);
 
     // Called from InspectorBackendDispatcher
-    void setWorkerInspectionEnabled(ErrorString*, bool value);
-    void connectToWorker(ErrorString*, int workerId);
-    void disconnectFromWorker(ErrorString*, int workerId);
-    void sendMessageToWorker(ErrorString*, int workerId, PassRefPtr<InspectorObject> message);
-    void setAutoconnectToWorkers(ErrorString*, bool value);
+    virtual void setWorkerInspectionEnabled(ErrorString*, bool value);
+    virtual void connectToWorker(ErrorString*, int workerId);
+    virtual void disconnectFromWorker(ErrorString*, int workerId);
+    virtual void sendMessageToWorker(ErrorString*, int workerId, const RefPtr<InspectorObject>& message);
+    virtual void setAutoconnectToWorkers(ErrorString*, bool value);
 
 private:
     InspectorWorkerAgent(InstrumentingAgents*, InspectorState*);
@@ -73,9 +74,7 @@ private:
     void createWorkerFrontendChannel(WorkerContextProxy*, const String& url);
     void destroyWorkerFrontendChannels();
 
-    InstrumentingAgents* m_instrumentingAgents;
     InspectorFrontend* m_inspectorFrontend;
-    InspectorState* m_inspectorState;
 
     class WorkerFrontendChannel;
     typedef HashMap<int, WorkerFrontendChannel*> WorkerChannels;

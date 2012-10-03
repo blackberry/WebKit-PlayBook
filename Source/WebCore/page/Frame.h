@@ -63,9 +63,9 @@ typedef struct HBITMAP__* HBITMAP;
 namespace WebCore {
 
     class Document;
+    class FrameDestructionObserver;
     class FrameView;
     class HTMLTableCellElement;
-    class MediaStreamFrameController;
     class RegularExpression;
     class RenderPart;
     class TiledBackingStore;
@@ -74,12 +74,7 @@ namespace WebCore {
     class TiledBackingStoreClient { };
 #endif
 
-    class FrameDestructionObserver {
-    public:
-        virtual ~FrameDestructionObserver() { }
-
-        virtual void frameDestroyed() = 0;
-    };
+    class TreeScope;
 
     class Frame : public RefCounted<Frame>, public TiledBackingStoreClient {
     public:
@@ -100,8 +95,8 @@ namespace WebCore {
         void addDestructionObserver(FrameDestructionObserver*);
         void removeDestructionObserver(FrameDestructionObserver*);
 
+        void willDetachPage();
         void detachFromPage();
-        void pageDestroyed();
         void disconnectOwnerElement();
 
         Page* page() const;
@@ -134,6 +129,7 @@ namespace WebCore {
         void setIsDisconnected(bool);
         bool excludeFromTextSearch() const;
         void setExcludeFromTextSearch(bool);
+        bool inScope(TreeScope*) const;
 
         void injectUserScripts(UserScriptInjectionTime);
         
@@ -144,7 +140,6 @@ namespace WebCore {
         DOMWindow* domWindow() const;
         DOMWindow* existingDOMWindow() { return m_domWindow.get(); }
         void setDOMWindow(DOMWindow*);
-        void clearFormerDOMWindow(DOMWindow*);
         void clearDOMWindow();
 
         static Frame* frameForWidget(const Widget*);
@@ -205,12 +200,9 @@ namespace WebCore {
         NSImage* imageFromRect(NSRect) const;
 #endif
 
-#if ENABLE(MEDIA_STREAM)
-        MediaStreamFrameController* mediaStreamFrameController() const { return m_mediaStreamFrameController.get(); }
-#endif
-        
         // Should only be called on the main frame of a page.
         void notifyChromeClientWheelEventHandlerCountChanged() const;
+        void notifyChromeClientTouchEventHandlerCountChanged() const;
 
     // ========
 
@@ -227,7 +219,6 @@ namespace WebCore {
         mutable NavigationScheduler m_navigationScheduler;
 
         mutable RefPtr<DOMWindow> m_domWindow;
-        HashSet<DOMWindow*> m_liveFormerWindows;
 
         HTMLFrameOwnerElement* m_ownerElement;
         RefPtr<FrameView> m_view;
@@ -270,9 +261,6 @@ namespace WebCore {
         OwnPtr<TiledBackingStore> m_tiledBackingStore;
 #endif
 
-#if ENABLE(MEDIA_STREAM)
-        OwnPtr<MediaStreamFrameController> m_mediaStreamFrameController;
-#endif
     };
 
     inline void Frame::init()

@@ -28,41 +28,14 @@
 #endif
 
 #include <wtf/Platform.h>
-
-/* See note in wtf/Platform.h for more info on EXPORT_MACROS. */
-#if USE(EXPORT_MACROS)
-
 #include <wtf/ExportMacros.h>
-
-#if defined(BUILDING_JavaScriptCore) || defined(BUILDING_WTF)
-#define WTF_EXPORT_PRIVATE WTF_EXPORT
-#define JS_EXPORT_PRIVATE WTF_EXPORT
-#else
-#define WTF_EXPORT_PRIVATE WTF_IMPORT
-#define JS_EXPORT_PRIVATE WTF_IMPORT
+// WTF cannot depend on JSC even if USE(JSC).
+#if USE(JSC) && !defined(BUILDING_WTF)
+#include "JSExportMacros.h"
+#elif PLATFORM(CHROMIUM)
+// Chromium doesn't have runtime/ in its include paths.
+#include "runtime/JSExportMacros.h"
 #endif
-
-#define JS_EXPORTDATA JS_EXPORT_PRIVATE
-#define JS_EXPORTCLASS JS_EXPORT_PRIVATE
-
-#else /* !USE(EXPORT_MACROS) */
-
-#if !PLATFORM(CHROMIUM) && OS(WINDOWS) && !defined(BUILDING_WX__) && !COMPILER(GCC)
-#if defined(BUILDING_JavaScriptCore) || defined(BUILDING_WTF)
-#define JS_EXPORTDATA __declspec(dllexport)
-#else
-#define JS_EXPORTDATA __declspec(dllimport)
-#endif
-#define JS_EXPORTCLASS JS_EXPORTDATA
-#else
-#define JS_EXPORTDATA
-#define JS_EXPORTCLASS
-#endif
-
-#define WTF_EXPORT_PRIVATE
-#define JS_EXPORT_PRIVATE
-
-#endif /* USE(EXPORT_MACROS) */
 
 #if OS(WINDOWS)
 
@@ -119,16 +92,3 @@
 #else
 #define SKIP_STATIC_CONSTRUCTORS_ON_GCC 1
 #endif
-
-#if PLATFORM(CHROMIUM)
-#if !defined(WTF_USE_V8)
-#define WTF_USE_V8 1
-#endif
-#endif /* PLATFORM(CHROMIUM) */
-
-#if !defined(WTF_USE_V8)
-#define WTF_USE_V8 0
-#endif /* !defined(WTF_USE_V8) */
-
-/* Using V8 implies not using JSC and vice versa */
-#define WTF_USE_JSC !WTF_USE_V8

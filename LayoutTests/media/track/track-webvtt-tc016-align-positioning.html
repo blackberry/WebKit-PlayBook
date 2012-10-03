@@ -27,11 +27,11 @@
                     tests:
                     [
                         {
-                            property : "textPosition",
+                            property : "position",
                             values : [10, 20, 80],
                         },
                         {
-                            property : "alignment",
+                            property : "align",
                             values : ["start", "middle", "end"],
                         },
                     ],
@@ -50,11 +50,11 @@
                     tests:
                     [
                         {
-                            property : "textPosition",
+                            property : "position",
                             values : [10, 50, 50],
                         },
                         {
-                            property : "alignment",
+                            property : "align",
                             values : ["middle", "middle", "middle"],
                         },
                     ],
@@ -65,7 +65,7 @@
             }
         </script>
     </head>
-    <body>
+    <body onload="enableAllTextTracks()">
         <p>Tests cue text position and alignment from settings.</p>
         <video>
             <track src="captions-webvtt/tc016-align-positioning.vtt" onload="trackLoaded()">

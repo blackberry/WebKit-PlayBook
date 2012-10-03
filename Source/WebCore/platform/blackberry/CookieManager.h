@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2008, 2009 Julien Chaffraix <julien.chaffraix@gmail.com>
- * Copyright (C) 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -41,22 +41,21 @@ class String;
 namespace WebCore {
 
 class CookieDatabaseBackingStore;
-class ParsedCookie;
 class KURL;
 
-enum BackingStoreRemoval {
+enum BackingStoreRemovalPolicy {
     RemoveFromBackingStore,
     BackingStoreCookieEntry,
     DoNotRemoveFromBackingStore
 };
 
-enum HttpOnlyCookieFiltering {
+enum CookieFilter {
     NoHttpOnlyCookie,
     WithHttpOnlyCookies,
 };
 
 enum CookieStorageAcceptPolicy {
-    CookieStorageAcceptPolicyAlways = 0,
+    CookieStorageAcceptPolicyAlways,
     CookieStorageAcceptPolicyNever,
     CookieStorageAcceptPolicyOnlyFromMainDocumentDomain
 };
@@ -71,7 +70,7 @@ enum CookieStorageAcceptPolicy {
   * If a cookie has a domain "a.b.com", it will be stored in the node named "a" in this tree.
   * in the branch ""->"com"->"b"->"a"
   *
-  * Cookie specs follow the RFC6265 spec sheet.
+  * Cookie specs follow the RFC 6265 spec sheet.
   * http://tools.ietf.org/html/rfc6265
   */
 
@@ -82,7 +81,7 @@ public:
 
     void setCookies(const KURL&, const String& value);
 
-    void removeAllCookies(BackingStoreRemoval);
+    void removeAllCookies(BackingStoreRemovalPolicy);
     void removeCookieWithName(const KURL&, const String& cookieName);
 
     unsigned short cookiesCount() const { return m_count; }
@@ -98,17 +97,17 @@ public:
     }
     void addedCookie() { ++m_count; }
 
-    // Constants getter.
-    static unsigned int maxCookieLength() { return s_maxCookieLength; }
+    static unsigned maxCookieLength() { return s_maxCookieLength; }
 
     void setCookiePolicy(CookieStorageAcceptPolicy policy) { m_policy = policy; }
     CookieStorageAcceptPolicy cookiePolicy() const { return m_policy; }
     void setPrivateMode(const bool);
 
-    String getCookie(const KURL& requestURL, HttpOnlyCookieFiltering) const;
+    String generateHtmlFragmentForCookies();
+    String getCookie(const KURL& requestURL, CookieFilter) const;
 
     // Returns all cookies that are associated with the specified URL as raw cookies.
-    void getRawCookies(Vector<ParsedCookie*>& stackOfCookies, const KURL& requestURL, HttpOnlyCookieFiltering = WithHttpOnlyCookies) const;
+    void getRawCookies(Vector<ParsedCookie*>& stackOfCookies, const KURL& requestURL, CookieFilter = WithHttpOnlyCookies) const;
 
     void flushCookiesToBackingStore();
 
@@ -116,14 +115,13 @@ private:
     friend CookieManager& cookieManager();
 
     CookieManager();
-    ~CookieManager();
+    virtual ~CookieManager();
 
-    void checkAndTreatCookie(ParsedCookie* candidateCookie, BackingStoreRemoval postToBackingStore);
+    void checkAndTreatCookie(ParsedCookie*, BackingStoreRemovalPolicy);
 
     bool shouldRejectForSecurityReason(const ParsedCookie*, const KURL&);
 
-    void addCookieToMap(CookieMap* targetMap, ParsedCookie* candidateCookie, BackingStoreRemoval postToBackingStore);
-    void update(CookieMap* targetMap, ParsedCookie* newCookie, BackingStoreRemoval postToBackingStore);
+    void addCookieToMap(CookieMap* targetMap, ParsedCookie* candidateCookie, BackingStoreRemovalPolicy postToBackingStore);
 
     CookieMap* findOrCreateCookieMap(CookieMap* protocolMap, const String& domain, bool findOnly);
 
@@ -132,7 +130,6 @@ private:
 
     HashMap<String, CookieMap*> m_managerMap;
 
-    // Count all cookies, cookies are limited by max_count
     unsigned short m_count;
 
     bool m_privateMode;
@@ -143,13 +140,8 @@ private:
     // FIXME: This method should be removed.
     void getBackingStoreCookies();
 
-    // Max count constants.
-    static const unsigned int s_globalMaxCookieCount = 6000;
-    static const unsigned int s_maxCookieCountPerHost = 60;
-    static const unsigned int s_cookiesToDeleteWhenLimitReached = 60;
-    static const unsigned int s_delayToStartCookieCleanup = 10;
     // Cookie size limit of 4kB as advised per RFC2109
-    static const unsigned int s_maxCookieLength = 4096;
+    static const unsigned s_maxCookieLength = 4096;
 
     CookieStorageAcceptPolicy m_policy;
 

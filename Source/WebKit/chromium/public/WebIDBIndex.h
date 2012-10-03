@@ -28,7 +28,7 @@
 
 #include "WebExceptionCode.h"
 #include "WebIDBTransaction.h"
-#include "WebString.h"
+#include "platform/WebString.h"
 
 namespace WebKit {
 
@@ -61,9 +61,15 @@ public:
         WEBKIT_ASSERT_NOT_REACHED();
         return false;
     }
+    virtual bool multiEntry() const
+    {
+        WEBKIT_ASSERT_NOT_REACHED();
+        return false;
+    }
 
     virtual void openObjectCursor(const WebIDBKeyRange&, unsigned short direction, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&) { WEBKIT_ASSERT_NOT_REACHED(); }
     virtual void openKeyCursor(const WebIDBKeyRange&, unsigned short direction, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&) { WEBKIT_ASSERT_NOT_REACHED(); }
+    virtual void count(const WebIDBKeyRange&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&) { WEBKIT_ASSERT_NOT_REACHED(); }
     virtual void getObject(const WebIDBKey&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&) { WEBKIT_ASSERT_NOT_REACHED(); }
     virtual void getKey(const WebIDBKey&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&) { WEBKIT_ASSERT_NOT_REACHED(); }
 

@@ -58,7 +58,10 @@
  *  - "menubar,visible,get", Eina_Bool *: expects a @c EINA_TRUE if menubar is
  *    visible; @c EINA_FALSE, otherwise.
  *  - "menubar,visible,set", Eina_Bool: sets menubar visibility.
+ *  - "mixedcontent,displayed", void: any of the containing frames has loaded and displayed mixed content.
+ *  - "mixedcontent,run", void: any of the containing frames has loaded and run mixed content.
  *  - "ready", void: page is fully loaded.
+ *  - "resource,request,willsend", Ewk_Frame_Resource_Request*: the network request for the main frame will be sent.
  *  - "scrollbars,visible,get", Eina_Bool *: expects a @c EINA_TRUE if scrollbars
  *    are visible; @c EINA_FALSE, otherwise.
  *  - "scrollbars,visible,set", Eina_Bool: sets scrollbars visibility.
@@ -92,6 +95,7 @@
 
 #include <Evas.h>
 #include <cairo.h>
+#include <libsoup/soup-session.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -129,10 +133,11 @@ struct _Ewk_View_Smart_Class {
     Eina_Bool (*zoom_set)(Ewk_View_Smart_Data *sd, float zoom, Evas_Coord cx, Evas_Coord cy);
     Eina_Bool (*zoom_weak_set)(Ewk_View_Smart_Data *sd, float zoom, Evas_Coord cx, Evas_Coord cy);
     void (*zoom_weak_smooth_scale_set)(Ewk_View_Smart_Data *sd, Eina_Bool smooth_scale);
-    void (*bg_color_set)(Ewk_View_Smart_Data *sd, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
+    void (*bg_color_set)(Ewk_View_Smart_Data *sd, unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha);
     void (*flush)(Ewk_View_Smart_Data *sd);
     Eina_Bool (*pre_render_region)(Ewk_View_Smart_Data *sd, Evas_Coord x, Evas_Coord y, Evas_Coord w, Evas_Coord h, float zoom);
     Eina_Bool (*pre_render_relative_radius)(Ewk_View_Smart_Data *sd, unsigned int n, float zoom);
+    Eina_Bool (*pre_render_start)(Ewk_View_Smart_Data *sd);
     void (*pre_render_cancel)(Ewk_View_Smart_Data *sd);
     Eina_Bool (*disable_render)(Ewk_View_Smart_Data *sd);
     Eina_Bool (*enable_render)(Ewk_View_Smart_Data *sd);
@@ -166,7 +171,7 @@ struct _Ewk_View_Smart_Class {
  * The version you have to put into the version field
  * in the @a Ewk_View_Smart_Class structure.
  */
-#define EWK_VIEW_SMART_CLASS_VERSION 3UL
+#define EWK_VIEW_SMART_CLASS_VERSION 4UL
 
 /**
  * Initializes a whole @a Ewk_View_Smart_Class structure.
@@ -178,7 +183,7 @@ struct _Ewk_View_Smart_Class {
  * @see EWK_VIEW_SMART_CLASS_INIT_VERSION
  * @see EWK_VIEW_SMART_CLASS_INIT_NAME_VERSION
  */
-#define EWK_VIEW_SMART_CLASS_INIT(smart_class_init) {smart_class_init, EWK_VIEW_SMART_CLASS_VERSION, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+#define EWK_VIEW_SMART_CLASS_INIT(smart_class_init) {smart_class_init, EWK_VIEW_SMART_CLASS_VERSION, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
 
 /**
  * Initializes to zero a whole @a Ewk_View_Smart_Class structure.
@@ -276,7 +281,6 @@ typedef struct _Ewk_Scroll_Request Ewk_Scroll_Request;
 struct _Ewk_Scroll_Request {
     Evas_Coord dx, dy;
     Evas_Coord x, y, w, h, x2, y2;
-    Eina_Bool main_scroll;
 };
 
 /**
@@ -313,10 +317,15 @@ struct _Ewk_View_Smart_Data {
         Eina_Bool position:1;
         Eina_Bool frame_rect:1;
     } changed; /**< Keeps what changed since last smart_calculate. */
+    struct {
+        Evas_Coord x, y;
+        float zoom;
+    } previousView;
 };
 
 /// Defines the modes of view.
 enum _Ewk_View_Mode {
+    EWK_VIEW_MODE_INVALID,
     EWK_VIEW_MODE_WINDOWED,
     EWK_VIEW_MODE_FLOATING,
     EWK_VIEW_MODE_FULLSCREEN,
@@ -1247,6 +1256,23 @@ EAPI Eina_Bool    ewk_view_pre_render_region(Evas_Object *o, Evas_Coord x, Evas_
 EAPI Eina_Bool    ewk_view_pre_render_relative_radius(Evas_Object *o, unsigned int n);
 
 /**
+ * Asks engine to start pre-rendering.
+ *
+ * This is an alternative method to pre-render around the view area.
+ * The first step is to find the center view area where to start pre-rendering.
+ * And then from the center of the view area the backing store append the render request
+ * outward in spiral order. So that the tiles which are close to view area are displayed
+ * sooner than outside.
+ *
+ * @param o view to ask pre-render
+ *
+ * @return @c EINA_TRUE if request was accepted, @c EINA_FALSE
+ *         otherwise (errors, pre-render feature not supported, etc)
+ *
+ */
+EAPI Eina_Bool    ewk_view_pre_render_start(Evas_Object *o);
+
+/**
  * Cancels and clears previous the pre-render requests.
  *
  * @param o view to clear pre-render requests
@@ -1417,7 +1443,7 @@ EAPI Eina_Bool    ewk_view_setting_enable_plugins_set(Evas_Object *o, Eina_Bool 
  * @return @c EINA_TRUE if the frame flattening feature is enabled,
  *         @c EINA_FALSE if not or on failure
  */
-EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_get(const Evas_Object* o);
+EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_get(const Evas_Object *o);
 
 /**
  * Enables/disables the frame flattening feature.
@@ -1428,7 +1454,7 @@ EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_get(const Evas_Object
  *
  * @return @c EINA_TRUE on success or @c EINA_FALSE on failure
  */
-EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_set(Evas_Object* o, Eina_Bool enable);
+EAPI Eina_Bool    ewk_view_setting_enable_frame_flattening_set(Evas_Object *o, Eina_Bool enable);
 
 /**
  * Queries if the scripts can open the new windows.
@@ -1555,25 +1581,39 @@ EAPI Eina_Bool    ewk_view_setting_private_browsing_get(const Evas_Object *o);
 EAPI Eina_Bool    ewk_view_setting_private_browsing_set(Evas_Object *o, Eina_Bool enable);
 
 /**
- * Queries if the cache for offline application is enabled.
+ * Returns whether HTML5 application cache support is enabled for this view.
  *
- * @param o view object to query if the cache for offline application is enabled
+ * The Offline Application Caching APIs are part of HTML5 and allow applications to store data locally that is accessed
+ * when the network cannot be reached.
  *
- * @return @c EINA_TRUE if the cache for offline application is enabled,
+ * Application cache support is enabled by default.
+ *
+ * @param o view object whose settings to query
+ *
+ * @return @c EINA_TRUE if the application cache is enabled,
  *         @c EINA_FALSE if not or on failure
+ *
+ * @sa ewk_settings_application_cache_path_set
  */
-EAPI Eina_Bool    ewk_view_setting_offline_app_cache_get(const Evas_Object *o);
+EAPI Eina_Bool    ewk_view_setting_application_cache_get(const Evas_Object *o);
 
 /**
- * Enables/disables the cache for offline application.
+ * Enables/disables the HTML5 application cache for this view.
  *
- * @param o view object to set if the cache for offline application
- * @param enable @c EINA_TRUE to enable the cache for offline application
+ * The Offline Application Caching APIs are part of HTML5 and allow applications to store data locally that is accessed
+ * when the network cannot be reached.
+ *
+ * Application cache support is enabled by default.
+ *
+ * @param o view object whose settings to change
+ * @param enable @c EINA_TRUE to enable the application cache,
  *        @c EINA_FALSE to disable
  *
  * @return @c EINA_TRUE on success or @c EINA_FALSE on failure
+ *
+ * @sa ewk_settings_application_cache_path_set
  */
-EAPI Eina_Bool    ewk_view_setting_offline_app_cache_set(Evas_Object *o, Eina_Bool enable);
+EAPI Eina_Bool    ewk_view_setting_application_cache_set(Evas_Object *o, Eina_Bool enable);
 
 /**
  * Queries if the caret browsing feature is enabled.
@@ -2217,25 +2257,6 @@ EAPI Ewk_View_Mode ewk_view_mode_get(const Evas_Object *o);
  */
 EAPI Eina_Bool ewk_view_js_object_add(Evas_Object *o, Ewk_JS_Object *obj, const char *obj_name);
 
-/**
- * Register a new protocol handler for handling an specific protocol (scheme).
- *
- * @param o view.
- * @param protocols the protocols that will be handled.
- * @param handler the function that will be executed for the protocols
- * @param ctxt the handler context
- * @return @c EINA_TRUE if success, @c EINA_FALSE if not.
- */
-EAPI Eina_Bool ewk_view_protocol_handler_set(Evas_Object* o, const char** protocol, Ewk_View_Resource_Handler_Cb handler, void* ctxt);
-
-/**
- * Remove the custom protocol handler.
- *
- * @param o view.
- * @return @c EINA_TRUE if success, @c EINA_FALSE if not.
- */
-EAPI Eina_Bool ewk_view_protocol_handler_unset(Evas_Object* o);
-
 /// Defines the page visibility status.
 enum _Ewk_Page_Visibility_State {
     EWK_PAGE_VISIBILITY_STATE_VISIBLE,
@@ -2268,7 +2289,7 @@ typedef enum _Ewk_Page_Visibility_State Ewk_Page_Visibility_State;
  *
  * @return @c EINA_TRUE on success or @c EINA_FALSE on failure.
  */
-EAPI Eina_Bool ewk_view_visibility_state_set(Evas_Object* o, Ewk_Page_Visibility_State page_visible_state, Eina_Bool initial_state);
+EAPI Eina_Bool ewk_view_visibility_state_set(Evas_Object *o, Ewk_Page_Visibility_State page_visible_state, Eina_Bool initial_state);
 
 /**
  * Gets the visibility state of the page.
@@ -2280,6 +2301,68 @@ EAPI Eina_Bool ewk_view_visibility_state_set(Evas_Object* o, Ewk_Page_Visibility
  * @see ewk_view_visibility_state_set()
  */
 EAPI Ewk_Page_Visibility_State ewk_view_visibility_state_get(const Evas_Object *o);
+
+/**
+ * Returns whether the view has displayed mixed content.
+ *
+ * When a view has displayed mixed content, any of its frames has loaded an HTTPS URI
+ * which has itself loaded and displayed a resource (such as an image) from an insecure,
+ * that is, non-HTTPS, URI.
+ *
+ * The status is reset only when a load event occurs (eg. the page is reloaded or a new page is loaded).
+ *
+ * When one of the containing frames displays mixed content, the view emits the "mixedcontent,displayed" signal.
+ *
+ * @param o The view to query.
+ *
+ * @sa ewk_frame_mixed_content_displayed_get
+ */
+EAPI Eina_Bool ewk_view_mixed_content_displayed_get(const Evas_Object *o);
+
+/**
+ * Returns whether the view has run mixed content.
+ *
+ * When a view has run mixed content, any of its frames has loaded an HTTPS URI
+ * which has itself loaded and run a resource (such as an image) from an insecure,
+ * that is, non-HTTPS, URI.
+ *
+ * The status is reset only when a load event occurs (eg. the page is reloaded or a new page is loaded).
+ *
+ * When one of the containing frames runs mixed content, the view emits the "mixedcontent,run" signal.
+ *
+ * @param o The view to query.
+ *
+ * @sa ewk_frame_mixed_content_run_get
+ */
+EAPI Eina_Bool ewk_view_mixed_content_run_get(const Evas_Object *o);
+
+/**
+ * Returns the SoupSession associated with this view.
+ *
+ * By default, all views share the same, default soup session also available
+ * by calling ewk_network_default_soup_session_get.
+ *
+ * @param o The view to query.
+ *
+ * @sa ewk_view_soup_session_set, ewk_network_default_soup_session_get
+ */
+EAPI SoupSession* ewk_view_soup_session_get(const Evas_Object *o);
+
+/**
+ * Associates a new SoupSession with this view.
+ *
+ * Only sessions of type SoupSessionAsync are supported.
+ *
+ * @note Changing the SoupSession should not be needed in most cases. If
+ *       a different SoupSession is used, the cookie management and some
+ *       network functions in ewk will not have any effect on it.
+ *
+ * @param o The view to change.
+ * @param session The new SoupSession.
+ *
+ * @sa ewk_view_soup_session_get, ewk_network_default_soup_session_get
+ */
+EAPI void ewk_view_soup_session_set(Evas_Object *o, SoupSession *session);
 
 #ifdef __cplusplus
 }

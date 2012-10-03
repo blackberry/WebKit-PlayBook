@@ -26,8 +26,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import with_statement
-
 import codecs
 import os
 import shutil
@@ -36,19 +34,14 @@ import unittest
 
 from .checkout import Checkout
 from .changelog import ChangeLogEntry
-from .scm import detect_scm_system, CommitMessage
+from .scm import CommitMessage, SCMDetector
 from .scm.scm_mock import MockSCM
 from webkitpy.common.system.executive import Executive, ScriptError
+from webkitpy.common.system.filesystem import FileSystem  # FIXME: This should not be needed.
 from webkitpy.common.system.filesystem_mock import MockFileSystem
 from webkitpy.common.system.executive_mock import MockExecutive
+from webkitpy.common.system.outputcapture import OutputCapture
 from webkitpy.thirdparty.mock import Mock
-
-
-
-# FIXME: Copied from scm_unittest.py
-def write_into_file_at_path(file_path, contents, encoding="utf-8"):
-    with codecs.open(file_path, "w", encoding) as file:
-        file.write(contents)
 
 
 _changelog1entry1 = u"""2010-03-25  Tor Arne Vestb\u00f8  <vestbo@webkit.org>
@@ -103,35 +96,41 @@ Second part of this complicated change by me, Tor Arne Vestb\u00f8!
 """
 
     def setUp(self):
-        self.temp_dir = tempfile.mkdtemp(suffix="changelogs")
-        self.old_cwd = os.getcwd()
-        os.chdir(self.temp_dir)
+        # FIXME: This should not need to touch the filesystem, however
+        # ChangeLog is difficult to mock at current.
+        self.filesystem = FileSystem()
+        self.temp_dir = str(self.filesystem.mkdtemp(suffix="changelogs"))
+        self.old_cwd = self.filesystem.getcwd()
+        self.filesystem.chdir(self.temp_dir)
 
         # Trick commit-log-editor into thinking we're in a Subversion working copy so it won't
         # complain about not being able to figure out what SCM is in use.
-        os.mkdir(".svn")
+        # FIXME: VCSTools.pm is no longer so easily fooled.  It logs because "svn info" doesn't
+        # treat a bare .svn directory being part of an svn checkout.
+        self.filesystem.maybe_make_directory(".svn")
 
-        self.changelogs = map(os.path.abspath, (os.path.join("Tools", "ChangeLog"), os.path.join("LayoutTests", "ChangeLog")))
+        self.changelogs = map(self.filesystem.abspath, (self.filesystem.join("Tools", "ChangeLog"), self.filesystem.join("LayoutTests", "ChangeLog")))
         for path, contents in zip(self.changelogs, (_changelog1, _changelog2)):
-            os.makedirs(os.path.dirname(path))
-            write_into_file_at_path(path, contents)
+            self.filesystem.maybe_make_directory(self.filesystem.dirname(path))
+            self.filesystem.write_text_file(path, contents)
 
     def tearDown(self):
-        shutil.rmtree(self.temp_dir, ignore_errors=True)
-        os.chdir(self.old_cwd)
+        self.filesystem.rmtree(self.temp_dir)
+        self.filesystem.chdir(self.old_cwd)
 
-    # FIXME: This should not need to touch the file system, however
-    # ChangeLog is difficult to mock at current.
     def test_commit_message_for_this_commit(self):
+        executive = Executive()
+
         def mock_run(*args, **kwargs):
             # Note that we use a real Executive here, not a MockExecutive, so we can test that we're
             # invoking commit-log-editor correctly.
             env = os.environ.copy()
             env['CHANGE_LOG_EMAIL_ADDRESS'] = 'vestbo@webkit.org'
             kwargs['env'] = env
-            return Executive().run_command(*args, **kwargs)
+            return executive.run_command(*args, **kwargs)
 
-        real_scm = detect_scm_system(self.old_cwd)
+        detector = SCMDetector(self.filesystem, executive)
+        real_scm = detector.detect_scm_system(self.old_cwd)
 
         mock_scm = MockSCM()
         mock_scm.run = mock_run
@@ -139,7 +138,9 @@ Second part of this complicated change by me, Tor Arne Vestb\u00f8!
 
         checkout = Checkout(mock_scm)
         checkout.modified_changelogs = lambda git_commit, changed_files=None: self.changelogs
-        commit_message = checkout.commit_message_for_this_commit(git_commit=None)
+        commit_message = checkout.commit_message_for_this_commit(git_commit=None, return_stderr=True)
+        # Throw away the first line - a warning about unknown VCS root.
+        commit_message.message_lines = commit_message.message_lines[1:]
         self.assertEqual(commit_message.message(), self.expected_commit_message)
 
 
@@ -250,3 +251,13 @@ class CheckoutTest(unittest.TestCase):
         checkout = self._make_checkout()
         checkout._scm.checkout_root = "/foo/bar"
         self.assertEqual(checkout.chromium_deps()._path, '/foo/bar/Source/WebKit/chromium/DEPS')
+
+    def test_apply_patch(self):
+        checkout = self._make_checkout()
+        checkout._executive = MockExecutive(should_log=True)
+        checkout._scm.script_path = lambda script: script
+        mock_patch = Mock()
+        mock_patch.contents = lambda: "foo"
+        mock_patch.reviewer = lambda: None
+        expected_stderr = "MOCK run_command: ['svn-apply', '--force'], cwd=/mock-checkout\n"
+        OutputCapture().assert_outputs(self, checkout.apply_patch, [mock_patch], expected_stderr=expected_stderr)

@@ -28,10 +28,10 @@
 #include "CachedResourceLoader.h"
 
 #include "CachedCSSStyleSheet.h"
+#include "CachedSVGDocument.h"
 #include "CachedFont.h"
 #include "CachedImage.h"
 #include "CachedRawResource.h"
-#include "CachedResourceRequest.h"
 #include "CachedScript.h"
 #include "CachedXSLStyleSheet.h"
 #include "Console.h"
@@ -56,6 +56,10 @@
 #include "CachedTextTrack.h"
 #endif
 
+#if ENABLE(CSS_SHADERS)
+#include "CachedShader.h"
+#endif
+
 #define PRELOAD_DEBUG 0
 
 namespace WebCore {
@@ -69,6 +73,10 @@ static CachedResource* createResource(CachedResource::Type type, ResourceRequest
         return new CachedCSSStyleSheet(request, charset);
     case CachedResource::Script:
         return new CachedScript(request, charset);
+#if ENABLE(SVG)
+    case CachedResource::SVGDocumentResource:
+        return new CachedSVGDocument(request);
+#endif
     case CachedResource::FontResource:
         return new CachedFont(request);
     case CachedResource::RawResource:
@@ -88,6 +96,10 @@ static CachedResource* createResource(CachedResource::Type type, ResourceRequest
 #if ENABLE(VIDEO_TRACK)
     case CachedResource::TextTrackResource:
         return new CachedTextTrack(request);
+#endif
+#if ENABLE(CSS_SHADERS)
+    case CachedResource::ShaderResource:
+        return new CachedShader(request);
 #endif
     }
     ASSERT_NOT_REACHED();
@@ -168,6 +180,13 @@ CachedTextTrack* CachedResourceLoader::requestTextTrack(ResourceRequest& request
 }
 #endif
 
+#if ENABLE(CSS_SHADERS)
+CachedShader* CachedResourceLoader::requestShader(ResourceRequest& request)
+{
+    return static_cast<CachedShader*>(requestResource(CachedResource::ShaderResource, request, String(), defaultCachedResourceOptions()));
+}
+#endif
+
 CachedCSSStyleSheet* CachedResourceLoader::requestCSSStyleSheet(ResourceRequest& request, const String& charset, ResourceLoadPriority priority)
 {
     return static_cast<CachedCSSStyleSheet*>(requestResource(CachedResource::CSSStyleSheet, request, charset, defaultCachedResourceOptions(), priority));
@@ -232,6 +251,9 @@ bool CachedResourceLoader::checkInsecureContent(CachedResource::Type type, const
 #if ENABLE(XSLT)
     case CachedResource::XSLStyleSheet:
 #endif
+#if ENABLE(SVG)
+    case CachedResource::SVGDocumentResource:
+#endif
     case CachedResource::CSSStyleSheet:
         // These resource can inject script into the current document (Script,
         // XSL) or exfiltrate the content of the current document (CSS).
@@ -241,6 +263,9 @@ bool CachedResourceLoader::checkInsecureContent(CachedResource::Type type, const
         break;
 #if ENABLE(VIDEO_TRACK)
     case CachedResource::TextTrackResource:
+#endif
+#if ENABLE(CSS_SHADERS)
+    case CachedResource::ShaderResource:
 #endif
     case CachedResource::ImageResource:
     case CachedResource::FontResource: {
@@ -290,17 +315,23 @@ bool CachedResourceLoader::canRequest(CachedResource::Type type, const KURL& url
 #if ENABLE(VIDEO_TRACK)
     case CachedResource::TextTrackResource:
 #endif
+#if ENABLE(CSS_SHADERS)
+    case CachedResource::ShaderResource:
+#endif
         // These types of resources can be loaded from any origin.
         // FIXME: Are we sure about CachedResource::FontResource?
         break;
+#if ENABLE(SVG)
+    case CachedResource::SVGDocumentResource:
+#endif
 #if ENABLE(XSLT)
     case CachedResource::XSLStyleSheet:
         if (!m_document->securityOrigin()->canRequest(url)) {
             printAccessDeniedMessage(url);
             return false;
         }
-        break;
 #endif
+        break;
     }
 
     switch (type) {
@@ -319,10 +350,17 @@ bool CachedResourceLoader::canRequest(CachedResource::Type type, const KURL& url
             }
         }
         break;
+#if ENABLE(CSS_SHADERS)
+    case CachedResource::ShaderResource:
+        // Since shaders are referenced from CSS Styles use the same rules here.
+#endif
     case CachedResource::CSSStyleSheet:
         if (!m_document->contentSecurityPolicy()->allowStyleFromSource(url))
             return false;
         break;
+#if ENABLE(SVG)
+    case CachedResource::SVGDocumentResource:
+#endif
     case CachedResource::ImageResource:
         if (!m_document->contentSecurityPolicy()->allowImageFromSource(url))
             return false;
@@ -417,7 +455,6 @@ CachedResource* CachedResourceLoader::requestResource(CachedResource::Type type,
 
     ASSERT(resource->url() == url.string());
     m_documentResources.set(resource->url(), resource);
-    
     return resource;
 }
     
@@ -500,8 +537,18 @@ CachedResourceLoader::RevalidationPolicy CachedResourceLoader::determineRevalida
         return Reload;
     }
 
-    // FIXME: Currently, all CachedRawResources are always reloaded. Some of them should be cacheable.
-    if (existingResource->type() == CachedResource::RawResource)
+    if (existingResource->type() == CachedResource::RawResource && !static_cast<CachedRawResource*>(existingResource)->canReuse())
+         return Reload;
+
+    // Certain requests (e.g., XHRs) might have manually set headers that require revalidation.
+    // FIXME: In theory, this should be a Revalidate case. In practice, the MemoryCache revalidation path assumes a whole bunch
+    // of things about how revalidation works that manual headers violate, so punt to Reload instead.
+    if (request.isConditional())
+        return Reload;
+
+    // Re-using resources in the case of a Range header is very simple if the headers are identical and
+    // much tougher if they aren't.
+    if (existingResource->resourceRequest().httpHeaderField("Range") != request.httpHeaderField("Range"))
         return Reload;
     
     // Don't reload resources while pasting.
@@ -585,8 +632,8 @@ void CachedResourceLoader::printAccessDeniedMessage(const KURL& url) const
     else
         message = "Unsafe attempt to load URL " + url.string() + " from frame with URL " + m_document->url().string() + ". Domains, protocols and ports must match.\n";
 
-    // FIXME: provide a real line number and source URL.
-    frame()->domWindow()->console()->addMessage(OtherMessageSource, LogMessageType, ErrorMessageLevel, message, 1, String());
+    // FIXME: provide line number and source URL.
+    frame()->domWindow()->console()->addMessage(OtherMessageSource, LogMessageType, ErrorMessageLevel, message);
 }
 
 void CachedResourceLoader::setAutoLoadImages(bool enable)
@@ -629,6 +676,8 @@ void CachedResourceLoader::removeCachedResource(CachedResource* resource) const
 void CachedResourceLoader::loadDone()
 {
     m_loadFinishing = false;
+
+    RefPtr<Document> protect(m_document);
     if (frame())
         frame()->loader()->loadDone();
     performPostLoadActions();

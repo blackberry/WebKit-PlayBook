@@ -40,31 +40,14 @@
 
 namespace WebCore {
 
-CanvasLayerChromium::CanvasLayerChromium(CCLayerDelegate* delegate)
-    : LayerChromium(delegate)
-    , m_hasAlpha(true)
-    , m_premultipliedAlpha(true)
-    , m_textureId(0)
+CanvasLayerChromium::CanvasLayerChromium()
+    : LayerChromium()
 {
 }
 
-CanvasLayerChromium::~CanvasLayerChromium()
-{
-}
-
-PassRefPtr<CCLayerImpl> CanvasLayerChromium::createCCLayerImpl()
+PassOwnPtr<CCLayerImpl> CanvasLayerChromium::createCCLayerImpl()
 {
     return CCCanvasLayerImpl::create(m_layerId);
-}
-
-void CanvasLayerChromium::pushPropertiesTo(CCLayerImpl* layer)
-{
-    LayerChromium::pushPropertiesTo(layer);
-
-    CCCanvasLayerImpl* canvasLayer = static_cast<CCCanvasLayerImpl*>(layer);
-    canvasLayer->setTextureId(textureId());
-    canvasLayer->setHasAlpha(m_hasAlpha);
-    canvasLayer->setPremultipliedAlpha(m_premultipliedAlpha);
 }
 
 }

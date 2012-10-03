@@ -255,6 +255,39 @@ String VertexShaderTile::getShaderString() const
     );
 }
 
+VertexShaderVideoTransform::VertexShaderVideoTransform()
+    : m_matrixLocation(-1)
+    , m_texTransformLocation(-1)
+    , m_texMatrixLocation(-1)
+{
+}
+
+bool VertexShaderVideoTransform::init(GraphicsContext3D* context, unsigned program)
+{
+    m_matrixLocation = context->getUniformLocation(program, "matrix");
+    m_texTransformLocation = context->getUniformLocation(program, "texTransform");
+    m_texMatrixLocation = context->getUniformLocation(program, "texMatrix");
+    return m_matrixLocation != -1 && m_texTransformLocation != -1 && m_texMatrixLocation != -1;
+}
+
+String VertexShaderVideoTransform::getShaderString() const
+{
+    return SHADER(
+        attribute vec4 a_position;
+        attribute vec2 a_texCoord;
+        uniform mat4 matrix;
+        uniform vec4 texTransform;
+        uniform mat4 texMatrix;
+        varying vec2 v_texCoord;
+        void main()
+        {
+            gl_Position = matrix * a_position;
+            vec2 texCoord = vec2(texMatrix * vec4(a_texCoord.x, 1.0 - a_texCoord.y, 0.0, 1.0));
+            v_texCoord = texCoord * texTransform.zw + texTransform.xy;
+        }
+    );
+}
+
 FragmentTexAlphaBinding::FragmentTexAlphaBinding()
     : m_samplerLocation(-1)
     , m_alphaLocation(-1)
@@ -267,6 +300,18 @@ void FragmentTexAlphaBinding::init(GraphicsContext3D* context, unsigned program)
     m_alphaLocation = context->getUniformLocation(program, "alpha");
 
     ASSERT(m_samplerLocation != -1 && m_alphaLocation != -1);
+}
+
+FragmentTexOpaqueBinding::FragmentTexOpaqueBinding()
+    : m_samplerLocation(-1)
+{
+}
+
+void FragmentTexOpaqueBinding::init(GraphicsContext3D* context, unsigned program)
+{
+    m_samplerLocation = context->getUniformLocation(program, "s_texture");
+
+    ASSERT(m_samplerLocation != -1);
 }
 
 String FragmentShaderRGBATexFlipAlpha::getShaderString() const
@@ -284,6 +329,27 @@ String FragmentShaderRGBATexFlipAlpha::getShaderString() const
     );
 }
 
+bool FragmentShaderOESImageExternal::init(GraphicsContext3D* context, unsigned program)
+{
+    m_samplerLocation = context->getUniformLocation(program, "s_texture");
+
+    return m_samplerLocation != -1;
+}
+
+String FragmentShaderOESImageExternal::getShaderString() const
+{
+    // Cannot use the SHADER() macro because of the '#' char
+    return "#extension GL_OES_EGL_image_external : require \n"
+           "precision mediump float;\n"
+           "varying vec2 v_texCoord;\n"
+           "uniform samplerExternalOES s_texture;\n"
+           "void main()\n"
+           "{\n"
+           "    vec4 texColor = texture2D(s_texture, v_texCoord);\n"
+           "    gl_FragColor = vec4(texColor.x, texColor.y, texColor.z, texColor.w);\n"
+           "}\n";
+}
+
 String FragmentShaderRGBATexAlpha::getShaderString() const
 {
     return SHADER(
@@ -299,6 +365,51 @@ String FragmentShaderRGBATexAlpha::getShaderString() const
     );
 }
 
+String FragmentShaderRGBATexRectFlipAlpha::getShaderString() const
+{
+    // This must be paired with VertexShaderPosTexTransform to pick up the texTransform uniform.
+    // The necessary #extension preprocessing directive breaks the SHADER and SHADER0 macros.
+    return "#extension GL_ARB_texture_rectangle : require\n"
+            "precision mediump float;\n"
+            "varying vec2 v_texCoord;\n"
+            "uniform vec4 texTransform;\n"
+            "uniform sampler2DRect s_texture;\n"
+            "uniform float alpha;\n"
+            "void main()\n"
+            "{\n"
+            "    vec4 texColor = texture2DRect(s_texture, vec2(v_texCoord.x, texTransform.w - v_texCoord.y));\n"
+            "    gl_FragColor = vec4(texColor.x, texColor.y, texColor.z, texColor.w) * alpha;\n"
+            "}\n";
+}
+
+String FragmentShaderRGBATexRectAlpha::getShaderString() const
+{
+    return "#extension GL_ARB_texture_rectangle : require\n"
+            "precision mediump float;\n"
+            "varying vec2 v_texCoord;\n"
+            "uniform sampler2DRect s_texture;\n"
+            "uniform float alpha;\n"
+            "void main()\n"
+            "{\n"
+            "    vec4 texColor = texture2DRect(s_texture, v_texCoord);\n"
+            "    gl_FragColor = texColor * alpha;\n"
+            "}\n";
+}
+
+String FragmentShaderRGBATexOpaque::getShaderString() const
+{
+    return SHADER(
+        precision mediump float;
+        varying vec2 v_texCoord;
+        uniform sampler2D s_texture;
+        void main()
+        {
+            vec4 texColor = texture2D(s_texture, v_texCoord);
+            gl_FragColor = vec4(texColor.rgb, 1.0);
+        }
+    );
+}
+
 String FragmentShaderRGBATexSwizzleAlpha::getShaderString() const
 {
     return SHADER(
@@ -310,6 +421,20 @@ String FragmentShaderRGBATexSwizzleAlpha::getShaderString() const
         {
             vec4 texColor = texture2D(s_texture, v_texCoord);
             gl_FragColor = vec4(texColor.z, texColor.y, texColor.x, texColor.w) * alpha;
+        }
+    );
+}
+
+String FragmentShaderRGBATexSwizzleOpaque::getShaderString() const
+{
+    return SHADER(
+        precision mediump float;
+        varying vec2 v_texCoord;
+        uniform sampler2D s_texture;
+        void main()
+        {
+            vec4 texColor = texture2D(s_texture, v_texCoord);
+            gl_FragColor = vec4(texColor.z, texColor.y, texColor.x, 1.0);
         }
     );
 }

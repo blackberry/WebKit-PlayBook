@@ -29,15 +29,65 @@
 
 namespace WebCore {
 
-class CCScrollController;
+class IntPoint;
+class IntSize;
+
+// The CCInputHandler is a way for the embedders to interact with
+// the impl thread side of the compositor implementation.
+//
+// There is one CCInputHandler for every CCLayerTreeHost. It is
+// created and used only on the impl thread.
+//
+// The CCInputHandler is constructed with an InputHandlerClient, which is the
+// interface by which the handler can manipulate the LayerTree.
+class CCInputHandlerClient {
+    WTF_MAKE_NONCOPYABLE(CCInputHandlerClient);
+public:
+    virtual void setNeedsRedraw() = 0;
+
+    enum ScrollStatus { ScrollFailed, ScrollStarted, ScrollIgnored };
+    enum ScrollInputType { Gesture, Wheel };
+
+    // Attempt to start scrolling a layer at a given point in window
+    // coordinates. Returns ScrollStarted if the layer at the coordinates can
+    // be scrolled, ScrollFailed if the scroll event should instead be
+    // delegated to the main thread, or ScrollIgnored if there is nothing to
+    // be scrolled at the given coordinates.
+    virtual ScrollStatus scrollBegin(const IntPoint&, ScrollInputType) = 0;
+
+    // Scroll the layer selected with scrollBegin(). If there is no room to
+    // move the layer in the requested direction, its first ancestor layer that
+    // can be scrolled will be moved instead. Should only be called if
+    // scrollBegin() returned ScrollStarted.
+    virtual void scrollBy(const IntSize&) = 0;
+
+    // Stop scrolling the layer selected with scrollBegin(). Should only be
+    // called if scrollBegin() returned ScrollStarted.
+    virtual void scrollEnd() = 0;
+
+    virtual void pinchGestureBegin() = 0;
+    virtual void pinchGestureUpdate(float magnifyDelta, const IntPoint& anchor) = 0;
+    virtual void pinchGestureEnd() = 0;
+
+    virtual void startPageScaleAnimation(const IntSize& targetPosition,
+                                         bool anchorPoint,
+                                         float pageScale,
+                                         double startTimeMs,
+                                         double durationMs) = 0;
+
+protected:
+    CCInputHandlerClient() { }
+    virtual ~CCInputHandlerClient() { }
+};
 
 class CCInputHandler {
     WTF_MAKE_NONCOPYABLE(CCInputHandler);
 public:
-    static PassOwnPtr<CCInputHandler> create(CCScrollController*);
+    static PassOwnPtr<CCInputHandler> create(CCInputHandlerClient*);
     virtual ~CCInputHandler() { }
 
     virtual int identifier() const = 0;
+    virtual void willDraw(double frameDisplayTimeMs) = 0;
 
 protected:
     CCInputHandler() { }

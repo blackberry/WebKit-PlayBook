@@ -3,6 +3,7 @@
  *  Copyright (C) 2006, 2007, 2008, 2009 Apple Inc. All Rights Reserved.
  *  Copyright (C) 2007 Cameron Zwarich (cwzwarich@uwaterloo.ca)
  *  Copyright (C) 2010 Zoltan Herczeg (zherczeg@inf.u-szeged.hu)
+ *  Copyright (C) 2012 Mathias Bynens (mathias@qiwi.be)
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Library General Public
@@ -30,7 +31,7 @@
 #include "Identifier.h"
 #include "NodeInfo.h"
 #include "Nodes.h"
-#include "dtoa.h"
+#include <wtf/dtoa.h>
 #include <ctype.h>
 #include <limits.h>
 #include <string.h>
@@ -379,8 +380,8 @@ static inline bool isIdentStart(int c)
 
 static NEVER_INLINE bool isNonASCIIIdentPart(int c)
 {
-    return category(c) & (Letter_Uppercase | Letter_Lowercase | Letter_Titlecase | Letter_Modifier | Letter_Other
-        | Mark_NonSpacing | Mark_SpacingCombining | Number_DecimalDigit | Punctuation_Connector);
+    return (category(c) & (Letter_Uppercase | Letter_Lowercase | Letter_Titlecase | Letter_Modifier | Letter_Other
+        | Mark_NonSpacing | Mark_SpacingCombining | Number_DecimalDigit | Punctuation_Connector)) || c == 0x200C || c == 0x200D;
 }
 
 static ALWAYS_INLINE bool isIdentPart(int c)
@@ -448,11 +449,9 @@ inline void assertCharIsIn8BitRange(LChar)
 template <typename T>
 inline void Lexer<T>::append8(const T* p, size_t length)
 {
-    // FIXME: Change three occurrances of m_buffer16 to m_buffer8 and
-    // UChar to LChar when 8 bit strings are turned on.
-    size_t currentSize = m_buffer16.size();
-    m_buffer16.grow(currentSize + length);
-    UChar* rawBuffer = m_buffer16.data() + currentSize;
+    size_t currentSize = m_buffer8.size();
+    m_buffer8.grow(currentSize + length);
+    LChar* rawBuffer = m_buffer8.data() + currentSize;
 
     for (size_t i = 0; i < length; i++) {
         T c = p[i];
@@ -482,7 +481,7 @@ template <typename T>
 inline void Lexer<T>::record16(int c)
 {
     ASSERT(c >= 0);
-    ASSERT(c <= USHRT_MAX);
+    ASSERT(c <= static_cast<int>(USHRT_MAX));
     m_buffer16.append(static_cast<UChar>(c));
 }
 
@@ -563,10 +562,8 @@ template <bool shouldCreateIdentifier> ALWAYS_INLINE JSTokenType Lexer<UChar>::p
 
     bool isAll8Bit = false;
 
-#if 0 // FIXME: Remove this #if when 8 bit strings are turned on.
     if (!(orAllChars & ~0xff))
         isAll8Bit = true;
-#endif
 
     const Identifier* ident = 0;
     
@@ -671,8 +668,6 @@ template <bool shouldCreateIdentifier> JSTokenType Lexer<T>::parseIdentifierSlow
 template <typename T>
 template <bool shouldBuildStrings> ALWAYS_INLINE bool Lexer<T>::parseString(JSTokenData* tokenData, bool strictMode)
 {
-    // FIXME: Change record16 and m_buffer16 to record8 and m_buffer8 below when
-    // 8 bit strings are turned on.
     int startingOffset = currentOffset();
     int startingLineNumber = lineNumber();
     int stringQuoteCharacter = m_current;
@@ -691,24 +686,25 @@ template <bool shouldBuildStrings> ALWAYS_INLINE bool Lexer<T>::parseString(JSTo
             // Most common escape sequences first
             if (escape) {
                 if (shouldBuildStrings)
-                    record16(escape); // FIXME: Change to record8
+                    record8(escape);
                 shift();
             } else if (UNLIKELY(isLineTerminator(m_current)))
                 shiftLineTerminator();
             else if (m_current == 'x') {
                 shift();
-                if (isASCIIHexDigit(m_current) && isASCIIHexDigit(peek(1))) {
-                    int prev = m_current;
-                    shift();
-                    if (shouldBuildStrings)
-                        record16(convertHex(prev, m_current)); // FIXME: Change to record8
-                    shift();
-                } else if (shouldBuildStrings)
-                    record16('x'); // FIXME: Change to record8
+                if (!isASCIIHexDigit(m_current) || !isASCIIHexDigit(peek(1))) {
+                    m_lexErrorMessage = "\\x can only be followed by a hex character sequence";
+                    return false;
+                }
+                int prev = m_current;
+                shift();
+                if (shouldBuildStrings)
+                    record8(convertHex(prev, m_current));
+                shift();
             } else {
                 setOffset(startingOffset);
                 setLineNumber(startingLineNumber);
-                m_buffer16.resize(0); // FIXME: Change to m_buffer8
+                m_buffer8.resize(0);
                 return parseStringSlowCase<shouldBuildStrings>(tokenData, strictMode);
             }
             stringStart = currentCharacter();
@@ -718,7 +714,7 @@ template <bool shouldBuildStrings> ALWAYS_INLINE bool Lexer<T>::parseString(JSTo
         if (UNLIKELY(((m_current > 0xff) || (m_current < 0xe)))) {
             setOffset(startingOffset);
             setLineNumber(startingLineNumber);
-            m_buffer16.resize(0); // FIXME: Change to m_buffer8
+            m_buffer8.resize(0);
             return parseStringSlowCase<shouldBuildStrings>(tokenData, strictMode);
         }
 
@@ -728,10 +724,8 @@ template <bool shouldBuildStrings> ALWAYS_INLINE bool Lexer<T>::parseString(JSTo
     if (currentCharacter() != stringStart && shouldBuildStrings)
         append8(stringStart, currentCharacter() - stringStart);
     if (shouldBuildStrings) {
-        // FIXME: Change to m_buffer8
-        tokenData->ident = makeIdentifier(m_buffer16.data(), m_buffer16.size());
-        // FIXME: Change to m_buffer8
-        m_buffer16.resize(0);
+        tokenData->ident = makeIdentifier(m_buffer8.data(), m_buffer8.size());
+        m_buffer8.resize(0);
     } else
         tokenData->ident = 0;
 
@@ -763,14 +757,15 @@ template <bool shouldBuildStrings> bool Lexer<T>::parseStringSlowCase(JSTokenDat
                 shiftLineTerminator();
             else if (m_current == 'x') {
                 shift();
-                if (isASCIIHexDigit(m_current) && isASCIIHexDigit(peek(1))) {
-                    int prev = m_current;
-                    shift();
-                    if (shouldBuildStrings)
-                        record16(convertHex(prev, m_current));
-                    shift();
-                } else if (shouldBuildStrings)
-                    record16('x');
+                if (!isASCIIHexDigit(m_current) || !isASCIIHexDigit(peek(1))) {
+                    m_lexErrorMessage = "\\x can only be followed by a hex character sequence";
+                    return false;
+                }
+                int prev = m_current;
+                shift();
+                if (shouldBuildStrings)
+                    record16(convertHex(prev, m_current));
+                shift();
             } else if (m_current == 'u') {
                 shift();
                 int character = getUnicodeCharacter();
@@ -1336,7 +1331,7 @@ inNumberAfterDecimalPoint:
                     }
                 // Null-terminate string for strtod.
                 m_buffer8.append('\0');
-                tokenData->doubleValue = WTF::strtod(reinterpret_cast<const char*>(m_buffer8.data()), 0);
+                tokenData->doubleValue = WTF::strtod<WTF::AllowTrailingJunk>(reinterpret_cast<const char*>(m_buffer8.data()), 0);
             }
             token = NUMBER;
         }

@@ -95,6 +95,15 @@ public:
     // current scissor bounds. Track the state of the scissor test so that it
     // can be disabled during calls to commit.
     void setScissorEnabled(bool scissorEnabled) { m_scissorEnabled = scissorEnabled; }
+
+    // The DrawingBuffer needs to track the texture bound to texture unit 0.
+    // The bound texture is tracked to avoid costly queries during rendering.
+    void setTexture2DBinding(GC3Dint texture) { m_texture2DBinding = texture; }
+
+    // Track the currently active texture unit. Texture unit 0 is used as host for a scratch
+    // texture.
+    void setActiveTextureUnit(GC3Dint textureUnit) { m_activeTextureUnit = textureUnit; }
+
     bool multisample() const;
 #endif
     
@@ -129,22 +138,20 @@ public:
     PassRefPtr<GraphicsContext3D> graphicsContext3D() const { return m_context; }
 
 private:
+#if PLATFORM(BLACKBERRY)
+    DrawingBuffer(GraphicsContext3D*, const IntSize&);
+#else
     DrawingBuffer(GraphicsContext3D*, const IntSize&, bool multisampleExtensionSupported,
                   bool packedDepthStencilExtensionSupported, bool separateBackingTexture);
+#endif
 
     void initialize(const IntSize&);
 
     bool m_separateBackingTexture;
     bool m_scissorEnabled;
-    
-#if PLATFORM(BLACKBERRY)
-    DrawingBuffer(GraphicsContext3D*, const IntSize&);
-#else
-    DrawingBuffer(GraphicsContext3D*, const IntSize&, bool multisampleExtensionSupported, bool packedDepthStencilExtensionSupported);
-#endif
-    
-    // Platform specific function called after reset() so each platform can do extra work if needed
-    void didReset();
+
+    Platform3DObject m_texture2DBinding;
+    GC3Denum m_activeTextureUnit;
 
     RefPtr<GraphicsContext3D> m_context;
     IntSize m_size;

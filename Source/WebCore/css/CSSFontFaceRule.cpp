@@ -22,7 +22,7 @@
 #include "config.h"
 #include "CSSFontFaceRule.h"
 
-#include "CSSMutableStyleDeclaration.h"
+#include "StylePropertySet.h"
 
 namespace WebCore {
 
@@ -34,14 +34,14 @@ CSSFontFaceRule::CSSFontFaceRule(CSSStyleSheet* parent)
 CSSFontFaceRule::~CSSFontFaceRule()
 {
     if (m_style)
-        m_style->setParentRule(0);
+        m_style->clearParentRule(this);
 }
 
 String CSSFontFaceRule::cssText() const
 {
     String result("@font-face");
     result += " { ";
-    result += m_style->cssText();
+    result += m_style->asText();
     result += "}";
     return result;
 }
@@ -49,7 +49,7 @@ String CSSFontFaceRule::cssText() const
 void CSSFontFaceRule::addSubresourceStyleURLs(ListHashSet<KURL>& urls)
 {
     if (m_style)
-        m_style->addSubresourceStyleURLs(urls);
+        m_style->addSubresourceStyleURLs(urls, parentStyleSheet());
 }
 
 } // namespace WebCore

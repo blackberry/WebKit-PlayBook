@@ -24,6 +24,7 @@
 
 #include "FrameView.h"
 #include "LayoutState.h"
+#include "PODFreeListArena.h"
 #include "RenderBlock.h"
 #include <wtf/ListHashSet.h>
 #include <wtf/OwnPtr.h>
@@ -61,7 +62,7 @@ public:
     int viewHeight() const;
     int viewWidth() const;
     int viewLogicalWidth() const { return style()->isHorizontalWritingMode() ? viewWidth() : viewHeight(); }
-    int viewLogicalHeight() const { return style()->isHorizontalWritingMode() ? viewHeight() : viewWidth(); }
+    int viewLogicalHeight() const;
 
     float zoomFactor() const;
 
@@ -171,7 +172,7 @@ public:
 
     IntRect documentRect() const;
 
-    RenderFlowThread* renderFlowThreadWithName(const AtomicString& flowThread);
+    RenderFlowThread* ensureRenderFlowThreadWithName(const AtomicString& flowThread);
     bool hasRenderFlowThreads() const { return m_renderFlowThreadList && !m_renderFlowThreadList->isEmpty(); }
     void layoutRenderFlowThreads();
     bool isRenderFlowThreadOrderDirty() const { return m_isRenderFlowThreadOrderDirty; }
@@ -193,13 +194,18 @@ public:
 #endif
 
     void styleDidChange(StyleDifference, const RenderStyle* oldStyle);
-    
+
+    IntervalArena* intervalArena();
+
 protected:
     virtual void mapLocalToContainer(RenderBoxModelObject* repaintContainer, bool useTransforms, bool fixed, TransformState&, bool* wasFixed = 0) const;
     virtual void mapAbsoluteToLocalPoint(bool fixed, bool useTransforms, TransformState&) const;
     virtual bool requiresColumns(int desiredColumnCount) const OVERRIDE;
 
 private:
+    virtual void calcColumnWidth() OVERRIDE;
+    virtual ColumnInfo::PaginationUnit paginationUnit() const OVERRIDE;
+
     bool shouldRepaint(const IntRect& r) const;
     
     int docHeight() const;
@@ -211,7 +217,8 @@ private:
     bool pushLayoutState(RenderBox* renderer, const IntSize& offset, int pageHeight = 0, bool pageHeightChanged = false, ColumnInfo* colInfo = 0)
     {
         // We push LayoutState even if layoutState is disabled because it stores layoutDelta too.
-        if (!doingFullRepaint() || m_layoutState->isPaginated() || renderer->hasColumns() || renderer->inRenderFlowThread()) {
+        if (!doingFullRepaint() || m_layoutState->isPaginated() || renderer->hasColumns() || renderer->inRenderFlowThread()
+            || m_layoutState->lineGrid() || (renderer->style()->lineGrid() != RenderStyle::initialLineGrid() && renderer->isBlockFlow())) {
             m_layoutState = new (renderArena()) LayoutState(m_layoutState, renderer, offset, pageHeight, pageHeightChanged, colInfo);
             return true;
         }
@@ -238,7 +245,7 @@ private:
     
     friend class LayoutStateMaintainer;
     friend class LayoutStateDisabler;
-        
+
 protected:
     FrameView* m_frameView;
 
@@ -281,6 +288,8 @@ private:
 #endif
     OwnPtr<RenderFlowThreadList> m_renderFlowThreadList;
     RenderFlowThread* m_currentRenderFlowThread;
+    RefPtr<IntervalArena> m_intervalArena;
+
     bool m_bodyIsLTR;
 
 #if ENABLE(VIEWPORT_REFLOW)
@@ -303,6 +312,11 @@ inline const RenderView* toRenderView(const RenderObject* object)
 // This will catch anyone doing an unnecessary cast.
 void toRenderView(const RenderView*);
 
+
+ALWAYS_INLINE RenderView* RenderObject::view() const
+{
+    return toRenderView(document()->renderer());
+}
 
 // Stack-based class to assist with LayoutState push/pop
 class LayoutStateMaintainer {

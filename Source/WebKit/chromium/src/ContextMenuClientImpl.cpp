@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -64,13 +64,13 @@
 #include "WebMenuItemInfo.h"
 #include "WebPlugin.h"
 #include "WebPluginContainerImpl.h"
-#include "WebPoint.h"
+#include "platform/WebPoint.h"
 #include "WebSearchableFormData.h"
 #include "WebSpellCheckClient.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLResponse.h"
-#include "WebVector.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLResponse.h"
+#include "platform/WebVector.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 
@@ -234,6 +234,10 @@ PlatformMenuDescription ContextMenuClientImpl::getCustomMenuFromDefaultItems(
                 HTMLPlugInImageElement* pluginElement = static_cast<HTMLPlugInImageElement*>(r.innerNonSharedNode());
                 data.srcURL = pluginElement->document()->completeURL(pluginElement->url());
                 data.mediaFlags |= WebContextMenuData::MediaCanSave;
+
+                // Add context menu commands that are supported by the plugin.
+                if (plugin->plugin()->canRotateView())
+                    data.mediaFlags |= WebContextMenuData::MediaCanRotate;
             }
         }
     }
@@ -255,8 +259,10 @@ PlatformMenuDescription ContextMenuClientImpl::getCustomMenuFromDefaultItems(
             data.frameHistoryItem = WebHistoryItem(historyItem);
     }
 
-    if (r.isSelected())
-        data.selectedText = selectedFrame->editor()->selectedText().stripWhiteSpace();
+    if (r.isSelected()) {
+        if (!r.innerNonSharedNode()->hasTagName(HTMLNames::inputTag) || !static_cast<HTMLInputElement*>(r.innerNonSharedNode())->isPasswordField())
+            data.selectedText = selectedFrame->editor()->selectedText().stripWhiteSpace();
+    }
 
     if (r.isContentEditable()) {
         data.isEditable = true;
@@ -304,6 +310,8 @@ PlatformMenuDescription ContextMenuClientImpl::getCustomMenuFromDefaultItems(
     WebDataSource* ds = WebDataSourceImpl::fromDocumentLoader(dl);
     if (ds)
         data.securityInfo = ds->response().securityInfo();
+
+    data.referrerPolicy = static_cast<WebReferrerPolicy>(selectedFrame->document()->referrerPolicy());
 
     // Filter out custom menu elements and add them into the data.
     populateCustomMenuItems(defaultMenu, &data);

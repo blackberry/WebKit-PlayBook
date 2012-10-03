@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -38,26 +38,18 @@
 #include "IntRect.h"
 #include "LayerData.h"
 #include "TransformationMatrix.h"
+
+#include <BlackBerryPlatformGLES2Context.h>
+#include <BlackBerryPlatformIntRectRegion.h>
 #include <wtf/HashSet.h>
 #include <wtf/Noncopyable.h>
 #include <wtf/PassOwnPtr.h>
-#include <wtf/PassRefPtr.h>
-#include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
-
-#if PLATFORM(CG)
-#include <CoreGraphics/CGContext.h>
-#include <wtf/RetainPtr.h>
-#endif
-
-#include <BlackBerryPlatformIntRectRegion.h>
 
 namespace WebCore {
 
-class GLES2Context;
 class LayerCompositingThread;
-class Page;
-class RenderSurface;
+class LayerRendererSurface;
 
 class LayerRenderingResults {
 public:
@@ -70,7 +62,7 @@ public:
     static const int NumberOfDirtyRects = 3;
     const IntRect& dirtyRect(int i) const { return m_dirtyRects[i]; }
     void addDirtyRect(const IntRect& dirtyRect);
-    bool isEmpty();
+    bool isEmpty() const;
 
     bool wasEmpty;
 
@@ -79,7 +71,7 @@ public:
     bool needsAnimationFrame;
 
 private:
-    Vector<IntRect> m_holePunchRects; // in compositing surface coordinates
+    Vector<IntRect> m_holePunchRects; // Rects are in compositing surface coordinates.
     IntRect m_dirtyRects[NumberOfDirtyRects];
 };
 
@@ -87,9 +79,9 @@ private:
 class LayerRenderer {
     WTF_MAKE_NONCOPYABLE(LayerRenderer);
 public:
-    static PassOwnPtr<LayerRenderer> create(Page*);
+    static PassOwnPtr<LayerRenderer> create(BlackBerry::Platform::Graphics::GLES2Context*);
 
-    LayerRenderer(Page*);
+    LayerRenderer(BlackBerry::Platform::Graphics::GLES2Context*);
     ~LayerRenderer();
 
     void releaseLayerResources();
@@ -112,7 +104,7 @@ public:
     void setClearSurfaceOnDrawLayers(bool clear) { m_clearSurfaceOnDrawLayers = clear; }
     bool clearSurfaceOnDrawLayers() const { return m_clearSurfaceOnDrawLayers; }
 
-    GLES2Context* context() const { return m_gles2Context.get(); }
+    BlackBerry::Platform::Graphics::GLES2Context* context() const { return m_context; }
 
     const LayerRenderingResults& lastRenderingResults() const { return m_lastRenderingResults; }
 
@@ -120,37 +112,36 @@ public:
     // Used when a layer discovers during rendering that it needs a commit.
     void setNeedsCommit() { m_needsCommit = true; }
 
-    IntRect toWebKitDocumentCoordinates(const FloatRect&);
+    IntRect toWebKitDocumentCoordinates(const FloatRect&) const;
 
     // If the layer has already been drawed on a surface.
-    bool layerAlreadyOnSurface(LayerCompositingThread*);
+    bool layerAlreadyOnSurface(LayerCompositingThread*) const;
 
 private:
     void updateLayersRecursive(LayerCompositingThread*, const TransformationMatrix& parentMatrix, Vector<RefPtr<LayerCompositingThread> >& surfaceLayers, float opacity, FloatRect clipRect, double currentTime);
     void compositeLayersRecursive(LayerCompositingThread*, int stencilValue, FloatRect clipRect);
     void updateScissorIfNeeded(const FloatRect& clipRect);
 
-    bool useSurface(RenderSurface*);
+    bool useSurface(LayerRendererSurface*);
     void drawLayersOnSurfaces(const Vector<RefPtr<LayerCompositingThread> >& surfaceLayers);
 
     void drawDebugBorder(LayerCompositingThread*);
     void drawHolePunchRect(LayerCompositingThread*);
 
-    IntRect toOpenGLWindowCoordinates(const FloatRect&);
-    IntRect toWebKitWindowCoordinates(const FloatRect&);
+    IntRect toOpenGLWindowCoordinates(const FloatRect&) const;
+    IntRect toWebKitWindowCoordinates(const FloatRect&) const;
 
     void bindCommonAttribLocation(int location, const char* attribName);
 
-    bool initGL();
     bool makeContextCurrent();
 
     bool initializeSharedGLObjects();
-    
+
     // GL shader program object IDs.
-    unsigned int m_layerProgramObject[LayerData::NumberOfLayerProgramShaders];
-    unsigned int m_layerMaskProgramObject[LayerData::NumberOfLayerProgramShaders];
-    unsigned int m_colorProgramObject;
-    unsigned int m_checkerProgramObject;
+    unsigned m_layerProgramObject[LayerData::NumberOfLayerProgramShaders];
+    unsigned m_layerMaskProgramObject[LayerData::NumberOfLayerProgramShaders];
+    unsigned m_colorProgramObject;
+    unsigned m_checkerProgramObject;
 
     // Shader uniform and attribute locations.
     const int m_positionLocation;
@@ -166,7 +157,7 @@ private:
     int m_checkerOriginLocation;
     int m_checkerSurfaceHeightLocation;
 
-    // Current draw configuration
+    // Current draw configuration.
     FloatRect m_visibleRect;
     IntRect m_layoutRect;
     IntSize m_contentsSize;
@@ -177,7 +168,7 @@ private:
     RefPtr<LayerCompositingThread> m_rootLayer;
 
     unsigned m_fbo;
-    RenderSurface* m_currentRenderSurface;
+    LayerRendererSurface* m_currentLayerRendererSurface;
 
     bool m_hardwareCompositing;
     bool m_clearSurfaceOnDrawLayers;
@@ -187,10 +178,7 @@ private:
     LayerSet m_layers;
     LayerSet m_layersLockingTextureResources;
 
-    OwnPtr<GLES2Context> m_gles2Context;
-
-    // The WebCore Page that the compositor renders into.
-    Page* m_page;
+    BlackBerry::Platform::Graphics::GLES2Context* m_context;
 
     LayerRenderingResults m_lastRenderingResults;
     bool m_needsCommit;

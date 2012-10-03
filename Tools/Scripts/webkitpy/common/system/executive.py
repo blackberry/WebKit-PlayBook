@@ -27,12 +27,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-try:
-    # This API exists only in Python 2.6 and higher.  :(
-    import multiprocessing
-except ImportError:
-    multiprocessing = None
-
+import multiprocessing
 import ctypes
 import errno
 import logging
@@ -46,7 +41,6 @@ import time
 
 from webkitpy.common.system.deprecated_logging import tee
 from webkitpy.common.system.filesystem import FileSystem
-from webkitpy.python24 import versioning
 
 
 _log = logging.getLogger(__name__)
@@ -108,7 +102,7 @@ class Executive(object):
         # shows up on Mac and Linux.
         return sys.platform not in ('win32', 'cygwin')
 
-    def _run_command_with_teed_output(self, args, teed_output, cwd=None):
+    def _run_command_with_teed_output(self, args, teed_output, **kwargs):
         args = map(unicode, args)  # Popen will throw an exception if args are non-strings (like int())
         args = map(self._encode_argument_if_needed, args)
 
@@ -116,7 +110,7 @@ class Executive(object):
                                    stdout=self.PIPE,
                                    stderr=self.STDOUT,
                                    close_fds=self._should_close_fds(),
-                                   cwd=cwd)
+                                   **kwargs)
 
         # Use our own custom wait loop because Popen ignores a tee'd
         # stderr/stdout.
@@ -136,7 +130,7 @@ class Executive(object):
     # capture their output and print out to stdin.  Useful for things
     # like "build-webkit" where we want to display to the user that we're building
     # but still have the output to stuff into a log file.
-    def run_and_throw_if_fail(self, args, quiet=False, decode_output=True, cwd=None):
+    def run_and_throw_if_fail(self, args, quiet=False, decode_output=True, **kwargs):
         # Cache the child's output locally so it can be used for error reports.
         child_out_file = StringIO.StringIO()
         tee_stdout = sys.stdout
@@ -144,7 +138,7 @@ class Executive(object):
             dev_null = open(os.devnull, "w")  # FIXME: Does this need an encoding?
             tee_stdout = dev_null
         child_stdout = tee(child_out_file, tee_stdout)
-        exit_code = self._run_command_with_teed_output(args, child_stdout, cwd=cwd)
+        exit_code = self._run_command_with_teed_output(args, child_stdout, **kwargs)
         if quiet:
             dev_null.close()
 
@@ -161,21 +155,7 @@ class Executive(object):
         return child_output
 
     def cpu_count(self):
-        if multiprocessing:
-            return multiprocessing.cpu_count()
-        # Darn.  We don't have the multiprocessing package.
-        system_name = platform.system()
-        if system_name == "Darwin":
-            return int(self.run_command(["sysctl", "-n", "hw.ncpu"]))
-        elif system_name == "Windows":
-            return int(os.environ.get('NUMBER_OF_PROCESSORS', 1))
-        elif system_name == "Linux":
-            num_cores = os.sysconf("SC_NPROCESSORS_ONLN")
-            if isinstance(num_cores, int) and num_cores > 0:
-                return num_cores
-        # This quantity is a lie but probably a reasonable guess for modern
-        # machines.
-        return 2
+        return multiprocessing.cpu_count()
 
     @staticmethod
     def interpreter_for_script(script_path, fs=None):
@@ -445,7 +425,7 @@ class Executive(object):
         # Win32 Python 2.x uses CreateProcessA rather than CreateProcessW
         # to launch subprocesses, so we have to encode arguments using the
         # current code page.
-        if sys.platform == 'win32' and versioning.compare_version(sys, '3.0')[0] < 0:
+        if sys.platform == 'win32' and sys.version < '3':
             return 'mbcs'
         # All other platforms use UTF-8.
         # FIXME: Using UTF-8 on Cygwin will confuse Windows-native commands
@@ -462,7 +442,7 @@ class Executive(object):
         # Win32 Python 2.x uses CreateProcessA rather than CreateProcessW
         # to launch subprocesses, so we have to encode arguments using the
         # current code page.
-        if sys.platform == 'win32' and versioning.compare_version(sys, '3.0')[0] < 0:
+        if sys.platform == 'win32' and sys.version < '3':
             return True
 
         return False

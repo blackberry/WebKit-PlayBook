@@ -32,6 +32,7 @@ namespace WebCore {
 class TestInterface;
 };
 
+class WebDOMNode;
 
 class WebDOMTestInterface : public WebDOMObject {
 public:
@@ -41,6 +42,30 @@ public:
     WebDOMTestInterface& operator=(const WebDOMTestInterface&);
     virtual ~WebDOMTestInterface();
 
+    enum {
+#if ENABLE(Condition11) || ENABLE(Condition12)
+        WEBDOM_SUPPLEMENTALCONSTANT1 = 1,
+#endif
+#if ENABLE(Condition11) || ENABLE(Condition12)
+        WEBDOM_SUPPLEMENTALCONSTANT2 = 2
+#endif
+
+    };
+
+#if ENABLE(Condition11) || ENABLE(Condition12)
+    WebDOMString supplementalStr1() const;
+#endif
+#if ENABLE(Condition11) || ENABLE(Condition12)
+    WebDOMString supplementalStr2() const;
+    void setSupplementalStr2(const WebDOMString&);
+#endif
+#if ENABLE(Condition11) || ENABLE(Condition12)
+    WebDOMNode supplementalNode() const;
+    void setSupplementalNode(const WebDOMNode&);
+#endif
+
+    void supplementalMethod1();
+    void supplementalMethod4();
 
     WebCore::TestInterface* impl() const;
 

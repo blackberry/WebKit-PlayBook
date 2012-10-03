@@ -35,6 +35,8 @@ static const unsigned maxColumnIndex = 0x7FFFFFFE; // 2,147,483,646
 static const unsigned unsetRowIndex = 0x7FFFFFFF;
 static const unsigned maxRowIndex = 0x7FFFFFFE; // 2,147,483,646
 
+enum IncludeBorderColorOrNot { DoNotIncludeBorderColor, IncludeBorderColor };
+
 class RenderTableCell : public RenderBlock {
 public:
     explicit RenderTableCell(Node*);
@@ -43,8 +45,8 @@ public:
     int cellIndex() const { return 0; }
     void setCellIndex(int) { }
 
-    int colSpan() const;
-    int rowSpan() const;
+    unsigned colSpan() const;
+    unsigned rowSpan() const;
 
     // Called from HTMLTableCellElement.
     void colSpanOrRowSpanChanged();
@@ -83,6 +85,8 @@ public:
 
     Length styleOrColLogicalWidth() const;
 
+    LayoutUnit logicalHeightForRowSizing() const;
+
     virtual void computePreferredLogicalWidths();
 
     void updateLogicalWidth(LayoutUnit);
@@ -96,26 +100,6 @@ public:
     virtual LayoutUnit borderBefore() const;
     virtual LayoutUnit borderAfter() const;
 
-    LayoutUnit borderHalfLeft(bool outer) const;
-    LayoutUnit borderHalfRight(bool outer) const;
-    LayoutUnit borderHalfTop(bool outer) const;
-    LayoutUnit borderHalfBottom(bool outer) const;
-
-    LayoutUnit borderHalfStart(bool outer) const;
-    LayoutUnit borderHalfEnd(bool outer) const;
-    LayoutUnit borderHalfBefore(bool outer) const;
-    LayoutUnit borderHalfAfter(bool outer) const;
-
-    CollapsedBorderValue collapsedStartBorder() const;
-    CollapsedBorderValue collapsedEndBorder() const;
-    CollapsedBorderValue collapsedBeforeBorder() const;
-    CollapsedBorderValue collapsedAfterBorder() const;
-
-    CollapsedBorderValue collapsedLeftBorder() const;
-    CollapsedBorderValue collapsedRightBorder() const;
-    CollapsedBorderValue collapsedTopBorder() const;
-    CollapsedBorderValue collapsedBottomBorder() const;
-
     void collectBorderValues(RenderTable::CollapsedBorderValues&) const;
     static void sortBorderValues(RenderTable::CollapsedBorderValues&);
 
@@ -123,6 +107,7 @@ public:
 
     virtual void paint(PaintInfo&, const LayoutPoint&);
 
+    void paintCollapsedBorders(PaintInfo&, const LayoutPoint&);
     void paintBackgroundsBehindCell(PaintInfo&, const LayoutPoint&, RenderObject* backgroundObject);
 
     LayoutUnit cellBaselinePosition() const;
@@ -168,11 +153,36 @@ private:
     virtual void paintBoxDecorations(PaintInfo&, const LayoutPoint&);
     virtual void paintMask(PaintInfo&, const LayoutPoint&);
 
+    virtual bool boxShadowShouldBeAppliedToBackground(BackgroundBleedAvoidance, InlineFlowBox*) const OVERRIDE;
+
     virtual LayoutSize offsetFromContainer(RenderObject*, const LayoutPoint&) const;
     virtual LayoutRect clippedOverflowRectForRepaint(RenderBoxModelObject* repaintContainer) const;
     virtual void computeRectForRepaint(RenderBoxModelObject* repaintContainer, LayoutRect&, bool fixed = false) const;
 
-    void paintCollapsedBorder(GraphicsContext*, const LayoutRect&);
+    LayoutUnit borderHalfLeft(bool outer) const;
+    LayoutUnit borderHalfRight(bool outer) const;
+    LayoutUnit borderHalfTop(bool outer) const;
+    LayoutUnit borderHalfBottom(bool outer) const;
+
+    LayoutUnit borderHalfStart(bool outer) const;
+    LayoutUnit borderHalfEnd(bool outer) const;
+    LayoutUnit borderHalfBefore(bool outer) const;
+    LayoutUnit borderHalfAfter(bool outer) const;
+
+    CollapsedBorderValue collapsedStartBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue collapsedEndBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue collapsedBeforeBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue collapsedAfterBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+
+    CollapsedBorderValue cachedCollapsedLeftBorder(RenderStyle*) const;
+    CollapsedBorderValue cachedCollapsedRightBorder(RenderStyle*) const;
+    CollapsedBorderValue cachedCollapsedTopBorder(RenderStyle*) const;
+    CollapsedBorderValue cachedCollapsedBottomBorder(RenderStyle*) const;
+
+    CollapsedBorderValue computeCollapsedStartBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue computeCollapsedEndBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue computeCollapsedBeforeBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
+    CollapsedBorderValue computeCollapsedAfterBorder(IncludeBorderColorOrNot = IncludeBorderColor) const;
 
     unsigned m_row : 31;
     bool m_cellWidthChanged : 1;

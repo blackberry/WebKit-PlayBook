@@ -26,6 +26,7 @@
 #define CCDelayBasedTimeSource_h
 
 #include "cc/CCTimeSource.h"
+#include "cc/CCTimer.h"
 
 #include <wtf/PassRefPtr.h>
 
@@ -35,7 +36,7 @@ class CCThread;
 
 // This timer implements a time source that achieves the specified interval
 // in face of millisecond-precision delayed callbacks and random queueing delays.
-class CCDelayBasedTimeSource : public CCTimeSource {
+class CCDelayBasedTimeSource : public CCTimeSource, CCTimerClient {
 public:
     static PassRefPtr<CCDelayBasedTimeSource> create(double intervalMs, CCThread*);
 
@@ -44,15 +45,17 @@ public:
     virtual void setClient(CCTimeSourceClient* client) { m_client = client; }
 
     virtual void setActive(bool);
+    virtual bool active() const { return m_state != STATE_INACTIVE; }
+
+    // CCTimerClient implementation.
+    virtual void onTimerFired();
 
     // Virtual for testing.
     virtual double monotonicallyIncreasingTimeMs() const;
 
 protected:
     CCDelayBasedTimeSource(double intervalMs, CCThread*);
-    void onTick();
-    void updateState();
-    void postTickTask(long long delay);
+    void postNextTickTask(double nowMs);
 
     enum State {
         STATE_INACTIVE,
@@ -60,10 +63,12 @@ protected:
         STATE_ACTIVE,
     };
     CCTimeSourceClient* m_client;
+    bool m_hasTickTarget;
     double m_intervalMs;
     double m_tickTarget;
     State m_state;
     CCThread* m_thread;
+    CCTimer m_timer;
 };
 
 }

@@ -39,16 +39,19 @@
 
 namespace JSC { namespace DFG {
 
-#ifndef NDEBUG
 typedef void (*V_DFGDebugOperation_EP)(ExecState*, void*);
-#endif
 
 class AssemblyHelpers : public MacroAssembler {
 public:
     AssemblyHelpers(JSGlobalData* globalData, CodeBlock* codeBlock)
         : m_globalData(globalData)
         , m_codeBlock(codeBlock)
+        , m_baselineCodeBlock(codeBlock->baselineVersion())
     {
+        ASSERT(m_codeBlock);
+        ASSERT(m_baselineCodeBlock);
+        ASSERT(!m_baselineCodeBlock->alternative());
+        ASSERT(m_baselineCodeBlock->getJITType() == JITCode::BaselineJIT);
     }
     
     CodeBlock* codeBlock() { return m_codeBlock; }
@@ -70,11 +73,6 @@ public:
     {
         push(address);
     }
-
-    void getPCAfterCall(GPRReg gpr)
-    {
-          peek(gpr, -1);
-    }
 #endif // CPU(X86_64) || CPU(X86)
 
 #if CPU(ARM)
@@ -91,11 +89,6 @@ public:
     ALWAYS_INLINE void restoreReturnAddressBeforeReturn(Address address)
     {
         loadPtr(address, linkRegister);
-    }
-
-    ALWAYS_INLINE void getPCAfterCall(GPRReg gpr)
-    {
-        move(ARMRegisters::lr, gpr);
     }
 #endif
 
@@ -157,9 +150,7 @@ public:
         return branch8(Below, Address(structureReg, Structure::typeInfoTypeOffset()), TrustedImm32(ObjectType));
     }
 
-#ifndef NDEBUG
     // Add a debug call. This call has no effect on JIT code execution state.
-#if CPU(X86_64) || CPU(X86)
     void debugCall(V_DFGDebugOperation_EP function, void* argument)
     {
         EncodedJSValue* buffer = static_cast<EncodedJSValue*>(m_globalData->scratchBufferForSize(sizeof(EncodedJSValue) * (GPRInfo::numberOfRegisters + FPRInfo::numberOfRegisters)));
@@ -170,7 +161,7 @@ public:
             move(TrustedImmPtr(buffer + GPRInfo::numberOfRegisters + i), GPRInfo::regT0);
             storeDouble(FPRInfo::toRegister(i), GPRInfo::regT0);
         }
-#if CPU(X86_64)
+#if CPU(X86_64) || CPU(ARM_THUMB2)
         move(TrustedImmPtr(argument), GPRInfo::argumentGPR1);
         move(GPRInfo::callFrameRegister, GPRInfo::argumentGPR0);
 #elif CPU(X86)
@@ -188,16 +179,6 @@ public:
         for (unsigned i = 0; i < GPRInfo::numberOfRegisters; ++i)
             loadPtr(buffer + i, GPRInfo::toRegister(i));
     }
-#else
-    void debugCall(V_DFGDebugOperation_EP function, void* argument) NO_RETURN_DUE_TO_ASSERT
-    {
-        // debugCall not supported on this platform.
-        UNUSED_PARAM(function);
-        UNUSED_PARAM(argument);
-        ASSERT_NOT_REACHED();
-    }
-#endif
-#endif
 
     // These methods JIT generate dynamic, debug-only checks - akin to ASSERTs.
 #if DFG_ENABLE(JIT_ASSERT)
@@ -220,6 +201,7 @@ public:
     {
         moveDoubleToPtr(fpr, gpr);
         subPtr(GPRInfo::tagTypeNumberRegister, gpr);
+        jitAssertIsJSDouble(gpr);
         return gpr;
     }
     FPRReg unboxDouble(GPRReg gpr, FPRReg fpr)
@@ -260,6 +242,16 @@ public:
         m_assembler.vmov(fpr, payloadGPR, tagGPR);
     }
 #endif
+    
+    enum ExceptionCheckKind { NormalExceptionCheck, InvertedExceptionCheck };
+    Jump emitExceptionCheck(ExceptionCheckKind kind = NormalExceptionCheck)
+    {
+#if USE(JSVALUE64)
+        return branchTestPtr(kind == NormalExceptionCheck ? NonZero : Zero, AbsoluteAddress(&globalData()->exception));
+#elif USE(JSVALUE32_64)
+        return branch32(kind == NormalExceptionCheck ? NotEqual : Equal, AbsoluteAddress(reinterpret_cast<char*>(&globalData()->exception) + OBJECT_OFFSETOF(JSValue, u.asBits.tag)), TrustedImm32(JSValue::EmptyValueTag));
+#endif
+    }
 
 #if ENABLE(SAMPLING_COUNTERS)
     static void emitCount(MacroAssembler& jit, AbstractSamplingCounter& counter, int32_t increment = 1)
@@ -279,10 +271,13 @@ public:
 
     JSGlobalObject* globalObjectFor(CodeOrigin codeOrigin)
     {
-        if (!codeOrigin.inlineCallFrame)
-            return codeBlock()->globalObject();
-        // FIXME: if we ever inline based on executable not function, this code will need to change.
-        return codeOrigin.inlineCallFrame->callee->scope()->globalObject.get();
+        return codeBlock()->globalObjectFor(codeOrigin);
+    }
+    
+    JSObject* globalThisObjectFor(CodeOrigin codeOrigin)
+    {
+        JSGlobalObject* object = globalObjectFor(codeOrigin);
+        return object->methodTable()->toThisObject(object, 0);
     }
     
     bool strictModeFor(CodeOrigin codeOrigin)
@@ -294,20 +289,22 @@ public:
     
     CodeBlock* baselineCodeBlockFor(const CodeOrigin& codeOrigin)
     {
-        if (codeOrigin.inlineCallFrame) {
-            ExecutableBase* executable = codeOrigin.inlineCallFrame->executable.get();
-            ASSERT(executable->structure()->classInfo() == &FunctionExecutable::s_info);
-            return static_cast<FunctionExecutable*>(executable)->baselineCodeBlockFor(codeOrigin.inlineCallFrame->isCall ? CodeForCall : CodeForConstruct);
-        }
-        ASSERT(codeBlock()->alternative() == codeBlock()->baselineVersion());
-        return codeBlock()->alternative();
+        return baselineCodeBlockForOriginAndBaselineCodeBlock(codeOrigin, baselineCodeBlock());
+    }
+    
+    CodeBlock* baselineCodeBlock()
+    {
+        return m_baselineCodeBlock;
     }
     
     Vector<BytecodeAndMachineOffset>& decodedCodeMapFor(CodeBlock*);
+    
+    static const double twoToThe32;
 
 protected:
     JSGlobalData* m_globalData;
     CodeBlock* m_codeBlock;
+    CodeBlock* m_baselineCodeBlock;
 
     HashMap<CodeBlock*, Vector<BytecodeAndMachineOffset> > m_decodedCodeMaps;
 };

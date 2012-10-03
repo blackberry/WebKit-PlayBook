@@ -241,7 +241,7 @@ struct FontDataCacheKeyTraits : WTF::GenericHashTraits<FontPlatformData> {
     }
     static void constructDeletedValue(FontPlatformData& slot)
     {
-        new (&slot) FontPlatformData(HashTableDeletedValue);
+        new (NotNull, &slot) FontPlatformData(HashTableDeletedValue);
     }
     static bool isDeletedValue(const FontPlatformData& value)
     {
@@ -253,7 +253,7 @@ typedef HashMap<FontPlatformData, pair<SimpleFontData*, unsigned>, FontDataCache
 
 static FontDataCache* gFontDataCache = 0;
 
-#if PLATFORM(CHROMIUM)
+#if PLATFORM(CHROMIUM) && !OS(ANDROID)
 const int cMaxInactiveFontData = 250;
 const int cTargetInactiveFontData = 200;
 #else

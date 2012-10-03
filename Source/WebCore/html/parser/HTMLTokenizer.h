@@ -130,6 +130,19 @@ public:
     // they call reset() first).
     bool nextToken(SegmentedString&, HTMLToken&);
 
+    // Returns a copy of any characters buffered internally by the tokenizer.
+    // The tokenizer buffers characters when searching for the </script> token
+    // that terminates a script element.
+    String bufferedCharacters() const;
+
+    size_t numberOfBufferedCharacters() const
+    {
+        // Notice that we add 2 to the length of the m_temporaryBuffer to
+        // account for the "</" characters, which are effecitvely buffered in
+        // the tokenizer's state machine.
+        return m_temporaryBuffer.size() ? m_temporaryBuffer.size() + 2 : 0;
+    }
+
     // Updates the tokenizer's state according to the given tag name. This is
     // an approximation of how the tree builder would update the tokenizer's
     // state. This method is useful for approximating HTML tokenization. To
@@ -146,10 +159,6 @@ public:
     //
     void updateStateFor(const AtomicString& tagName, Frame*);
 
-    // Hack to skip leading newline in <pre>/<listing> for authoring ease.
-    // http://www.whatwg.org/specs/web-apps/current-work/multipage/tokenization.html#parsing-main-inbody
-    void setSkipLeadingNewLineForListing(bool value) { m_skipLeadingNewLineForListing = value; }
-
     bool forceNullCharacterReplacement() const { return m_forceNullCharacterReplacement; }
     void setForceNullCharacterReplacement(bool value) { m_forceNullCharacterReplacement = value; }
 
@@ -157,7 +166,7 @@ public:
     void setShouldAllowCDATA(bool value) { m_shouldAllowCDATA = value; }
 
 private:
-    HTMLTokenizer(bool usePreHTML5ParserQuirks);
+    explicit HTMLTokenizer(bool usePreHTML5ParserQuirks);
 
     inline bool processEntity(SegmentedString&);
 
@@ -206,7 +215,7 @@ private:
     // token (e.g., when lexing script). We buffer the name of the end tag
     // token here so we remember it next time we re-enter the tokenizer.
     Vector<UChar, 32> m_bufferedEndTagName;
-    
+
     bool m_usePreHTML5ParserQuirks;
 };
 

@@ -23,7 +23,7 @@
  */
 
 #include "config.h"
-#include "WebAudioBus.h"
+#include "platform/WebAudioBus.h"
 
 #if ENABLE(WEB_AUDIO)
 #include "AudioBus.h"
@@ -110,7 +110,7 @@ float* WebAudioBus::channelData(unsigned channelIndex)
     if (!m_private)
         return 0;
     ASSERT(channelIndex < numberOfChannels());
-    return m_private->channel(channelIndex)->data();
+    return m_private->channel(channelIndex)->mutableData();
 #else
     ASSERT_NOT_REACHED();
     return 0;

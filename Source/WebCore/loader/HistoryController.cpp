@@ -208,9 +208,10 @@ void HistoryController::restoreDocumentState()
     
     if (!itemToRestore)
         return;
-
-    LOG(Loading, "WebCoreLoading %s: restoring form state from %p", m_frame->tree()->uniqueName().string().utf8().data(), itemToRestore);
-    doc->setStateForNewFormElements(itemToRestore->documentState());
+    if (m_frame->loader()->requestedHistoryItem() == m_currentItem.get() && !m_frame->loader()->documentLoader()->isClientRedirect()) {
+        LOG(Loading, "WebCoreLoading %s: restoring form state from %p", m_frame->tree()->uniqueName().string().utf8().data(), itemToRestore);
+        doc->setStateForNewFormElements(itemToRestore->documentState());
+    }
 }
 
 void HistoryController::invalidateCurrentItemCachedPage()
@@ -859,6 +860,8 @@ void HistoryController::replaceState(PassRefPtr<SerializedScriptValue> stateObje
         m_currentItem->setURLString(urlString);
     m_currentItem->setTitle(title);
     m_currentItem->setStateObject(stateObject);
+    m_currentItem->setFormData(0);
+    m_currentItem->setFormContentType(String());
 
     Settings* settings = m_frame->settings();
     if (!settings || settings->privateBrowsingEnabled())

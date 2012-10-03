@@ -25,12 +25,12 @@
 #include "ClassList.h"
 #include "DatasetDOMStringMap.h"
 #include "Element.h"
+#include "HTMLCollection.h"
 #include "NodeRareData.h"
+#include "ShadowTree.h"
 #include <wtf/OwnPtr.h>
 
 namespace WebCore {
-
-class ShadowRoot;
 
 class ElementRareData : public NodeRareData {
 public:
@@ -42,13 +42,33 @@ public:
     using NodeRareData::needsFocusAppearanceUpdateSoonAfterAttach;
     using NodeRareData::setNeedsFocusAppearanceUpdateSoonAfterAttach;
 
+    typedef FixedArray<OwnPtr<HTMLCollection>, NumNodeCollectionTypes> CachedHTMLCollectionArray;
+
+    bool hasCachedHTMLCollections() const
+    {
+        return m_cachedCollections;
+    }
+
+    HTMLCollection* ensureCachedHTMLCollection(Element* element, CollectionType type)
+    {
+        if (!m_cachedCollections)
+            m_cachedCollections = adoptPtr(new CachedHTMLCollectionArray);
+
+        OwnPtr<HTMLCollection>& collection = (*m_cachedCollections)[type - FirstNodeCollectionType];
+        if (!collection)
+            collection = HTMLCollection::create(element, type);
+        return collection.get();
+    }
+
+    OwnPtr<CachedHTMLCollectionArray> m_cachedCollections;
+
     LayoutSize m_minimumSizeForResizing;
     RefPtr<RenderStyle> m_computedStyle;
-    ShadowRoot* m_shadowRoot;
     AtomicString m_shadowPseudoId;
 
     OwnPtr<DatasetDOMStringMap> m_datasetDOMStringMap;
     OwnPtr<ClassList> m_classList;
+    OwnPtr<ShadowTree> m_shadowTree;
 
     bool m_styleAffectedByEmpty;
 
@@ -63,8 +83,8 @@ inline IntSize defaultMinimumSizeForResizing()
 }
 
 inline ElementRareData::ElementRareData()
-    : m_minimumSizeForResizing(defaultMinimumSizeForResizing())
-    , m_shadowRoot(0)
+    : NodeRareData()
+    , m_minimumSizeForResizing(defaultMinimumSizeForResizing())
     , m_styleAffectedByEmpty(false)
 #if ENABLE(FULLSCREEN_API)
     , m_containsFullScreenElement(false)
@@ -74,7 +94,7 @@ inline ElementRareData::ElementRareData()
 
 inline ElementRareData::~ElementRareData()
 {
-    ASSERT(!m_shadowRoot);
+    ASSERT(!m_shadowTree);
 }
 
 inline void ElementRareData::resetComputedStyle()

@@ -41,9 +41,13 @@ console.trace = function() {}
 var JSON = {}
 /** @param {string} str */
 JSON.parse = function(str) {}
-/** @param {Object} obj */
-/** @return {string} */
-JSON.stringify = function(str) {}
+/**
+ * @param {*} obj
+ * @param {Function=} replacer
+ * @param {number=} space
+ * @return {string}
+ */
+JSON.stringify = function(obj, replacer, space) {}
 
 /** @param {boolean=} param */
 Element.prototype.scrollIntoViewIfNeeded = function(param) {}
@@ -57,6 +61,9 @@ window.getComputedStyle = function(element) {}
 /** @param {boolean=} onlyFirst */
 Array.prototype.remove = function(obj, onlyFirst) {}
 Array.prototype.keySet = function() {}
+/** @return {number} */
+Array.prototype.upperBound = function(anchor) {}
+
 
 DOMApplicationCache.prototype.UNCACHED = 0;
 DOMApplicationCache.prototype.IDLE = 1;
@@ -75,12 +82,6 @@ InspectorBackend.runAfterPendingDispatches = function(message) {}
 // FIXME: remove everything below.
 var WebInspector = {}
 
-WebInspector.extensionServer = {}
-WebInspector.extensionServer.notifyResourceContentCommitted = function(resource, content) {}
-WebInspector.extensionServer.notifyPanelShown = function(panel) {}
-WebInspector.extensionServer.notifyPanelHidden = function(panel) {}
-WebInspector.extensionServer.notifyObjectSelected = function(object) {}
-
 /**
  * @param {NetworkAgent.RequestId} requestId
  * @return {?WebInspector.Resource}
@@ -97,15 +98,11 @@ WebInspector.panels = {};
 WebInspector.inspectorView;
 
 /**
- * @type {WebInspector.ScriptsPanel}
- */
-WebInspector.panels.scripts = null;
-
-/**
  * @param {WebInspector.View} view
  */
 WebInspector.showViewInDrawer = function(view) {}
 
+WebInspector.closeDrawerView = function() {}
 
 /**
  * @param {string=} messageLevel
@@ -118,6 +115,8 @@ WebInspector.addMainEventListeners = function(doc) {}
 WebInspector.openResource = function(url, external) {}
 
 WebInspector.openRequestInNetworkPanel = function(request) {}
+
+WebInspector.populateResourceContextMenu = function(contextMenu, url, preferredLineNumber) {}
 
 WebInspector.evaluateInConsole = function(expression) {}
 
@@ -174,3 +173,24 @@ function ExtensionReloadOptions() {
  * @type {WebInspector.HandlerRegistry}
  */
 WebInspector.openAnchorLocationRegistry = null;
+
+/**
+ * @param {WebInspector.Panel} panel
+ */
+WebInspector.showPanelForAnchorNavigation = function(panel)
+{
+}
+
+WebInspector.showPanel = function(panel)
+{
+}
+
+/**
+ * @type {string} 
+ */
+WebInspector.inspectedPageDomain;
+
+WebInspector.isCompactMode = function() { return false; }
+
+WebInspector.SourceJavaScriptTokenizer = {}
+WebInspector.SourceJavaScriptTokenizer.Keywords = {}

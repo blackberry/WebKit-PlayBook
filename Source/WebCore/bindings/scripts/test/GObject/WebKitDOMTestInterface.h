@@ -46,6 +46,91 @@ struct _WebKitDOMTestInterfaceClass {
 WEBKIT_API GType
 webkit_dom_test_interface_get_type (void);
 
+/**
+ * webkit_dom_test_interface_supplemental_method1:
+ * @self: A #WebKitDOMTestInterface
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_interface_supplemental_method1(WebKitDOMTestInterface* self);
+
+/**
+ * webkit_dom_test_interface_supplemental_method2:
+ * @self: A #WebKitDOMTestInterface
+ * @str_arg: A #gchar
+ * @obj_arg: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_interface_supplemental_method2(WebKitDOMTestInterface* self, const gchar* str_arg, WebKitDOMTestObj* obj_arg, GError **error);
+
+/**
+ * webkit_dom_test_interface_supplemental_method4:
+ * @self: A #WebKitDOMTestInterface
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_interface_supplemental_method4(WebKitDOMTestInterface* self);
+
+/**
+ * webkit_dom_test_interface_get_supplemental_str1:
+ * @self: A #WebKitDOMTestInterface
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API gchar*
+webkit_dom_test_interface_get_supplemental_str1(WebKitDOMTestInterface* self);
+
+/**
+ * webkit_dom_test_interface_get_supplemental_str2:
+ * @self: A #WebKitDOMTestInterface
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API gchar*
+webkit_dom_test_interface_get_supplemental_str2(WebKitDOMTestInterface* self);
+
+/**
+ * webkit_dom_test_interface_set_supplemental_str2:
+ * @self: A #WebKitDOMTestInterface
+ * @value: A #gchar
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_interface_set_supplemental_str2(WebKitDOMTestInterface* self, const gchar* value);
+
+/**
+ * webkit_dom_test_interface_get_supplemental_node:
+ * @self: A #WebKitDOMTestInterface
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMNode*
+webkit_dom_test_interface_get_supplemental_node(WebKitDOMTestInterface* self);
+
+/**
+ * webkit_dom_test_interface_set_supplemental_node:
+ * @self: A #WebKitDOMTestInterface
+ * @value: A #WebKitDOMNode
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_interface_set_supplemental_node(WebKitDOMTestInterface* self, WebKitDOMNode* value);
+
 G_END_DECLS
 
 #endif /* WebKitDOMTestInterface_h */

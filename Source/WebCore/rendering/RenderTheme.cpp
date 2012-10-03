@@ -1,7 +1,7 @@
 /**
  * This file is part of the theme implementation for form controls in WebCore.
  *
- * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010 Apple Computer, Inc.
+ * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2012 Apple Computer, Inc.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -111,26 +111,26 @@ void RenderTheme::adjustStyle(CSSStyleSelector* selector, RenderStyle* style, El
             // Border
             LengthBox borderBox(style->borderTopWidth(), style->borderRightWidth(), style->borderBottomWidth(), style->borderLeftWidth());
             borderBox = m_theme->controlBorder(part, style->font(), borderBox, style->effectiveZoom());
-            if (borderBox.top().value() != style->borderTopWidth()) {
+            if (borderBox.top().value() != static_cast<int>(style->borderTopWidth())) {
                 if (borderBox.top().value())
                     style->setBorderTopWidth(borderBox.top().value());
                 else
                     style->resetBorderTop();
             }
-            if (borderBox.right().value() != style->borderRightWidth()) {
+            if (borderBox.right().value() != static_cast<int>(style->borderRightWidth())) {
                 if (borderBox.right().value())
                     style->setBorderRightWidth(borderBox.right().value());
                 else
                     style->resetBorderRight();
             }
-            if (borderBox.bottom().value() != style->borderBottomWidth()) {
+            if (borderBox.bottom().value() != static_cast<int>(style->borderBottomWidth())) {
                 style->setBorderBottomWidth(borderBox.bottom().value());
                 if (borderBox.bottom().value())
                     style->setBorderBottomWidth(borderBox.bottom().value());
                 else
                     style->resetBorderBottom();
             }
-            if (borderBox.left().value() != style->borderLeftWidth()) {
+            if (borderBox.left().value() != static_cast<int>(style->borderLeftWidth())) {
                 style->setBorderLeftWidth(borderBox.left().value());
                 if (borderBox.left().value())
                     style->setBorderLeftWidth(borderBox.left().value());
@@ -205,6 +205,7 @@ void RenderTheme::adjustStyle(CSSStyleSelector* selector, RenderStyle* style, El
             return adjustMenuListButtonStyle(selector, style, e);
         case MediaSliderPart:
         case MediaVolumeSliderPart:
+        case MediaFullScreenVolumeSliderPart:
         case SliderHorizontalPart:
         case SliderVerticalPart:
             return adjustSliderTrackStyle(selector, style, e);
@@ -242,7 +243,7 @@ void RenderTheme::adjustStyle(CSSStyleSelector* selector, RenderStyle* style, El
     }
 }
 
-bool RenderTheme::paint(RenderObject* o, const PaintInfo& paintInfo, const IntRect& r)
+bool RenderTheme::paint(RenderObject* o, const PaintInfo& paintInfo, const LayoutRect& r)
 {
     // If painting is disabled, but we aren't updating control tints, then just bail.
     // If we are updating control tints, just schedule a repaint if the theme supports tinting
@@ -338,6 +339,10 @@ bool RenderTheme::paint(RenderObject* o, const PaintInfo& paintInfo, const IntRe
             return paintMediaVolumeSliderTrack(o, paintInfo, r);
         case MediaVolumeSliderThumbPart:
             return paintMediaVolumeSliderThumb(o, paintInfo, r);
+        case MediaFullScreenVolumeSliderPart:
+            return paintMediaFullScreenVolumeSliderTrack(o, paintInfo, r);
+        case MediaFullScreenVolumeSliderThumbPart:
+            return paintMediaFullScreenVolumeSliderThumb(o, paintInfo, r);
         case MediaTimeRemainingPart:
             return paintMediaTimeRemaining(o, paintInfo, r);
         case MediaCurrentTimePart:
@@ -500,13 +505,13 @@ String RenderTheme::formatMediaControlsRemainingTime(float currentTime, float du
     return formatMediaControlsTime(currentTime - duration);
 }
 
-IntPoint RenderTheme::volumeSliderOffsetFromMuteButton(RenderBox* muteButtonBox, const IntSize& size) const
+LayoutPoint RenderTheme::volumeSliderOffsetFromMuteButton(RenderBox* muteButtonBox, const LayoutSize& size) const
 {
-    int y = -size.height();
-    FloatPoint absPoint = muteButtonBox->localToAbsolute(FloatPoint(muteButtonBox->offsetLeft(), y), true, true);
+    LayoutUnit y = -size.height();
+    FloatPoint absPoint = muteButtonBox->localToAbsolute(FloatPoint(muteButtonBox->pixelSnappedOffsetLeft(), y), true, true);
     if (absPoint.y() < 0)
         y = muteButtonBox->height();
-    return IntPoint(0, y);
+    return LayoutPoint(0, y);
 }
 
 #endif
@@ -612,7 +617,7 @@ Color RenderTheme::platformInactiveListBoxSelectionForegroundColor() const
     return platformInactiveSelectionForegroundColor();
 }
 
-int RenderTheme::baselinePosition(const RenderObject* o) const
+LayoutUnit RenderTheme::baselinePosition(const RenderObject* o) const
 {
     if (!o->isBox())
         return 0;
@@ -662,7 +667,7 @@ bool RenderTheme::isControlStyled(const RenderStyle* style, const BorderData& bo
     }
 }
 
-void RenderTheme::adjustRepaintRect(const RenderObject* o, IntRect& r)
+void RenderTheme::adjustRepaintRect(const RenderObject* o, LayoutRect& r)
 {
 #if USE(NEW_THEME)
     m_theme->inflateControlPaintRect(o->style()->appearance(), controlStatesForRenderer(o), r, o->style()->effectiveZoom());
@@ -920,7 +925,7 @@ void RenderTheme::adjustMeterStyle(CSSStyleSelector*, RenderStyle* style, Elemen
     style->setBoxShadow(nullptr);
 }
 
-IntSize RenderTheme::meterSizeForBounds(const RenderMeter*, const IntRect& bounds) const
+LayoutSize RenderTheme::meterSizeForBounds(const RenderMeter*, const LayoutRect& bounds) const
 {
     return bounds.size();
 }
@@ -1092,6 +1097,30 @@ Color RenderTheme::tapHighlightColor()
 }
 #endif
 
+// Value chosen by observation. This can be tweaked.
+static const int minColorContrastValue = 1300;
+// For transparent or translucent background color, use lightening.
+static const int minDisabledColorAlphaValue = 128;
+
+Color RenderTheme::disabledTextColor(const Color& textColor, const Color& backgroundColor) const
+{
+    // The explicit check for black is an optimization for the 99% case (black on white).
+    // This also means that black on black will turn into grey on black when disabled.
+    Color disabledColor;
+    if (textColor.rgb() == Color::black || backgroundColor.alpha() < minDisabledColorAlphaValue || differenceSquared(textColor, Color::white) > differenceSquared(backgroundColor, Color::white))
+        disabledColor = textColor.light();
+    else
+        disabledColor = textColor.dark();
+    
+    // If there's not very much contrast between the disabled color and the background color,
+    // just leave the text color alone. We don't want to change a good contrast color scheme so that it has really bad contrast.
+    // If the the contrast was already poor, then it doesn't do any good to change it to a different poor contrast color scheme.
+    if (differenceSquared(disabledColor, backgroundColor) < minColorContrastValue)
+        return textColor;
+    
+    return disabledColor;
+}
+
 void RenderTheme::setCustomFocusRingColor(const Color& c)
 {
     customFocusRingColor() = c;
@@ -1102,18 +1131,21 @@ Color RenderTheme::focusRingColor()
     return customFocusRingColor().isValid() ? customFocusRingColor() : defaultTheme()->platformFocusRingColor();
 }
 
-String RenderTheme::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width, bool multipleFilesAllowed)
+String RenderTheme::fileListDefaultLabel(bool multipleFilesAllowed) const
+{
+    if (multipleFilesAllowed)
+        return fileButtonNoFilesSelectedLabel();
+    return fileButtonNoFileSelectedLabel();
+}
+
+String RenderTheme::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width, bool multipleFilesAllowed) const
 {
     if (width <= 0)
         return String();
 
     String string;
-    if (filenames.isEmpty()) {
-        if (multipleFilesAllowed)
-            string = fileButtonNoFilesSelectedLabel();
-        else
-            string = fileButtonNoFileSelectedLabel();
-    }
+    if (filenames.isEmpty())
+        string = fileListDefaultLabel(multipleFilesAllowed);
     else if (filenames.size() == 1)
         string = pathGetFileName(filenames[0]);
     else

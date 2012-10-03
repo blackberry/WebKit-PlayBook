@@ -108,6 +108,7 @@ WebCore::FindOptions coreOptions(WebFindOptions options);
 #ifdef __cplusplus
 - (WebCore::Page*)page;
 - (void)_setGlobalHistoryItem:(WebCore::HistoryItem*)historyItem;
+- (WTF::String)_userAgentString;
 #endif
 
 - (NSMenu *)_menuForElement:(NSDictionary *)element defaultItems:(NSArray *)items;
@@ -187,5 +188,9 @@ WebCore::FindOptions coreOptions(WebFindOptions options);
 - (void)_exitFullScreenForElement:(WebCore::Element*)element;
 - (void)_fullScreenRendererChanged:(WebCore::RenderBox*)renderer;
 #endif
+
+// Conversion functions between WebCore root view coordinates and web view coordinates.
+- (NSPoint)_convertPointFromRootView:(NSPoint)point;
+- (NSRect)_convertRectFromRootView:(NSRect)rect;
 
 @end

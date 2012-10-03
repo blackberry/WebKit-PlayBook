@@ -29,7 +29,7 @@
 #include "ImageBufferDataCairo.h"
 #elif PLATFORM(QT)
 #include "ImageBufferDataQt.h"
-#elif USE(SKIA) || PLATFORM(BLACKBERRY)
+#elif USE(SKIA)
 #include "ImageBufferDataSkia.h"
 #elif OS(WINCE)
 #include "ImageBufferDataWince.h"

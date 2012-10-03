@@ -27,16 +27,19 @@
 #define TiledCoreAnimationDrawingArea_h
 
 #include "DrawingArea.h"
+#include <WebCore/GraphicsLayerClient.h>
+#include <WebCore/LayerFlushScheduler.h>
+#include <WebCore/LayerFlushSchedulerClient.h>
 #include <wtf/RetainPtr.h>
 
 OBJC_CLASS CALayer;
 OBJC_CLASS WKContentLayer;
 
-typedef struct __WKCARemoteLayerClientRef* WKCARemoteLayerClientRef;
-
 namespace WebKit {
 
-class TiledCoreAnimationDrawingArea : public DrawingArea {
+class RemoteLayerClient;
+
+class TiledCoreAnimationDrawingArea : public DrawingArea, WebCore::GraphicsLayerClient, WebCore::LayerFlushSchedulerClient {
 public:
     static PassOwnPtr<TiledCoreAnimationDrawingArea> create(WebPage*, const WebPageCreationParameters&);
     virtual ~TiledCoreAnimationDrawingArea();
@@ -48,17 +51,44 @@ private:
     virtual void setNeedsDisplay(const WebCore::IntRect&) OVERRIDE;
     virtual void scroll(const WebCore::IntRect& scrollRect, const WebCore::IntSize& scrollOffset) OVERRIDE;
 
+    virtual void forceRepaint() OVERRIDE;
+    virtual void setLayerTreeStateIsFrozen(bool) OVERRIDE;
+    virtual bool layerTreeStateIsFrozen() const OVERRIDE;
     virtual void setRootCompositingLayer(WebCore::GraphicsLayer*) OVERRIDE;
     virtual void scheduleCompositingLayerSync() OVERRIDE;
 
+    virtual void didInstallPageOverlay() OVERRIDE;
+    virtual void didUninstallPageOverlay() OVERRIDE;
+    virtual void setPageOverlayNeedsDisplay(const WebCore::IntRect&) OVERRIDE;
+
+    // WebCore::GraphicsLayerClient
+    virtual void notifyAnimationStarted(const WebCore::GraphicsLayer*, double time) OVERRIDE;
+    virtual void notifySyncRequired(const WebCore::GraphicsLayer*) OVERRIDE;
+    virtual void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::IntRect& clipRect) OVERRIDE;
+    virtual bool showDebugBorders(const WebCore::GraphicsLayer*) const OVERRIDE;
+    virtual bool showRepaintCounter(const WebCore::GraphicsLayer*) const OVERRIDE;
+    virtual float deviceScaleFactor() const OVERRIDE;
+
+    // WebCore::LayerFlushSchedulerClient
+    virtual bool flushLayers() OVERRIDE;
+
     // Message handlers.
     virtual void updateGeometry(const WebCore::IntSize& viewSize) OVERRIDE;
+    virtual void setDeviceScaleFactor(float) OVERRIDE;
 
-    RetainPtr<WKCARemoteLayerClientRef> m_remoteLayerClient;
+    void setRootCompositingLayer(CALayer *);
 
+    void createPageOverlayLayer();
+    void destroyPageOverlayLayer();
+
+    bool m_layerTreeStateIsFrozen;
+    WebCore::LayerFlushScheduler m_layerFlushScheduler;
+
+    OwnPtr<RemoteLayerClient> m_remoteLayerClient;
     RetainPtr<CALayer> m_rootLayer;
+    RetainPtr<CALayer> m_pendingRootCompositingLayer;
 
-    RetainPtr<WKContentLayer> m_contentLayer;
+    OwnPtr<WebCore::GraphicsLayer> m_pageOverlayLayer;
 };
 
 } // namespace WebKit

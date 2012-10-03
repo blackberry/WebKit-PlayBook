@@ -25,6 +25,7 @@
  */
 #include "config.h"
 #include "SchemeRegistry.h"
+#include <wtf/MainThread.h>
 
 namespace WebCore {
 
@@ -68,10 +69,13 @@ static URLSchemesMap& schemesWithUniqueOrigins()
 {
     DEFINE_STATIC_LOCAL(URLSchemesMap, schemesWithUniqueOrigins, ());
 
-    // This is a willful violation of HTML5.
-    // See https://bugs.webkit.org/show_bug.cgi?id=11885
-    if (schemesWithUniqueOrigins.isEmpty())
+    if (schemesWithUniqueOrigins.isEmpty()) {
+        schemesWithUniqueOrigins.add("about");
+        schemesWithUniqueOrigins.add("javascript");
+        // This is a willful violation of HTML5.
+        // See https://bugs.webkit.org/show_bug.cgi?id=11885
         schemesWithUniqueOrigins.add("data");
+    }
 
     return schemesWithUniqueOrigins;
 }
@@ -147,6 +151,19 @@ static URLSchemesMap& schemesAllowingDatabaseAccessInPrivateBrowsing()
 {
     DEFINE_STATIC_LOCAL(URLSchemesMap, schemesAllowingDatabaseAccessInPrivateBrowsing, ());
     return schemesAllowingDatabaseAccessInPrivateBrowsing;
+}
+
+static URLSchemesMap& CORSEnabledSchemes()
+{
+    // FIXME: http://bugs.webkit.org/show_bug.cgi?id=77160  
+    DEFINE_STATIC_LOCAL(URLSchemesMap, CORSEnabledSchemes, ());
+
+    if (CORSEnabledSchemes.isEmpty()) {
+        CORSEnabledSchemes.add("http");
+        CORSEnabledSchemes.add("https");
+    }
+
+    return CORSEnabledSchemes;
 }
 
 bool SchemeRegistry::shouldTreatURLSchemeAsLocal(const String& scheme)
@@ -268,6 +285,18 @@ bool SchemeRegistry::allowsDatabaseAccessInPrivateBrowsing(const String& scheme)
     if (scheme.isEmpty())
         return false;
     return schemesAllowingDatabaseAccessInPrivateBrowsing().contains(scheme);
+}
+
+void SchemeRegistry::registerURLSchemeAsCORSEnabled(const String& scheme)
+{
+    CORSEnabledSchemes().add(scheme);
+}
+
+bool SchemeRegistry::shouldTreatURLSchemeAsCORSEnabled(const String& scheme)
+{
+    if (scheme.isEmpty())
+        return false;
+    return CORSEnabledSchemes().contains(scheme);
 }
 
 } // namespace WebCore

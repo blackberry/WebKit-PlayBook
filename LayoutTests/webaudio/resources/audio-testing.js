@@ -32,28 +32,23 @@ function writeInt32(n, a, offset) {
 
 function writeAudioBuffer(audioBuffer, a, offset) {
     var n = audioBuffer.length;
-    var bufferL = audioBuffer.getChannelData(0);
-    var bufferR = audioBuffer.getChannelData(1);
+    var channels = audioBuffer.numberOfChannels;
     
     for (var i = 0; i < n; ++i) {
-        // Write left and right
-        var sampleL = bufferL[i] * 32768.0;
-        var sampleR = bufferR[i] * 32768.0;
+        for (var k = 0; k < channels; ++k) {
+            var buffer = audioBuffer.getChannelData(k);
+            var sample = buffer[i] * 32768.0;
 
-        // Clip left and right samples to the limitations of 16-bit.
-        // If we don't do this then we'll get nasty wrap-around distortion.
-        if (sampleL < -32768)
-            sampleL = -32768;
-        if (sampleL > 32767)
-            sampleL = 32767;
-        if (sampleR < -32768)
-            sampleR = -32768;
-        if (sampleR > 32767)
-            sampleR = 32767;
-            
-        writeInt16(sampleL, a, offset);
-        writeInt16(sampleR, a, offset + 2);
-        offset += 4;
+            // Clip samples to the limitations of 16-bit.
+            // If we don't do this then we'll get nasty wrap-around distortion.
+            if (sample < -32768)
+                sample = -32768;
+            if (sample > 32767)
+                sample = 32767;
+
+            writeInt16(sample, a, offset);
+            offset += 2;
+        }
     }
 }
 
@@ -104,4 +99,32 @@ function finishAudioTest(event) {
     var audioData = createAudioData(event.renderedBuffer);
     layoutTestController.setAudioData(audioData);
     layoutTestController.notifyDone();
+}
+
+// Create an impulse in a buffer of length sampleFrameLength
+function createImpulseBuffer(context, sampleFrameLength) {
+    var audioBuffer = context.createBuffer(1, sampleFrameLength, context.sampleRate);
+    var n = audioBuffer.length;
+    var dataL = audioBuffer.getChannelData(0);
+
+    for (var k = 0; k < n; ++k) {
+        dataL[k] = 0;
+    }
+    dataL[0] = 1;
+
+    return audioBuffer;
+}
+
+// Convert time (in seconds) to sample frames.
+function timeToSampleFrame(time, sampleRate) {
+    return Math.floor(0.5 + time * sampleRate);
+}
+
+// Compute the number of sample frames consumed by noteGrainOn with
+// the specified |grainOffset|, |duration|, and |sampleRate|.
+function grainLengthInSampleFrames(grainOffset, duration, sampleRate) {
+    var startFrame = timeToSampleFrame(grainOffset, sampleRate);
+    var endFrame = timeToSampleFrame(grainOffset + duration, sampleRate);
+
+    return endFrame - startFrame;
 }

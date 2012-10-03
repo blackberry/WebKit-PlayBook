@@ -38,37 +38,31 @@ _log = logging.getLogger(__name__)
 
 
 class EflPort(WebKitPort):
-    port_name = "efl"
-
-    def __init__(self, host, **kwargs):
-        WebKitPort.__init__(self, host, **kwargs)
-        self._version = self.port_name
+    port_name = 'efl'
 
     def _port_flag_for_scripts(self):
         return "--efl"
-
-    def setup_environ_for_server(self, server_name=None):
-        return WebKitPort.setup_environ_for_server(self, server_name)
 
     def _generate_all_test_configurations(self):
         return [TestConfiguration(version=self._version, architecture='x86', build_type=build_type, graphics_type='cpu') for build_type in self.ALL_BUILD_TYPES]
 
     def _path_to_driver(self):
-        return self._build_path('Programs', self.driver_name())
+        return self._build_path('bin', self.driver_name())
 
     def _path_to_image_diff(self):
-        return self._build_path('Programs', 'ImageDiff')
+        return self._build_path('bin', 'ImageDiff')
 
+    # FIXME: I doubt EFL wants to override this method.
     def check_build(self, needs_http):
         return self._check_driver()
 
     def _path_to_webcore_library(self):
         static_path = self._build_path('WebCore', 'libwebcore_efl.a')
         dyn_path = self._build_path('WebCore', 'libwebcore_efl.so')
-
         return static_path if self._filesystem.exists(static_path) else dyn_path
 
     def _runtime_feature_list(self):
+        # FIXME: EFL should detect runtime features like other webkit ports do.
         return None
 
     def show_results_html_file(self, results_filename):

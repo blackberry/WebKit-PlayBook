@@ -181,6 +181,7 @@ namespace WebCore {
     macro(loadend) \
     \
     macro(webkitfullscreenchange) \
+    macro(webkitfullscreenerror) \
     \
     macro(webkitspeechchange) \
     \
@@ -193,6 +194,11 @@ namespace WebCore {
     macro(connecting) \
     macro(addstream) \
     macro(removestream) \
+    macro(statechange) \
+    \
+    macro(show) \
+    \
+    macro(webkitpointerlocklost) \
     \
 
 // end of DOM_EVENT_NAMES_FOR_EACH

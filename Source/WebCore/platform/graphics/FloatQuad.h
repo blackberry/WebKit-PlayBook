@@ -117,13 +117,6 @@ public:
         m_p3.scale(dx, dy);
         m_p4.scale(dx, dy);
     }
-#if PLATFORM(BLACKBERRY)
-    String toString() const
-    {
-        return String::format("[FloatQuad p1: %s, p2: %s, p3: %s, p4: %s]", m_p1.toString().utf8().data(), m_p2.toString().utf8().data(),
-            m_p3.toString().utf8().data(), m_p4.toString().utf8().data());
-    }
-#endif
 
     // Tests whether points are in clock-wise, or counter clock-wise order.
     // Note that output is undefined when all points are colinear.

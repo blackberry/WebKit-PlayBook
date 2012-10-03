@@ -45,6 +45,7 @@
 #include "qwebpage.h"
 #include "qwebpage_p.h"
 #include "qwebview.h"
+#include <wtf/text/CString.h>
 #include <QtCore/QCoreApplication>
 #include <QtCore/QFile>
 #include <QtCore/QSettings>
@@ -189,8 +190,7 @@ InspectorClientQt::InspectorClientQt(QWebPage* page)
 void InspectorClientQt::inspectorDestroyed()
 {
 #if ENABLE(INSPECTOR)
-    if (m_frontendClient)
-        m_frontendClient->inspectorClientDestroyed();
+    closeInspectorFrontend();
 
     InspectorServerQt* webInspectorServer = InspectorServerQt::server();
     if (webInspectorServer)
@@ -240,6 +240,21 @@ void InspectorClientQt::openInspectorFrontend(WebCore::InspectorController* insp
     m_frontendClient = frontendClient.get();
     controller->setInspectorFrontendClient(frontendClient.release());
     m_frontendWebPage = inspectorPage;
+#endif
+}
+
+void InspectorClientQt::closeInspectorFrontend()
+{
+#if ENABLE(INSPECTOR)
+    if (m_frontendClient)
+        m_frontendClient->inspectorClientDestroyed();
+#endif
+}
+
+void InspectorClientQt::bringFrontendToFront()
+{
+#if ENABLE(INSPECTOR)
+    m_frontendClient->bringToFront();
 #endif
 }
 
@@ -343,11 +358,6 @@ void InspectorFrontendClientQt::closeWindow()
     destroyInspectorView(true);
 }
 
-void InspectorFrontendClientQt::disconnectFromBackend()
-{
-    destroyInspectorView(false);
-}
-
 void InspectorFrontendClientQt::attachWindow()
 {
     notImplemented();
@@ -402,6 +412,7 @@ void InspectorFrontendClientQt::destroyInspectorView(bool notifyInspectorControl
 
 void InspectorFrontendClientQt::inspectorClientDestroyed()
 {
+    destroyInspectorView(false);
     m_inspectorClient = 0;
     m_inspectedWebPage = 0;
 }

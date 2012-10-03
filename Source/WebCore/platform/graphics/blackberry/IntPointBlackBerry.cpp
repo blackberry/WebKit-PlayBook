@@ -34,6 +34,4 @@ IntPoint::operator BlackBerry::Platform::IntPoint() const
     return BlackBerry::Platform::IntPoint(m_x, m_y);
 }
 
-}
-
-// vim: ts=4 sw=4 et
+} // namespace WebCore

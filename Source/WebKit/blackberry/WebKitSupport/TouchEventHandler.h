@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,12 +24,6 @@
 #include "IntPoint.h"
 
 #include <BlackBerryPlatformTouchEvent.h>
-#include <BlackBerryPlatformWindow.h>
-
-namespace WebCore {
-class IntPoint;
-class Element;
-}
 
 namespace BlackBerry {
 namespace WebKit {
@@ -41,7 +35,7 @@ public:
     TouchEventHandler(WebPagePrivate* webpage);
     ~TouchEventHandler();
 
-    bool handleTouchPoint(BlackBerry::Platform::TouchPoint&);
+    bool handleTouchPoint(Platform::TouchPoint&);
     void touchEventCancel();
     void touchEventCancelAndClearFocusedNode();
     void touchHoldEvent();
@@ -51,12 +45,11 @@ public:
     const FatFingersResult& lastFatFingersResult() const { return m_lastFatFingersResult; }
     void resetLastFatFingersResult() { m_lastFatFingersResult.reset(); }
 
-    void drawTapHighlight();
-    void hideTapHighlight();
-
 private:
-    unsigned spellCheck(BlackBerry::Platform::TouchPoint&);
+    unsigned spellCheck(Platform::TouchPoint&);
     void handleFatFingerPressed();
+
+    void drawTapHighlight();
 
 private:
     WebPagePrivate* m_webPage;

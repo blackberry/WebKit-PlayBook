@@ -45,10 +45,11 @@
 #include "HTMLImageElement.h"
 #include "ImageBuffer.h"
 #include "ImageData.h"
-#include "WebGraphicsContext3D.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
+#include "WebViewClient.h"
 #include "WebViewImpl.h"
+#include "platform/WebGraphicsContext3D.h"
+#include "platform/WebKitPlatformSupport.h"
 
 #include <stdio.h>
 #include <wtf/FastMalloc.h>
@@ -84,12 +85,11 @@ namespace WebCore {
 //----------------------------------------------------------------------
 // GraphicsContext3DPrivate
 
-GraphicsContext3DPrivate::GraphicsContext3DPrivate(WebKit::WebViewImpl* webViewImpl, PassOwnPtr<WebKit::WebGraphicsContext3D> webContext, GraphicsContext3D::Attributes attrs)
+GraphicsContext3DPrivate::GraphicsContext3DPrivate(PassOwnPtr<WebKit::WebGraphicsContext3D> webContext, bool preserveDrawingBuffer)
     : m_impl(webContext)
-    , m_webViewImpl(webViewImpl)
     , m_initializedAvailableExtensions(false)
     , m_layerComposited(false)
-    , m_preserveDrawingBuffer(attrs.preserveDrawingBuffer)
+    , m_preserveDrawingBuffer(preserveDrawingBuffer)
     , m_resourceSafety(ResourceSafetyUnknown)
 #if USE(SKIA)
     , m_grContext(0)
@@ -111,57 +111,18 @@ GraphicsContext3DPrivate::~GraphicsContext3DPrivate()
 #endif
 }
 
-
-PassOwnPtr<GraphicsContext3DPrivate> GraphicsContext3DPrivate::create(WebKit::WebViewImpl* webViewImpl, PassOwnPtr<WebKit::WebGraphicsContext3D> webContext, GraphicsContext3D::Attributes attrs)
+PassRefPtr<GraphicsContext3D> GraphicsContext3DPrivate::createGraphicsContextFromWebContext(PassOwnPtr<WebKit::WebGraphicsContext3D> webContext, GraphicsContext3D::RenderStyle renderStyle, bool preserveDrawingBuffer)
 {
-    return adoptPtr(new GraphicsContext3DPrivate(webViewImpl, webContext, attrs));
-}
-
-PassRefPtr<GraphicsContext3D> GraphicsContext3DPrivate::createGraphicsContextFromWebContext(PassOwnPtr<WebKit::WebGraphicsContext3D> webContext, GraphicsContext3D::Attributes attrs, HostWindow* hostWindow, GraphicsContext3D::RenderStyle renderStyle, ThreadUsage threadUsage)
-{
-    Chrome* chrome = static_cast<Chrome*>(hostWindow);
-    WebKit::WebViewImpl* webViewImpl = chrome ? static_cast<WebKit::WebViewImpl*>(chrome->client()->webView()) : 0;
-
-    if (threadUsage == ForUseOnThisThread && !webContext->makeContextCurrent())
-        return 0;
-
-    OwnPtr<GraphicsContext3DPrivate> priv = GraphicsContext3DPrivate::create(webViewImpl, webContext, attrs);
-    if (!priv)
-        return 0;
-
     bool renderDirectlyToHostWindow = renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow;
-    RefPtr<GraphicsContext3D> result = adoptRef(new GraphicsContext3D(attrs, hostWindow, renderDirectlyToHostWindow));
-    result->m_private = priv.release();
-    return result.release();
+
+    RefPtr<GraphicsContext3D> context = adoptRef(new GraphicsContext3D(GraphicsContext3D::Attributes(), 0, renderDirectlyToHostWindow));
+
+    OwnPtr<GraphicsContext3DPrivate> priv = adoptPtr(new GraphicsContext3DPrivate(webContext, preserveDrawingBuffer));
+    context->m_private = priv.release();
+    return context.release();
 }
 
 namespace {
-
-PassRefPtr<GraphicsContext3D> createGraphicsContext(GraphicsContext3D::Attributes attrs, HostWindow* hostWindow, GraphicsContext3D::RenderStyle renderStyle, GraphicsContext3DPrivate::ThreadUsage threadUsage)
-{
-    bool renderDirectlyToHostWindow = renderStyle == GraphicsContext3D::RenderDirectlyToHostWindow;
-
-    WebKit::WebGraphicsContext3D::Attributes webAttributes;
-    webAttributes.alpha = attrs.alpha;
-    webAttributes.depth = attrs.depth;
-    webAttributes.stencil = attrs.stencil;
-    webAttributes.antialias = attrs.antialias;
-    webAttributes.premultipliedAlpha = attrs.premultipliedAlpha;
-    webAttributes.canRecoverFromContextLoss = attrs.canRecoverFromContextLoss;
-    webAttributes.noExtensions = attrs.noExtensions;
-    webAttributes.shareResources = attrs.shareResources;
-    OwnPtr<WebKit::WebGraphicsContext3D> webContext = adoptPtr(WebKit::webKitPlatformSupport()->createGraphicsContext3D());
-    if (!webContext)
-        return 0;
-
-    Chrome* chrome = static_cast<Chrome*>(hostWindow);
-    WebKit::WebViewImpl* webViewImpl = chrome ? static_cast<WebKit::WebViewImpl*>(chrome->client()->webView()) : 0;
-
-    if (!webContext->initialize(webAttributes, webViewImpl, renderDirectlyToHostWindow))
-        return 0;
-
-    return GraphicsContext3DPrivate::createGraphicsContextFromWebContext(webContext.release(), attrs, hostWindow, renderStyle, threadUsage);
-}
 
 void getDrawingParameters(DrawingBuffer* drawingBuffer, WebKit::WebGraphicsContext3D* graphicsContext3D,
                           Platform3DObject* frameBufferId, int* width, int* height)
@@ -179,11 +140,6 @@ void getDrawingParameters(DrawingBuffer* drawingBuffer, WebKit::WebGraphicsConte
 
 } // anonymous namespace
 
-PassRefPtr<GraphicsContext3D> GraphicsContext3DPrivate::createGraphicsContextForAnotherThread(GraphicsContext3D::Attributes attrs, HostWindow* hostWindow, GraphicsContext3D::RenderStyle renderStyle)
-{
-    return createGraphicsContext(attrs, hostWindow, renderStyle, ForUseOnAnotherThread);
-}
-
 WebKit::WebGraphicsContext3D* GraphicsContext3DPrivate::extractWebGraphicsContext3D(GraphicsContext3D* context)
 {
     if (!context)
@@ -198,24 +154,43 @@ PlatformGraphicsContext3D GraphicsContext3DPrivate::platformGraphicsContext3D() 
 
 Platform3DObject GraphicsContext3DPrivate::platformTexture() const
 {
-    ASSERT(m_webViewImpl);
-    m_impl->setParentContext(m_webViewImpl->graphicsContext3D());
     return m_impl->getPlatformTextureId();
 }
 
 #if USE(SKIA)
+class GrMemoryAllocationChangedCallback : public Extensions3DChromium::GpuMemoryAllocationChangedCallbackCHROMIUM {
+public:
+    GrMemoryAllocationChangedCallback(GraphicsContext3DPrivate* context)
+        : m_context(context)
+    {
+    }
+
+    virtual void onGpuMemoryAllocationChanged(size_t gpuResourceSizeInBytes)
+    {
+        if (!gpuResourceSizeInBytes && m_context->grContext())
+            m_context->grContext()->freeGpuResources();
+    }
+
+private:
+    GraphicsContext3DPrivate* m_context;
+};
+
 GrContext* GraphicsContext3DPrivate::grContext()
 {
     // Limit the number of textures we hold in the bitmap->texture cache.
     static const int maxTextureCacheCount = 512;
     // Limit the bytes allocated toward textures in the bitmap->texture cache.
-    static const size_t maxTextureCacheBytes = 50 * 1024 * 1024;
+    static const size_t maxTextureCacheBytes = 96 * 1024 * 1024;
 
     if (!m_grContext) {
         SkAutoTUnref<GrGLInterface> interface(m_impl->createGrGLInterface());
         m_grContext = GrContext::Create(kOpenGL_Shaders_GrEngine, reinterpret_cast<GrPlatform3DContext>(interface.get()));
-        if (m_grContext)
+        if (m_grContext) {
             m_grContext->setTextureCacheLimits(maxTextureCacheCount, maxTextureCacheBytes);
+            Extensions3DChromium* extensions3DChromium = static_cast<Extensions3DChromium*>(getExtensions());
+            if (extensions3DChromium->supports("GL_CHROMIUM_gpu_memory_manager"))
+                extensions3DChromium->setGpuMemoryAllocationChangedCallbackCHROMIUM(adoptPtr(new GrMemoryAllocationChangedCallback(this)));
+        }
     }
     return m_grContext;
 }
@@ -343,13 +318,6 @@ PassRefPtr<ImageData> GraphicsContext3DPrivate::paintRenderingResultsToImageData
     return imageData.release();
 }
 
-bool GraphicsContext3DPrivate::paintsIntoCanvasBuffer() const
-{
-    // If the gpu compositor is on then skip the readback and software rendering path.
-    ASSERT(m_webViewImpl);
-    return !m_webViewImpl->isAcceleratedCompositingActive();
-}
-
 void GraphicsContext3DPrivate::reshape(int width, int height)
 {
     if (width == m_impl->width() && height == m_impl->height())
@@ -473,6 +441,12 @@ void GraphicsContext3DPrivate::name(t1 a1, t2 a2, t3 a3, t4 a4, t5 a5, t6 a6, t7
     m_impl->name(a1, a2, a3, a4, a5, a6, a7, a8);      \
 }
 
+#define DELEGATE_TO_IMPL_9(name, t1, t2, t3, t4, t5, t6, t7, t8, t9)       \
+void GraphicsContext3DPrivate::name(t1 a1, t2 a2, t3 a3, t4 a4, t5 a5, t6 a6, t7 a7, t8 a8, t9 a9) \
+{ \
+    m_impl->name(a1, a2, a3, a4, a5, a6, a7, a8, a9);      \
+}
+
 #define DELEGATE_TO_IMPL_9R(name, t1, t2, t3, t4, t5, t6, t7, t8, t9, rt) \
 rt GraphicsContext3DPrivate::name(t1 a1, t2 a2, t3 a3, t4 a4, t5 a5, t6 a6, t7 a7, t8 a8, t9 a9) \
 { \
@@ -533,6 +507,8 @@ DELEGATE_TO_IMPL_1(clearStencil, GC3Dint)
 DELEGATE_TO_IMPL_4(colorMask, GC3Dboolean, GC3Dboolean, GC3Dboolean, GC3Dboolean)
 DELEGATE_TO_IMPL_1(compileShader, Platform3DObject)
 
+DELEGATE_TO_IMPL_8(compressedTexImage2D, GC3Denum, GC3Dint, GC3Denum, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei, const void*)
+DELEGATE_TO_IMPL_9(compressedTexSubImage2D, GC3Denum, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Denum, GC3Dsizei, const void*)
 DELEGATE_TO_IMPL_8(copyTexImage2D, GC3Denum, GC3Dint, GC3Denum, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei, GC3Dint)
 DELEGATE_TO_IMPL_8(copyTexSubImage2D, GC3Denum, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei)
 DELEGATE_TO_IMPL_1(cullFace, GC3Denum)
@@ -898,6 +874,8 @@ DELEGATE_TO_IMPL(rateLimitOffscreenContextCHROMIUM)
 DELEGATE_TO_IMPL_R(getGraphicsResetStatusARB, GC3Denum)
 
 DELEGATE_TO_IMPL_1R(getTranslatedShaderSourceANGLE, Platform3DObject, String)
+DELEGATE_TO_IMPL_5(texImageIOSurface2DCHROMIUM, GC3Denum, GC3Dint, GC3Dint, GC3Duint, GC3Duint)
+DELEGATE_TO_IMPL_5(texStorage2DEXT, GC3Denum, GC3Dint, GC3Duint, GC3Dint, GC3Dint)
 
 //----------------------------------------------------------------------
 // GraphicsContext3D
@@ -1021,12 +999,30 @@ GraphicsContext3D::GraphicsContext3D(GraphicsContext3D::Attributes, HostWindow*,
 GraphicsContext3D::~GraphicsContext3D()
 {
     m_private->setContextLostCallback(nullptr);
+    m_private->setErrorMessageCallback(nullptr);
     m_private->setSwapBuffersCompleteCallbackCHROMIUM(nullptr);
+    m_private->setGpuMemoryAllocationChangedCallbackCHROMIUM(nullptr);
 }
 
-PassRefPtr<GraphicsContext3D> GraphicsContext3D::create(GraphicsContext3D::Attributes attrs, HostWindow* hostWindow, GraphicsContext3D::RenderStyle renderStyle)
+PassRefPtr<GraphicsContext3D> GraphicsContext3D::create(GraphicsContext3D::Attributes attrs, HostWindow*, GraphicsContext3D::RenderStyle renderStyle)
 {
-    return createGraphicsContext(attrs, hostWindow, renderStyle, GraphicsContext3DPrivate::ForUseOnThisThread);
+    ASSERT(renderStyle != GraphicsContext3D::RenderDirectlyToHostWindow);
+
+    WebKit::WebGraphicsContext3D::Attributes webAttributes;
+    webAttributes.alpha = attrs.alpha;
+    webAttributes.depth = attrs.depth;
+    webAttributes.stencil = attrs.stencil;
+    webAttributes.antialias = attrs.antialias;
+    webAttributes.premultipliedAlpha = attrs.premultipliedAlpha;
+    webAttributes.canRecoverFromContextLoss = attrs.canRecoverFromContextLoss;
+    webAttributes.noExtensions = attrs.noExtensions;
+    webAttributes.shareResources = attrs.shareResources;
+
+    OwnPtr<WebKit::WebGraphicsContext3D> webContext = adoptPtr(WebKit::webKitPlatformSupport()->createOffscreenGraphicsContext3D(webAttributes));
+    if (!webContext)
+        return 0;
+
+    return GraphicsContext3DPrivate::createGraphicsContextFromWebContext(webContext.release(), renderStyle, attrs.preserveDrawingBuffer);
 }
 
 PlatformGraphicsContext3D GraphicsContext3D::platformGraphicsContext3D() const
@@ -1097,6 +1093,8 @@ DELEGATE_TO_INTERNAL_1(clearStencil, GC3Dint)
 DELEGATE_TO_INTERNAL_4(colorMask, GC3Dboolean, GC3Dboolean, GC3Dboolean, GC3Dboolean)
 DELEGATE_TO_INTERNAL_1(compileShader, Platform3DObject)
 
+DELEGATE_TO_INTERNAL_8(compressedTexImage2D, GC3Denum, GC3Dint, GC3Denum, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei, const void*)
+DELEGATE_TO_INTERNAL_9(compressedTexSubImage2D, GC3Denum, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Denum, GC3Dsizei, const void*)
 DELEGATE_TO_INTERNAL_8(copyTexImage2D, GC3Denum, GC3Dint, GC3Denum, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei, GC3Dint)
 DELEGATE_TO_INTERNAL_8(copyTexSubImage2D, GC3Denum, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dint, GC3Dsizei, GC3Dsizei)
 DELEGATE_TO_INTERNAL_1(cullFace, GC3Denum)
@@ -1232,11 +1230,6 @@ PassRefPtr<ImageData> GraphicsContext3D::paintRenderingResultsToImageData(Drawin
 
 DELEGATE_TO_INTERNAL_1R(paintCompositedResultsToCanvas, CanvasRenderingContext*, bool)
 
-bool GraphicsContext3D::paintsIntoCanvasBuffer() const
-{
-    return m_private->paintsIntoCanvasBuffer();
-}
-
 DELEGATE_TO_INTERNAL_R(createBuffer, Platform3DObject)
 DELEGATE_TO_INTERNAL_R(createFramebuffer, Platform3DObject)
 DELEGATE_TO_INTERNAL_R(createProgram, Platform3DObject)
@@ -1255,6 +1248,7 @@ DELEGATE_TO_INTERNAL_1(synthesizeGLError, GC3Denum)
 DELEGATE_TO_INTERNAL_R(getExtensions, Extensions3D*)
 
 DELEGATE_TO_INTERNAL_1(setContextLostCallback, PassOwnPtr<GraphicsContext3D::ContextLostCallback>)
+DELEGATE_TO_INTERNAL_1(setErrorMessageCallback, PassOwnPtr<GraphicsContext3D::ErrorMessageCallback>)
 
 class GraphicsContextLostCallbackAdapter : public WebKit::WebGraphicsContext3D::WebGraphicsContextLostCallback {
 public:
@@ -1281,6 +1275,33 @@ void GraphicsContext3DPrivate::setContextLostCallback(PassOwnPtr<GraphicsContext
 {
     m_contextLostCallbackAdapter = GraphicsContextLostCallbackAdapter::create(cb);
     m_impl->setContextLostCallback(m_contextLostCallbackAdapter.get());
+}
+
+class GraphicsErrorMessageCallbackAdapter : public WebKit::WebGraphicsContext3D::WebGraphicsErrorMessageCallback {
+public:
+    virtual void onErrorMessage(const WebKit::WebString&, WebKit::WGC3Dint);
+    static PassOwnPtr<GraphicsErrorMessageCallbackAdapter> create(PassOwnPtr<GraphicsContext3D::ErrorMessageCallback>);
+    virtual ~GraphicsErrorMessageCallbackAdapter() { }
+private:
+    GraphicsErrorMessageCallbackAdapter(PassOwnPtr<GraphicsContext3D::ErrorMessageCallback> cb) : m_errorMessageCallback(cb) { }
+    OwnPtr<GraphicsContext3D::ErrorMessageCallback> m_errorMessageCallback;
+};
+
+void GraphicsErrorMessageCallbackAdapter::onErrorMessage(const WebKit::WebString& message, WebKit::WGC3Dint id)
+{
+    if (m_errorMessageCallback)
+        m_errorMessageCallback->onErrorMessage(message, id);
+}
+
+PassOwnPtr<GraphicsErrorMessageCallbackAdapter> GraphicsErrorMessageCallbackAdapter::create(PassOwnPtr<GraphicsContext3D::ErrorMessageCallback> cb)
+{
+    return adoptPtr(cb.get() ? new GraphicsErrorMessageCallbackAdapter(cb) : 0);
+}
+
+void GraphicsContext3DPrivate::setErrorMessageCallback(PassOwnPtr<GraphicsContext3D::ErrorMessageCallback> cb)
+{
+    m_errorMessageCallbackAdapter = GraphicsErrorMessageCallbackAdapter::create(cb);
+    m_impl->setErrorMessageCallback(m_errorMessageCallbackAdapter.get());
 }
 
 bool GraphicsContext3D::isGLES2Compliant() const
@@ -1314,6 +1335,31 @@ void GraphicsContext3DPrivate::setSwapBuffersCompleteCallbackCHROMIUM(PassOwnPtr
 {
     m_swapBuffersCompleteCallbackAdapter = GraphicsContext3DSwapBuffersCompleteCallbackAdapter::create(cb);
     m_impl->setSwapBuffersCompleteCallbackCHROMIUM(m_swapBuffersCompleteCallbackAdapter.get());
+}
+
+class GraphicsContext3DMemoryAllocationChangedCallbackAdapter : public WebKit::WebGraphicsContext3D::WebGraphicsMemoryAllocationChangedCallbackCHROMIUM {
+public:
+    GraphicsContext3DMemoryAllocationChangedCallbackAdapter(PassOwnPtr<Extensions3DChromium::GpuMemoryAllocationChangedCallbackCHROMIUM> cb)
+        : m_memoryAllocationChangedCallback(cb)
+    {
+    }
+
+    virtual ~GraphicsContext3DMemoryAllocationChangedCallbackAdapter() { }
+
+    virtual void onMemoryAllocationChanged(size_t gpuResourceSizeInBytes)
+    {
+        if (m_memoryAllocationChangedCallback)
+            m_memoryAllocationChangedCallback->onGpuMemoryAllocationChanged(gpuResourceSizeInBytes);
+    }
+
+private:
+    OwnPtr<Extensions3DChromium::GpuMemoryAllocationChangedCallbackCHROMIUM> m_memoryAllocationChangedCallback;
+};
+
+void GraphicsContext3DPrivate::setGpuMemoryAllocationChangedCallbackCHROMIUM(PassOwnPtr<Extensions3DChromium::GpuMemoryAllocationChangedCallbackCHROMIUM> cb)
+{
+    m_memoryAllocationChangedCallbackAdapter = adoptPtr(new GraphicsContext3DMemoryAllocationChangedCallbackAdapter(cb));
+    m_impl->setMemoryAllocationChangedCallbackCHROMIUM(m_memoryAllocationChangedCallbackAdapter.get());
 }
 
 } // namespace WebCore

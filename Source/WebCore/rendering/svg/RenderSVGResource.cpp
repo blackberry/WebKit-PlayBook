@@ -25,7 +25,10 @@
 #if ENABLE(SVG)
 #include "RenderSVGResource.h"
 
+#include "Frame.h"
+#include "FrameView.h"
 #include "RenderSVGResourceContainer.h"
+#include "RenderSVGResourceFilter.h"
 #include "RenderSVGResourceSolidColor.h"
 #include "SVGResources.h"
 #include "SVGResourcesCache.h"
@@ -54,12 +57,23 @@ static inline RenderSVGResource* requestPaintingResource(RenderSVGResourceMode m
     if (!svgStyle)
         return 0;
 
+    bool isRenderingMask = false;
+    if (object->frame() && object->frame()->view())
+        isRenderingMask = object->frame()->view()->paintBehavior() & PaintBehaviorRenderingSVGMask;
+
     // If we have no fill/stroke, return 0.
     if (mode == ApplyToFillMode) {
+        // When rendering the mask for a RenderSVGResourceClipper, always use the initial fill paint server, and ignore stroke.
+        if (isRenderingMask) {
+            RenderSVGResourceSolidColor* colorResource = RenderSVGResource::sharedSolidPaintingResource();
+            colorResource->setColor(SVGRenderStyle::initialFillPaintColor());
+            return colorResource;
+        }
+
         if (!svgStyle->hasFill())
             return 0;
     } else {
-        if (!svgStyle->hasStroke())
+        if (!svgStyle->hasStroke() || isRenderingMask)
             return 0;
     }
 
@@ -147,16 +161,45 @@ RenderSVGResourceSolidColor* RenderSVGResource::sharedSolidPaintingResource()
     return s_sharedSolidPaintingResource;
 }
 
+static inline void removeFromFilterCacheAndInvalidateDependencies(RenderObject* object, bool needsLayout)
+{
+    ASSERT(object);
+#if ENABLE(FILTERS)
+    if (SVGResources* resources = SVGResourcesCache::cachedResourcesForRenderObject(object)) {
+        if (RenderSVGResourceFilter* filter = resources->filter())
+            filter->removeClientFromCache(object);
+    }
+#endif
+    if (!object->node() || !object->node()->isSVGElement())
+        return;
+    HashSet<SVGElement*>* dependencies = object->document()->accessSVGExtensions()->setOfElementsReferencingTarget(static_cast<SVGElement*>(object->node()));
+    if (!dependencies)
+        return;
+    HashSet<SVGElement*>::iterator end = dependencies->end();
+    for (HashSet<SVGElement*>::iterator it = dependencies->begin(); it != end; ++it) {
+        if (RenderObject* renderer = (*it)->renderer())
+            RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer, needsLayout);
+    }
+}
+
 void RenderSVGResource::markForLayoutAndParentResourceInvalidation(RenderObject* object, bool needsLayout)
 {
     ASSERT(object);
+    ASSERT(object->document());
+    ASSERT(object->node());
+
     if (needsLayout)
         object->setNeedsLayout(true);
+
+    removeFromFilterCacheAndInvalidateDependencies(object, needsLayout);
 
     // Invalidate resources in ancestor chain, if needed.
     RenderObject* current = object->parent();
     while (current) {
+        removeFromFilterCacheAndInvalidateDependencies(current, needsLayout);
+
         if (current->isSVGResourceContainer()) {
+            // This will process the rest of the ancestors.
             current->toRenderSVGResourceContainer()->removeAllClientsFromCache();
             break;
         }

@@ -29,9 +29,10 @@
  */
 
 #include "config.h"
-#include "ConsoleMessage.h"
 
 #if ENABLE(INSPECTOR)
+
+#include "ConsoleMessage.h"
 
 #include "Console.h"
 #include "InjectedScript.h"
@@ -45,13 +46,13 @@
 
 namespace WebCore {
 
-ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, const String& m, unsigned li, const String& u, const String& requestId)
+ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, const String& m, const String& u, unsigned li, const String& requestId)
     : m_source(s)
     , m_type(t)
     , m_level(l)
     , m_message(m)
-    , m_line(li)
     , m_url(u)
+    , m_line(li)
     , m_repeatCount(1)
     , m_requestId(requestId)
 {
@@ -63,8 +64,8 @@ ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, c
     , m_level(l)
     , m_message(m)
     , m_arguments(arguments)
-    , m_line(0)
     , m_url()
+    , m_line(0)
     , m_repeatCount(1)
 {
     if (callStack && callStack->size()) {
@@ -80,8 +81,8 @@ ConsoleMessage::ConsoleMessage(MessageSource s, MessageType t, MessageLevel l, c
     , m_type(t)
     , m_level(l)
     , m_message(m)
-    , m_line(0)
     , m_url(responseUrl)
+    , m_line(0)
     , m_repeatCount(1)
     , m_requestId(requestId)
 {
@@ -117,7 +118,7 @@ static String messageTypeValue(MessageType type)
     case EndGroupMessageType: return "endGroup";
     case AssertMessageType: return "assert";
     }
-    return "other";
+    return "log";
 }
 
 static String messageLevelValue(MessageLevel level)
@@ -134,17 +135,17 @@ static String messageLevelValue(MessageLevel level)
 
 void ConsoleMessage::addToFrontend(InspectorFrontend::Console* frontend, InjectedScriptManager* injectedScriptManager)
 {
-    RefPtr<InspectorObject> jsonObj = InspectorObject::create();
-    jsonObj->setString("source", messageSourceValue(m_source));
+    RefPtr<TypeBuilder::Console::ConsoleMessage> jsonObj = TypeBuilder::Console::ConsoleMessage::create()
+        .setSource(messageSourceValue(m_source))
+        .setLevel(messageLevelValue(m_level))
+        .setText(m_message);
     // FIXME: only send out type for ConsoleAPI source messages.
-    jsonObj->setString("type", messageTypeValue(m_type));
-    jsonObj->setString("level", messageLevelValue(m_level));
-    jsonObj->setNumber("line", static_cast<int>(m_line));
-    jsonObj->setString("url", m_url);
-    jsonObj->setNumber("repeatCount", static_cast<int>(m_repeatCount));
-    jsonObj->setString("text", m_message);
+    jsonObj->setType(messageTypeValue(m_type));
+    jsonObj->setLine(static_cast<int>(m_line));
+    jsonObj->setUrl(m_url);
+    jsonObj->setRepeatCount(static_cast<int>(m_repeatCount));
     if (m_source == NetworkMessageSource && !m_requestId.isEmpty())
-        jsonObj->setString("networkRequestId", m_requestId);
+        jsonObj->setNetworkRequestId(m_requestId);
     if (m_arguments && m_arguments->argumentCount()) {
         InjectedScript injectedScript = injectedScriptManager->injectedScriptFor(m_arguments->globalState());
         if (!injectedScript.hasNoValue()) {
@@ -157,11 +158,11 @@ void ConsoleMessage::addToFrontend(InspectorFrontend::Console* frontend, Injecte
                 }
                 jsonArgs->pushValue(inspectorValue);
             }
-            jsonObj->setArray("parameters", jsonArgs);
+            jsonObj->setParameters(jsonArgs);
         }
     }
     if (m_callStack)
-        jsonObj->setArray("stackTrace", m_callStack->buildInspectorArray());
+        jsonObj->setStackTrace(m_callStack->buildInspectorArray());
     frontend->messageAdded(jsonObj);
 }
 

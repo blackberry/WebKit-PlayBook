@@ -73,8 +73,8 @@ public:
 private:
     DatabaseThread();
 
-    static void* databaseThreadStart(void*);
-    void* databaseThread();
+    static void databaseThreadStart(void*);
+    void databaseThread();
 
     Mutex m_threadCreationMutex;
     ThreadIdentifier m_threadID;

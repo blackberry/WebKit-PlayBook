@@ -37,6 +37,7 @@ class CCThread;
 
 class CCSchedulerClient {
 public:
+    virtual bool canDraw() = 0;
     virtual bool hasMoreResourceUpdates() const = 0;
 
     virtual void scheduledActionBeginFrame() = 0;
@@ -60,7 +61,6 @@ public:
 
     void setVisible(bool);
 
-    void setNeedsAnimate();
     void setNeedsCommit();
     void setNeedsRedraw();
 
@@ -82,6 +82,7 @@ public:
 private:
     CCScheduler(CCSchedulerClient*, PassOwnPtr<CCFrameRateController>);
 
+    CCSchedulerStateMachine::Action nextAction();
     void processScheduledActions();
 
     CCSchedulerClient* m_client;

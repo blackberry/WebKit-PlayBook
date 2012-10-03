@@ -36,7 +36,7 @@ class HTMLImageLoader;
 
 class HTMLVideoElement : public HTMLMediaElement {
 public:
-    static PassRefPtr<HTMLVideoElement> create(const QualifiedName&, Document*);
+    static PassRefPtr<HTMLVideoElement> create(const QualifiedName&, Document*, bool);
 
     unsigned width() const;
     unsigned height() const;
@@ -67,7 +67,7 @@ public:
     bool shouldDisplayPosterImage() const { return displayMode() == Poster || displayMode() == PosterWaitingForVideo; }
 
 private:
-    HTMLVideoElement(const QualifiedName&, Document*);
+    HTMLVideoElement(const QualifiedName&, Document*, bool);
 
     virtual bool rendererIsNeeded(const NodeRenderingContext&);
 #if !ENABLE(PLUGIN_PROXY_FOR_VIDEO)
@@ -75,7 +75,9 @@ private:
 #endif
     virtual void attach();
     virtual void detach();
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
+    virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
+    virtual void collectStyleForAttribute(Attribute*, StylePropertySet*) OVERRIDE;
     virtual bool isVideo() const { return true; }
     virtual bool hasVideo() const { return player() && player()->hasVideo(); }
     virtual bool supportsFullscreen() const;
@@ -84,9 +86,7 @@ private:
 
     virtual bool hasAvailableVideoFrame() const;
     virtual void updateDisplayState();
-
-    virtual void willMoveToNewOwnerDocument();
-
+    virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
     virtual void setDisplayMode(DisplayMode);
 
     OwnPtr<HTMLImageLoader> m_imageLoader;

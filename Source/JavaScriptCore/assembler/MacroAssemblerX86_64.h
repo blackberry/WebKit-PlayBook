@@ -35,9 +35,6 @@
 namespace JSC {
 
 class MacroAssemblerX86_64 : public MacroAssemblerX86Common {
-protected:
-    static const X86Registers::RegisterID scratchRegister = X86Registers::r11;
-
 public:
     static const Scale ScalePtr = TimesEight;
 
@@ -88,12 +85,6 @@ public:
         }
     }
 
-    void loadDouble(const void* address, FPRegisterID dest)
-    {
-        move(TrustedImmPtr(address), scratchRegister);
-        loadDouble(scratchRegister, dest);
-    }
-
     void addDouble(AbsoluteAddress address, FPRegisterID dest)
     {
         move(TrustedImmPtr(address.m_ptr), scratchRegister);
@@ -104,14 +95,6 @@ public:
     {
         move(imm, scratchRegister);
         m_assembler.cvtsi2sd_rr(scratchRegister, dest);
-    }
-
-    void absDouble(FPRegisterID src, FPRegisterID dst)
-    {
-        ASSERT(src != dst);
-        static const double negativeZeroConstant = -0.0;
-        loadDouble(&negativeZeroConstant, dst);
-        m_assembler.andnpd_rr(src, dst);
     }
 
     void store32(TrustedImm32 imm, void* address)
@@ -351,6 +334,13 @@ public:
         m_assembler.movzbl_rr(dest, dest);
     }
     
+    void comparePtr(RelationalCondition cond, RegisterID left, RegisterID right, RegisterID dest)
+    {
+        m_assembler.cmpq_rr(right, left);
+        m_assembler.setCC_r(x86Condition(cond), dest);
+        m_assembler.movzbl_rr(dest, dest);
+    }
+    
     Jump branchAdd32(ResultCondition cond, TrustedImm32 src, AbsoluteAddress dest)
     {
         move(TrustedImmPtr(dest.m_ptr), scratchRegister);
@@ -497,6 +487,11 @@ public:
     static bool supportsFloatingPointTruncate() { return true; }
     static bool supportsFloatingPointSqrt() { return true; }
     static bool supportsFloatingPointAbs() { return true; }
+    
+    static FunctionPtr readCallTarget(CodeLocationCall call)
+    {
+        return FunctionPtr(X86Assembler::readPointer(call.dataLabelPtrAtOffset(-REPTACH_OFFSET_CALL_R11).dataLocation()));
+    }
 
 private:
     friend class LinkBuffer;

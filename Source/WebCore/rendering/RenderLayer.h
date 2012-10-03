@@ -44,6 +44,9 @@
 #ifndef RenderLayer_h
 #define RenderLayer_h
 
+#if ENABLE(CSS_FILTERS)
+#include "FilterEffectObserver.h"
+#endif
 #include "PaintInfo.h"
 #include "RenderBox.h"
 #include "ScrollBehavior.h"
@@ -72,6 +75,12 @@ class RenderLayerCompositor;
 #endif
 
 enum BorderRadiusClippingRule { IncludeSelfForBorderRadius, DoNotIncludeSelfForBorderRadius };
+
+enum RepaintStatus {
+    NeedsNormalRepaint = 0,
+    NeedsFullRepaint = 1 << 0,
+    NeedsFullRepaintForPositionedMovementLayout = 1 << 1
+};
 
 class ClipRect {
 public:
@@ -168,7 +177,7 @@ public:
     void destroy(RenderArena*);
 
     // Overloaded new operator.
-    void* operator new(size_t, RenderArena*) throw();
+    void* operator new(size_t, RenderArena*);
 
     // Overridden to prevent the normal delete from being called.
     void operator delete(void*, size_t);
@@ -202,7 +211,11 @@ private:
     bool m_fixed : 1;
 };
 
-class RenderLayer : public ScrollableArea {
+class RenderLayer : public ScrollableArea
+#if ENABLE(CSS_FILTERS)
+    , public FilterEffectObserver
+#endif
+{
 public:
     friend class RenderReplica;
 
@@ -244,7 +257,7 @@ public:
 
     bool isTransparent() const;
     RenderLayer* transparentPaintingAncestor();
-    void beginTransparencyLayers(GraphicsContext*, const RenderLayer* rootLayer, PaintBehavior);
+    void beginTransparencyLayers(GraphicsContext*, const RenderLayer* rootLayer, const LayoutRect& paintDirtyRect, PaintBehavior);
 
     bool hasReflection() const { return renderer()->hasReflection(); }
     bool isReflection() const { return renderer()->isReplica(); }
@@ -269,6 +282,8 @@ public:
 
     LayoutUnit scrollWidth();
     LayoutUnit scrollHeight();
+    int pixelSnappedScrollWidth();
+    int pixelSnappedScrollHeight();
 
     void panScrollFromPoint(const LayoutPoint&);
 
@@ -279,8 +294,6 @@ public:
 
     // Scrolling methods for layers that can scroll their overflow.
     void scrollByRecursively(LayoutUnit xDelta, LayoutUnit yDelta, ScrollOffsetClamping = ScrollOffsetUnclamped);
-
-    LayoutSize scrolledContentOffset() const { return scrollOffset() + m_scrollOverflow; }
 
     int scrollXOffset() const { return m_scrollOffset.width() + scrollOrigin().x(); }
     int scrollYOffset() const { return m_scrollOffset.height() + scrollOrigin().y(); }
@@ -297,8 +310,6 @@ public:
     bool scrollsOverflow() const;
     bool allowsScrolling() const; // Returns true if at least one scrollbar is visible and enabled.
     bool hasScrollbars() const { return m_hBar || m_vBar; }
-    virtual void didAddHorizontalScrollbar(Scrollbar*);
-    virtual void willRemoveHorizontalScrollbar(Scrollbar*);
     void setHasHorizontalScrollbar(bool);
     void setHasVerticalScrollbar(bool);
 
@@ -314,13 +325,13 @@ public:
     int horizontalScrollbarHeight(OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
 
     bool hasOverflowControls() const;
-    bool isPointInResizeControl(const LayoutPoint& absolutePoint) const;
-    bool hitTestOverflowControls(HitTestResult&, const LayoutPoint& localPoint);
-    LayoutSize offsetFromResizeCorner(const LayoutPoint& absolutePoint) const;
+    bool isPointInResizeControl(const IntPoint& absolutePoint) const;
+    bool hitTestOverflowControls(HitTestResult&, const IntPoint& localPoint);
+    IntSize offsetFromResizeCorner(const IntPoint& absolutePoint) const;
 
-    void paintOverflowControls(GraphicsContext*, const LayoutPoint&, const LayoutRect& damageRect, bool paintingOverlayControls = false);
-    void paintScrollCorner(GraphicsContext*, const LayoutPoint&, const LayoutRect& damageRect);
-    void paintResizer(GraphicsContext*, const LayoutPoint&, const LayoutRect& damageRect);
+    void paintOverflowControls(GraphicsContext*, const IntPoint&, const IntRect& damageRect, bool paintingOverlayControls = false);
+    void paintScrollCorner(GraphicsContext*, const IntPoint&, const IntRect& damageRect);
+    void paintResizer(GraphicsContext*, const IntPoint&, const IntRect& damageRect);
 
     void updateScrollInfoAfterLayout();
 
@@ -412,6 +423,8 @@ public:
     RenderLayer* ancestorCompositingLayer() const { return enclosingCompositingLayer(false); }
 #endif
 
+    void convertToPixelSnappedLayerCoords(const RenderLayer* ancestorLayer, IntPoint& location) const;
+    void convertToPixelSnappedLayerCoords(const RenderLayer* ancestorLayer, IntRect&) const;
     void convertToLayerCoords(const RenderLayer* ancestorLayer, LayoutPoint& location) const;
     void convertToLayerCoords(const RenderLayer* ancestorLayer, LayoutRect&) const;
 
@@ -423,10 +436,11 @@ public:
         PaintLayerAppliedTransform = 1 << 1,
         PaintLayerTemporaryClipRects = 1 << 2,
         PaintLayerPaintingReflection = 1 << 3,
-        PaintLayerPaintingOverlayScrollbars = 1 << 4
-#if ENABLE(CSS_FILTERS)
-        , PaintLayerPaintingFilter = 1 << 5
-#endif
+        PaintLayerPaintingOverlayScrollbars = 1 << 4,
+        PaintLayerPaintingCompositingBackgroundPhase = 1 << 5,
+        PaintLayerPaintingCompositingForegroundPhase = 1 << 6,
+        PaintLayerPaintingCompositingMaskPhase = 1 << 7,
+        PaintLayerPaintingCompositingAllPhases = (PaintLayerPaintingCompositingBackgroundPhase | PaintLayerPaintingCompositingForegroundPhase | PaintLayerPaintingCompositingMaskPhase)
     };
     
     typedef unsigned PaintLayerFlags;
@@ -483,8 +497,8 @@ public:
 
     typedef unsigned UpdateLayerPositionsAfterScrollFlags;
     void updateLayerPositionsAfterScroll(UpdateLayerPositionsAfterScrollFlags = NoFlag);
-    void setNeedsFullRepaint(bool f = true) { m_needsFullRepaint = f; }
-    
+    void setRepaintStatus(RepaintStatus status) { m_repaintStatus = status; }
+
     LayoutUnit staticInlinePosition() const { return m_staticInlinePosition; }
     LayoutUnit staticBlockPosition() const { return m_staticBlockPosition; }
    
@@ -509,12 +523,15 @@ public:
     bool has3DTransform() const { return m_transform && !m_transform->isAffine(); }
 
 #if ENABLE(CSS_FILTERS)
+    virtual void filterNeedsRepaint();
     bool hasFilter() const { return renderer()->hasFilter(); }
+#else
+    bool hasFilter() const { return false; }
 #endif
 
     // Overloaded new operator. Derived classes must override operator new
     // in order to allocate out of the RenderArena.
-    void* operator new(size_t, RenderArena*) throw();
+    void* operator new(size_t, RenderArena*);
 
     // Overridden to prevent the normal delete from being called.
     void operator delete(void*, size_t);
@@ -543,13 +560,25 @@ public:
     bool containsDirtyOverlayScrollbars() const { return m_containsDirtyOverlayScrollbars; }
     void setContainsDirtyOverlayScrollbars(bool dirtyScrollbars) { m_containsDirtyOverlayScrollbars = dirtyScrollbars; }
 
+#if ENABLE(CSS_FILTERS)
+    bool paintsWithFilters() const;
+    FilterEffectRenderer* filter() const { return m_filter.get(); }
+#endif
+
 private:
-    void computeRepaintRects(IntPoint* offsetFromRoot = 0);
+    void updateZOrderListsSlowCase();
+
+    void computeRepaintRects(LayoutPoint* offsetFromRoot = 0);
     void clearRepaintRects();
 
     void clipToRect(RenderLayer* rootLayer, GraphicsContext*, const LayoutRect& paintDirtyRect, const ClipRect&,
                     BorderRadiusClippingRule = IncludeSelfForBorderRadius);
     void restoreClip(GraphicsContext*, const LayoutRect& paintDirtyRect, const ClipRect&);
+
+    bool shouldRepaintAfterLayout() const;
+
+    friend IntSize RenderBox::scrolledContentOffset() const;
+    IntSize scrolledContentOffset() const { return scrollOffset() + m_scrollOverflow; }
 
     // The normal operator new is disallowed on all render objects.
     void* operator new(size_t) throw();
@@ -570,6 +599,12 @@ private:
     void updateCompositingAndLayerListsIfNeeded();
 
     void paintLayer(RenderLayer* rootLayer, GraphicsContext*, const LayoutRect& paintDirtyRect,
+                    PaintBehavior, RenderObject* paintingRoot, RenderRegion* = 0, OverlapTestRequestMap* = 0,
+                    PaintLayerFlags = 0);
+    void paintLayerContentsAndReflection(RenderLayer* rootLayer, GraphicsContext*, const LayoutRect& paintDirtyRect,
+                    PaintBehavior, RenderObject* paintingRoot, RenderRegion* = 0, OverlapTestRequestMap* = 0,
+                    PaintLayerFlags = 0);
+    void paintLayerContents(RenderLayer* rootLayer, GraphicsContext*, const LayoutRect& paintDirtyRect,
                     PaintBehavior, RenderObject* paintingRoot, RenderRegion* = 0, OverlapTestRequestMap* = 0,
                     PaintLayerFlags = 0);
     void paintList(Vector<RenderLayer*>*, RenderLayer* rootLayer, GraphicsContext* p,
@@ -633,9 +668,9 @@ private:
     virtual IntSize contentsSize() const;
     virtual IntSize overhangAmount() const;
     virtual IntPoint currentMousePosition() const;
-    virtual void didCompleteRubberBand(const IntSize&) const;
     virtual bool shouldSuspendScrollAnimations() const;
     virtual bool isOnActivePage() const;
+    virtual IntRect scrollableAreaBoundingBox() const OVERRIDE;
 
     // Rectangle encompassing the scroll corner and resizer rect.
     IntRect scrollCornerAndResizerRect() const;
@@ -648,6 +683,8 @@ private:
     IntSize scrollbarOffset(const Scrollbar*) const;
     
     void updateOverflowStatus(bool horizontalOverflow, bool verticalOverflow);
+
+    void updateScrollableAreaSet(bool hasOverflow);
 
     void childVisibilityChanged(bool newVisibility);
     void dirtyVisibleDescendantStatus();
@@ -672,22 +709,22 @@ private:
 
 #if ENABLE(CSS_FILTERS)
     void updateOrRemoveFilterEffect();
-    void updateFilterBackingStore();
 #endif
 
     void parentClipRects(const RenderLayer* rootLayer, RenderRegion*, ClipRects&, bool temporaryClipRects = false, OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
     ClipRect backgroundClipRect(const RenderLayer* rootLayer, RenderRegion*, bool temporaryClipRects, OverlayScrollbarSizeRelevancy = IgnoreOverlayScrollbarSize) const;
+    LayoutRect paintingExtent(const RenderLayer* rootLayer, const LayoutRect& paintDirtyRect, PaintBehavior);
 
     RenderLayer* enclosingTransformedAncestor() const;
 
     // Convert a point in absolute coords into layer coords, taking transforms into account
     LayoutPoint absoluteToContents(const LayoutPoint&) const;
 
-    void positionOverflowControls(const LayoutSize&);
+    void positionOverflowControls(const IntSize&);
     void updateScrollCornerStyle();
     void updateResizerStyle();
 
-    void drawPlatformResizerImage(GraphicsContext*, LayoutRect resizerCornerRect);
+    void drawPlatformResizerImage(GraphicsContext*, IntRect resizerCornerRect);
 
     void updatePagination();
     bool isPaginated() const { return m_isPaginated; }
@@ -747,7 +784,7 @@ protected:
                                  // blend).
     bool m_paintingInsideReflection : 1;  // A state bit tracking if we are painting inside a replica.
     bool m_inOverflowRelayout : 1;
-    bool m_needsFullRepaint : 1;
+    unsigned m_repaintStatus : 2; // RepaintStatus
 
     bool m_overflowStatusDirty : 1;
     bool m_horizontalOverflow : 1;
@@ -805,7 +842,7 @@ protected:
     LayoutSize m_scrollOverflow;
     
     // The width/height of our scrolled area.
-    IntSize m_scrollSize;
+    LayoutSize m_scrollSize;
 
     // For layers with overflow, we have a pair of scrollbars.
     RefPtr<Scrollbar> m_hBar;
@@ -827,7 +864,7 @@ protected:
     const RenderLayer* m_clipRectsRoot;   // Root layer used to compute clip rects.
 #endif
 
-    LayoutPoint m_cachedOverlayScrollbarOffset;
+    IntPoint m_cachedOverlayScrollbarOffset;
 
     RenderMarquee* m_marquee; // Used by layers with overflow:marquee
     
@@ -857,6 +894,13 @@ private:
 
     Page* m_scrollableAreaPage; // Page on which this is registered as a scrollable area.
 };
+
+inline void RenderLayer::updateZOrderLists()
+{
+    if (!m_zOrderListsDirty || !isStackingContext())
+        return;
+    updateZOrderListsSlowCase();
+}
 
 } // namespace WebCore
 

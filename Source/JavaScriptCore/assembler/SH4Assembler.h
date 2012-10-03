@@ -31,10 +31,12 @@
 
 #include "AssemblerBuffer.h"
 #include "AssemblerBufferWithConstantPool.h"
+#include "JITCompilationEffort.h"
 #include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <wtf/Assertions.h>
+#include <wtf/DataLog.h>
 #include <wtf/Vector.h>
 
 #ifndef NDEBUG
@@ -1506,9 +1508,16 @@ public:
         return readPCrelativeAddress((*(reinterpret_cast<uint16_t*>(code)) & 0xff), reinterpret_cast<uint16_t*>(code));
     }
 
-    PassRefPtr<ExecutableMemoryHandle> executableCopy(JSGlobalData& globalData)
+    static void* readCallTarget(void* from)
     {
-        return m_buffer.executableCopy(globalData);
+        uint16_t* instructionPtr = static_cast<uint16_t*>(from);
+        instructionPtr -= 3;
+        return reinterpret_cast<void*>(readPCrelativeAddress((*instructionPtr & 0xff), instructionPtr));
+    }
+
+    PassRefPtr<ExecutableMemoryHandle> executableCopy(JSGlobalData& globalData, void* ownerUID, JITCompilationEffort effort)
+    {
+        return m_buffer.executableCopy(globalData, ownerUID, effort);
     }
 
     void prefix(uint16_t pre)
@@ -2018,7 +2027,7 @@ public:
     static void vprintfStdoutInstr(const char* format, va_list args)
     {
         if (getenv("JavaScriptCoreDumpJIT"))
-            vfprintf(stdout, format, args);
+            WTF::dataLogV(format, args);
     }
 
     static void printBlockInstr(uint16_t* first, unsigned int offset, int nbInstr)

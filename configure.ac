@@ -1,15 +1,15 @@
 AC_PREREQ(2.59)
 
 m4_define([webkit_major_version], [1])
-m4_define([webkit_minor_version], [7])
-m4_define([webkit_micro_version], [1])
+m4_define([webkit_minor_version], [9])
+m4_define([webkit_micro_version], [0])
 
 # This is the version we'll be using as part of our User-Agent string
 # e.g., AppleWebKit/$(webkit_user_agent_version) ...
 #
 # Sourced from Source/WebCore/Configurations/Version.xcconfig
 m4_define([webkit_user_agent_major_version], [535])
-m4_define([webkit_user_agent_minor_version], [7])
+m4_define([webkit_user_agent_minor_version], [20])
 
 AC_INIT([WebKit],[webkit_major_version.webkit_minor_version.webkit_micro_version],[http://bugs.webkit.org/])
 
@@ -35,7 +35,7 @@ AC_CONFIG_SRCDIR([Source/WebCore/config.h])
 
 dnl # Libtool library version, not to confuse with API version
 dnl # see http://www.gnu.org/software/libtool/manual/html_node/Libtool-versioning.html
-LIBWEBKITGTK_VERSION=11:1:11
+LIBWEBKITGTK_VERSION=12:0:12
 AC_SUBST([LIBWEBKITGTK_VERSION])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects dist-xz no-dist-gzip tar-ustar])
@@ -77,8 +77,61 @@ case "$host_os" in
        ;;
 esac
 
-# initialize webkit options
-WEBKIT_INIT
+# If CFLAGS and CXXFLAGS are unset, default to empty.
+# This is to tell automake not to include '-g' if C{XX,}FLAGS is not set
+# For more info - http://www.gnu.org/software/automake/manual/autoconf.html#C_002b_002b-Compiler
+if test -z "$CXXFLAGS"; then
+   CXXFLAGS=""
+fi
+if test -z "$CFLAGS"; then
+   CFLAGS=""
+fi
+
+PKG_PROG_PKG_CONFIG
+
+AC_PATH_PROG(PERL, perl)
+if test -z "$PERL"; then
+   AC_MSG_ERROR([You need 'perl' to compile WebKit])
+fi
+
+AC_PATH_PROG(PYTHON, python)
+if test -z "$PYTHON"; then
+   AC_MSG_ERROR([You need 'python' to compile WebKit])
+fi
+
+AC_PATH_PROG(BISON, bison)
+if test -z "$BISON"; then
+   AC_MSG_ERROR([You need the 'bison' parser generator to compile WebKit])
+fi
+
+AC_PATH_PROG(MV, mv)
+if test -z "$MV"; then
+   AC_MSG_ERROR([You need 'mv' to compile WebKit])
+fi
+
+AC_PROG_CC
+AC_PROG_CXX
+AM_PROG_CC_STDC
+AM_PROG_CC_C_O
+AC_PROG_INSTALL
+AC_SYS_LARGEFILE
+
+# Check whether a C++ was found (AC_PROG_CXX sets $CXX to "g++" even when it
+# doesn't exist)
+AC_LANG_PUSH([C++])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],[])],[],[AC_MSG_ERROR([No C++ compiler found])])
+AC_LANG_POP([C++])
+
+# C/C++ Language Features
+AC_C_CONST
+AC_C_INLINE
+AC_C_VOLATILE
+
+# C/C++ Headers
+AC_HEADER_STDC
+AC_HEADER_STDBOOL
+
+# Linker
 AC_DISABLE_STATIC
 AC_LIBTOOL_WIN32_DLL
 AC_PROG_LIBTOOL
@@ -99,12 +152,39 @@ if test -z "$GPERF"; then
    AC_MSG_ERROR([You need the 'gperf' hash function generator to compile WebKit])
 fi
 
+# check for -fvisibility=hidden compiler support (GCC >= 4)
+saved_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -fvisibility=hidden -fvisibility-inlines-hidden"
+AC_MSG_CHECKING([if ${CXX} supports -fvisibility=hidden -fvisibility-inlines-hidden])
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([char foo;])],
+      [ AC_MSG_RESULT([yes])
+        SYMBOL_VISIBILITY="-fvisibility=hidden" SYMBOL_VISIBILITY_INLINES="-fvisibility-inlines-hidden" ],
+        AC_MSG_RESULT([no]))
+CFLAGS="$saved_CFLAGS"
+AC_SUBST(SYMBOL_VISIBILITY)
+AC_SUBST(SYMBOL_VISIBILITY_INLINES)
+
 # Disable C++0x compat warnings for GCC >= 4.6.0 until we build
 # cleanly with that.
-if test "$CXX" = "g++"; then
-   CXX_VERSION=`$CXX -dumpversion`
-   AX_COMPARE_VERSION([$CXX_VERSION],[ge],[4.6.0],CXXFLAGS="$CXXFLAGS -Wno-c++0x-compat")
+AC_LANG_PUSH(C++)
+TMPCXXFLAGS=$CXXFLAGS
+CXXFLAGS="-Wall -Werror"
+AC_MSG_CHECKING([if we have to disable C++0x compat warnings for GCC >= 4.6.0])
+AC_TRY_COMPILE([
+namespace std {
+    class nullptr_t { };
+}
+extern std::nullptr_t nullptr;
+], [return 0;],
+disable_cxx0x_compat=no,
+disable_cxx0x_compat=yes)
+AC_MSG_RESULT($disable_cxx0x_compat)
+if test "$disable_cxx0x_compat" = yes; then
+  CXXFLAGS="$TMPCXXFLAGS -Wno-c++0x-compat"
+else
+  CXXFLAGS="$TMPCXXFLAGS"
 fi
+AC_LANG_POP(C++)
 
 # pthread (not needed on Windows)
 if test "$os_win32" = "no"; then
@@ -261,31 +341,112 @@ if test "$with_hildon" = "yes"; then
     AC_SUBST([HILDON_LIBS])
 fi
 
+AC_MSG_CHECKING([the GStreamer version to use])
+AC_ARG_WITH([gstreamer],
+        [AS_HELP_STRING([--with-gstreamer=0.10|0.11], [the GStreamer version to use (default: 0.10)])],
+        [case "$with_gstreamer" in
+        0.10|0.11) ;;
+        *) AC_MSG_ERROR([invalid GStreamer version specified]) ;;
+        esac],
+        [with_gstreamer=0.10])
+AC_MSG_RESULT([$with_gstreamer])
+
+GSTREAMER_0_10_REQUIRED_VERSION=0.10
+GSTREAMER_0_10_PLUGINS_BASE_REQUIRED_VERSION=0.10.30
+GSTREAMER_0_11_REQUIRED_VERSION=0.11
+GSTREAMER_0_11_PLUGINS_BASE_REQUIRED_VERSION=0.11.0.2
+
+case "$with_gstreamer" in
+     0.10) GSTREAMER_REQUIRED_VERSION=GSTREAMER_0_10_REQUIRED_VERSION
+           GSTREAMER_PLUGINS_BASE_REQUIRED_VERSION=GSTREAMER_0_10_PLUGINS_BASE_REQUIRED_VERSION
+           GST_API_VERSION=0.10
+           ;;
+     0.11) GSTREAMER_REQUIRED_VERSION=GSTREAMER_0_11_REQUIRED_VERSION
+           GSTREAMER_PLUGINS_BASE_REQUIRED_VERSION=GSTREAMER_0_11_PLUGINS_BASE_REQUIRED_VERSION
+           GST_API_VERSION=0.11
+           ;;
+esac
+
+AC_SUBST([GST_API_VERSION])
+if test "$GST_API_VERSION" = "0.11"; then
+AC_DEFINE([GST_USE_UNSTABLE_API], [1], [Using unstable GStreamer API])
+AC_DEFINE([GST_API_VERSION_1],[1], [Using GStreamer 0.11])
+fi
+
 # minimum base dependencies
-LIBSOUP_REQUIRED_VERSION=2.33.6
 CAIRO_REQUIRED_VERSION=1.10
 FONTCONFIG_REQUIRED_VERSION=2.4
 FREETYPE2_REQUIRED_VERSION=9.0
+GLIB_REQUIRED_VERSION=2.31.2
+LIBSOUP_REQUIRED_VERSION=2.37.2.1
 LIBXML_REQUIRED_VERSION=2.6
-
-# minimum GTK+ base dependencies
-PANGO_REQUIRED_VERSION=1.12
+PANGO_REQUIRED_VERSION=1.21.0
 
 # optional modules
 LIBXSLT_REQUIRED_VERSION=1.1.7
 SQLITE_REQUIRED_VERSION=3.0
-GSTREAMER_REQUIRED_VERSION=0.10
-GSTREAMER_PLUGINS_BASE_REQUIRED_VERSION=0.10.30
 ENCHANT_REQUIRED_VERSION=0.22
-LIBFFTW_REQUIRED_VERSION=3.2.2
+CLUTTER_REQUIRED_VERSION=1.8.2
+CLUTTER_GTK_REQUIRED_VERSION=1.0.2
+ATSPI2_REQUIRED_VERSION=2.2.1
 
-# Available modules
-#
-# glib - glib and includes gthread
-# unicode - check and identify which unicode backend to use
-#
-# todo: webcore gtk
-WEBKIT_CHECK_DEPENDENCIES([glib unicode])
+# Check for glib and required utilities
+AM_PATH_GLIB_2_0($GLIB_REQUIRED_VERSION, :, :, gmodule gobject gthread gio)
+if test -z "$GLIB_GENMARSHAL" || test -z "$GLIB_MKENUMS"; then
+   AC_MSG_ERROR([You need the GLib dev tools in your path])
+fi
+GLIB_GSETTINGS
+
+# Check and identify which unicode backend to use
+AC_MSG_CHECKING([which Unicode backend to use])
+AC_ARG_WITH(unicode_backend,
+            AC_HELP_STRING([--with-unicode-backend=@<:@icu/glib@:>@],
+                           [Select Unicode backend (WARNING: the glib-based backend is slow, and incomplete) [default=icu]]),
+            [],[with_unicode_backend="icu"])
+
+case "$with_unicode_backend" in
+     icu|glib) ;;
+     *) AC_MSG_ERROR([Invalid Unicode backend: must be icu or glib.]) ;;
+esac
+
+AC_MSG_RESULT([$with_unicode_backend])
+
+if test "$with_unicode_backend" = "icu"; then
+    # TODO: use pkg-config (after CFLAGS in their .pc files are cleaned up)
+    case "$host" in
+        *-*-darwin*)
+            UNICODE_CFLAGS="-I$srcdir/Source/JavaScriptCore/icu -I$srcdir/Source/WebCore/icu"
+            UNICODE_LIBS="-licucore"
+            ;;
+        *-*-mingw*)
+            UNICODE_CFLAGS=""
+            UNICODE_LIBS="-licui18n -licuuc"
+            ;;
+        *)
+            AC_PATH_PROG(icu_config, icu-config, no)
+            if test "$icu_config" = "no"; then
+                AC_MSG_ERROR([Cannot find icu-config. The ICU library is needed.])
+            fi
+
+            # We don't use --cflags as this gives us a lot of things that we don't
+            # necessarily want, like debugging and optimization flags
+            # See man (1) icu-config for more info.
+            UNICODE_CFLAGS=`$icu_config --cppflags`
+            UNICODE_LIBS=`$icu_config --ldflags-libsonly`
+            ;;
+    esac
+fi
+
+if test "$with_unicode_backend" = "glib"; then
+    PKG_CHECK_MODULES([UNICODE], [glib-2.0 pango >= $PANGO_REQUIRED_VERSION])
+fi
+
+AC_SUBST([UNICODE_CFLAGS])
+AC_SUBST([UNICODE_LIBS])
+
+PKG_CHECK_MODULES([ZLIB], [zlib])
+AC_SUBST([ZLIB_CFLAGS])
+AC_SUBST([ZLIB_LIBS])
 
 GETTEXT_PACKAGE=$PACKAGE-$GTK_API_VERSION
 AC_SUBST(GETTEXT_PACKAGE)
@@ -371,28 +532,41 @@ AC_ARG_ENABLE(optimizations,
               [if test "$enable_debug" = "yes"; then enable_optimizations="no"; else enable_optimizations="yes"; fi])
 AC_MSG_RESULT([$enable_optimizations])
 
-# check whether to enable 3D rendering support
-AC_MSG_CHECKING([whether to enable support for 3D Rendering])
-AC_ARG_ENABLE(3d_rendering,
-              AC_HELP_STRING([--enable-3d-rendering],
-                             [enable support for 3D Rendering (experimental) [default=no]]),
-              [],[enable_3d_rendering="no"])
-AC_MSG_RESULT([$enable_3d_rendering])
-
 # check whether to enable WebGL support
 AC_MSG_CHECKING([whether to enable WebGL support])
 AC_ARG_ENABLE(webgl,
-              AC_HELP_STRING([--enable-webgl],
-                             [enable support for WebGL (experimental) [default=no]]),
-              [], [enable_webgl="no"])
+              AC_HELP_STRING([--enable-webgl], [enable support for WebGL [default=yes]]),
+              [], [if test "$with_target" = "x11"; then enable_webgl="yes"; else enable_webgl="no"; fi])
 AC_MSG_RESULT([$enable_webgl])
 
-if test "$enable_webgl" = "yes"; then
+# check whether to enable accelerated compositing support
+AC_MSG_CHECKING([whether to enable accelerated compositing support])
+AC_ARG_WITH(accelerated_compositing,
+            AC_HELP_STRING([--with-accelerated-compositing=@<:@no/opengl/cairo/clutter@:>@],
+                           [use accelerated compositing (experimental) [default=no]]),
+            [], [with_accelerated_compositing="no"])
+AC_MSG_RESULT([$with_accelerated_compositing])
+
+if test "$with_accelerated_compositing" = "opengl" && test "$with_target" != "x11" ; then
+    AC_MSG_ERROR([OpenGL accelerated compositing is only available on X11 currently.])
+fi
+
+if test "$enable_webgl" = "yes" ||  test "$with_accelerated_compositing" = "opengl" ; then
     AC_CHECK_HEADERS([GL/gl.h], [], AC_MSG_ERROR([OpenGL header not found]))
     AC_CHECK_HEADERS([GL/glx.h], [], AC_MSG_ERROR([GLX header not found]))
     OPENGL_LIBS="-lGL -ldl"
 fi
 AC_SUBST([OPENGL_LIBS])
+
+if test "$with_accelerated_compositing" = "clutter"; then
+   PKG_CHECK_MODULES(CLUTTER, clutter-1.0 >= $CLUTTER_REQUIRED_VERSION)
+   PKG_CHECK_MODULES([CLUTTER_GTK], [clutter-gtk-1.0 >= $CLUTTER_GTK_REQUIRED_VERSION])
+
+   AC_SUBST(CLUTTER_CFLAGS)
+   AC_SUBST(CLUTTER_LIBS)
+   AC_SUBST(CLUTTER_GTK_CFLAGS)
+   AC_SUBST(CLUTTER_GTK_LIBS)
+fi
 
 # check whether to enable channel messaging support
 AC_MSG_CHECKING([whether to enable HTML5 Channel Messaging support])
@@ -619,17 +793,25 @@ AC_MSG_RESULT([$enable_xslt])
 AC_MSG_CHECKING([whether to enable geolocation support])
 AC_ARG_ENABLE(geolocation,
               AC_HELP_STRING([--enable-geolocation],
-                             [enable support for geolocation [default=no]]),
-              [],[enable_geolocation="no"])
+                             [enable support for geolocation [default=yes]]),
+              [],[enable_geolocation="yes"])
 AC_MSG_RESULT([$enable_geolocation])
 
 # check whether to enable MathML support
 AC_MSG_CHECKING([whether to enable MathML support])
 AC_ARG_ENABLE(mathml,
               AC_HELP_STRING([--enable-mathml],
-                             [enable support for MathML [default=no]]),
-              [],[enable_mathml="no"])
+                             [enable support for MathML [default=yes]]),
+              [],[enable_mathml="yes"])
 AC_MSG_RESULT([$enable_mathml])
+
+# check whether to enable MHTML support
+AC_MSG_CHECKING([whether to enable MHTML support])
+AC_ARG_ENABLE(mhtml,
+              AC_HELP_STRING([--enable-mhtml],
+                             [enable support for MHTML [default=no]]),
+              [],[enable_mhtml="no"])
+AC_MSG_RESULT([$enable_mhtml])
 
 # check whether to enable SVG support
 AC_MSG_CHECKING([whether to enable SVG support])
@@ -638,6 +820,14 @@ AC_ARG_ENABLE(svg,
                              [enable support for SVG [default=yes]]),
               [],[enable_svg="yes"])
 AC_MSG_RESULT([$enable_svg])
+
+# check whether to enable Shadow DOM support
+AC_MSG_CHECKING([whether to enable Shadow DOM support])
+AC_ARG_ENABLE(shadow_dom,
+              AC_HELP_STRING([--enable-shadow-dom],
+                             [enable support for Shadow DOM [default=yes]]),
+              [],[enable_shadow_dom="yes"])
+AC_MSG_RESULT([$enable_shadow_dom])
 
 # check whether to enable SharedWorkers support
 AC_MSG_CHECKING([whether to enable SharedWorkers support])
@@ -670,6 +860,14 @@ AC_ARG_ENABLE(file_system,
                              [enable support for HTML5 FileSystem API [default=no]]),
               [], [enable_file_system="no"])
 AC_MSG_RESULT([$enable_file_system])
+
+# check whether to enable HTML5 <style scoped> support
+AC_MSG_CHECKING([whether to enable HTML5 <style scoped> support])
+AC_ARG_ENABLE(style_scoped,
+              AC_HELP_STRING([--enable-style-scoped],
+                             [enable support for HTML5 <style scoped> [default=no]]),
+              [], [enable_style_scoped="no"])
+AC_MSG_RESULT([$enable_style_scoped])
 
 # check whether to enable Quota API support
 AC_MSG_CHECKING([whether to enable Quota API support])
@@ -781,67 +979,16 @@ AC_ARG_ENABLE(debug_features,
               [],[if test "$enable_debug" = "yes"; then enable_debug_features="yes"; else enable_debug_features="no"; fi])
 AC_MSG_RESULT([$enable_debug_features])
 
-# Determine JavaScript engine to use.
-AC_MSG_CHECKING([Javascript engine])
-AC_ARG_WITH(jsengine,
-            AC_HELP_STRING([--with-jsengine=@<:@jsc@:>@],
-                           [Select Javascript engine [default=jsc]]),
-            [],[with_jsengine="jsc"])
-
-case "$with_jsengine" in
-     jsc) ;;
-     *) AC_MSG_ERROR([Invalid JS engine: Must be jsc]) ;;
+AC_MSG_CHECKING([whether to enable JIT compilation])
+AC_ARG_ENABLE(jit,
+              AS_HELP_STRING([--enable-jit],
+                             [Enable JIT compilation (default: autodetect)]))
+case "$enable_jit" in
+  yes) JSC_CPPFLAGS="-DENABLE_JIT=1" ;;
+  no) JSC_CPPFLAGS="-DENABLE_JIT=0" ;;
+  *) enable_jit="autodetect" ;;
 esac
-AC_MSG_RESULT([$with_jsengine])
-
-if test "$with_jsengine" = "jsc"; then
-    AC_MSG_CHECKING([whether to enable JIT compilation])
-    AC_ARG_ENABLE([jit],
-                  AC_HELP_STRING([--enable-jit],
-                                 [Enable JIT compilation default=yes]),
-                  [],[enable_jit="yes"])
-    if test "$enable_jit" = "yes"; then
-        case "$host_cpu" in
-            arm*)
-                AC_DEFINE([ENABLE_JIT], [1], [Define to enable JIT])
-                AC_DEFINE([ENABLE_YARR], [1], [Define to enable YARR])
-                AC_DEFINE([ENABLE_YARR_JIT], [1], [Define to enable YARR JIT])
-            ;;
-            i*86|x86_64)
-                AC_DEFINE([ENABLE_JIT], [1], [Define to enable JIT])
-                AC_DEFINE([ENABLE_YARR], [1], [Define to enable YARR])
-                AC_DEFINE([ENABLE_YARR_JIT], [1], [Define to enable YARR JIT])
-                AC_DEFINE([ENABLE_JIT_OPTIMIZE_CALL], [1], [Define to enable optimizing calls])
-                AC_DEFINE([ENABLE_JIT_OPTIMIZE_PROPERTY_ACCESS], [1], [Define to enable optimized property access])
-                AC_DEFINE([ENABLE_JIT_OPTIMIZE_ARITHMETIC], [1], [Define to enable optimized arithmetic])
-                case "$host_cpu" in
-                    i*86)
-                        AC_DEFINE([WTF_USE_JIT_STUB_ARGUMENT_VA_LIST], [1], [Use stub va_list])
-                    ;;
-                    x86_64)
-                        AC_DEFINE([WTF_USE_JIT_STUB_ARGUMENT_REGISTER], [1], [Use stub register])
-                        AC_DEFINE([WTF_USE_ALTERNATE_JSIMMEDIATE], [1], [Use alternate JSImmediate])
-                    ;;
-                esac
-            ;;
-            sh4)
-                AC_DEFINE([ENABLE_YARR], [1], [Define to enable YARR])
-                AC_DEFINE([ENABLE_YARR_JIT], [1], [Define to enable YARR JIT])
-                AC_DEFINE([ENABLE_JIT], [1], [Define to enable JIT])
-                AC_DEFINE([WTF_USE_JIT_STUB_ARGUMENT_REGISTER], [1], [Use stub register])
-            ;;
-            *)
-                enable_jit="no (CPU '$host_cpu' not supported)"
-            ;;
-        esac
-    else
-            AC_DEFINE([ENABLE_JIT], [0], [Define to enable JIT])
-    fi
-else
-    AC_DEFINE([ENABLE_JIT], [0], [Define to enable JIT])
-    enable_jit="no"
-fi
-
+AC_SUBST(JSC_CPPFLAGS)
 AC_MSG_RESULT([$enable_jit])
 
 # Opcode stats
@@ -888,8 +1035,8 @@ AC_MSG_RESULT([$enable_animation_api])
 AC_MSG_CHECKING([whether to enable requestAnimationFrame support])
 AC_ARG_ENABLE(request_animation_frame,
               AC_HELP_STRING([--enable-request-animation-frame],
-                             [enable support for requestAnimationFrame (experimental) [default=no]]),
-              [],[enable_request_animation_frame="no"])
+                             [enable support for requestAnimationFrame (experimental) [default=yes]]),
+              [],[enable_request_animation_frame="yes"])
 AC_MSG_RESULT([$enable_request_animation_frame])
 
 # check whether to enable touch icon loading 
@@ -1038,29 +1185,41 @@ fi
 # check if gstreamer is available
 if test "$enable_video" = "yes" || test "$enable_web_audio" = "yes"; then
    PKG_CHECK_MODULES([GSTREAMER],
-                     [gstreamer-0.10 >= $GSTREAMER_REQUIRED_VERSION
-                     gstreamer-app-0.10
-                     gstreamer-audio-0.10
-                     gstreamer-base-0.10
-                     gstreamer-interfaces-0.10
-                     gstreamer-pbutils-0.10
-                     gstreamer-plugins-base-0.10 >= $GSTREAMER_PLUGINS_BASE_REQUIRED_VERSION
-                     gstreamer-video-0.10],
+                     [gstreamer-$GST_API_VERSION >= $GSTREAMER_REQUIRED_VERSION
+                     gstreamer-app-$GST_API_VERSION
+                     gstreamer-audio-$GST_API_VERSION
+                     gstreamer-fft-$GST_API_VERSION
+                     gstreamer-base-$GST_API_VERSION
+                     gstreamer-interfaces-$GST_API_VERSION
+                     gstreamer-pbutils-$GST_API_VERSION
+                     gstreamer-plugins-base-$GST_API_VERSION >= $GSTREAMER_PLUGINS_BASE_REQUIRED_VERSION
+                     gstreamer-video-$GST_API_VERSION],
                      [have_gstreamer=yes])
 
    AC_SUBST([GSTREAMER_CFLAGS])
    AC_SUBST([GSTREAMER_LIBS])
 fi
 
-# check if libfftw is available
-if test "$enable_web_audio" = "yes"; then
-   PKG_CHECK_MODULES([LIBFFTW],
-                     [fftw3 >= $LIBFFTW_REQUIRED_VERSION
-                     fftw3f >= $LIBFFTW_REQUIRED_VERSION],
-                     [have_fftw=yes])
 
-    AC_SUBST([LIBFFTW_CFLAGS])
-    AC_SUBST([LIBFFTW_LIBS])
+if test "$with_accelerated_compositing" = "clutter"; then
+   PKG_CHECK_MODULES(CLUTTER, clutter-1.0 >= $CLUTTER_REQUIRED_VERSION)
+   PKG_CHECK_MODULES([CLUTTER_GTK],
+                     [clutter-gtk-1.0 >= $CLUTTER_GTK_REQUIRED_VERSION])
+
+   AC_SUBST(CLUTTER_CFLAGS)
+   AC_SUBST(CLUTTER_LIBS)
+   AC_SUBST(CLUTTER_GTK_CFLAGS)
+   AC_SUBST(CLUTTER_GTK_LIBS)
+fi
+
+# check if atspi2 is available (only needed for Webkit2 unit tests)
+if test "$enable_webkit2" = "yes"; then
+   PKG_CHECK_MODULES([ATSPI2],
+                     [atspi-2 >= $ATSPI2_REQUIRED_VERSION],
+                     [have_atspi2=yes], [have_atspi2=no])
+
+   AC_SUBST([ATSPI2_CFLAGS])
+   AC_SUBST([ATSPI2_LIBS])
 fi
 
 # check for code coverage support
@@ -1085,6 +1244,16 @@ AC_MSG_RESULT([$enable_webkit2])
 if test "$enable_webkit2" = "yes"; then
    if test "$GTK_API_VERSION" = "2.0"; then
       AC_MSG_ERROR([WebKit2 requires GTK+ 3.x, use --with-gtk=3.0])
+   fi
+
+   # Check Unix printing
+   PKG_CHECK_MODULES(GTK_UNIX_PRINTING, gtk+-unix-print-3.0,
+                     [have_gtk_unix_printing=yes],
+                     [have_gtk_unix_printing=no])
+   AC_SUBST(GTK_UNIX_PRINTING_CFLAGS)
+   AC_SUBST(GTK_UNIX_PRINTING_LIBS)
+   if test "$have_gtk_unix_printing" = "yes"; then
+       AC_DEFINE([HAVE_GTK_UNIX_PRINTING], [1], [Define if GTK+ UNIX Printing is available])
    fi
 fi
 
@@ -1122,9 +1291,6 @@ AM_CONDITIONAL([TARGET_WIN32], [test "$with_target" = "win32"])
 AM_CONDITIONAL([TARGET_QUARTZ], [test "$with_target" = "quartz"])
 AM_CONDITIONAL([TARGET_DIRECTFB], [test "$with_target" = "directfb"])
 
-# JS engine conditionals
-AM_CONDITIONAL([USE_JSC], [test "$with_jsengine" = "jsc"])
-
 # Unicode backend conditionals
 AM_CONDITIONAL([USE_ICU_UNICODE], [test "$with_unicode_backend" = "icu"])
 AM_CONDITIONAL([USE_GLIB_UNICODE], [test "$with_unicode_backend" = "glib"])
@@ -1135,13 +1301,19 @@ AM_CONDITIONAL([USE_PANGO], [test "$with_font_backend" = "pango"])
 
 # GStreamer feature conditional
 AM_CONDITIONAL([USE_GSTREAMER], [test "$have_gstreamer" = "yes"])
+AM_CONDITIONAL([USE_WEBAUDIO_GSTREAMER], [test "$enable_web_audio" = "yes"])
 
-# Web Audio feature conditional
-AM_CONDITIONAL([USE_WEBAUDIO_FFTW], [test "$have_fftw" = "yes"])
+# ATSPI2 conditional
+AM_CONDITIONAL([HAVE_ATSPI2], [test "$have_atspi2" = "yes"])
+
+# Accelerated compositing conditional
+AM_CONDITIONAL([USE_ACCELERATED_COMPOSITING], [test "$with_accelerated_compositing" = "cairo" || test "$with_accelerated_compositing" = "opengl" || test "$with_accelerated_compositing" = "clutter"])
+AM_CONDITIONAL([USE_TEXTURE_MAPPER_CAIRO], [test "$with_accelerated_compositing" = "cairo"])
+AM_CONDITIONAL([USE_TEXTURE_MAPPER_GL], [test "$with_accelerated_compositing" = "opengl"])
+AM_CONDITIONAL([USE_CLUTTER], [test "$with_accelerated_compositing" = "clutter"])
 
 # WebKit feature conditionals
 AM_CONDITIONAL([ENABLE_DEBUG],[test "$enable_debug_features" = "yes"])
-AM_CONDITIONAL([ENABLE_3D_RENDERING],[test "$enable_3d_rendering" = "yes"])
 AM_CONDITIONAL([ENABLE_WEBGL],[test "$enable_webgl" = "yes"])
 AM_CONDITIONAL([ENABLE_BLOB],[test "$enable_blob" = "yes"])
 AM_CONDITIONAL([ENABLE_METER_TAG],[test "$enable_meter_tag" = "yes"])
@@ -1159,6 +1331,7 @@ AM_CONDITIONAL([ENABLE_DATALIST],[test "$enable_datalist" = "yes"])
 AM_CONDITIONAL([ENABLE_DETAILS],[test "$enable_details" = "yes"])
 AM_CONDITIONAL([ENABLE_FAST_MOBILE_SCROLLING],[test "$enable_fast_mobile_scrolling" = "yes"])
 AM_CONDITIONAL([ENABLE_FILE_SYSTEM],[test "$enable_file_system" = "yes"])
+AM_CONDITIONAL([ENABLE_STYLE_SCOPED],[test "$enable_style_scoped" = "yes"])
 AM_CONDITIONAL([ENABLE_QUOTA],[test "$enable_quota" = "yes"])
 AM_CONDITIONAL([ENABLE_ICONDATABASE],[test "$enable_icon_database" = "yes"])
 AM_CONDITIONAL([ENABLE_IMAGE_RESIZER],[test "$enable_image_resizer" = "yes"])
@@ -1183,6 +1356,7 @@ AM_CONDITIONAL([ENABLE_SVG_FONTS],[test "$enable_svg_fonts" = "yes"])
 AM_CONDITIONAL([ENABLE_COVERAGE],[test "$enable_coverage" = "yes"])
 AM_CONDITIONAL([ENABLE_FAST_MALLOC],[test "$enable_fast_malloc" = "yes"])
 AM_CONDITIONAL([ENABLE_WORKERS],[test "$enable_workers" = "yes"])
+AM_CONDITIONAL([ENABLE_SHADOW_DOM],[test "$enable_shadow_dom" = "yes"])
 AM_CONDITIONAL([ENABLE_SHARED_WORKERS],[test "$enable_shared_workers" = "yes"])
 AM_CONDITIONAL([SVG_FLAGS],[test "$svg_flags" = "yes"])
 AM_CONDITIONAL([HTML_FLAGS],[test "$html_flags" = "yes"])
@@ -1210,13 +1384,11 @@ GNUmakefile
 
 AC_CONFIG_FILES([
 Source/WebKit/gtk/webkit/webkitversion.h
-Documentation/version.xml:Source/WebKit/gtk/docs/version.xml.in
 ])
 
 AC_CONFIG_FILES([
 Source/WebKit/gtk/${WEBKITGTK_PC_NAME}-${WEBKITGTK_API_VERSION}.pc:Source/WebKit/gtk/webkit.pc.in
 Source/WebKit/gtk/JSCore-${WEBKITGTK_API_VERSION}.gir:Source/WebKit/gtk/JSCore.gir.in
-Source/WebKit/gtk/org.webkitgtk-${WEBKITGTK_API_VERSION}.gschema.xml:Source/WebKit/gtk/org.webkitgtk.gschema.xml.in
 Source/JavaScriptCore/javascriptcoregtk-${WEBKITGTK_API_VERSION}.pc:Source/JavaScriptCore/javascriptcoregtk.pc.in
 ]
 ,[WEBKITGTK_API_VERSION=$WEBKITGTK_API_VERSION,WEBKITGTK_PC_NAME=$WEBKITGTK_PC_NAME]
@@ -1245,9 +1417,9 @@ Build configuration:
  Unicode backend                                          : $with_unicode_backend
  Font backend                                             : $with_font_backend
  Optimized memory allocator                               : $enable_fast_malloc
- JavaScript Engine                                        : $with_jsengine
+ Accelerated Compositing                                  : $with_accelerated_compositing
+
 Features:
- 3D Rendering                                             : $enable_3d_rendering
  WebGL                                                    : $enable_webgl
  Blob support                                             : $enable_blob
  DOM mutation observer support                            : $enable_mutation_observers
@@ -1262,6 +1434,7 @@ Features:
  MathML support                                           : $enable_mathml
  Media source                                             : $enable_media_source
  Media statistics                                         : $enable_media_statistics
+ MHTML support                                            : $enable_mhtml
  HTML5 channel messaging support                          : $enable_channel_messaging
  HTML5 meter element support                              : $enable_meter_tag
  HTML5 microdata support                                  : $enable_microdata
@@ -1282,6 +1455,7 @@ Features:
  Image resizer support                                    : $enable_image_resizer
  Link prefetch support                                    : $enable_link_prefetch
  Opcode stats                                             : $enable_opcode_stats
+ Shadow DOM support                                       : $enable_shadow_dom
  SharedWorkers support                                    : $enable_shared_workers
  Color input support                                      : $enable_input_color
  Speech input support                                     : $enable_input_speech
@@ -1304,7 +1478,9 @@ GTK+ configuration:
  GTK+ version                                             : $with_gtk
  GDK target                                               : $with_target
  Hildon UI extensions                                     : $with_hildon
+ GStreamer version                                        : $with_gstreamer
  Introspection support                                    : $enable_introspection
+ Generate documentation                                   : $enable_gtk_doc
 "
 if test "$with_unicode_backend" = "glib"; then
    echo "     >> WARNING: the glib-based unicode backend is slow and incomplete <<"

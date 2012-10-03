@@ -40,8 +40,6 @@
 #if USE(SKIA)
 #include "NativeImageSkia.h"
 #include "SkColorPriv.h"
-#elif USE(OPENVG)
-#include "TiledImageOpenVG.h"
 #elif PLATFORM(QT)
 #include <QPixmap>
 #include <QImage>
@@ -49,7 +47,6 @@
 
 namespace WebCore {
 
-    // FIXME: Do we want better encapsulation?
     typedef Vector<char> ColorProfile;
 
     // ImageFrame represents the decoded image data.  This buffer is what all
@@ -67,7 +64,7 @@ namespace WebCore {
             DisposeOverwritePrevious  // Clear frame to previous framebuffer
                                       // contents
         };
-#if USE(SKIA) || PLATFORM(QT)
+#if USE(SKIA) || (PLATFORM(QT) && USE(QT_IMAGE_DECODER))
         typedef uint32_t PixelData;
 #else
         typedef unsigned PixelData;
@@ -139,7 +136,20 @@ namespace WebCore {
             setRGBA(getAddr(x, y), r, g, b, a);
         }
 
-#if PLATFORM(QT)
+        inline PixelData* getAddr(int x, int y)
+        {
+#if USE(SKIA)
+            return m_bitmap.bitmap().getAddr32(x, y);
+#elif PLATFORM(QT) && USE(QT_IMAGE_DECODER)
+            m_image = m_pixmap.toImage();
+            m_pixmap = QPixmap();
+            return reinterpret_cast_ptr<QRgb*>(m_image.scanLine(y)) + x;
+#else
+            return m_bytes + (y * width()) + x;
+#endif
+        }
+
+#if PLATFORM(QT) && USE(QT_IMAGE_DECODER)
         void setPixmap(const QPixmap& pixmap);
 #endif
 
@@ -152,19 +162,6 @@ namespace WebCore {
 
         int width() const;
         int height() const;
-
-        inline PixelData* getAddr(int x, int y)
-        {
-#if USE(SKIA)
-            return m_bitmap.getAddr32(x, y);
-#elif PLATFORM(QT)
-            m_image = m_pixmap.toImage();
-            m_pixmap = QPixmap();
-            return reinterpret_cast_ptr<QRgb*>(m_image.scanLine(y)) + x;
-#else
-            return m_bytes + (y * width()) + x;
-#endif
-        }
 
         inline void setRGBA(PixelData* dest, unsigned r, unsigned g, unsigned b, unsigned a)
         {
@@ -190,12 +187,10 @@ namespace WebCore {
 
 #if USE(SKIA)
         NativeImageSkia m_bitmap;
-#elif USE(OPENVG)
-        mutable RefPtr<TiledImageOpenVG> m_image;
-        mutable Vector<PixelData> m_bytes;
-        bool m_hasAlpha;
-        IntSize m_size;
-#elif PLATFORM(QT)
+#if PLATFORM(CHROMIUM) && OS(DARWIN)
+        ColorProfile m_colorProfile;
+#endif
+#elif PLATFORM(QT) && USE(QT_IMAGE_DECODER)
         mutable QPixmap m_pixmap;
         mutable QImage m_image;
         bool m_hasAlpha;
@@ -304,6 +299,22 @@ namespace WebCore {
 
         void setIgnoreGammaAndColorProfile(bool flag) { m_ignoreGammaAndColorProfile = flag; }
         bool ignoresGammaAndColorProfile() const { return m_ignoreGammaAndColorProfile; }
+
+        enum { iccColorProfileHeaderLength = 128 };
+
+        static bool rgbColorProfile(const char* profileData, unsigned profileLength)
+        {
+            ASSERT(profileLength >= iccColorProfileHeaderLength);
+
+            return !memcmp(&profileData[16], "RGB ", 4);
+        }
+
+        static bool inputDeviceColorProfile(const char* profileData, unsigned profileLength)
+        {
+            ASSERT(profileLength >= iccColorProfileHeaderLength);
+
+            return !memcmp(&profileData[12], "mntr", 4) || !memcmp(&profileData[12], "scnr", 4);
+        }
 
         // Sets the "decode failure" flag.  For caller convenience (since so
         // many callers want to return false after calling this), returns false

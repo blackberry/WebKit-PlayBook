@@ -47,7 +47,6 @@ typedef Vector<RegisteredEventListener, 1> EventListenerVector;
 class EventListenerMap {
 public:
     EventListenerMap();
-    ~EventListenerMap();
 
     bool isEmpty() const;
     bool contains(const AtomicString& eventType) const;
@@ -66,10 +65,12 @@ public:
 private:
     friend class EventListenerIterator;
 
+    void assertNoActiveIterators();
+
     struct EventListenerHashMapTraits : HashTraits<WTF::AtomicString> {
         static const int minimumTableSize = 32;
     };
-    typedef HashMap<AtomicString, EventListenerVector*, AtomicStringHash, EventListenerHashMapTraits> EventListenerHashMap;
+    typedef HashMap<AtomicString, OwnPtr<EventListenerVector>, AtomicStringHash, EventListenerHashMapTraits> EventListenerHashMap;
 
     OwnPtr<EventListenerHashMap> m_hashMap;
 
@@ -98,6 +99,10 @@ private:
     EventListenerMap::EventListenerHashMap::iterator m_mapEnd;
     unsigned m_index;
 };
+
+#ifdef NDEBUG
+inline void EventListenerMap::assertNoActiveIterators() { }
+#endif
 
 } // namespace WebCore
 

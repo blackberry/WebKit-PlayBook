@@ -46,15 +46,17 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-inline HTMLVideoElement::HTMLVideoElement(const QualifiedName& tagName, Document* document)
-    : HTMLMediaElement(tagName, document)
+inline HTMLVideoElement::HTMLVideoElement(const QualifiedName& tagName, Document* document, bool createdByParser)
+    : HTMLMediaElement(tagName, document, createdByParser)
 {
     ASSERT(hasTagName(videoTag));
 }
 
-PassRefPtr<HTMLVideoElement> HTMLVideoElement::create(const QualifiedName& tagName, Document* document)
+PassRefPtr<HTMLVideoElement> HTMLVideoElement::create(const QualifiedName& tagName, Document* document, bool createdByParser)
 {
-    return adoptRef(new HTMLVideoElement(tagName, document));
+    RefPtr<HTMLVideoElement> videoElement(adoptRef(new HTMLVideoElement(tagName, document, createdByParser)));
+    videoElement->suspendIfNeeded();
+    return videoElement.release();
 }
 
 bool HTMLVideoElement::rendererIsNeeded(const NodeRenderingContext& context) 
@@ -93,7 +95,24 @@ void HTMLVideoElement::detach()
         m_imageLoader.clear();
 }
 
-void HTMLVideoElement::parseMappedAttribute(Attribute* attr)
+void HTMLVideoElement::collectStyleForAttribute(Attribute* attr, StylePropertySet* style)
+{
+    if (attr->name() == widthAttr)
+        addHTMLLengthToStyle(style, CSSPropertyWidth, attr->value());
+    else if (attr->name() == heightAttr)
+        addHTMLLengthToStyle(style, CSSPropertyHeight, attr->value());
+    else
+        HTMLMediaElement::collectStyleForAttribute(attr, style);
+}
+
+bool HTMLVideoElement::isPresentationAttribute(const QualifiedName& name) const
+{
+    if (name == widthAttr || name == heightAttr)
+        return true;
+    return HTMLMediaElement::isPresentationAttribute(name);
+}
+
+void HTMLVideoElement::parseAttribute(Attribute* attr)
 {
     const QualifiedName& attrName = attr->name();
 
@@ -113,12 +132,8 @@ void HTMLVideoElement::parseMappedAttribute(Attribute* attr)
                 toRenderImage(renderer())->imageResource()->setCachedImage(0); 
         }
 #endif
-    } else if (attrName == widthAttr)
-        addCSSLength(attr, CSSPropertyWidth, attr->value());
-    else if (attrName == heightAttr)
-        addCSSLength(attr, CSSPropertyHeight, attr->value());
-    else
-        HTMLMediaElement::parseMappedAttribute(attr);
+    } else
+        HTMLMediaElement::parseAttribute(attr);
 }
 
 bool HTMLVideoElement::supportsFullscreen() const
@@ -237,7 +252,7 @@ bool HTMLVideoElement::hasAvailableVideoFrame() const
     if (!player())
         return false;
     
-    return player()->hasAvailableVideoFrame();
+    return player()->hasVideo() && player()->hasAvailableVideoFrame();
 }
 
 void HTMLVideoElement::webkitEnterFullscreen(ExceptionCode& ec)
@@ -271,11 +286,11 @@ bool HTMLVideoElement::webkitDisplayingFullscreen()
     return isFullscreen();
 }
 
-void HTMLVideoElement::willMoveToNewOwnerDocument()
+void HTMLVideoElement::didMoveToNewDocument(Document* oldDocument)
 {
     if (m_imageLoader)
-        m_imageLoader->elementWillMoveToNewOwnerDocument();
-    HTMLMediaElement::willMoveToNewOwnerDocument();
+        m_imageLoader->elementDidMoveToNewDocument();
+    HTMLMediaElement::didMoveToNewDocument(oldDocument);
 }
 
 #if ENABLE(MEDIA_STATISTICS)

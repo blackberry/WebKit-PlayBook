@@ -35,6 +35,10 @@
 #include "AudioBus.h"
 #include <wtf/MathExtras.h>
 
+#ifdef __SSE2__
+#include <emmintrin.h>
+#endif
+
 using namespace std;
 
 // Input buffer layout, dividing the total buffer into regions (r0 - r5):
@@ -131,6 +135,8 @@ void SincResampler::consumeSource(float* buffer, unsigned numberOfSourceFrames)
     
     // Wrap the provided buffer by an AudioBus for use by the source provider.
     AudioBus bus(1, numberOfSourceFrames, false);
+
+    // FIXME: Find a way to make the following const-correct:
     bus.setChannelMemory(0, buffer, numberOfSourceFrames);
     
     m_sourceProvider->provideInput(&bus, numberOfSourceFrames);
@@ -142,7 +148,7 @@ namespace {
 
 class BufferSourceProvider : public AudioSourceProvider {
 public:
-    BufferSourceProvider(float* source, size_t numberOfSourceFrames)
+    BufferSourceProvider(const float* source, size_t numberOfSourceFrames)
         : m_source(source)
         , m_sourceFramesAvailable(numberOfSourceFrames)
     {
@@ -155,7 +161,7 @@ public:
         if (!m_source || !bus)
             return;
             
-        float* buffer = bus->channel(0)->data();
+        float* buffer = bus->channel(0)->mutableData();
 
         // Clamp to number of frames available and zero-pad.
         size_t framesToCopy = min(m_sourceFramesAvailable, framesToProcess);
@@ -170,13 +176,13 @@ public:
     }
     
 private:
-    float* m_source;
+    const float* m_source;
     size_t m_sourceFramesAvailable;
 };
 
 } // namespace
 
-void SincResampler::process(float* source, float* destination, unsigned numberOfSourceFrames)
+void SincResampler::process(const float* source, float* destination, unsigned numberOfSourceFrames)
 {
     // Resample an in-memory buffer using an AudioSourceProvider.
     BufferSourceProvider sourceProvider(source, numberOfSourceFrames);
@@ -246,8 +252,6 @@ void SincResampler::process(AudioSourceProvider* sourceProvider, float* destinat
             // Generate a single output sample. 
             int n = m_kernelSize;
 
-            // FIXME: add SIMD optimizations for the following. The scalar code-path can probably also be optimized better.
-
 #define CONVOLVE_ONE_SAMPLE      \
             input = *inputP++;   \
             sum1 += input * *k1; \
@@ -257,6 +261,76 @@ void SincResampler::process(AudioSourceProvider* sourceProvider, float* destinat
 
             {
                 float input;
+
+#ifdef __SSE2__
+                // If the sourceP address is not 16-byte aligned, the first several frames (at most three) should be processed seperately.
+                while ((reinterpret_cast<uintptr_t>(inputP) & 0x0F) && n) {
+                    CONVOLVE_ONE_SAMPLE
+                    n--;
+                }
+
+                // Now the inputP is aligned and start to apply SSE.
+                float* endP = inputP + n - n % 4;
+                __m128 mInput;
+                __m128 mK1;
+                __m128 mK2;
+                __m128 mul1;
+                __m128 mul2;
+
+                __m128 sums1 = _mm_setzero_ps();
+                __m128 sums2 = _mm_setzero_ps();
+                bool k1Aligned = !(reinterpret_cast<uintptr_t>(k1) & 0x0F);
+                bool k2Aligned = !(reinterpret_cast<uintptr_t>(k2) & 0x0F);
+
+#define LOAD_DATA(l1, l2)                        \
+                mInput = _mm_load_ps(inputP);    \
+                mK1 = _mm_##l1##_ps(k1);         \
+                mK2 = _mm_##l2##_ps(k2);
+
+#define CONVOLVE_4_SAMPLES                       \
+                mul1 = _mm_mul_ps(mInput, mK1);  \
+                mul2 = _mm_mul_ps(mInput, mK2);  \
+                sums1 = _mm_add_ps(sums1, mul1); \
+                sums2 = _mm_add_ps(sums2, mul2); \
+                inputP += 4;                     \
+                k1 += 4;                         \
+                k2 += 4;
+
+                if (k1Aligned && k2Aligned) { // both aligned
+                    while (inputP < endP) {
+                        LOAD_DATA(load, load)
+                        CONVOLVE_4_SAMPLES
+                    }
+                } else if (!k1Aligned && k2Aligned) { // only k2 aligned
+                    while (inputP < endP) {
+                        LOAD_DATA(loadu, load)
+                        CONVOLVE_4_SAMPLES
+                    }
+                } else if (k1Aligned && !k2Aligned) { // only k1 aligned
+                    while (inputP < endP) {
+                        LOAD_DATA(load, loadu)
+                        CONVOLVE_4_SAMPLES
+                    }
+                } else { // both non-aligned
+                    while (inputP < endP) {
+                        LOAD_DATA(loadu, loadu)
+                        CONVOLVE_4_SAMPLES
+                    }
+                }
+
+                // Summarize the SSE results to sum1 and sum2.
+                float* groupSumP = reinterpret_cast<float*>(&sums1);
+                sum1 += groupSumP[0] + groupSumP[1] + groupSumP[2] + groupSumP[3];
+                groupSumP = reinterpret_cast<float*>(&sums2);
+                sum2 += groupSumP[0] + groupSumP[1] + groupSumP[2] + groupSumP[3];
+
+                n %= 4;
+                while (n) {
+                    CONVOLVE_ONE_SAMPLE
+                    n--;
+                }
+#else
+                // FIXME: add ARM NEON optimizations for the following. The scalar code-path can probably also be optimized better.
                 
                 // Optimize size 32 and size 64 kernels by unrolling the while loop.
                 // A 20 - 30% speed improvement was measured in some cases by using this approach.
@@ -365,6 +439,7 @@ void SincResampler::process(AudioSourceProvider* sourceProvider, float* destinat
                         CONVOLVE_ONE_SAMPLE
                     }
                 }
+#endif
             }
 
             // Linearly interpolate the two "convolutions".

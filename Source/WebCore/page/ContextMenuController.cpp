@@ -58,6 +58,7 @@
 #include "NavigationAction.h"
 #include "Node.h"
 #include "Page.h"
+#include "PlatformEvent.h"
 #include "RenderLayer.h"
 #include "RenderObject.h"
 #include "ReplaceSelectionCommand.h"
@@ -85,6 +86,11 @@ ContextMenuController::ContextMenuController(Page* page, ContextMenuClient* clie
 ContextMenuController::~ContextMenuController()
 {
     m_client->contextMenuDestroyed();
+}
+
+PassOwnPtr<ContextMenuController> ContextMenuController::create(Page* page, ContextMenuClient* client)
+{
+    return adoptPtr(new ContextMenuController(page, client));
 }
 
 void ContextMenuController::clearContextMenu()
@@ -169,7 +175,7 @@ static void openNewWindow(const KURL& urlToLoad, Frame* frame)
     if (Page* oldPage = frame->page()) {
         FrameLoadRequest request(frame->document()->securityOrigin(), ResourceRequest(urlToLoad, frame->loader()->outgoingReferrer()));
         if (Page* newPage = oldPage->chrome()->createWindow(frame, request, WindowFeatures(), NavigationAction(request.resourceRequest()))) {
-            newPage->mainFrame()->loader()->loadFrameRequest(request, false, false, 0, 0, SendReferrer);   
+            newPage->mainFrame()->loader()->loadFrameRequest(request, false, false, 0, 0, MaybeSendReferrer);
             newPage->chrome()->show();
         }
     }
@@ -217,7 +223,7 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuItem* item)
         // For now, call into the client. This is temporary!
         frame->editor()->copyImage(m_hitTestResult);
         break;
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
     case ContextMenuItemTagCopyImageUrlToClipboard:
         frame->editor()->copyURL(m_hitTestResult.absoluteImageURL(), m_hitTestResult.textContent());
         break;
@@ -279,7 +285,7 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuItem* item)
         frame->editor()->performDelete();
         break;
 #endif
-#if PLATFORM(GTK) || PLATFORM(QT)
+#if PLATFORM(GTK) || PLATFORM(QT) || PLATFORM(EFL)
     case ContextMenuItemTagSelectAll:
         frame->editor()->command("SelectAll").execute();
         break;
@@ -308,7 +314,7 @@ void ContextMenuController::contextMenuItemSelected(ContextMenuItem* item)
         break;
     case ContextMenuItemTagOpenLink:
         if (Frame* targetFrame = m_hitTestResult.targetFrame())
-            targetFrame->loader()->loadFrameRequest(FrameLoadRequest(frame->document()->securityOrigin(), ResourceRequest(m_hitTestResult.absoluteLinkURL(), frame->loader()->outgoingReferrer())), false, false, 0, 0, SendReferrer);
+            targetFrame->loader()->loadFrameRequest(FrameLoadRequest(frame->document()->securityOrigin(), ResourceRequest(m_hitTestResult.absoluteLinkURL(), frame->loader()->outgoingReferrer())), false, false, 0, 0, MaybeSendReferrer);
         else
             openNewWindow(m_hitTestResult.absoluteLinkURL(), frame);
         break;
@@ -636,7 +642,7 @@ void ContextMenuController::populate()
         contextMenuItemTagDownloadImageToDisk());
     ContextMenuItem CopyImageItem(ActionType, ContextMenuItemTagCopyImageToClipboard, 
         contextMenuItemTagCopyImageToClipboard());
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
     ContextMenuItem CopyImageUrlItem(ActionType, ContextMenuItemTagCopyImageUrlToClipboard, 
         contextMenuItemTagCopyImageUrlToClipboard());
 #endif
@@ -680,7 +686,7 @@ void ContextMenuController::populate()
 #if PLATFORM(GTK)
     ContextMenuItem DeleteItem(ActionType, ContextMenuItemTagDelete, contextMenuItemTagDelete());
 #endif
-#if PLATFORM(GTK) || PLATFORM(QT)
+#if PLATFORM(GTK) || PLATFORM(QT) || PLATFORM(EFL)
     ContextMenuItem SelectAllItem(ActionType, ContextMenuItemTagSelectAll, contextMenuItemTagSelectAll());
 #endif
 
@@ -720,7 +726,7 @@ void ContextMenuController::populate()
             appendItem(DownloadImageItem, m_contextMenu.get());
             if (imageURL.isLocalFile() || m_hitTestResult.image())
                 appendItem(CopyImageItem, m_contextMenu.get());
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
             appendItem(CopyImageUrlItem, m_contextMenu.get());
 #endif
         }
@@ -899,7 +905,7 @@ void ContextMenuController::populate()
         appendItem(DeleteItem, m_contextMenu.get());
         appendItem(*separatorItem(), m_contextMenu.get());
 #endif
-#if PLATFORM(GTK) || PLATFORM(QT)
+#if PLATFORM(GTK) || PLATFORM(QT) || PLATFORM(EFL)
         appendItem(SelectAllItem, m_contextMenu.get());
 #endif
 
@@ -978,7 +984,12 @@ void ContextMenuController::addInspectElementItem()
         return;
 
     ContextMenuItem InspectElementItem(ActionType, ContextMenuItemTagInspectElement, contextMenuItemTagInspectElement());
-    appendItem(*separatorItem(), m_contextMenu.get());
+#if USE(CROSS_PLATFORM_CONTEXT_MENUS)
+    if (!m_contextMenu->items().isEmpty())
+#else
+    if (m_contextMenu->itemCount())
+#endif
+        appendItem(*separatorItem(), m_contextMenu.get());
     appendItem(InspectElementItem, m_contextMenu.get());
 }
 #endif // ENABLE(INSPECTOR)
@@ -1049,9 +1060,13 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
         case ContextMenuItemTagDelete:
             shouldEnable = frame->editor()->canDelete();
             break;
-        case ContextMenuItemTagSelectAll:
         case ContextMenuItemTagInputMethods:
         case ContextMenuItemTagUnicode:
+            shouldEnable = true;
+            break;
+#endif
+#if PLATFORM(GTK) || PLATFORM(EFL)
+        case ContextMenuItemTagSelectAll:
             shouldEnable = true;
             break;
 #endif
@@ -1180,7 +1195,7 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
         case ContextMenuItemTagOpenImageInNewWindow:
         case ContextMenuItemTagDownloadImageToDisk:
         case ContextMenuItemTagCopyImageToClipboard:
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
         case ContextMenuItemTagCopyImageUrlToClipboard:
 #endif
             break;
@@ -1255,6 +1270,17 @@ void ContextMenuController::checkOrEnableIfNeeded(ContextMenuItem& item) const
     item.setChecked(shouldCheck);
     item.setEnabled(shouldEnable);
 }
+
+#if USE(ACCESSIBILITY_CONTEXT_MENUS)
+void ContextMenuController::showContextMenuAt(Frame* frame, const IntPoint& clickPoint)
+{
+    // Simulate a click in the middle of the accessibility object.
+    PlatformMouseEvent mouseEvent(clickPoint, clickPoint, RightButton, PlatformEvent::MousePressed, 1, false, false, false, false, currentTime());
+    bool handled = frame->eventHandler()->sendContextMenuEvent(mouseEvent);
+    if (handled && client())
+        client()->showContextMenu();
+}
+#endif
 
 } // namespace WebCore
 

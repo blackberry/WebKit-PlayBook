@@ -25,11 +25,12 @@
 
 #import "config.h"
 #import "WKBrowsingContextController.h"
+#import "WKBrowsingContextControllerPrivate.h"
 #import "WKBrowsingContextControllerInternal.h"
 
 #import "WKErrorCF.h"
 #import "WKFrame.h"
-#import "WKPage.h"
+#import "WKPagePrivate.h"
 #import "WKRetainPtr.h"
 #import "WKStringCF.h"
 #import "WKURLCF.h"
@@ -65,15 +66,25 @@ static inline NSURL *autoreleased(WKURLRef url)
 @implementation WKBrowsingContextControllerData
 @end
 
+
+@interface WKBrowsingContextController ()
+
+@property(readonly) WKPageRef _pageRef;
+
+@end
+
+
 @implementation WKBrowsingContextController
 
 - (void)dealloc
 {
+    WKPageSetPageLoaderClient(_data->_pageRef.get(), 0);
+
     [_data release];
     [super dealloc];
 }
 
-- (WKPageRef)pageRef
+- (WKPageRef)_pageRef
 {
     return _data->_pageRef.get();
 }
@@ -90,13 +101,12 @@ static inline NSURL *autoreleased(WKURLRef url)
     _data->_loadDelegate = loadDelegate;
 }
 
-
 #pragma mark Loading
 
 - (void)loadRequest:(NSURLRequest *)request
 {
     WKRetainPtr<WKURLRequestRef> wkRequest = adoptWK(WKURLRequestCreateWithNSURLRequest(request));
-    WKPageLoadURLRequest(self.pageRef, wkRequest.get());
+    WKPageLoadURLRequest(self._pageRef, wkRequest.get());
 }
 
 - (void)loadFileURL:(NSURL *)URL restrictToFilesWithin:(NSURL *)allowedDirectory
@@ -107,44 +117,44 @@ static inline NSURL *autoreleased(WKURLRef url)
     /* FIXME: Implement restrictions. */
 
     WKRetainPtr<WKURLRef> wkURL = adoptWK(WKURLCreateWithCFURL((CFURLRef)URL));
-    WKPageLoadURL(self.pageRef, wkURL.get());
+    WKPageLoadURL(self._pageRef, wkURL.get());
 }
 
 - (void)stopLoading
 {
-    WKPageStopLoading(self.pageRef);
+    WKPageStopLoading(self._pageRef);
 }
 
 - (void)reload
 {
-    WKPageReload(self.pageRef);
+    WKPageReload(self._pageRef);
 }
 
 - (void)reloadFromOrigin
 {
-    WKPageReloadFromOrigin(self.pageRef);
+    WKPageReloadFromOrigin(self._pageRef);
 }
 
 #pragma mark Back/Forward
 
 - (void)goForward
 {
-    WKPageGoForward(self.pageRef);
+    WKPageGoForward(self._pageRef);
 }
 
 - (BOOL)canGoForward
 {
-    return WKPageCanGoForward(self.pageRef);
+    return WKPageCanGoForward(self._pageRef);
 }
 
 - (void)goBack
 {
-    WKPageGoBack(self.pageRef);
+    WKPageGoBack(self._pageRef);
 }
 
 - (BOOL)canGoBack
 {
-    return WKPageCanGoBack(self.pageRef);
+    return WKPageCanGoBack(self._pageRef);
 }
 
 
@@ -152,50 +162,123 @@ static inline NSURL *autoreleased(WKURLRef url)
 
 - (NSURL *)activeURL
 {
-    return autoreleased(WKPageCopyActiveURL(self.pageRef));
+    return autoreleased(WKPageCopyActiveURL(self._pageRef));
 }
 
 - (NSURL *)provisionalURL
 {
-    return autoreleased(WKPageCopyProvisionalURL(self.pageRef));
+    return autoreleased(WKPageCopyProvisionalURL(self._pageRef));
 }
 
 - (NSURL *)committedURL
 {
-    return autoreleased(WKPageCopyCommittedURL(self.pageRef));
+    return autoreleased(WKPageCopyCommittedURL(self._pageRef));
 }
 
 #pragma mark Active Document Introspection
 
 - (NSString *)title
 {
-    return autoreleased(WKPageCopyTitle(self.pageRef));
+    return autoreleased(WKPageCopyTitle(self._pageRef));
 }
 
 #pragma mark Zoom
 
 - (CGFloat)textZoom
 {
-    return WKPageGetTextZoomFactor(self.pageRef);
+    return WKPageGetTextZoomFactor(self._pageRef);
 }
 
 - (void)setTextZoom:(CGFloat)textZoom
 {
-    return WKPageSetTextZoomFactor(self.pageRef, textZoom);
+    return WKPageSetTextZoomFactor(self._pageRef, textZoom);
 }
 
 - (CGFloat)pageZoom
 {
-    return WKPageGetPageZoomFactor(self.pageRef);
+    return WKPageGetPageZoomFactor(self._pageRef);
 }
 
 - (void)setPageZoom:(CGFloat)pageZoom
 {
-    return WKPageSetPageZoomFactor(self.pageRef, pageZoom);
+    return WKPageSetPageZoomFactor(self._pageRef, pageZoom);
 }
 
 @end
 
+@implementation WKBrowsingContextController (Private)
+
+- (void)setPaginationMode:(WKBrowsingContextPaginationMode)paginationMode
+{
+    WKPaginationMode mode;
+    switch (paginationMode) {
+    case WKPaginationModeUnpaginated:
+        mode = kWKPaginationModeUnpaginated;
+        break;
+    case WKPaginationModeHorizontal:
+        mode = kWKPaginationModeHorizontal;
+        break;
+    case WKPaginationModeVertical:
+        mode = kWKPaginationModeVertical;
+        break;
+    default:
+        return;
+    }
+
+    WKPageSetPaginationMode(self._pageRef, mode);
+}
+
+- (WKBrowsingContextPaginationMode)paginationMode
+{
+    switch (WKPageGetPaginationMode(self._pageRef)) {
+    case kWKPaginationModeUnpaginated:
+        return WKPaginationModeUnpaginated;
+    case kWKPaginationModeHorizontal:
+        return WKPaginationModeHorizontal;
+    case kWKPaginationModeVertical:
+        return WKPaginationModeVertical;
+    }
+
+    ASSERT_NOT_REACHED();
+    return WKPaginationModeUnpaginated;
+}
+
+- (void)setPaginationBehavesLikeColumns:(BOOL)behavesLikeColumns
+{
+    WKPageSetPaginationBehavesLikeColumns(self._pageRef, behavesLikeColumns);
+}
+
+- (BOOL)paginationBehavesLikeColumns
+{
+    return WKPageGetPaginationBehavesLikeColumns(self._pageRef);
+}
+
+- (void)setPageLength:(CGFloat)pageLength
+{
+    WKPageSetPageLength(self._pageRef, pageLength);
+}
+
+- (CGFloat)pageLength
+{
+    return WKPageGetPageLength(self._pageRef);
+}
+
+- (void)setGapBetweenPages:(CGFloat)gapBetweenPages
+{
+    WKPageSetGapBetweenPages(self._pageRef, gapBetweenPages);
+}
+
+- (CGFloat)gapBetweenPages
+{
+    return WKPageGetGapBetweenPages(self._pageRef);
+}
+
+- (NSUInteger)pageCount
+{
+    return WKPageGetPageCount(self._pageRef);
+}
+
+@end
 
 @implementation WKBrowsingContextController (Internal)
 
@@ -283,7 +366,7 @@ static void setUpPageLoaderClient(WKBrowsingContextController *browsingContext, 
 
 /* This should only be called from associate view. */
 
-- (id)initWithPageRef:(WKPageRef)pageRef
+- (id)_initWithPageRef:(WKPageRef)pageRef
 {
     self = [super init];
     if (!self)

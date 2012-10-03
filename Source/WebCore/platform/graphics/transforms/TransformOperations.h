@@ -58,6 +58,8 @@ public:
         return false;
     }
     
+    bool operationsMatch(const TransformOperations&) const;
+    
     void clear()
     {
         m_operations.clear();
@@ -68,18 +70,6 @@ public:
 
     size_t size() const { return m_operations.size(); }
     const TransformOperation* at(size_t index) const { return index < m_operations.size() ? m_operations.at(index).get() : 0; }
-
-#if PLATFORM(BLACKBERRY)
-    String toString() const
-    {
-        String operations;
-        for (size_t i = 0; i < m_operations.size(); ++i) {
-            if (i > 0) operations.append(" ");
-            operations.append(m_operations[i]->toString());
-        }
-        return String::format("[TransformOperations %s]", operations.latin1().data());
-    }
-#endif
 
 private:
     Vector<RefPtr<TransformOperation> > m_operations;

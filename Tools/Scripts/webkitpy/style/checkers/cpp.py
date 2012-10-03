@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# Copyright (C) 2009, 2010 Google Inc. All rights reserved.
+# Copyright (C) 2009, 2010, 2012 Google Inc. All rights reserved.
 # Copyright (C) 2009 Torch Mobile Inc.
 # Copyright (C) 2009 Apple Inc. All rights reserved.
 # Copyright (C) 2010 Chris Jerdonek (cjerdonek@webkit.org)
@@ -1602,7 +1602,7 @@ def check_function_definition(filename, file_extension, clean_lines, line_number
 
     modifiers_and_return_type = function_state.modifiers_and_return_type()
     if filename.find('/chromium/') != -1 and search(r'\bWEBKIT_EXPORT\b', modifiers_and_return_type):
-        if filename.find('/chromium/public/') == -1 and filename.find('/chromium/tests/') == -1:
+        if filename.find('/chromium/public/') == -1 and filename.find('/chromium/tests/') == -1 and filename.find('chromium/platform') == -1:
             error(function_state.function_name_start_position.row, 'readability/webkit_export', 5,
                   'WEBKIT_EXPORT should only appear in the chromium public (or tests) directory.')
         elif not file_extension == "h":
@@ -1660,6 +1660,31 @@ def check_pass_ptr_usage(clean_lines, line_number, function_state, error):
             error(line_number, 'readability/pass_ptr', 5,
                   'Local variables should never be %s (see '
                   'http://webkit.org/coding/RefPtr.html).' % type_name)
+
+
+def check_for_leaky_patterns(clean_lines, line_number, function_state, error):
+    """Check for constructs known to be leak prone.
+    Args:
+      clean_lines: A CleansedLines instance containing the file.
+      line_number: The number of the line to check.
+      function_state: Current function name and lines in body so far.
+      error: The function to call with any errors found.
+    """
+    lines = clean_lines.lines
+    line = lines[line_number]
+
+    matched_get_dc = search(r'\b(?P<function_name>GetDC(Ex)?)\s*\(', line)
+    if matched_get_dc:
+        error(line_number, 'runtime/leaky_pattern', 5,
+              'Use the class HWndDC instead of calling %s to avoid potential '
+              'memory leaks.' % matched_get_dc.group('function_name'))
+
+    matched_create_dc = search(r'\b(?P<function_name>Create(Compatible)?DC)\s*\(', line)
+    matched_own_dc = search(r'\badoptPtr\b', line)
+    if matched_create_dc and not matched_own_dc:
+        error(line_number, 'runtime/leaky_pattern', 5,
+              'Use adoptPtr and OwnPtr<HDC> when calling %s to avoid potential '
+              'memory leaks.' % matched_create_dc.group('function_name'))
 
 
 def check_spacing(file_extension, clean_lines, line_number, error):
@@ -1783,7 +1808,7 @@ def check_spacing(file_extension, clean_lines, line_number, error):
     line = clean_lines.elided[line_number]  # get rid of comments and strings
 
     # Don't try to do spacing checks for operator methods
-    line = sub(r'operator(==|!=|<|<<|<=|>=|>>|>|\+=|-=|\*=|/=|%=|&=|\|=|^=|<<=|>>=)\(', 'operator\(', line)
+    line = sub(r'operator(==|!=|<|<<|<=|>=|>>|>|\+=|-=|\*=|/=|%=|&=|\|=|^=|<<=|>>=|/)\(', 'operator\(', line)
     # Don't try to do spacing checks for #include or #import statements at
     # minimum because it messes up checks for spacing around /
     if match(r'\s*#\s*(?:include|import)', line):
@@ -2052,6 +2077,29 @@ def check_max_min_macros(clean_lines, line_number, file_state, error):
           % (max_min_macro_lower, max_min_macro_lower, max_min_macro))
 
 
+def check_ctype_functions(clean_lines, line_number, file_state, error):
+    """Looks for use of the standard functions in ctype.h and suggest they be replaced
+       by use of equivilent ones in <wtf/ASCIICType.h>?.
+
+    Args:
+      clean_lines: A CleansedLines instance containing the file.
+      line_number: The number of the line to check.
+      file_state: A _FileState instance which maintains information about
+                  the state of things in the file.
+      error: The function to call with any errors found.
+    """
+
+    line = clean_lines.elided[line_number]  # Get rid of comments and strings.
+
+    ctype_function_search = search(r'\b(?P<ctype_function>(isalnum|isalpha|isascii|isblank|iscntrl|isdigit|isgraph|islower|isprint|ispunct|isspace|isupper|isxdigit|toascii|tolower|toupper))\s*\(', line)
+    if not ctype_function_search:
+        return
+
+    ctype_function = ctype_function_search.group('ctype_function')
+    error(line_number, 'runtime/ctype_function', 4,
+          'Use equivelent function in <wtf/ASCIICType.h> instead of the %s() function.'
+          % (ctype_function))
+
 def check_switch_indentation(clean_lines, line_number, error):
     """Looks for indentation errors inside of switch statements.
 
@@ -2143,12 +2191,12 @@ def check_braces(clean_lines, line_number, error):
         # ')', or ') const' and doesn't begin with 'if|for|while|switch|else'.
         # We also allow '#' for #endif and '=' for array initialization.
         previous_line = get_previous_non_blank_line(clean_lines, line_number)[0]
-        if ((not search(r'[;:}{)=]\s*$|\)\s*const\s*$', previous_line)
+        if ((not search(r'[;:}{)=]\s*$|\)\s*((const|OVERRIDE)\s*)*\s*$', previous_line)
              or search(r'\b(if|for|foreach|while|switch|else)\b', previous_line))
             and previous_line.find('#') < 0):
             error(line_number, 'whitespace/braces', 4,
                   'This { should be at the end of the previous line')
-    elif (search(r'\)\s*(const\s*)?{\s*$', line)
+    elif (search(r'\)\s*(((const|OVERRIDE)\s*)*\s*)?{\s*$', line)
           and line.count('(') == line.count(')')
           and not search(r'\b(if|for|foreach|while|switch)\b', line)
           and not match(r'\s+[A-Z_][A-Z_0-9]+\b', line)):
@@ -2389,6 +2437,10 @@ def check_for_null(clean_lines, line_number, file_state, error):
     if search(r'\bgtk_widget_style_get\(\w+\b', line):
         return
 
+    # Don't warn about NULL usage in soup_server_new(). See Bug 77890.
+    if search(r'\bsoup_server_new\(\w+\b', line):
+        return
+
     if search(r'\bNULL\b', line):
         error(line_number, 'readability/null', 5, 'Use 0 instead of NULL.')
         return
@@ -2511,6 +2563,7 @@ def check_style(clean_lines, line_number, file_extension, class_state, file_stat
     check_namespace_indentation(clean_lines, line_number, file_extension, file_state, error)
     check_using_std(clean_lines, line_number, file_state, error)
     check_max_min_macros(clean_lines, line_number, file_state, error)
+    check_ctype_functions(clean_lines, line_number, file_state, error)
     check_switch_indentation(clean_lines, line_number, error)
     check_braces(clean_lines, line_number, error)
     check_exit_statement_simplifications(clean_lines, line_number, error)
@@ -2605,8 +2658,13 @@ def _classify_include(filename, include, is_system, include_state):
     include_base = FileInfo(include).base_name()
 
     # If we haven't encountered a primary header, then be lenient in checking.
-    if not include_state.visited_primary_section() and target_base.find(include_base) != -1:
-        return _PRIMARY_HEADER
+    if not include_state.visited_primary_section():
+        if target_base.find(include_base) != -1:
+            return _PRIMARY_HEADER
+        # Qt private APIs use _p.h suffix.
+        if include_base.find(target_base) != -1 and include_base.endswith('_p'):
+            return _PRIMARY_HEADER
+
     # If we already encountered a primary header, perform a strict comparison.
     # In case the two filename bases are the same then the above lenient check
     # probably was a false positive.
@@ -2946,6 +3004,11 @@ def check_language(filename, clean_lines, line_number, file_extension, include_s
 
     check_identifier_name_in_declaration(filename, line_number, line, file_state, error)
 
+    # Check that we're not using static_cast<Text*>.
+    if search(r'\bstatic_cast<Text\*>', line):
+        error(line_number, 'readability/check', 4,
+              'Consider using toText helper function in WebCore/dom/Text.h '
+              'instead of static_cast<Text*>')
 
 def check_identifier_name_in_declaration(filename, line_number, line, file_state, error):
     """Checks if identifier names contain any underscores.
@@ -3395,6 +3458,7 @@ def process_line(filename, file_extension,
         return
     check_function_definition(filename, file_extension, clean_lines, line, function_state, error)
     check_pass_ptr_usage(clean_lines, line, function_state, error)
+    check_for_leaky_patterns(clean_lines, line, function_state, error)
     check_for_multiline_comments_and_strings(clean_lines, line, error)
     check_style(clean_lines, line, file_extension, class_state, file_state, error)
     check_language(filename, clean_lines, line, file_extension, include_state,
@@ -3488,10 +3552,12 @@ class CppChecker(object):
         'runtime/arrays',
         'runtime/bitfields',
         'runtime/casting',
+        'runtime/ctype_function',
         'runtime/explicit',
         'runtime/init',
         'runtime/int',
         'runtime/invalid_increment',
+        'runtime/leaky_pattern',
         'runtime/max_min_macros',
         'runtime/memset',
         'runtime/printf',

@@ -37,36 +37,35 @@ namespace JSC {
     class SpecializedThunkJIT : public JSInterfaceJIT {
     public:
         static const int ThisArgument = -1;
-        SpecializedThunkJIT(int expectedArgCount, JSGlobalData* globalData, ExecutablePool* pool)
+        SpecializedThunkJIT(int expectedArgCount, JSGlobalData* globalData)
             : m_expectedArgCount(expectedArgCount)
             , m_globalData(globalData)
-            , m_pool(pool)
         {
             // Check that we have the expected number of arguments
-            m_failures.append(branch32(NotEqual, Address(callFrameRegister, RegisterFile::ArgumentCount * (int)sizeof(Register)), TrustedImm32(expectedArgCount + 1)));
+            m_failures.append(branch32(NotEqual, payloadFor(RegisterFile::ArgumentCount), TrustedImm32(expectedArgCount + 1)));
         }
         
         void loadDoubleArgument(int argument, FPRegisterID dst, RegisterID scratch)
         {
-            unsigned src = argumentToVirtualRegister(argument);
+            unsigned src = CallFrame::argumentOffset(argument);
             m_failures.append(emitLoadDouble(src, dst, scratch));
         }
         
         void loadCellArgument(int argument, RegisterID dst)
         {
-            unsigned src = argumentToVirtualRegister(argument);
+            unsigned src = CallFrame::argumentOffset(argument);
             m_failures.append(emitLoadJSCell(src, dst));
         }
         
         void loadJSStringArgument(int argument, RegisterID dst)
         {
             loadCellArgument(argument, dst);
-            m_failures.append(branchPtr(NotEqual, Address(dst, 0), TrustedImmPtr(m_globalData->jsStringVPtr)));
+            m_failures.append(branchPtr(NotEqual, Address(dst, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
         }
         
         void loadInt32Argument(int argument, RegisterID dst, Jump& failTarget)
         {
-            unsigned src = argumentToVirtualRegister(argument);
+            unsigned src = CallFrame::argumentOffset(argument);
             failTarget = emitLoadInt32(src, dst);
         }
         
@@ -133,13 +132,13 @@ namespace JSC {
             ret();
         }
         
-        MacroAssemblerCodePtr finalize(JSGlobalData& globalData, MacroAssemblerCodePtr fallback)
+        MacroAssemblerCodeRef finalize(JSGlobalData& globalData, MacroAssemblerCodePtr fallback)
         {
-            LinkBuffer patchBuffer(globalData, this, m_pool.get());
+            LinkBuffer patchBuffer(globalData, this, GLOBAL_THUNK_ID);
             patchBuffer.link(m_failures, CodeLocationLabel(fallback));
             for (unsigned i = 0; i < m_calls.size(); i++)
                 patchBuffer.link(m_calls[i].first, m_calls[i].second);
-            return patchBuffer.finalizeCode().m_code;
+            return patchBuffer.finalizeCode();
         }
 
         // Assumes that the target function uses fpRegister0 as the first argument
@@ -150,10 +149,6 @@ namespace JSC {
         }
 
     private:
-        int argumentToVirtualRegister(unsigned argument)
-        {
-            return -static_cast<int>(RegisterFile::CallFrameHeaderSize + (m_expectedArgCount - argument));
-        }
 
         void tagReturnAsInt32()
         {
@@ -173,7 +168,6 @@ namespace JSC {
         
         int m_expectedArgCount;
         JSGlobalData* m_globalData;
-        RefPtr<ExecutablePool> m_pool;
         MacroAssembler::JumpList m_failures;
         Vector<std::pair<Call, FunctionPtr> > m_calls;
     };

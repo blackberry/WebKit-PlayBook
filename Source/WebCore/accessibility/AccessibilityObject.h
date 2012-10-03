@@ -47,37 +47,26 @@
 #include "AccessibilityObjectWrapper.h"
 #endif
 
+#if PLATFORM(MAC)
+
 typedef struct _NSRange NSRange;
 
-#ifdef __OBJC__
-@class NSArray;
-@class NSAttributedString;
-@class NSData;
-@class NSMutableAttributedString;
-@class NSString;
-@class NSValue;
-@class NSView;
-@class WebAccessibilityObjectWrapper;
-#else
-class NSArray;
-class NSAttributedString;
-class NSData;
-class NSMutableAttributedString;
-class NSString;
-class NSValue;
-class NSView;
-#if PLATFORM(GTK)
+OBJC_CLASS NSArray;
+OBJC_CLASS NSAttributedString;
+OBJC_CLASS NSData;
+OBJC_CLASS NSMutableAttributedString;
+OBJC_CLASS NSString;
+OBJC_CLASS NSValue;
+OBJC_CLASS NSView;
+OBJC_CLASS WebAccessibilityObjectWrapper;
+
+typedef WebAccessibilityObjectWrapper AccessibilityObjectWrapper;
+
+#elif PLATFORM(GTK)
 typedef struct _AtkObject AtkObject;
 typedef struct _AtkObject AccessibilityObjectWrapper;
-#elif PLATFORM(MAC)
-class WebAccessibilityObjectWrapper;
 #else
 class AccessibilityObjectWrapper;
-#endif
-#endif
-
-#if PLATFORM(MAC)
-typedef WebAccessibilityObjectWrapper AccessibilityObjectWrapper;
 #endif
 
 namespace WebCore {
@@ -95,6 +84,7 @@ class Node;
 class Page;
 class RenderObject;
 class RenderListItem;
+class ScrollableArea;
 class VisibleSelection;
 class Widget;
 
@@ -254,6 +244,7 @@ enum AccessibilitySearchKey {
     HeadingLevel6SearchKey,
     HeadingSameLevelSearchKey,
     HeadingSearchKey,
+    HighlightedSearchKey,
     ItalicFontSearchKey,
     LandmarkSearchKey,
     LinkSearchKey,
@@ -273,11 +264,10 @@ enum AccessibilitySearchKey {
     VisitedLinkSearchKey
 };
 
-struct AccessibilitySearchPredicate {
-    AccessibilityObject* axContainerObject;
-    AccessibilityObject* axStartObject;
-    AccessibilitySearchDirection axSearchDirection;
-    AccessibilitySearchKey axSearchKey;
+struct AccessibilitySearchCriteria {
+    AccessibilityObject* startObject;
+    AccessibilitySearchDirection searchDirection;
+    AccessibilitySearchKey searchKey;
     String* searchText;
     unsigned resultsLimit;
 };
@@ -319,9 +309,6 @@ class AccessibilityObject : public RefCounted<AccessibilityObject> {
 protected:
     AccessibilityObject();
     
-    // Should only be called by accessibleObjectsWithAccessibilitySearchPredicate for AccessibilityObject searching.
-    static bool isAccessibilityObjectSearchMatch(AccessibilityObject*, AccessibilitySearchPredicate*);
-    static bool isAccessibilityTextSearchMatch(AccessibilityObject*, AccessibilitySearchPredicate*);
 public:
     virtual ~AccessibilityObject();
     virtual void detach();
@@ -411,6 +398,9 @@ public:
     virtual bool isCollapsed() const { return false; }
     virtual void setIsExpanded(bool) { }
 
+    // In a multi-select list, many items can be selected but only one is active at a time.
+    virtual bool isSelectedOptionActive() const { return false; }
+
     virtual bool hasBoldFont() const { return false; }
     virtual bool hasItalicFont() const { return false; }
     bool hasMisspelling() const;
@@ -420,6 +410,7 @@ public:
     virtual bool hasSameStyle(RenderObject*) const { return false; }
     bool hasStaticText() const { return roleValue() == StaticTextRole; }
     virtual bool hasUnderline() const { return false; }
+    bool hasHighlighting() const;
 
     virtual bool canSetFocusAttribute() const { return false; }
     virtual bool canSetTextRangeAttributes() const { return false; }
@@ -483,7 +474,7 @@ public:
     virtual AccessibilityObject* parentObjectUnignored() const;
     virtual AccessibilityObject* parentObjectIfExists() const { return 0; }
     static AccessibilityObject* firstAccessibleObjectFromNode(const Node*);
-    static void accessibleObjectsWithAccessibilitySearchPredicate(AccessibilitySearchPredicate*, AccessibilityChildrenVector&);
+    void findMatchingObjects(AccessibilitySearchCriteria*, AccessibilityChildrenVector&);
 
     virtual AccessibilityObject* observableObject() const { return 0; }
     virtual void linkedUIElements(AccessibilityChildrenVector&) const { }
@@ -491,7 +482,7 @@ public:
     virtual bool exposesTitleUIElement() const { return true; }
     virtual AccessibilityObject* correspondingLabelForControlElement() const { return 0; }
     virtual AccessibilityObject* correspondingControlForLabelElement() const { return 0; }
-    virtual AccessibilityObject* scrollBar(AccessibilityOrientation) const { return 0; }
+    virtual AccessibilityObject* scrollBar(AccessibilityOrientation) { return 0; }
     
     virtual AccessibilityRole ariaRoleAttribute() const { return UnknownRole; }
     virtual bool isPresentationalChildOfAriaRole() const { return false; }
@@ -575,6 +566,8 @@ public:
     virtual AccessibilityObject* activeDescendant() const { return 0; }    
     virtual void handleActiveDescendantChanged() { }
     virtual void handleAriaExpandedChanged() { }
+    bool isDescendantOfObject(const AccessibilityObject*) const;
+    bool isAncestorOfObject(const AccessibilityObject*) const;
     
     static AccessibilityRole ariaRoleToWebCoreRole(const String&);
     const AtomicString& getAttribute(const QualifiedName&) const;
@@ -593,7 +586,7 @@ public:
     VisiblePositionRange visiblePositionRangeForRange(const PlainTextRange&) const;
 
     String stringForVisiblePositionRange(const VisiblePositionRange&) const;
-    virtual LayoutRect boundsForVisiblePositionRange(const VisiblePositionRange&) const { return LayoutRect(); }
+    virtual IntRect boundsForVisiblePositionRange(const VisiblePositionRange&) const { return IntRect(); }
     int lengthForVisiblePositionRange(const VisiblePositionRange&) const;
     virtual void setSelectedVisiblePositionRange(const VisiblePositionRange&) const { }
 
@@ -624,7 +617,7 @@ public:
     PlainTextRange doAXStyleRangeForIndex(unsigned) const;
 
     virtual String doAXStringForRange(const PlainTextRange&) const { return String(); }
-    virtual LayoutRect doAXBoundsForRange(const PlainTextRange&) const { return LayoutRect(); }
+    virtual IntRect doAXBoundsForRange(const PlainTextRange&) const { return IntRect(); }
     String listMarkerTextForNodeAndPosition(Node*, const VisiblePosition&) const;
 
     unsigned doAXLineForIndex(unsigned);
@@ -654,7 +647,14 @@ public:
     
     // CSS3 Speech properties.
     virtual ESpeak speakProperty() const { return SpeakNormal; }
-    
+
+    // Make this object visible by scrolling as many nested scrollable views as needed.
+    virtual void scrollToMakeVisible() const;
+    // Same, but if the whole object can't be made visible, try for this subrect, in local coordinates.
+    virtual void scrollToMakeVisibleWithSubFocus(const IntRect&) const;
+    // Scroll this object to a given point in global coordinates of the top-level window.
+    virtual void scrollToGlobalPoint(const IntPoint&) const;
+
 #if HAVE(ACCESSIBILITY)
 #if PLATFORM(GTK)
     AccessibilityObjectWrapper* wrapper() const;
@@ -688,7 +688,14 @@ protected:
     mutable bool m_haveChildren;
     AccessibilityRole m_role;
     
+    // If this object itself scrolls, return its ScrollableArea.
+    virtual ScrollableArea* getScrollableAreaIfScrollable() const { return 0; }
+    virtual void scrollTo(const IntPoint&) const { }
+
     virtual bool isDetached() const { return true; }
+    static bool isAccessibilityObjectSearchMatch(AccessibilityObject*, AccessibilitySearchCriteria*);
+    static bool isAccessibilityTextSearchMatch(AccessibilityObject*, AccessibilitySearchCriteria*);
+    static bool objectMatchesSearchCriteriaWithResultLimit(AccessibilityObject*, AccessibilitySearchCriteria*, AccessibilityChildrenVector&);
     
 #if PLATFORM(GTK)
     bool allowsTextRanges() const;

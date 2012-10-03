@@ -33,7 +33,6 @@
 #include "ApplyStyleCommand.h"
 #include "BackForwardController.h"
 #include "CSSComputedStyleDeclaration.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "CSSProperty.h"
 #include "CSSPropertyNames.h"
 #include "CachedCSSStyleSheet.h"
@@ -47,6 +46,7 @@
 #include "EventNames.h"
 #include "FloatQuad.h"
 #include "FocusController.h"
+#include "FrameDestructionObserver.h"
 #include "FrameLoader.h"
 #include "FrameLoaderClient.h"
 #include "FrameView.h"
@@ -79,6 +79,7 @@
 #include "ScriptSourceCode.h"
 #include "ScriptValue.h"
 #include "Settings.h"
+#include "StylePropertySet.h"
 #include "TextIterator.h"
 #include "TextResourceDecoder.h"
 #include "UserContentURLPattern.h"
@@ -109,10 +110,6 @@
 #if ENABLE(SVG)
 #include "SVGDocument.h"
 #include "SVGDocumentExtensions.h"
-#endif
-
-#if ENABLE(MEDIA_STREAM)
-#include "MediaStreamFrameController.h"
 #endif
 
 #if USE(TILED_BACKING_STORE)
@@ -169,9 +166,6 @@ inline Frame::Frame(Page* page, HTMLFrameOwnerElement* ownerElement, FrameLoader
     , m_inViewSourceMode(false)
     , m_isDisconnected(false)
     , m_excludeFromTextSearch(false)
-#if ENABLE(MEDIA_STREAM)
-    , m_mediaStreamFrameController(RuntimeEnabledFeatures::mediaStreamEnabled() ? adoptPtr(new MediaStreamFrameController(this)) : PassOwnPtr<MediaStreamFrameController>())
-#endif
 {
     ASSERT(page);
     AtomicString::init();
@@ -225,18 +219,6 @@ Frame::~Frame()
 
     disconnectOwnerElement();
 
-    if (m_domWindow)
-        m_domWindow->disconnectFrame();
-
-#if ENABLE(MEDIA_STREAM)
-    if (m_mediaStreamFrameController)
-        m_mediaStreamFrameController->disconnectFrame();
-#endif
-
-    HashSet<DOMWindow*>::iterator end = m_liveFormerWindows.end();
-    for (HashSet<DOMWindow*>::iterator it = m_liveFormerWindows.begin(); it != end; ++it)
-        (*it)->disconnectFrame();
-
     HashSet<FrameDestructionObserver*>::iterator stop = m_destructionObservers.end();
     for (HashSet<FrameDestructionObserver*>::iterator it = m_destructionObservers.begin(); it != stop; ++it)
         (*it)->frameDestroyed();
@@ -245,6 +227,15 @@ Frame::~Frame()
         m_view->hide();
         m_view->clearFrame();
     }
+}
+
+bool Frame::inScope(TreeScope* scope) const
+{
+    ASSERT(scope);
+    HTMLFrameOwnerElement* owner = document()->ownerElement();
+    // Scoping test should be done only for child frames.
+    ASSERT(owner);
+    return owner->treeScope() == scope;
 }
 
 void Frame::addDestructionObserver(FrameDestructionObserver* observer)
@@ -308,10 +299,12 @@ void Frame::setDocument(PassRefPtr<Document> newDoc)
     // Update the cached 'document' property, which is now stale.
     m_script.updateDocument();
 
-    if (m_page) {
-        m_page->updateViewportArguments();
-        if (m_page->mainFrame() == this)
-            notifyChromeClientWheelEventHandlerCountChanged();
+    if (m_doc)
+        m_doc->updateViewportArguments();
+
+    if (m_page && m_page->mainFrame() == this) {
+        notifyChromeClientWheelEventHandlerCountChanged();
+        notifyChromeClientTouchEventHandlerCountChanged();
     }
 }
 
@@ -499,7 +492,7 @@ String Frame::matchLabelsAgainstElement(const Vector<String>& labels, Element* e
     // See 7538330 for one popular site that benefits from the id element check.
     // FIXME: This code is mirrored in FrameMac.mm. It would be nice to make the Mac code call the platform-agnostic
     // code, which would require converting the NSArray of NSStrings to a Vector of Strings somewhere along the way.
-    String resultFromNameAttribute = matchLabelsAgainstString(labels, element->getAttribute(nameAttr));
+    String resultFromNameAttribute = matchLabelsAgainstString(labels, element->getNameAttribute());
     if (!resultFromNameAttribute.isEmpty())
         return resultFromNameAttribute;
     
@@ -587,10 +580,8 @@ void Frame::injectUserScriptsForWorld(DOMWrapperWorld* world, const UserScriptVe
 
 void Frame::clearDOMWindow()
 {
-    if (m_domWindow) {
-        m_liveFormerWindows.add(m_domWindow.get());
+    if (m_domWindow)
         m_domWindow->clear();
-    }
     m_domWindow = 0;
 }
 
@@ -655,10 +646,8 @@ void Frame::clearTimers()
 
 void Frame::setDOMWindow(DOMWindow* domWindow)
 {
-    if (m_domWindow) {
-        m_liveFormerWindows.add(m_domWindow.get());
+    if (m_domWindow)
         m_domWindow->clear();
-    }
     m_domWindow = domWindow;
 }
 
@@ -680,28 +669,19 @@ DOMWindow* Frame::domWindow() const
     return m_domWindow.get();
 }
 
-void Frame::clearFormerDOMWindow(DOMWindow* window)
+void Frame::willDetachPage()
 {
-    m_liveFormerWindows.remove(window);
-}
-
-void Frame::pageDestroyed()
-{
-    // FIXME: Rename this function, since it's called not only from Page destructor, but in several other cases.
-    // This cleanup is needed whenever we remove a frame from page.
-
     if (Frame* parent = tree()->parent())
         parent->loader()->checkLoadComplete();
 
-    if (m_domWindow) {
-        m_domWindow->resetGeolocation();
-        m_domWindow->pageDestroyed();
-    }
-
-#if ENABLE(MEDIA_STREAM)
-    if (m_mediaStreamFrameController)
-        m_mediaStreamFrameController->disconnectPage();
+#if ENABLE(NOTIFICATIONS)
+    if (m_domWindow)
+        m_domWindow->resetNotifications();
 #endif
+
+    HashSet<FrameDestructionObserver*>::iterator stop = m_destructionObservers.end();
+    for (HashSet<FrameDestructionObserver*>::iterator it = m_destructionObservers.begin(); it != stop; ++it)
+        (*it)->willDetachPage();
 
     // FIXME: It's unclear as to why this is called more than once, but it is,
     // so page() could be NULL.
@@ -710,8 +690,6 @@ void Frame::pageDestroyed()
 
     script()->clearScriptObjects();
     script()->updatePlatformScriptObjects();
-
-    detachFromPage();
 }
 
 void Frame::disconnectOwnerElement()
@@ -745,21 +723,16 @@ void Frame::transferChildFrameToNewDocument()
              m_page->decrementFrameCount();
         }
 
-        // FIXME: We should ideally allow existing Geolocation activities to continue
-        // when the Geolocation's iframe is reparented.
-        // See https://bugs.webkit.org/show_bug.cgi?id=55577
-        // and https://bugs.webkit.org/show_bug.cgi?id=52877
         if (m_domWindow) {
-            m_domWindow->resetGeolocation();
 #if ENABLE(NOTIFICATIONS)
             m_domWindow->resetNotifications();
 #endif
         }
 
-#if ENABLE(MEDIA_STREAM)
-        if (m_mediaStreamFrameController)
-            m_mediaStreamFrameController->transferToNewPage(newPage);
-#endif
+        HashSet<FrameDestructionObserver*>::iterator stop = m_destructionObservers.end();
+        for (HashSet<FrameDestructionObserver*>::iterator it = m_destructionObservers.begin(); it != stop; ++it)
+            (*it)->willDetachPage();
+
         m_page = newPage;
 
         if (newPage)
@@ -935,7 +908,7 @@ void Frame::tiledBackingStorePaintEnd(const Vector<IntRect>& paintedArea)
     unsigned size = paintedArea.size();
     // Request repaint from the system
     for (int n = 0; n < size; ++n)
-        m_page->chrome()->invalidateContentsAndWindow(m_view->contentsToWindow(paintedArea[n]), false);
+        m_page->chrome()->invalidateContentsAndRootView(m_view->contentsToRootView(paintedArea[n]), false);
 }
 
 IntRect Frame::tiledBackingStoreContentsRect()
@@ -1059,14 +1032,28 @@ void Frame::notifyChromeClientWheelEventHandlerCountChanged() const
 {
     // Ensure that this method is being called on the main frame of the page.
     ASSERT(m_page && m_page->mainFrame() == this);
-    
+
     unsigned count = 0;
     for (const Frame* frame = this; frame; frame = frame->tree()->traverseNext()) {
         if (frame->document())
             count += frame->document()->wheelEventHandlerCount();
     }
-    
+
     m_page->chrome()->client()->numWheelEventHandlersChanged(count);
+}
+
+void Frame::notifyChromeClientTouchEventHandlerCountChanged() const
+{
+    // Ensure that this method is being called on the main frame of the page.
+    ASSERT(m_page && m_page->mainFrame() == this);
+
+    unsigned count = 0;
+    for (const Frame* frame = this; frame; frame = frame->tree()->traverseNext()) {
+        if (frame->document())
+            count += frame->document()->touchEventHandlerCount();
+    }
+
+    m_page->chrome()->client()->numTouchEventHandlersChanged(count);
 }
 
 #if !PLATFORM(MAC) && !PLATFORM(WIN)
@@ -1110,10 +1097,10 @@ DragImageRef Frame::nodeImage(Node* node)
     m_doc->updateLayout();
     m_view->setNodeToDraw(node); // Enable special sub-tree drawing mode.
 
-    IntRect topLevelRect;
-    IntRect paintingRect = renderer->paintingRootRect(topLevelRect);
+    LayoutRect topLevelRect;
+    IntRect paintingRect = pixelSnappedIntRect(renderer->paintingRootRect(topLevelRect));
 
-    OwnPtr<ImageBuffer> buffer(ImageBuffer::create(paintingRect.size()));
+    OwnPtr<ImageBuffer> buffer(ImageBuffer::create(paintingRect.size(), 1, ColorSpaceDeviceRGB));
     if (!buffer)
         return 0;
     buffer->context()->translate(-paintingRect.x(), -paintingRect.y());
@@ -1136,7 +1123,7 @@ DragImageRef Frame::dragImageForSelection()
 
     IntRect paintingRect = enclosingIntRect(selection()->bounds());
 
-    OwnPtr<ImageBuffer> buffer(ImageBuffer::create(paintingRect.size()));
+    OwnPtr<ImageBuffer> buffer(ImageBuffer::create(paintingRect.size(), 1, ColorSpaceDeviceRGB));
     if (!buffer)
         return 0;
     buffer->context()->translate(-paintingRect.x(), -paintingRect.y());

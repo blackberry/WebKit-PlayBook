@@ -56,6 +56,34 @@ static inline void setRowLogicalHeightToRowStyleLogicalHeightIfNotRelative(Rende
         row.logicalHeight = Length();
 }
 
+static inline void updateLogicalHeightForCell(RenderTableSection::RowStruct& row, const RenderTableCell* cell)
+{
+    // We ignore height settings on rowspan cells.
+    if (cell->rowSpan() != 1)
+        return;
+
+    Length logicalHeight = cell->style()->logicalHeight();
+    if (logicalHeight.isPositive() || (logicalHeight.isRelative() && logicalHeight.value() >= 0)) {
+        Length cRowLogicalHeight = row.logicalHeight;
+        switch (logicalHeight.type()) {
+        case Percent:
+            if (!(cRowLogicalHeight.isPercent())
+                || (cRowLogicalHeight.isPercent() && cRowLogicalHeight.percent() < logicalHeight.percent()))
+                row.logicalHeight = logicalHeight;
+            break;
+        case Fixed:
+            if (cRowLogicalHeight.type() < Percent
+                || (cRowLogicalHeight.isFixed() && cRowLogicalHeight.value() < logicalHeight.value()))
+                row.logicalHeight = logicalHeight;
+            break;
+        case Relative:
+        default:
+            break;
+        }
+    }
+}
+
+
 RenderTableSection::RenderTableSection(Node* node)
     : RenderBox(node)
     , m_cCol(0)
@@ -102,7 +130,7 @@ void RenderTableSection::addChild(RenderObject* child, RenderObject* beforeChild
 {
     // Make sure we don't append things after :after-generated content if we have it.
     if (!beforeChild)
-        beforeChild = findAfterContentRenderer();
+        beforeChild = afterPseudoElementRenderer();
 
     if (!child->isTableRow()) {
         RenderObject* last = beforeChild;
@@ -193,8 +221,8 @@ void RenderTableSection::addCell(RenderTableCell* cell, RenderTableRow* row)
     if (needsCellRecalc())
         return;
 
-    int rSpan = cell->rowSpan();
-    int cSpan = cell->colSpan();
+    unsigned rSpan = cell->rowSpan();
+    unsigned cSpan = cell->colSpan();
     Vector<RenderTable::ColumnStruct>& columns = table()->columns();
     unsigned nCols = columns.size();
     // addCell should be called only after m_cRow has been incremented.
@@ -210,28 +238,7 @@ void RenderTableSection::addCell(RenderTableCell* cell, RenderTableRow* row)
     while (m_cCol < nCols && (cellAt(insertionRow, m_cCol).hasCells() || cellAt(insertionRow, m_cCol).inColSpan))
         m_cCol++;
 
-    if (rSpan == 1) {
-        // we ignore height settings on rowspan cells
-        Length logicalHeight = cell->style()->logicalHeight();
-        if (logicalHeight.isPositive() || (logicalHeight.isRelative() && logicalHeight.value() >= 0)) {
-            Length cRowLogicalHeight = m_grid[insertionRow].logicalHeight;
-            switch (logicalHeight.type()) {
-                case Percent:
-                    if (!(cRowLogicalHeight.isPercent()) ||
-                        (cRowLogicalHeight.isPercent() && cRowLogicalHeight.percent() < logicalHeight.percent()))
-                        m_grid[insertionRow].logicalHeight = logicalHeight;
-                        break;
-                case Fixed:
-                    if (cRowLogicalHeight.type() < Percent ||
-                        (cRowLogicalHeight.isFixed() && cRowLogicalHeight.value() < logicalHeight.value()))
-                        m_grid[insertionRow].logicalHeight = logicalHeight;
-                    break;
-                case Relative:
-                default:
-                    break;
-            }
-        }
-    }
+    updateLogicalHeightForCell(m_grid[insertionRow], cell);
 
     ensureRows(insertionRow + rSpan);
 
@@ -241,16 +248,16 @@ void RenderTableSection::addCell(RenderTableCell* cell, RenderTableRow* row)
     // tell the cell where it is
     bool inColSpan = false;
     while (cSpan) {
-        int currentSpan;
+        unsigned currentSpan;
         if (m_cCol >= nCols) {
             table()->appendColumn(cSpan);
             currentSpan = cSpan;
         } else {
-            if (cSpan < (int)columns[m_cCol].span)
+            if (cSpan < columns[m_cCol].span)
                 table()->splitColumn(m_cCol, cSpan);
             currentSpan = columns[m_cCol].span;
         }
-        for (int r = 0; r < rSpan; r++) {
+        for (unsigned r = 0; r < rSpan; r++) {
             CellStruct& c = cellAt(insertionRow + r, m_cCol);
             ASSERT(cell);
             c.cells.append(cell);
@@ -270,7 +277,7 @@ void RenderTableSection::addCell(RenderTableCell* cell, RenderTableRow* row)
 
 void RenderTableSection::setCellLogicalWidths()
 {
-    Vector<LayoutUnit>& columnPos = table()->columnPositions();
+    Vector<int>& columnPos = table()->columnPositions();
 
     LayoutStateMaintainer statePusher(view());
 
@@ -283,14 +290,14 @@ void RenderTableSection::setCellLogicalWidths()
             if (!cell || current.inColSpan)
               continue;
             unsigned endCol = j;
-            int cspan = cell->colSpan();
+            unsigned cspan = cell->colSpan();
             while (cspan && endCol < cols) {
                 ASSERT(endCol < table()->columns().size());
                 cspan -= table()->columns()[endCol].span;
                 endCol++;
             }
-            LayoutUnit w = columnPos[endCol] - columnPos[j] - table()->hBorderSpacing();
-            LayoutUnit oldLogicalWidth = cell->logicalWidth();
+            int w = columnPos[endCol] - columnPos[j] - table()->hBorderSpacing();
+            int oldLogicalWidth = cell->logicalWidth();
             if (w != oldLogicalWidth) {
                 cell->setNeedsLayout(true);
                 if (!table()->selfNeedsLayout() && cell->checkForRepaintDuringLayout()) {
@@ -309,7 +316,7 @@ void RenderTableSection::setCellLogicalWidths()
     statePusher.pop(); // only pops if we pushed
 }
 
-LayoutUnit RenderTableSection::calcRowLogicalHeight()
+int RenderTableSection::calcRowLogicalHeight()
 {
 #ifndef NDEBUG
     setNeedsLayoutIsForbidden(true);
@@ -319,7 +326,7 @@ LayoutUnit RenderTableSection::calcRowLogicalHeight()
 
     RenderTableCell* cell;
 
-    LayoutUnit spacing = table()->vBorderSpacing();
+    int spacing = table()->vBorderSpacing();
 
     LayoutStateMaintainer statePusher(view());
 
@@ -327,14 +334,11 @@ LayoutUnit RenderTableSection::calcRowLogicalHeight()
     m_rowPos[0] = spacing;
 
     for (unsigned r = 0; r < m_grid.size(); r++) {
-        m_rowPos[r + 1] = 0;
         m_grid[r].baseline = 0;
-        LayoutUnit baseline = 0;
-        LayoutUnit bdesc = 0;
-        LayoutUnit ch = m_grid[r].logicalHeight.calcMinValue(0);
-        LayoutUnit pos = m_rowPos[r] + ch + (m_grid[r].rowRenderer ? spacing : 0);
+        LayoutUnit baselineDescent = 0;
 
-        m_rowPos[r + 1] = max(m_rowPos[r + 1], pos);
+        // Our base size is the biggest logical height from our cells' styles (excluding row spanning cells).
+        m_rowPos[r + 1] = max(m_rowPos[r] + m_grid[r].logicalHeight.calcMinValue(0), 0);
 
         Row& row = m_grid[r].row;
         unsigned totalCols = row.size();
@@ -346,10 +350,13 @@ LayoutUnit RenderTableSection::calcRowLogicalHeight()
             if (!cell || current.inColSpan)
                 continue;
 
-            if ((cell->row() + cell->rowSpan() - 1) > r)
+            // FIXME: We are always adding the height of a rowspan to the last rows which doesn't match
+            // other browsers. See webkit.org/b/52185 for example.
+            if ((cell->row() + cell->rowSpan() - 1) != r)
                 continue;
 
-            unsigned indx = max(r - cell->rowSpan() + 1, 0u);
+            // For row spanning cells, |r| is the last row in the span.
+            unsigned cellStartRow = cell->row();
 
             if (cell->hasOverrideHeight()) {
                 if (!statePusher.didPush()) {
@@ -363,43 +370,27 @@ LayoutUnit RenderTableSection::calcRowLogicalHeight()
                 cell->layoutIfNeeded();
             }
 
-            LayoutUnit adjustedLogicalHeight = cell->logicalHeight() - (cell->intrinsicPaddingBefore() + cell->intrinsicPaddingAfter());
-
-            ch = cell->style()->logicalHeight().calcValue(0);
-            if (document()->inQuirksMode() || cell->style()->boxSizing() == BORDER_BOX) {
-                // Explicit heights use the border box in quirks mode.
-                // Don't adjust height.
-            } else {
-                // In strict mode, box-sizing: content-box do the right
-                // thing and actually add in the border and padding.
-                LayoutUnit adjustedPaddingBefore = cell->paddingBefore() - cell->intrinsicPaddingBefore();
-                LayoutUnit adjustedPaddingAfter = cell->paddingAfter() - cell->intrinsicPaddingAfter();
-                ch += adjustedPaddingBefore + adjustedPaddingAfter + cell->borderBefore() + cell->borderAfter();
-            }
-            ch = max(ch, adjustedLogicalHeight);
-
-            pos = m_rowPos[indx] + ch + (m_grid[r].rowRenderer ? spacing : 0);
-
-            m_rowPos[r + 1] = max(m_rowPos[r + 1], pos);
+            int cellLogicalHeight = cell->logicalHeightForRowSizing();
+            m_rowPos[r + 1] = max(m_rowPos[r + 1], m_rowPos[cellStartRow] + cellLogicalHeight);
 
             // find out the baseline
             EVerticalAlign va = cell->style()->verticalAlign();
             if (va == BASELINE || va == TEXT_BOTTOM || va == TEXT_TOP || va == SUPER || va == SUB) {
-                LayoutUnit b = cell->cellBaselinePosition();
-                if (b > cell->borderBefore() + cell->paddingBefore()) {
-                    baseline = max(baseline, b - cell->intrinsicPaddingBefore());
-                    bdesc = max(bdesc, m_rowPos[indx] + ch - (b - cell->intrinsicPaddingBefore()));
+                int baselinePosition = cell->cellBaselinePosition();
+                if (baselinePosition > cell->borderBefore() + cell->paddingBefore()) {
+                    m_grid[r].baseline = max(m_grid[r].baseline, baselinePosition - cell->intrinsicPaddingBefore());
+                    baselineDescent = max(baselineDescent, m_rowPos[cellStartRow] + cellLogicalHeight - (baselinePosition - cell->intrinsicPaddingBefore()));
                 }
             }
         }
 
         // do we have baseline aligned elements?
-        if (baseline) {
+        if (m_grid[r].baseline)
             // increase rowheight if baseline requires
-            m_rowPos[r + 1] = max(m_rowPos[r + 1], baseline + bdesc + (m_grid[r].rowRenderer ? spacing : 0));
-            m_grid[r].baseline = baseline;
-        }
+            m_rowPos[r + 1] = max(m_rowPos[r + 1], m_grid[r].baseline + baselineDescent);
 
+        // Add the border-spacing to our final position.
+        m_rowPos[r + 1] += m_grid[r].rowRenderer ? spacing : 0;
         m_rowPos[r + 1] = max(m_rowPos[r + 1], m_rowPos[r]);
     }
 
@@ -421,6 +412,10 @@ void RenderTableSection::layout()
     LayoutStateMaintainer statePusher(view(), this, locationOffset(), style()->isFlippedBlocksWritingMode());
     for (RenderObject* child = children()->firstChild(); child; child = child->nextSibling()) {
         if (child->isTableRow()) {
+#if ENABLE(VIEWPORT_REFLOW)
+            if (view()->shouldReflow()) // Might have children that need to reflow.
+                child->setNeedsLayout(true, false);
+#endif
             child->layoutIfNeeded();
             ASSERT(!child->needsLayout());
         }
@@ -429,7 +424,7 @@ void RenderTableSection::layout()
     setNeedsLayout(false);
 }
 
-LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
+int RenderTableSection::layoutRows(int toAdd)
 {
 #ifndef NDEBUG
     setNeedsLayoutIsForbidden(true);
@@ -437,8 +432,8 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
 
     ASSERT(!needsLayout());
 
-    LayoutUnit rHeight;
-    int rindx;
+    int rHeight;
+    unsigned rindx;
     unsigned totalRows = m_grid.size();
 
     // Set the width of our section now.  The rows will also be this width.
@@ -448,9 +443,9 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
     m_forceSlowPaintPathWithOverflowingCell = false;
 
     if (toAdd && totalRows && (m_rowPos[totalRows] || !nextSibling())) {
-        LayoutUnit totalHeight = m_rowPos[totalRows] + toAdd;
+        int totalHeight = m_rowPos[totalRows] + toAdd;
 
-        LayoutUnit dh = toAdd;
+        int dh = toAdd;
         int totalPercent = 0;
         int numAuto = 0;
         for (unsigned r = 0; r < totalRows; r++) {
@@ -461,15 +456,15 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
         }
         if (totalPercent) {
             // try to satisfy percent
-            LayoutUnit add = 0;
+            int add = 0;
             totalPercent = min(totalPercent, 100);
-            LayoutUnit rh = m_rowPos[1] - m_rowPos[0];
+            int rh = m_rowPos[1] - m_rowPos[0];
             for (unsigned r = 0; r < totalRows; r++) {
                 if (totalPercent > 0 && m_grid[r].logicalHeight.isPercent()) {
-                    LayoutUnit toAdd = min<LayoutUnit>(dh, (totalHeight * m_grid[r].logicalHeight.percent() / 100) - rh);
+                    int toAdd = min<int>(dh, (totalHeight * m_grid[r].logicalHeight.percent() / 100) - rh);
                     // If toAdd is negative, then we don't want to shrink the row (this bug
                     // affected Outlook Web Access).
-                    toAdd = max<LayoutUnit>(0, toAdd);
+                    toAdd = max(0, toAdd);
                     add += toAdd;
                     dh -= toAdd;
                     totalPercent -= m_grid[r].logicalHeight.percent();
@@ -482,10 +477,10 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
         }
         if (numAuto) {
             // distribute over variable cols
-            LayoutUnit add = 0;
+            int add = 0;
             for (unsigned r = 0; r < totalRows; r++) {
                 if (numAuto > 0 && m_grid[r].logicalHeight.isAuto()) {
-                    LayoutUnit toAdd = dh / numAuto;
+                    int toAdd = dh / numAuto;
                     add += toAdd;
                     dh -= toAdd;
                     numAuto--;
@@ -495,9 +490,9 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
         }
         if (dh > 0 && m_rowPos[totalRows]) {
             // if some left overs, distribute equally.
-            LayoutUnit tot = m_rowPos[totalRows];
-            LayoutUnit add = 0;
-            LayoutUnit prev = m_rowPos[0];
+            int tot = m_rowPos[totalRows];
+            int add = 0;
+            int prev = m_rowPos[0];
             for (unsigned r = 0; r < totalRows; r++) {
                 // weight with the original height
                 add += dh * (m_rowPos[r + 1] - prev) / tot;
@@ -507,9 +502,9 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
         }
     }
 
-    LayoutUnit hspacing = table()->hBorderSpacing();
-    LayoutUnit vspacing = table()->vBorderSpacing();
-    LayoutUnit nEffCols = table()->numEffCols();
+    int hspacing = table()->hBorderSpacing();
+    int vspacing = table()->vBorderSpacing();
+    unsigned nEffCols = table()->numEffCols();
 
     LayoutStateMaintainer statePusher(view(), this, LayoutSize(x(), y()), style()->isFlippedBlocksWritingMode());
 
@@ -522,7 +517,7 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
             rowRenderer->updateLayerTransform();
         }
 
-        for (int c = 0; c < nEffCols; c++) {
+        for (unsigned c = 0; c < nEffCols; c++) {
             CellStruct& cs = cellAt(r, c);
             RenderTableCell* cell = cs.primaryCell();
 
@@ -596,18 +591,18 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
                 }
             }
 
-            LayoutUnit oldIntrinsicPaddingBefore = cell->intrinsicPaddingBefore();
-            LayoutUnit oldIntrinsicPaddingAfter = cell->intrinsicPaddingAfter();
-            LayoutUnit logicalHeightWithoutIntrinsicPadding = cell->logicalHeight() - oldIntrinsicPaddingBefore - oldIntrinsicPaddingAfter;
+            int oldIntrinsicPaddingBefore = cell->intrinsicPaddingBefore();
+            int oldIntrinsicPaddingAfter = cell->intrinsicPaddingAfter();
+            int logicalHeightWithoutIntrinsicPadding = cell->logicalHeight() - oldIntrinsicPaddingBefore - oldIntrinsicPaddingAfter;
 
-            LayoutUnit intrinsicPaddingBefore = 0;
+            int intrinsicPaddingBefore = 0;
             switch (cell->style()->verticalAlign()) {
                 case SUB:
                 case SUPER:
                 case TEXT_TOP:
                 case TEXT_BOTTOM:
                 case BASELINE: {
-                    LayoutUnit b = cell->cellBaselinePosition();
+                    int b = cell->cellBaselinePosition();
                     if (b > cell->borderBefore() + cell->paddingBefore())
                         intrinsicPaddingBefore = getBaseline(r) - (b - oldIntrinsicPaddingBefore);
                     break;
@@ -624,7 +619,7 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
                     break;
             }
             
-            LayoutUnit intrinsicPaddingAfter = rHeight - logicalHeightWithoutIntrinsicPadding - intrinsicPaddingBefore;
+            int intrinsicPaddingAfter = rHeight - logicalHeightWithoutIntrinsicPadding - intrinsicPaddingBefore;
             cell->setIntrinsicPaddingBefore(intrinsicPaddingBefore);
             cell->setIntrinsicPaddingAfter(intrinsicPaddingAfter);
 
@@ -679,7 +674,7 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
 #endif
     // Now that our height has been determined, add in overflow from cells.
     for (unsigned r = 0; r < totalRows; r++) {
-        for (int c = 0; c < nEffCols; c++) {
+        for (unsigned c = 0; c < nEffCols; c++) {
             CellStruct& cs = cellAt(r, c);
             RenderTableCell* cell = cs.primaryCell();
             if (!cell || cs.inColSpan)
@@ -708,9 +703,9 @@ LayoutUnit RenderTableSection::layoutRows(LayoutUnit toAdd)
     return height();
 }
 
-LayoutUnit RenderTableSection::calcOuterBorderBefore() const
+int RenderTableSection::calcOuterBorderBefore() const
 {
-    int totalCols = table()->numEffCols();
+    unsigned totalCols = table()->numEffCols();
     if (!m_grid.size() || !totalCols)
         return 0;
 
@@ -729,7 +724,7 @@ LayoutUnit RenderTableSection::calcOuterBorderBefore() const
         borderWidth = rb.width();
 
     bool allHidden = true;
-    for (int c = 0; c < totalCols; c++) {
+    for (unsigned c = 0; c < totalCols; c++) {
         const CellStruct& current = cellAt(0, c);
         if (current.inColSpan || !current.hasCells())
             continue;
@@ -759,9 +754,9 @@ LayoutUnit RenderTableSection::calcOuterBorderBefore() const
     return borderWidth / 2;
 }
 
-LayoutUnit RenderTableSection::calcOuterBorderAfter() const
+int RenderTableSection::calcOuterBorderAfter() const
 {
-    int totalCols = table()->numEffCols();
+    unsigned totalCols = table()->numEffCols();
     if (!m_grid.size() || !totalCols)
         return 0;
 
@@ -780,7 +775,7 @@ LayoutUnit RenderTableSection::calcOuterBorderAfter() const
         borderWidth = rb.width();
 
     bool allHidden = true;
-    for (int c = 0; c < totalCols; c++) {
+    for (unsigned c = 0; c < totalCols; c++) {
         const CellStruct& current = cellAt(m_grid.size() - 1, c);
         if (current.inColSpan || !current.hasCells())
             continue;
@@ -810,9 +805,9 @@ LayoutUnit RenderTableSection::calcOuterBorderAfter() const
     return (borderWidth + 1) / 2;
 }
 
-LayoutUnit RenderTableSection::calcOuterBorderStart() const
+int RenderTableSection::calcOuterBorderStart() const
 {
-    int totalCols = table()->numEffCols();
+    unsigned totalCols = table()->numEffCols();
     if (!m_grid.size() || !totalCols)
         return 0;
 
@@ -854,9 +849,9 @@ LayoutUnit RenderTableSection::calcOuterBorderStart() const
     return (borderWidth + (table()->style()->isLeftToRightDirection() ? 0 : 1)) / 2;
 }
 
-LayoutUnit RenderTableSection::calcOuterBorderEnd() const
+int RenderTableSection::calcOuterBorderEnd() const
 {
-    int totalCols = table()->numEffCols();
+    unsigned totalCols = table()->numEffCols();
     if (!m_grid.size() || !totalCols)
         return 0;
 
@@ -948,6 +943,9 @@ void RenderTableSection::paint(PaintInfo& paintInfo, const LayoutPoint& paintOff
     paintObject(paintInfo, adjustedPaintOffset);
     if (pushedClip)
         popContentsClip(paintInfo, phase, adjustedPaintOffset);
+
+    if ((phase == PaintPhaseOutline || phase == PaintPhaseSelfOutline) && style()->visibility() == VISIBLE)
+        paintOutline(paintInfo.context, LayoutRect(adjustedPaintOffset, size()));
 }
 
 static inline bool compareCellPositions(RenderTableCell* elem1, RenderTableCell* elem2)
@@ -995,21 +993,67 @@ void RenderTableSection::paintCell(RenderTableCell* cell, PaintInfo& paintInfo, 
         if (!row->hasSelfPaintingLayer())
             cell->paintBackgroundsBehindCell(paintInfo, cellPoint, row);
     }
-    if ((!cell->hasSelfPaintingLayer() && !row->hasSelfPaintingLayer()) || paintInfo.phase == PaintPhaseCollapsedTableBorders)
+    if ((!cell->hasSelfPaintingLayer() && !row->hasSelfPaintingLayer()))
         cell->paint(paintInfo, cellPoint);
+}
+
+CellSpan RenderTableSection::dirtiedRows(const LayoutRect& damageRect) const
+{
+    if (m_forceSlowPaintPathWithOverflowingCell) 
+        return fullTableRowSpan();
+
+    LayoutUnit before = style()->isHorizontalWritingMode() ? damageRect.y() : damageRect.x();
+
+    // binary search to find a row
+    unsigned startRow = std::lower_bound(m_rowPos.begin(), m_rowPos.end(), before) - m_rowPos.begin();
+
+    // The binary search above gives us the first row with
+    // a y position >= the top of the paint rect. Thus, the previous
+    // may need to be repainted as well.
+    if (startRow == m_rowPos.size() || (startRow > 0 && (m_rowPos[startRow] >  before)))
+        --startRow;
+
+    LayoutUnit after = (style()->isHorizontalWritingMode() ? damageRect.maxY() : damageRect.maxX());
+    unsigned endRow = std::lower_bound(m_rowPos.begin(), m_rowPos.end(), after) - m_rowPos.begin();
+    if (endRow == m_rowPos.size())
+        --endRow;
+
+    if (!endRow && m_rowPos[0] - table()->outerBorderBefore() <= after)
+        ++endRow;
+
+    return CellSpan(startRow, endRow);
+}
+
+
+CellSpan RenderTableSection::dirtiedColumns(const LayoutRect& damageRect) const
+{
+    if (m_forceSlowPaintPathWithOverflowingCell) 
+        return fullTableColumnSpan();
+
+    // FIXME: Implement RTL.
+    if (!style()->isLeftToRightDirection())
+        return fullTableColumnSpan();
+
+    LayoutUnit start = style()->isHorizontalWritingMode() ? damageRect.x() : damageRect.y();
+    Vector<int>& columnPos = table()->columnPositions();
+    unsigned startCol = std::lower_bound(columnPos.begin(), columnPos.end(), start) - columnPos.begin();
+    if ((startCol == columnPos.size()) || (startCol > 0 && (columnPos[startCol] > start)))
+        --startCol;
+
+    LayoutUnit end = (style()->isHorizontalWritingMode() ? damageRect.maxX() : damageRect.maxY());
+    unsigned endCol = std::lower_bound(columnPos.begin(), columnPos.end(), end) - columnPos.begin();
+    if (endCol == columnPos.size())
+        --endCol;
+
+    if (!endCol && columnPos[0] - table()->outerBorderStart() <= end)
+        ++endCol;
+
+    return CellSpan(startCol, endCol);
 }
 
 void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
-    // Check which rows and cols are visible and only paint these.
-    unsigned totalRows = m_grid.size();
-    unsigned totalCols = table()->columns().size();
-
     PaintPhase paintPhase = paintInfo.phase;
-
-    LayoutUnit os = 2 * maximalOutlineSize(paintPhase);
-    unsigned startrow = 0;
-    unsigned endrow = totalRows;
 
     LayoutRect localRepaintRect = paintInfo.rect;
     localRepaintRect.moveBy(-paintOffset);
@@ -1020,59 +1064,50 @@ void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& pa
             localRepaintRect.setX(width() - localRepaintRect.maxX());
     }
 
-    if (!m_forceSlowPaintPathWithOverflowingCell) {
-        LayoutUnit before = (style()->isHorizontalWritingMode() ? localRepaintRect.y() : localRepaintRect.x()) - os;
-        // binary search to find a row
-        startrow = std::lower_bound(m_rowPos.begin(), m_rowPos.end(), before) - m_rowPos.begin();
+    localRepaintRect.inflate(maximalOutlineSize(paintPhase));
 
-        // The binary search above gives us the first row with
-        // a y position >= the top of the paint rect. Thus, the previous
-        // may need to be repainted as well.
-        if (startrow == m_rowPos.size() || (startrow > 0 && (m_rowPos[startrow] >  before)))
-          --startrow;
+    CellSpan dirtiedRows = this->dirtiedRows(localRepaintRect);
+    CellSpan dirtiedColumns = this->dirtiedColumns(localRepaintRect);
 
-        LayoutUnit after = (style()->isHorizontalWritingMode() ? localRepaintRect.maxY() : localRepaintRect.maxX()) + os;
-        endrow = std::lower_bound(m_rowPos.begin(), m_rowPos.end(), after) - m_rowPos.begin();
-        if (endrow == m_rowPos.size())
-          --endrow;
-
-        if (!endrow && m_rowPos[0] - table()->outerBorderBefore() <= after)
-            ++endrow;
-    }
-
-    unsigned startcol = 0;
-    unsigned endcol = totalCols;
-    // FIXME: Implement RTL.
-    if (!m_forceSlowPaintPathWithOverflowingCell && style()->isLeftToRightDirection()) {
-        LayoutUnit start = (style()->isHorizontalWritingMode() ? localRepaintRect.x() : localRepaintRect.y()) - os;
-        Vector<LayoutUnit>& columnPos = table()->columnPositions();
-        startcol = std::lower_bound(columnPos.begin(), columnPos.end(), start) - columnPos.begin();
-        if ((startcol == columnPos.size()) || (startcol > 0 && (columnPos[startcol] > start)))
-            --startcol;
-
-        LayoutUnit end = (style()->isHorizontalWritingMode() ? localRepaintRect.maxX() : localRepaintRect.maxY()) + os;
-        endcol = std::lower_bound(columnPos.begin(), columnPos.end(), end) - columnPos.begin();
-        if (endcol == columnPos.size())
-            --endcol;
-
-        if (!endcol && columnPos[0] - table()->outerBorderStart() <= end)
-            ++endcol;
-    }
-    if (startcol < endcol) {
+    if (dirtiedColumns.start() < dirtiedColumns.end()) {
         if (!m_hasMultipleCellLevels && !m_overflowingCells.size()) {
-            // Draw the dirty cells in the order that they appear.
-            for (unsigned r = startrow; r < endrow; r++) {
-                for (unsigned c = startcol; c < endcol; c++) {
-                    CellStruct& current = cellAt(r, c);
-                    RenderTableCell* cell = current.primaryCell();
-                    if (!cell || (r > startrow && primaryCellAt(r - 1, c) == cell) || (c > startcol && primaryCellAt(r, c - 1) == cell))
-                        continue;
-                    paintCell(cell, paintInfo, paintOffset);
+            if (paintInfo.phase == PaintPhaseCollapsedTableBorders) {
+                // Collapsed borders are painted from the bottom right to the top left so that precedence
+                // due to cell position is respected.
+                for (unsigned r = dirtiedRows.end(); r > dirtiedRows.start(); r--) {
+                    unsigned row = r - 1;
+                    for (unsigned c = dirtiedColumns.end(); c > dirtiedColumns.start(); c--) {
+                        unsigned col = c - 1;
+                        CellStruct& current = cellAt(row, col);
+                        RenderTableCell* cell = current.primaryCell();
+                        if (!cell || (row > dirtiedRows.start() && primaryCellAt(row - 1, col) == cell) || (col > dirtiedColumns.start() && primaryCellAt(row, col - 1) == cell))
+                            continue;
+                        LayoutPoint cellPoint = flipForWritingModeForChild(cell, paintOffset);
+                        cell->paintCollapsedBorders(paintInfo, cellPoint);
+                    }
+                }
+            } else {
+                // Draw the dirty cells in the order that they appear.
+                for (unsigned r = dirtiedRows.start(); r < dirtiedRows.end(); r++) {
+                    RenderTableRow* row = m_grid[r].rowRenderer;
+                    if (row && !row->hasSelfPaintingLayer())
+                        row->paintOutlineForRowIfNeeded(paintInfo, paintOffset);
+                    for (unsigned c = dirtiedColumns.start(); c < dirtiedColumns.end(); c++) {
+                        CellStruct& current = cellAt(r, c);
+                        RenderTableCell* cell = current.primaryCell();
+                        if (!cell || (r > dirtiedRows.start() && primaryCellAt(r - 1, c) == cell) || (c > dirtiedColumns.start() && primaryCellAt(r, c - 1) == cell))
+                            continue;
+                        paintCell(cell, paintInfo, paintOffset);
+                    }
                 }
             }
         } else {
             // The overflowing cells should be scarce to avoid adding a lot of cells to the HashSet.
+#ifndef NDEBUG
+            unsigned totalRows = m_grid.size();
+            unsigned totalCols = table()->columns().size();
             ASSERT(m_overflowingCells.size() < totalRows * totalCols * gMaxAllowedOverflowingCellRatioForFastPaintPath);
+#endif
 
             // To make sure we properly repaint the section, we repaint all the overflowing cells that we collected.
             Vector<RenderTableCell*> cells;
@@ -1080,8 +1115,11 @@ void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& pa
 
             HashSet<RenderTableCell*> spanningCells;
 
-            for (unsigned r = startrow; r < endrow; r++) {
-                for (unsigned c = startcol; c < endcol; c++) {
+            for (unsigned r = dirtiedRows.start(); r < dirtiedRows.end(); r++) {
+                RenderTableRow* row = m_grid[r].rowRenderer;
+                if (row && !row->hasSelfPaintingLayer())
+                    row->paintOutlineForRowIfNeeded(paintInfo, paintOffset);
+                for (unsigned c = dirtiedColumns.start(); c < dirtiedColumns.end(); c++) {
                     CellStruct& current = cellAt(r, c);
                     if (!current.hasCells())
                         continue;
@@ -1106,10 +1144,15 @@ void RenderTableSection::paintObject(PaintInfo& paintInfo, const LayoutPoint& pa
             else
                 std::sort(cells.begin(), cells.end(), compareCellPositionsWithOverflowingCells);
 
-            int size = cells.size();
-            // Paint the cells.
-            for (int i = 0; i < size; ++i)
-                paintCell(cells[i], paintInfo, paintOffset);
+            if (paintInfo.phase == PaintPhaseCollapsedTableBorders) {
+                for (unsigned i = cells.size(); i > 0; --i) {
+                    LayoutPoint cellPoint = flipForWritingModeForChild(cells[i - 1], paintOffset);
+                    cells[i - 1]->paintCollapsedBorders(paintInfo, cellPoint);
+                }
+            } else {
+                for (unsigned i = 0; i < cells.size(); ++i)
+                    paintCell(cells[i], paintInfo, paintOffset);
+            }
         }
     }
 }
@@ -1157,9 +1200,20 @@ void RenderTableSection::recalcCells()
     setNeedsLayout(true);
 }
 
+// FIXME: This function could be made O(1) in certain cases (like for the non-most-constrainive cells' case).
 void RenderTableSection::rowLogicalHeightChanged(unsigned rowIndex)
 {
+    if (needsCellRecalc())
+        return;
+
     setRowLogicalHeightToRowStyleLogicalHeightIfNotRelative(m_grid[rowIndex]);
+
+    for (RenderObject* cell = m_grid[rowIndex].rowRenderer->firstChild(); cell; cell = cell->nextSibling()) {
+        if (!cell->isTableCell())
+            continue;
+
+        updateLogicalHeightForCell(m_grid[rowIndex], toRenderTableCell(cell));
+    }
 }
 
 void RenderTableSection::setNeedsCellRecalc()
@@ -1184,7 +1238,7 @@ unsigned RenderTableSection::numColumns() const
     return result + 1;
 }
 
-void RenderTableSection::appendColumn(int pos)
+void RenderTableSection::appendColumn(unsigned pos)
 {
     ASSERT(!m_needsCellRecalc);
 
@@ -1192,7 +1246,7 @@ void RenderTableSection::appendColumn(int pos)
         m_grid[row].row.resize(pos + 1);
 }
 
-void RenderTableSection::splitColumn(unsigned pos, int first)
+void RenderTableSection::splitColumn(unsigned pos, unsigned first)
 {
     ASSERT(!m_needsCellRecalc);
 
@@ -1205,7 +1259,8 @@ void RenderTableSection::splitColumn(unsigned pos, int first)
             r[pos + 1].cells.append(r[pos].cells);
             RenderTableCell* cell = r[pos].primaryCell();
             ASSERT(cell);
-            int colleft = cell->colSpan() - r[pos].inColSpan;
+            ASSERT(cell->colSpan() >= (r[pos].inColSpan ? 1 : 0));
+            unsigned colleft = cell->colSpan() - r[pos].inColSpan;
             if (first > colleft)
               r[pos + 1].inColSpan = 0;
             else
@@ -1256,6 +1311,9 @@ bool RenderTableSection::nodeAtPoint(const HitTestRequest& request, HitTestResul
     }
 
     LayoutUnit offsetInColumnDirection = style()->isHorizontalWritingMode() ? location.y() : location.x();
+    
+    recalcCellsIfNeeded();
+
     // Find the first row that starts after offsetInColumnDirection.
     unsigned nextRow = std::upper_bound(m_rowPos.begin(), m_rowPos.end(), offsetInColumnDirection) - m_rowPos.begin();
     if (nextRow == m_rowPos.size())
@@ -1263,7 +1321,7 @@ bool RenderTableSection::nodeAtPoint(const HitTestRequest& request, HitTestResul
     // Now set hitRow to the index of the hit row, or 0.
     unsigned hitRow = nextRow > 0 ? nextRow - 1 : 0;
 
-    Vector<LayoutUnit>& columnPos = table()->columnPositions();
+    Vector<int>& columnPos = table()->columnPositions();
     LayoutUnit offsetInRowDirection = style()->isHorizontalWritingMode() ? location.x() : location.y();
     if (!style()->isLeftToRightDirection())
         offsetInRowDirection = columnPos[columnPos.size() - 1] - offsetInRowDirection;
@@ -1279,7 +1337,8 @@ bool RenderTableSection::nodeAtPoint(const HitTestRequest& request, HitTestResul
     if (!current.hasCells())
         return false;
 
-    for (int i = current.cells.size() - 1; i >= 0; --i) {
+    for (unsigned i = current.cells.size() ; i; ) {
+        --i;
         RenderTableCell* cell = current.cells[i];
         LayoutPoint cellPoint = flipForWritingModeForChild(cell, adjustedLocation);
         if (static_cast<RenderObject*>(cell)->nodeAtPoint(request, result, pointInContainer, cellPoint, action)) {
@@ -1299,6 +1358,29 @@ unsigned RenderTableSection::rowIndexForRenderer(const RenderTableRow* row) cons
     }
     ASSERT_NOT_REACHED();
     return 0;
+}
+
+void RenderTableSection::removeCachedCollapsedBorders(const RenderTableCell* cell)
+{
+    if (!table()->collapseBorders())
+        return;
+    
+    for (int side = CBSBefore; side <= CBSEnd; ++side)
+        m_cellsCollapsedBorders.remove(make_pair(cell, side));
+}
+
+void RenderTableSection::setCachedCollapsedBorder(const RenderTableCell* cell, CollapsedBorderSide side, CollapsedBorderValue border)
+{
+    ASSERT(table()->collapseBorders());
+    m_cellsCollapsedBorders.set(make_pair(cell, side), border);
+}
+
+CollapsedBorderValue& RenderTableSection::cachedCollapsedBorder(const RenderTableCell* cell, CollapsedBorderSide side)
+{
+    ASSERT(table()->collapseBorders());
+    HashMap<pair<const RenderTableCell*, int>, CollapsedBorderValue>::iterator it = m_cellsCollapsedBorders.find(make_pair(cell, side));
+    ASSERT(it != m_cellsCollapsedBorders.end());
+    return it->second;
 }
 
 } // namespace WebCore

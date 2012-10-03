@@ -31,16 +31,17 @@
 #ifndef WebWidgetClient_h
 #define WebWidgetClient_h
 
-#include "WebCommon.h"
 #include "WebNavigationPolicy.h"
-#include "WebRect.h"
 #include "WebScreenInfo.h"
+#include "platform/WebCommon.h"
+#include "platform/WebRect.h"
 
 namespace WebKit {
 
 class WebString;
 class WebWidget;
 struct WebCursorInfo;
+struct WebSize;
 
 class WebWidgetClient {
 public:
@@ -50,6 +51,9 @@ public:
     // Called when a region of the WebWidget, given by clipRect, should be
     // scrolled by the specified dx and dy amounts.
     virtual void didScrollRect(int dx, int dy, const WebRect& clipRect) { }
+
+    // Called when the Widget has changed size as a result of an auto-resize.
+    virtual void didAutoResize(const WebSize& newSize) { }
 
     // Called when the compositor is enabled or disabled.
     // The WebCompositor identifier can be used on the compositor thread to get access
@@ -92,6 +96,14 @@ public:
     // closed.
     virtual void runModal() { }
 
+    // Called to enter/exit fullscreen mode. If enterFullScreen returns true,
+    // then WebWidget::{will,Did}EnterFullScreen should bound resizing the
+    // WebWidget into fullscreen mode. Similarly, when exitFullScreen is
+    // called, WebWidget::{will,Did}ExitFullScreen should bound resizing the
+    // WebWidget out of fullscreen mode.
+    virtual bool enterFullScreen() { return false; }
+    virtual void exitFullScreen() { }
+
     // Called to get/set the position of the widget in screen coordinates.
     virtual WebRect windowRect() { return WebRect(); }
     virtual void setWindowRect(const WebRect&) { }
@@ -113,6 +125,21 @@ public:
     // When this method gets called, WebWidgetClient implementation should
     // reset the input method by cancelling any ongoing composition.
     virtual void resetInputMethod() { }
+
+    // Requests to lock the mouse cursor. If true is returned, the success
+    // result will be asynchronously returned via a single call to
+    // WebWidget::didAcquirePointerLock() or
+    // WebWidget::didNotAcquirePointerLock().
+    // If false, the request has been denied synchronously.
+    virtual bool requestPointerLock() { return false; }
+
+    // Cause the pointer lock to be released. This may be called at any time,
+    // including when a lock is pending but not yet acquired.
+    // WebWidget::didLosePointerLock() is called when unlock is complete.
+    virtual void requestPointerUnlock() { }
+
+    // Returns true iff the pointer is locked to this widget.
+    virtual bool isPointerLocked() { return false; }
 
 protected:
     ~WebWidgetClient() { }

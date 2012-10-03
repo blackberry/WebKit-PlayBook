@@ -20,8 +20,10 @@
 #include "config.h"
 #include "InlineBox.h"
 
+#include "Frame.h"
 #include "HitTestResult.h"
 #include "InlineFlowBox.h"
+#include "Page.h"
 #include "PaintInfo.h"
 #include "RenderArena.h"
 #include "RenderBlock.h"
@@ -86,7 +88,7 @@ void InlineBox::destroy(RenderArena* renderArena)
     renderArena->free(*(size_t *)this, this);
 }
 
-void* InlineBox::operator new(size_t sz, RenderArena* renderArena) throw()
+void* InlineBox::operator new(size_t sz, RenderArena* renderArena)
 {
     return renderArena->allocate(sz);
 }
@@ -141,7 +143,7 @@ void InlineBox::showBox(int printedCharacters) const
 }
 #endif
 
-LayoutUnit InlineBox::logicalHeight() const
+float InlineBox::logicalHeight() const
 {
     if (hasVirtualLogicalHeight())
         return virtualLogicalHeight();
@@ -154,7 +156,7 @@ LayoutUnit InlineBox::logicalHeight() const
     ASSERT(isInlineFlowBox());
     RenderBoxModelObject* flowObject = boxModelObject();
     const FontMetrics& fontMetrics = renderer()->style(m_firstLine)->fontMetrics();
-    LayoutUnit result = fontMetrics.height();
+    float result = fontMetrics.height();
     if (parent())
         result += flowObject->borderAndPaddingLogicalHeight();
     return result;

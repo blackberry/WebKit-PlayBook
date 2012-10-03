@@ -89,7 +89,7 @@ namespace WebCore {
         void destroyStream(NPReason);
         void destroyStream();
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
         int deliveryDelay() const;
 #endif
 

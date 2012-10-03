@@ -30,8 +30,11 @@
 namespace WebCore {
 
 class Element;
-class ImageLoadEventSender;
+class ImageLoader;
 class RenderImageResource;
+
+template<typename T> class EventSender;
+typedef EventSender<ImageLoader> ImageEventSender;
 
 class ImageLoader : public CachedImageClient {
 public:
@@ -46,7 +49,7 @@ public:
     // doesn't change; starts new load unconditionally (matches Firefox and Opera behavior).
     void updateFromElementIgnoringPreviousError();
 
-    void elementWillMoveToNewOwnerDocument();
+    void elementDidMoveToNewDocument();
 
     Element* element() const { return m_element; }
     bool imageComplete() const { return m_imageComplete; }
@@ -59,6 +62,8 @@ public:
     bool haveFiredBeforeLoadEvent() const { return m_firedBeforeLoad; }
     bool haveFiredLoadEvent() const { return m_firedLoad; }
 
+    void dispatchPendingEvent(ImageEventSender*);
+
     static void dispatchPendingBeforeLoadEvents();
     static void dispatchPendingLoadEvents();
 
@@ -69,7 +74,6 @@ private:
     virtual void dispatchLoadEvent() = 0;
     virtual String sourceURI(const AtomicString&) const = 0;
 
-    friend class ImageEventSender;
     void dispatchPendingBeforeLoadEvent();
     void dispatchPendingLoadEvent();
 

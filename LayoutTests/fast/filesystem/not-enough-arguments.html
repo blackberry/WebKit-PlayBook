@@ -18,6 +18,7 @@ function successCallback(fs)
     fileSystem = fs;
     debug("Successfully obtained Persistent FileSystem:" + fileSystem.name);
 
+    shouldThrow("fileSystem.root.removeRecursively()");
     shouldThrow("fileSystem.root.moveTo()");
     shouldThrow("fileSystem.root.copyTo()");
     reader = fileSystem.root.createReader();
@@ -46,6 +47,10 @@ function successCallback(fs)
 }
 
 if (window.webkitRequestFileSystem) {
+    shouldThrow("webkitResolveLocalFileSystemURL()");
+    shouldThrow("webkitRequestFileSystem()");
+    shouldThrow("webkitRequestFileSystem(PERSISTENT)");
+    shouldThrow("webkitRequestFileSystem(PERSISTENT, 100)");
     webkitRequestFileSystem(window.TEMPORARY, 100, successCallback, errorCallback);
     window.jsTestIsAsync = true;
 } else

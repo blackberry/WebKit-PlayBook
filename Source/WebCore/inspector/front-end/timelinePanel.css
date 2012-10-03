@@ -39,16 +39,15 @@
     pointer-events: none;
 }
 
-.sidebar.timeline-sidebar-background {
-    top: 90px;
-    bottom: 0;
-}
-
 .timeline .sidebar {
     overflow-y: hidden;
-    z-index: 100;
     min-height: 100%;
     bottom: auto;
+}
+
+.timeline-sidebar-background {
+    top: 90px;
+    bottom: 0;
 }
 
 #timeline-overview-separator {
@@ -73,6 +72,10 @@
     border-right: 1px solid rgb(163, 163, 163);
 }
 
+.timeline-start-at-zero #timeline-overview-sidebar {
+    display: none;
+}
+
 #timeline-overview-grid {
     position: absolute;
     top: 0px;
@@ -80,6 +83,10 @@
     left: 200px;
     right: 0px;
     background-color: rgb(255, 255, 255);
+}
+
+.timeline-start-at-zero #timeline-overview-grid {
+    display: none;
 }
 
 .timeline-window-selector {
@@ -90,7 +97,7 @@
     z-index: 250;
 }
 
-#timeline-overview-window {
+.timeline-overview-window {
     background-color: white;
     position: absolute;
     left: 0;
@@ -100,6 +107,10 @@
     z-index: 150;
 }
 
+.timeline-start-at-zero .timeline-overview-window {
+    bottom: 0;
+}
+
 .timeline-overview-dividers-background {
     left: 0%;
     right: 0%;
@@ -107,6 +118,10 @@
     bottom: 60px;
     background-color: black;
     position: absolute;
+}
+
+.timeline-start-at-zero .timeline-overview-dividers-background {
+    bottom: 0;
 }
 
 .timeline-overview-window-rulers {
@@ -150,6 +165,10 @@
     border-right: 0 none transparent;
     overflow-y: auto;
     overflow-x: hidden;
+}
+
+#timeline-container .split-view-sidebar-left {
+    z-index: 1;
 }
 
 .timeline-category-statusbar-item {
@@ -265,6 +284,10 @@
     z-index: 160;
 }
 
+.timeline-start-at-zero #timeline-overview-memory {
+    display: none;
+}
+
 #timeline-overview-memory > canvas {
     position: absolute;
     left: 0;
@@ -360,15 +383,15 @@
     width: 10px;
 }
 
-.timeline-loading {
+.popover .timeline-loading {
     -webkit-border-image: url(Images/timelineBarBlue.png) 4 4 5 4;
 }
 
-.timeline-scripting {
+.popover .timeline-scripting {
     -webkit-border-image: url(Images/timelineBarOrange.png) 4 4 5 4;
 }
 
-.timeline-rendering {
+.popover .timeline-rendering {
     -webkit-border-image: url(Images/timelineBarPurple.png) 4 4 5 4;
 }
 
@@ -432,6 +455,18 @@
     -webkit-mask-position: -128px -24px;
 }
 
+.glue-async-status-bar-item .glyph {
+    -webkit-mask-position: -128px -48px;
+}
+
+.timeline-start-at-zero-status-bar-item .glyph {
+    -webkit-mask-position: -160px -48px;
+}
+
+.timeline-start-at-zero-status-bar-item.toggled-on .glyph {
+    background-color: rgb(66, 129, 235) !important;
+}
+
 .timeline-records-counter, .storage-application-cache-status, .storage-application-cache-connectivity {
     font-size: 11px;
     text-shadow: white 0 1px 0;
@@ -449,10 +484,7 @@
 }
 
 #resources-container-content {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 200px;
+    overflow: visible;
     min-height: 100%;
 }
 
@@ -496,9 +528,119 @@
 
 .memory-graph-label {
     position: absolute;
-    top: 5px;
     left: 5px;
     font-size: 9px;
     color: rgb(50%, 50%, 50%);
     white-space: nowrap;
+}
+
+.max.memory-graph-label {
+    top: 5px;
+}
+
+.min.memory-graph-label {
+    bottom: 5px;
+}
+
+#timeline-memory-splitter {
+    position: absolute;
+    z-index: 5;
+    left: 0;
+    right: 0;
+    height: 5px;
+    cursor: ns-resize;
+}
+
+#memory-counters-graph {
+    overflow: hidden;
+}
+
+#memory-graphs-container {
+    border-top: 1px solid #AAA;
+}
+
+#memory-graphs-canvas-container {
+    border-right: 1px solid #AAA;
+}
+
+#memory-graphs-canvas-container .resources-dividers {
+    top: 15px;
+}
+
+#memory-graphs-container .split-view-contents {
+    overflow: hidden;
+}
+
+.memory-counter-sidebar-info {
+    font-size: 11px;
+    margin: 10px;
+}
+
+.memory-counter-sidebar-info .swatch{
+    background-image: none;
+}
+
+.memory-counter-sidebar-info.bottom-border-visible {
+    border-bottom: 1px solid #AAA;
+}
+
+.memory-counter-sidebar-info .title {
+    margin: 4px;
+}
+
+.memory-counter-value {
+    margin: 4px;
+    font-size: 11px;
+}
+
+.timeline-overview-start-at-zero {
+    background-color: white;
+}
+
+#counter-values-bar {
+    border-bottom: solid 1px lightgray;
+    min-height: 15px;
+}
+
+.timeline-overview-start-at-zero-bars {
+    display: -webkit-box;
+    -webkit-box-align: end;
+    background-color: white;
+    padding-left: 4px;
+    padding-right: 4px;
+    z-index: 200;
+    background-color: rgba(255, 255, 255, 0.8);
+}
+
+.timeline-overview-start-at-zero-bars .padding {
+    -webkit-box-flex: 100000;
+}
+
+.timeline-overview-start-at-zero-bars .timeline-bar-vertical {
+    display: -webkit-box;
+    -webkit-box-orient: vertical;
+    -webkit-box-pack: end;
+    width: 12px;
+    padding-right: 2px;
+    -webkit-box-flex: 1;
+}
+
+.timeline-bar-vertical div:first-child {
+    -webkit-border-top-left-radius: 2px;
+    -webkit-border-top-right-radius: 2px;
+}
+
+.timeline-bar-vertical .timeline-loading {
+    background: -webkit-linear-gradient(left, rgb(201, 220, 245), rgb(109, 157, 222));
+    border: solid 1px rgb(106, 152, 213);
+}
+
+.timeline-bar-vertical .timeline-scripting {
+    background: -webkit-linear-gradient(left, rgb(251, 222, 168), rgb(234, 182, 77));
+    border: solid 1px rgb(223, 175, 77);
+}
+
+.timeline-bar-vertical .timeline-rendering {
+    background: -webkit-linear-gradient(left, rgb(213, 185, 236), rgb(137, 62, 200));
+    border: solid 1px rgb(130, 59, 190);
 }

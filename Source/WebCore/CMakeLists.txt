@@ -1,5 +1,8 @@
 SET(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}"
+    "${WEBCORE_DIR}/Modules/geolocation"
+    "${WEBCORE_DIR}/Modules/indexeddb"
+    "${WEBCORE_DIR}/Modules/websockets"
     "${WEBCORE_DIR}/accessibility"
     "${WEBCORE_DIR}/bindings"
     "${WEBCORE_DIR}/bindings/generic"
@@ -27,6 +30,7 @@ SET(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/notifications"
     "${WEBCORE_DIR}/page"
     "${WEBCORE_DIR}/page/animation"
+    "${WEBCORE_DIR}/page/scrolling"
     "${WEBCORE_DIR}/platform"
     "${WEBCORE_DIR}/platform/animation"
     "${WEBCORE_DIR}/platform/audio"
@@ -59,7 +63,6 @@ SET(WebCore_INCLUDE_DIRECTORIES
     "${WEBCORE_DIR}/svg/graphics/filters"
     "${WEBCORE_DIR}/svg/properties"
     "${WEBCORE_DIR}/webaudio"
-    "${WEBCORE_DIR}/websockets"
     "${WEBCORE_DIR}/workers"
     "${WEBCORE_DIR}/xml"
     "${WEBCORE_DIR}/xml/parser"
@@ -74,6 +77,7 @@ SET(WebCore_INCLUDE_DIRECTORIES
     "${JAVASCRIPTCORE_DIR}/debugger"
     "${JAVASCRIPTCORE_DIR}/interpreter"
     "${JAVASCRIPTCORE_DIR}/jit"
+    "${JAVASCRIPTCORE_DIR}/llint"
     "${JAVASCRIPTCORE_DIR}/parser"
     "${JAVASCRIPTCORE_DIR}/profiler"
     "${JAVASCRIPTCORE_DIR}/runtime"
@@ -81,11 +85,14 @@ SET(WebCore_INCLUDE_DIRECTORIES
     "${JAVASCRIPTCORE_DIR}/wtf/unicode"
     "${JAVASCRIPTCORE_DIR}/yarr"
     "${DERIVED_SOURCES_WEBCORE_DIR}"
-    "${CMAKE_SOURCE_DIR}"
+    "${CMAKE_SOURCE_DIR}/Source"
     "${CMAKE_BINARY_DIR}"
 )
 
 SET(WebCore_IDL_INCLUDES
+    Modules/geolocation
+    Modules/indexeddb
+    Modules/websockets
     bindings/generic
     css
     dom
@@ -104,6 +111,16 @@ SET(WebCore_IDL_INCLUDES
 )
 
 SET(WebCore_IDL_FILES
+    Modules/geolocation/Geolocation.idl
+    Modules/geolocation/Geoposition.idl
+    Modules/geolocation/NavigatorGeolocation.idl
+    Modules/geolocation/PositionCallback.idl
+    Modules/geolocation/PositionError.idl
+    Modules/geolocation/PositionErrorCallback.idl
+
+    Modules/websockets/CloseEvent.idl
+    Modules/websockets/DOMWindowWebSocket.idl
+
     css/Counter.idl
     css/CSSCharsetRule.idl
     css/CSSFontFaceRule.idl
@@ -129,6 +146,7 @@ SET(WebCore_IDL_FILES
     css/WebKitCSSKeyframeRule.idl
     css/WebKitCSSKeyframesRule.idl
     css/WebKitCSSMatrix.idl
+    css/WebKitCSSRegionRule.idl
     css/WebKitCSSTransformValue.idl
 
     dom/Attr.idl
@@ -179,6 +197,7 @@ SET(WebCore_IDL_FILES
     dom/ProgressEvent.idl
     dom/RangeException.idl
     dom/Range.idl
+    dom/ShadowRoot.idl
     dom/TextEvent.idl
     dom/Text.idl
     dom/TouchEvent.idl
@@ -188,6 +207,7 @@ SET(WebCore_IDL_FILES
     dom/UIEvent.idl
     dom/WebKitAnimationEvent.idl
     dom/WebKitMutationObserver.idl
+    dom/WebKitNamedFlow.idl
     dom/WebKitTransitionEvent.idl
     dom/WheelEvent.idl
 
@@ -202,6 +222,7 @@ SET(WebCore_IDL_FILES
     html/DOMSettableTokenList.idl
     html/DOMTokenList.idl
     html/DOMURL.idl
+    html/DOMWindowHTML.idl
     html/HTMLAllCollection.idl
     html/HTMLAnchorElement.idl
     html/HTMLAppletElement.idl
@@ -234,7 +255,6 @@ SET(WebCore_IDL_FILES
     html/HTMLIFrameElement.idl
     html/HTMLImageElement.idl
     html/HTMLInputElement.idl
-    html/HTMLIsIndexElement.idl
     html/HTMLKeygenElement.idl
     html/HTMLLabelElement.idl
     html/HTMLLegendElement.idl
@@ -257,6 +277,7 @@ SET(WebCore_IDL_FILES
     html/HTMLParamElement.idl
     html/HTMLPreElement.idl
     html/HTMLProgressElement.idl
+    html/HTMLPropertiesCollection.idl
     html/HTMLQuoteElement.idl
     html/HTMLScriptElement.idl
     html/HTMLSelectElement.idl
@@ -301,6 +322,16 @@ SET(WebCore_IDL_FILES
     html/canvas/Uint16Array.idl
     html/canvas/Uint32Array.idl
     html/canvas/Uint8Array.idl
+    html/canvas/Uint8ClampedArray.idl
+
+    html/shadow/HTMLContentElement.idl
+    html/shadow/HTMLShadowElement.idl
+
+    html/track/TextTrack.idl
+    html/track/TextTrackCue.idl
+    html/track/TextTrackCueList.idl
+    html/track/TextTrackList.idl
+    html/track/TrackEvent.idl
     html/canvas/WebGLActiveInfo.idl
     html/canvas/WebGLBuffer.idl
     html/canvas/WebGLContextAttributes.idl
@@ -315,7 +346,8 @@ SET(WebCore_IDL_FILES
     html/canvas/WebGLTexture.idl
     html/canvas/WebGLUniformLocation.idl
     html/canvas/WebGLVertexArrayObjectOES.idl
-    html/canvas/WebKitLoseContext.idl
+    html/canvas/WebGLLoseContext.idl
+    html/canvas/WebGLCompressedTextureS3TC.idl
 
     inspector/InjectedScriptHost.idl
     inspector/InspectorFrontendHost.idl
@@ -330,20 +362,13 @@ SET(WebCore_IDL_FILES
     page/DOMSelection.idl
     page/DOMWindow.idl
     page/EventSource.idl
-    page/Geolocation.idl
-    page/Geoposition.idl
     page/History.idl
     page/Location.idl
     page/MemoryInfo.idl
     page/Navigator.idl
-    page/NavigatorUserMediaErrorCallback.idl
-    page/NavigatorUserMediaSuccessCallback.idl
     page/Performance.idl
     page/PerformanceNavigation.idl
     page/PerformanceTiming.idl
-    page/PositionCallback.idl
-    page/PositionError.idl
-    page/PositionErrorCallback.idl
     page/Screen.idl
     page/SpeechInputEvent.idl
     page/SpeechInputResult.idl
@@ -380,6 +405,7 @@ SET(WebCore_IDL_FILES
     webaudio/AudioProcessingEvent.idl
     webaudio/AudioSourceNode.idl
     webaudio/ConvolverNode.idl
+    webaudio/DOMWindowWebAudio.idl
     webaudio/DelayNode.idl
     webaudio/HighPass2FilterNode.idl
     webaudio/JavaScriptAudioNode.idl
@@ -394,6 +420,7 @@ SET(WebCore_IDL_FILES
     workers/WorkerContext.idl
     workers/WorkerLocation.idl
 
+    xml/DOMWindowXML.idl
     xml/DOMParser.idl
     xml/XMLHttpRequest.idl
     xml/XMLHttpRequestException.idl
@@ -409,6 +436,10 @@ SET(WebCore_IDL_FILES
 )
 
 SET(WebCore_SOURCES
+    Modules/geolocation/Geolocation.cpp
+    Modules/geolocation/GeolocationController.cpp
+    Modules/geolocation/NavigatorGeolocation.cpp
+
     accessibility/AXObjectCache.cpp
     accessibility/AccessibilityARIAGrid.cpp
     accessibility/AccessibilityARIAGridCell.cpp
@@ -440,8 +471,9 @@ SET(WebCore_SOURCES
     bindings/generic/RuntimeEnabledFeatures.cpp
 
     css/CSSAspectRatioValue.cpp
-    css/CSSBorderImageValue.cpp
+    css/CSSBorderImage.cpp
     css/CSSBorderImageSliceValue.cpp
+    css/CSSCalculationValue.cpp
     css/CSSCanvasValue.cpp
     css/CSSCharsetRule.cpp
     css/CSSComputedStyleDeclaration.cpp
@@ -462,18 +494,15 @@ SET(WebCore_SOURCES
     css/CSSInitialValue.cpp
     css/CSSLineBoxContainValue.cpp
     css/CSSMediaRule.cpp
-    css/CSSMutableStyleDeclaration.cpp
     css/CSSOMUtils.cpp
     css/CSSPageRule.cpp
     css/CSSParser.cpp
     css/CSSParserValues.cpp
     css/CSSPrimitiveValue.cpp
-    css/CSSPrimitiveValueCache.cpp
     css/CSSProperty.cpp
     css/CSSPropertyLonghand.cpp
     css/CSSPropertySourceData.cpp
     css/CSSReflectValue.cpp
-    css/CSSRegionStyleRule.cpp
     css/CSSRule.cpp
     css/CSSRuleList.cpp
     css/CSSSegmentedFontFace.cpp
@@ -488,8 +517,8 @@ SET(WebCore_SOURCES
     css/CSSUnicodeRangeValue.cpp
     css/CSSValue.cpp
     css/CSSValueList.cpp
+    css/CSSValuePool.cpp
     css/CSSWrapShapes.cpp
-    css/FontFamilyValue.cpp
     css/FontFeatureValue.cpp
     css/FontValue.cpp
     css/MediaFeatureNames.cpp
@@ -500,16 +529,20 @@ SET(WebCore_SOURCES
     css/MediaQueryList.cpp
     css/MediaQueryListListener.cpp
     css/MediaQueryMatcher.cpp
+    css/PropertySetCSSStyleDeclaration.cpp
     css/RGBColor.cpp
     css/SelectorChecker.cpp
     css/ShadowValue.cpp
     css/StyleMedia.cpp
+    css/StylePropertySet.cpp
+    css/StyleRule.cpp
     css/StyleSheet.cpp
     css/StyleSheetList.cpp
     css/WebKitCSSFilterValue.cpp
     css/WebKitCSSKeyframeRule.cpp
     css/WebKitCSSKeyframesRule.cpp
     css/WebKitCSSMatrix.cpp
+    css/WebKitCSSRegionRule.cpp
     css/WebKitCSSTransformValue.cpp
 
     dom/ActiveDOMObject.cpp
@@ -530,7 +563,7 @@ SET(WebCore_SOURCES
     dom/Comment.cpp
     dom/CompositionEvent.cpp
     dom/ContainerNode.cpp
-    dom/CSSMappedAttributeDeclaration.cpp
+    dom/ContextDestructionObserver.cpp
     dom/CustomEvent.cpp
     dom/DatasetDOMStringMap.cpp
     dom/DecodedDataDocumentParser.cpp
@@ -555,6 +588,7 @@ SET(WebCore_SOURCES
     dom/DynamicNodeList.cpp
     dom/EditingText.cpp
     dom/Element.cpp
+    dom/ElementAttributeData.cpp
     dom/EntityReference.cpp
     dom/ErrorEvent.cpp
     dom/Event.cpp
@@ -567,6 +601,7 @@ SET(WebCore_SOURCES
     dom/EventTarget.cpp
     dom/ExceptionBase.cpp
     dom/ExceptionCodePlaceholder.cpp
+    dom/GenericEventQueue.cpp
     dom/IconURL.cpp
     dom/KeyboardEvent.cpp
     dom/MessageChannel.cpp
@@ -577,6 +612,8 @@ SET(WebCore_SOURCES
     dom/MouseEvent.cpp
     dom/MouseRelatedEvent.cpp
     dom/MutationEvent.cpp
+    dom/MutationObserverInterestGroup.cpp
+    dom/MutationObserverRegistration.cpp
     dom/MutationRecord.cpp
     dom/NamedNodeMap.cpp
     dom/NameNodeList.cpp
@@ -597,6 +634,7 @@ SET(WebCore_SOURCES
     dom/QualifiedName.cpp
     dom/Range.cpp
     dom/RangeException.cpp
+    dom/RegionNodeList.cpp
     dom/RegisteredEventListener.cpp
     dom/ScopedEventQueue.cpp
     dom/ScriptableDocumentParser.cpp
@@ -605,9 +643,8 @@ SET(WebCore_SOURCES
     dom/ScriptRunner.cpp
     dom/SecurityContext.cpp
     dom/SelectorQuery.cpp
-    dom/ShadowContentElement.cpp
-    dom/ShadowInclusionSelector.cpp
     dom/ShadowRoot.cpp
+    dom/ShadowTree.cpp
     dom/SpaceSplitString.cpp
     dom/StaticHashSetNodeList.cpp
     dom/StaticNodeList.cpp
@@ -622,6 +659,7 @@ SET(WebCore_SOURCES
     dom/TransformSourceLibxslt.cpp
     dom/Traversal.cpp
     dom/TreeScope.cpp
+    dom/TreeScopeAdopter.cpp
     dom/TreeWalker.cpp
     dom/UIEvent.cpp
     dom/UIEventWithKeyState.cpp
@@ -630,6 +668,7 @@ SET(WebCore_SOURCES
     dom/ViewportArguments.cpp
     dom/WebKitAnimationEvent.cpp
     dom/WebKitMutationObserver.cpp
+    dom/WebKitNamedFlow.cpp
     dom/WebKitTransitionEvent.cpp
     dom/WheelEvent.cpp
     dom/WindowEventContext.cpp
@@ -709,12 +748,12 @@ SET(WebCore_SOURCES
 
     html/BaseButtonInputType.cpp
     html/BaseCheckableInputType.cpp
+    html/BaseClickableWithKeyInputType.cpp
     html/BaseDateAndTimeInputType.cpp
     html/BaseTextInputType.cpp
     html/ButtonInputType.cpp
     html/CheckboxInputType.cpp
     html/ClassList.cpp
-    html/CollectionCache.cpp
     html/ColorInputType.cpp
     html/DOMFormData.cpp
     html/DOMSettableTokenList.cpp
@@ -751,6 +790,7 @@ SET(WebCore_SOURCES
     html/HTMLFontElement.cpp
     html/HTMLFormCollection.cpp
     html/HTMLFormControlElement.cpp
+    html/HTMLFormControlElementWithState.cpp
     html/HTMLFormElement.cpp
     html/HTMLFrameElement.cpp
     html/HTMLFrameElementBase.cpp
@@ -764,7 +804,6 @@ SET(WebCore_SOURCES
     html/HTMLImageElement.cpp
     html/HTMLImageLoader.cpp
     html/HTMLInputElement.cpp
-    html/HTMLIsIndexElement.cpp
     html/HTMLKeygenElement.cpp
     html/HTMLLIElement.cpp
     html/HTMLLabelElement.cpp
@@ -790,6 +829,7 @@ SET(WebCore_SOURCES
     html/HTMLPlugInImageElement.cpp
     html/HTMLPreElement.cpp
     html/HTMLProgressElement.cpp
+    html/HTMLPropertiesCollection.cpp
     html/HTMLQuoteElement.cpp
     html/HTMLScriptElement.cpp
     html/HTMLSelectElement.cpp
@@ -814,7 +854,6 @@ SET(WebCore_SOURCES
     html/ImageDocument.cpp
     html/ImageInputType.cpp
     html/InputType.cpp
-    html/IsIndexInputType.cpp
     html/LabelsNodeList.cpp
     html/LinkRelAttribute.cpp
     html/MediaController.cpp
@@ -840,8 +879,6 @@ SET(WebCore_SOURCES
     html/ValidityState.cpp
     html/WeekInputType.cpp
 
-    html/canvas/ArrayBuffer.cpp
-    html/canvas/ArrayBufferView.cpp
     html/canvas/CanvasContextAttributes.cpp
     html/canvas/CanvasGradient.cpp
     html/canvas/CanvasPattern.cpp
@@ -850,14 +887,6 @@ SET(WebCore_SOURCES
     html/canvas/CanvasRenderingContext2D.cpp
     html/canvas/CanvasStyle.cpp
     html/canvas/DataView.cpp
-    html/canvas/Float32Array.cpp
-    html/canvas/Float64Array.cpp
-    html/canvas/Int16Array.cpp
-    html/canvas/Int32Array.cpp
-    html/canvas/Int8Array.cpp
-    html/canvas/Uint16Array.cpp
-    html/canvas/Uint32Array.cpp
-    html/canvas/Uint8Array.cpp
 
     html/parser/CSSPreloadScanner.cpp
     html/parser/HTMLConstructionSite.cpp
@@ -879,7 +908,12 @@ SET(WebCore_SOURCES
     html/parser/TextViewSourceParser.cpp
     html/parser/XSSAuditor.cpp
 
+    html/shadow/ContentSelectorQuery.cpp
     html/shadow/DetailsMarkerControl.cpp
+    html/shadow/HTMLContentElement.cpp
+    html/shadow/HTMLContentSelector.cpp
+    html/shadow/HTMLShadowElement.cpp
+    html/shadow/InsertionPoint.cpp
     html/shadow/MediaControls.cpp
     html/shadow/MediaControlRootElement.cpp
     html/shadow/MeterShadowElement.cpp
@@ -889,18 +923,22 @@ SET(WebCore_SOURCES
 
     inspector/ConsoleMessage.cpp
     inspector/ContentSearchUtils.cpp
+    inspector/DOMEditor.cpp
     inspector/DOMNodeHighlighter.cpp
+    inspector/DOMPatchSupport.cpp
     inspector/IdentifiersFactory.cpp
     inspector/InjectedScript.cpp
     inspector/InjectedScriptHost.cpp
     inspector/InjectedScriptManager.cpp
     inspector/InspectorAgent.cpp
     inspector/InspectorApplicationCacheAgent.cpp
+    inspector/InspectorBaseAgent.cpp
     inspector/InspectorPageAgent.cpp
     inspector/InspectorCSSAgent.cpp
     inspector/InspectorClient.cpp
     inspector/InspectorConsoleAgent.cpp
     inspector/InspectorController.cpp
+    inspector/InspectorCounters.cpp
     inspector/InspectorDOMAgent.cpp
     inspector/InspectorDOMDebuggerAgent.cpp
     inspector/InspectorDOMStorageAgent.cpp
@@ -908,9 +946,13 @@ SET(WebCore_SOURCES
     inspector/InspectorDatabaseAgent.cpp
     inspector/InspectorDatabaseResource.cpp
     inspector/InspectorDebuggerAgent.cpp
+    inspector/InspectorFileSystemAgent.cpp
     inspector/InspectorFrontendClientLocal.cpp
     inspector/InspectorFrontendHost.cpp
+    inspector/InspectorHistory.cpp
+    inspector/InspectorIndexedDBAgent.cpp
     inspector/InspectorInstrumentation.cpp
+    inspector/InspectorMemoryAgent.cpp
     inspector/InspectorProfilerAgent.cpp
     inspector/InspectorResourceAgent.cpp
     inspector/InspectorRuntimeAgent.cpp
@@ -922,16 +964,21 @@ SET(WebCore_SOURCES
     inspector/InspectorWorkerAgent.cpp
     inspector/InstrumentingAgents.cpp
     inspector/NetworkResourcesData.cpp
+    inspector/PageConsoleAgent.cpp
     inspector/PageDebuggerAgent.cpp
+    inspector/PageRuntimeAgent.cpp
     inspector/ScriptArguments.cpp
     inspector/ScriptCallFrame.cpp
     inspector/ScriptCallStack.cpp
     inspector/TimelineRecordFactory.cpp
+    inspector/WorkerConsoleAgent.cpp
     inspector/WorkerDebuggerAgent.cpp
     inspector/WorkerInspectorController.cpp
+    inspector/WorkerRuntimeAgent.cpp
 
     loader/CrossOriginAccessControl.cpp
     loader/CrossOriginPreflightResultCache.cpp
+    loader/DocumentLoadTiming.cpp
     loader/DocumentLoader.cpp
     loader/DocumentThreadableLoader.cpp
     loader/DocumentWriter.cpp
@@ -982,8 +1029,8 @@ SET(WebCore_SOURCES
     loader/cache/CachedResource.cpp
     loader/cache/CachedResourceHandle.cpp
     loader/cache/CachedResourceLoader.cpp
-    loader/cache/CachedResourceRequest.cpp
     loader/cache/CachedScript.cpp
+    loader/cache/CachedSVGDocument.cpp
     loader/cache/CachedXSLStyleSheet.cpp
     loader/cache/MemoryCache.cpp
 
@@ -1003,16 +1050,16 @@ SET(WebCore_SOURCES
     page/DOMSelection.cpp
     page/DOMTimer.cpp
     page/DOMWindow.cpp
+    page/DOMWindowProperty.cpp
     page/DragController.cpp
     page/EventHandler.cpp
     page/EventSource.cpp
     page/FocusController.cpp
     page/Frame.cpp
     page/FrameActionScheduler.cpp
+    page/FrameDestructionObserver.cpp
     page/FrameTree.cpp
     page/FrameView.cpp
-    page/Geolocation.cpp
-    page/GeolocationController.cpp
     page/GroupSettings.cpp
     page/History.cpp
     page/Location.cpp
@@ -1020,6 +1067,7 @@ SET(WebCore_SOURCES
     page/MouseEventWithHitTestResults.cpp
     page/Navigator.cpp
     page/NavigatorBase.cpp
+    page/NavigatorRegisterProtocolHandler.cpp
     page/OriginAccessEntry.cpp
     page/Page.cpp
     page/PageGroup.cpp
@@ -1048,14 +1096,17 @@ SET(WebCore_SOURCES
     page/animation/ImplicitAnimation.cpp
     page/animation/KeyframeAnimation.cpp
 
+    page/scrolling/ScrollingCoordinator.cpp
+    page/scrolling/ScrollingCoordinatorNone.cpp
+
     platform/Arena.cpp
+    platform/CalculationValue.cpp
     platform/Clock.cpp
     platform/ContextMenu.cpp
     platform/ContextMenuItem.cpp
     platform/ContentType.cpp
     platform/CrossThreadCopier.cpp
     platform/DateComponents.cpp
-    platform/DefaultLocalizationStrategy.cpp
     platform/DragData.cpp
     platform/DragImage.cpp
     platform/FileChooser.cpp
@@ -1063,6 +1114,7 @@ SET(WebCore_SOURCES
     platform/FileSystem.cpp
     platform/ClockGeneric.cpp
     platform/GeolocationService.cpp
+    platform/HistogramSupport.cpp
     platform/KURL.cpp
     platform/KillRingNone.cpp
     platform/Language.cpp
@@ -1070,6 +1122,9 @@ SET(WebCore_SOURCES
     platform/LinkHash.cpp
     platform/Logging.cpp
     platform/MIMETypeRegistry.cpp
+    platform/MemoryPressureHandler.cpp
+    platform/PlatformEvent.cpp
+    platform/RunLoop.cpp
     platform/RuntimeApplicationChecks.cpp
     platform/ScrollAnimator.cpp
     platform/ScrollableArea.cpp
@@ -1091,6 +1146,8 @@ SET(WebCore_SOURCES
 
     platform/graphics/BitmapImage.cpp
     platform/graphics/Color.cpp
+    platform/graphics/CrossfadeGeneratedImage.cpp
+    platform/graphics/FractionalLayoutSize.cpp
     platform/graphics/FloatPoint.cpp
     platform/graphics/FloatPoint3D.cpp
     platform/graphics/FloatQuad.cpp
@@ -1104,7 +1161,7 @@ SET(WebCore_SOURCES
     platform/graphics/FontFamily.cpp
     platform/graphics/FontFastPath.cpp
     platform/graphics/FontFeatureSettings.cpp
-    platform/graphics/GeneratedImage.cpp
+    platform/graphics/GeneratorGeneratedImage.cpp
     platform/graphics/GlyphPageTreeNode.cpp
     platform/graphics/Gradient.cpp
     platform/graphics/GraphicsContext.cpp
@@ -1126,12 +1183,16 @@ SET(WebCore_SOURCES
     platform/graphics/TextRun.cpp
     platform/graphics/WidthIterator.cpp
 
+    platform/graphics/filters/CustomFilterMesh.cpp
+    platform/graphics/filters/CustomFilterProgram.cpp
+    platform/graphics/filters/CustomFilterShader.cpp
     platform/graphics/filters/DistantLightSource.cpp
     platform/graphics/filters/FEBlend.cpp
     platform/graphics/filters/FEColorMatrix.cpp
     platform/graphics/filters/FEComponentTransfer.cpp
     platform/graphics/filters/FEComposite.cpp
     platform/graphics/filters/FEConvolveMatrix.cpp
+    platform/graphics/filters/FECustomFilter.cpp
     platform/graphics/filters/FEDiffuseLighting.cpp
     platform/graphics/filters/FEDisplacementMap.cpp
     platform/graphics/filters/FEDropShadow.cpp
@@ -1193,6 +1254,7 @@ SET(WebCore_SOURCES
     platform/network/ProxyServer.cpp
     platform/network/ResourceErrorBase.cpp
     platform/network/ResourceHandle.cpp
+    platform/network/ResourceLoadTiming.cpp
     platform/network/ResourceRequestBase.cpp
     platform/network/ResourceResponseBase.cpp
     platform/network/SocketStreamHandleBase.cpp
@@ -1252,7 +1314,6 @@ SET(WebCore_SOURCES
     rendering/RenderCombineText.cpp
     rendering/RenderCounter.cpp
     rendering/RenderDeprecatedFlexibleBox.cpp
-    rendering/RenderDetails.cpp
     rendering/RenderDetailsMarker.cpp
     rendering/RenderEmbeddedObject.cpp
     rendering/RenderFieldset.cpp
@@ -1295,8 +1356,8 @@ SET(WebCore_SOURCES
     rendering/RenderScrollbarPart.cpp
     rendering/RenderScrollbarTheme.cpp
     rendering/RenderSlider.cpp
-    rendering/RenderSummary.cpp
     rendering/RenderTable.cpp
+    rendering/RenderTableCaption.cpp
     rendering/RenderTableCell.cpp
     rendering/RenderTableCol.cpp
     rendering/RenderTableRow.cpp
@@ -1330,6 +1391,8 @@ SET(WebCore_SOURCES
     rendering/style/StyleFilterData.cpp
     rendering/style/StyleFlexibleBoxData.cpp
     rendering/style/StyleGeneratedImage.cpp
+    rendering/style/StyleGridData.cpp
+    rendering/style/StyleGridItemData.cpp
     rendering/style/StyleInheritedData.cpp
     rendering/style/StyleMarqueeData.cpp
     rendering/style/StyleMultiColData.cpp
@@ -1341,31 +1404,16 @@ SET(WebCore_SOURCES
 
     storage/AbstractDatabase.cpp
     storage/ChangeVersionWrapper.cpp
+    storage/DOMWindowSQLDatabase.cpp
     storage/Database.cpp
     storage/DatabaseAuthorizer.cpp
+    storage/DatabaseContext.cpp
     storage/DatabaseSync.cpp
     storage/DatabaseTask.cpp
     storage/DatabaseThread.cpp
     storage/DatabaseTracker.cpp
-    storage/IDBAny.cpp
-    storage/IDBDatabase.cpp
-    storage/IDBDatabaseBackendImpl.cpp
-    storage/IDBCursor.cpp
-    storage/IDBCursorBackendImpl.cpp
-    storage/IDBDatabaseException.cpp
-    storage/IDBEventDispatcher.cpp
-    storage/IDBIndex.cpp
-    storage/IDBIndexBackendImpl.cpp
-    storage/IDBKey.cpp
-    storage/IDBKeyRange.cpp
-    storage/IDBRequest.cpp
-    storage/IDBObjectStore.cpp
-    storage/IDBObjectStoreBackendImpl.cpp
-    storage/IDBFactory.cpp
-    storage/IDBFactoryBackendInterface.cpp
-    storage/IDBFactoryBackendImpl.cpp
-    storage/LocalStorageTask.cpp
-    storage/LocalStorageThread.cpp
+    storage/StorageTask.cpp
+    storage/StorageThread.cpp
     storage/OriginQuotaManager.cpp
     storage/OriginUsageRecord.cpp
     storage/SQLException.cpp
@@ -1389,15 +1437,6 @@ SET(WebCore_SOURCES
     storage/StorageSyncManager.cpp
     storage/StorageTracker.cpp
 
-    websockets/ThreadableWebSocketChannel.cpp
-    websockets/ThreadableWebSocketChannelClientWrapper.cpp
-    websockets/WebSocket.cpp
-    websockets/WebSocketChannel.cpp
-    websockets/WebSocketHandshake.cpp
-    websockets/WebSocketHandshakeRequest.cpp
-    websockets/WebSocketHandshakeResponse.cpp
-    websockets/WorkerThreadableWebSocketChannel.cpp
-
     workers/AbstractWorker.cpp
     workers/DedicatedWorkerContext.cpp
     workers/DedicatedWorkerThread.cpp
@@ -1407,6 +1446,7 @@ SET(WebCore_SOURCES
     workers/SharedWorkerThread.cpp
     workers/Worker.cpp
     workers/WorkerContext.cpp
+    workers/WorkerEventQueue.cpp
     workers/WorkerLocation.cpp
     workers/WorkerMessagingProxy.cpp
     workers/WorkerRunLoop.cpp
@@ -1492,6 +1532,7 @@ IF (ENABLE_SQL_DATABASE)
         platform/sql/SQLiteTransaction.cpp
     )
     LIST(APPEND WebCore_IDL_FILES
+        storage/DOMWindowSQLDatabase.idl
         storage/Database.idl
         storage/DatabaseCallback.idl
         storage/DatabaseSync.idl
@@ -1516,30 +1557,77 @@ IF (ENABLE_DATA_TRANSFER_ITEMS)
     )
     LIST(APPEND WebCore_SOURCES
         dom/DataTransferItem.cpp
-        dom/DataTransferItemList.cpp
         dom/StringCallback.cpp
     )
 ENDIF ()
 
 IF (ENABLE_INDEXED_DATABASE)
+    LIST(APPEND WebCore_SOURCES
+        Modules/indexeddb/DOMWindowIndexedDatabase.cpp
+        Modules/indexeddb/IDBAny.cpp
+        Modules/indexeddb/IDBCursor.cpp
+        Modules/indexeddb/IDBCursorBackendImpl.cpp
+        Modules/indexeddb/IDBCursorWithValue.cpp
+        Modules/indexeddb/IDBDatabase.cpp
+        Modules/indexeddb/IDBDatabaseBackendImpl.cpp
+        Modules/indexeddb/IDBDatabaseCallbacksImpl.cpp
+        Modules/indexeddb/IDBDatabaseException.cpp
+        Modules/indexeddb/IDBEventDispatcher.cpp
+        Modules/indexeddb/IDBFactory.cpp
+        Modules/indexeddb/IDBFactoryBackendImpl.cpp
+        Modules/indexeddb/IDBFactoryBackendInterface.cpp
+        Modules/indexeddb/IDBIndex.cpp
+        Modules/indexeddb/IDBIndexBackendImpl.cpp
+        Modules/indexeddb/IDBKey.cpp
+        Modules/indexeddb/IDBKeyRange.cpp
+        Modules/indexeddb/IDBKeyPath.cpp
+        Modules/indexeddb/IDBKeyPathBackendImpl.cpp
+        Modules/indexeddb/IDBObjectStore.cpp
+        Modules/indexeddb/IDBObjectStoreBackendImpl.cpp
+        Modules/indexeddb/IDBPendingTransactionMonitor.cpp
+        Modules/indexeddb/IDBRequest.cpp
+        Modules/indexeddb/IDBTransaction.cpp
+        Modules/indexeddb/IDBTransactionBackendImpl.cpp
+        Modules/indexeddb/IDBTransactionCoordinator.cpp
+        Modules/indexeddb/IDBVersionChangeEvent.cpp
+        Modules/indexeddb/IDBVersionChangeRequest.cpp
+        Modules/indexeddb/PageGroupIndexedDatabase.cpp
+    )
+
     LIST(APPEND WebCore_IDL_FILES
-        storage/IDBAny.idl
-        storage/IDBCursor.idl
-        storage/IDBDatabaseError.idl
-        storage/IDBDatabaseException.idl
-        storage/IDBDatabase.idl
-        storage/IDBFactory.idl
-        storage/IDBIndex.idl
-        storage/IDBKey.idl
-        storage/IDBKeyRange.idl
-        storage/IDBObjectStore.idl
-        storage/IDBRequest.idl
-        storage/IDBTransaction.idl
+        Modules/indexeddb/DOMWindowIndexedDatabase.idl
+        Modules/indexeddb/IDBAny.idl
+        Modules/indexeddb/IDBCursor.idl
+        Modules/indexeddb/IDBCursorWithValue.idl
+        Modules/indexeddb/IDBDatabase.idl
+        Modules/indexeddb/IDBDatabaseError.idl
+        Modules/indexeddb/IDBDatabaseException.idl
+        Modules/indexeddb/IDBFactory.idl
+        Modules/indexeddb/IDBIndex.idl
+        Modules/indexeddb/IDBKey.idl
+        Modules/indexeddb/IDBKeyRange.idl
+        Modules/indexeddb/IDBObjectStore.idl
+        Modules/indexeddb/IDBRequest.idl
+        Modules/indexeddb/IDBTransaction.idl
+        Modules/indexeddb/IDBVersionChangeEvent.idl
+        Modules/indexeddb/IDBVersionChangeRequest.idl
+    )
+ENDIF ()
+
+IF (ENABLE_INDEXED_DATABASE AND ENABLE_WORKERS)
+    LIST(APPEND WebCore_SOURCES
+        Modules/indexeddb/WorkerContextIndexedDatabase.cpp
+    )
+
+    LIST(APPEND WebCore_IDL_FILES
+        Modules/indexeddb/WorkerContextIndexedDatabase.idl
     )
 ENDIF ()
 
 IF (WTF_USE_LEVELDB)
     LIST(APPEND WebCore_SOURCES
+        Modules/indexeddb/IDBLevelDBBackingStore.cpp
+        Modules/indexeddb/IDBLevelDBCoding.cpp
         platform/leveldb/LevelDBDatabase.cpp
         platform/leveldb/LevelDBTransaction.cpp
         platform/leveldb/LevelDBWriteBatch.cpp
@@ -1576,6 +1664,7 @@ ENDIF ()
 IF (ENABLE_NOTIFICATIONS)
     LIST(APPEND WebCore_SOURCES
         notifications/NotificationCenter.cpp
+        notifications/NotificationController.cpp
         notifications/Notification.cpp
     )
 
@@ -1595,9 +1684,11 @@ if (ENABLE_FILE_SYSTEM)
         fileapi/DOMFileSystem.cpp
         fileapi/DOMFileSystemBase.cpp
         fileapi/DOMFileSystemSync.cpp
+        fileapi/DOMWindowFileSystem.cpp
         fileapi/Entry.cpp
         fileapi/EntryArray.cpp
         fileapi/EntryArraySync.cpp
+        fileapi/EntryBase.cpp
         fileapi/EntrySync.cpp
         fileapi/FileEntry.cpp
         fileapi/FileEntrySync.cpp
@@ -1606,6 +1697,7 @@ if (ENABLE_FILE_SYSTEM)
         fileapi/FileWriterBase.cpp
         fileapi/FileWriterSync.cpp
         fileapi/LocalFileSystem.cpp
+        fileapi/WorkerContextFileSystem.cpp
         platform/AsyncFileSystem.cpp
     )
     LIST(APPEND WebCore_IDL_FILES
@@ -1615,6 +1707,7 @@ if (ENABLE_FILE_SYSTEM)
         fileapi/DirectoryReaderSync.idl
         fileapi/DOMFileSystem.idl
         fileapi/DOMFileSystemSync.idl
+        fileapi/DOMWindowFileSystem.idl
         fileapi/EntriesCallback.idl
         fileapi/Entry.idl
         fileapi/EntrySync.idl
@@ -1629,9 +1722,9 @@ if (ENABLE_FILE_SYSTEM)
         fileapi/FileWriterCallback.idl
         fileapi/FileWriter.idl
         fileapi/FileWriterSync.idl
-        fileapi/WebKitFlags.idl
         fileapi/Metadata.idl
         fileapi/MetadataCallback.idl
+        fileapi/WorkerContextFileSystem.idl
     )
 ENDIF ()
 
@@ -1661,6 +1754,7 @@ IF (ENABLE_SVG)
         rendering/svg/RenderSVGInlineText.cpp
         rendering/svg/RenderSVGModelObject.cpp
         rendering/svg/RenderSVGPath.cpp
+        rendering/svg/RenderSVGRect.cpp
         rendering/svg/RenderSVGResource.cpp
         rendering/svg/RenderSVGResourceClipper.cpp
         rendering/svg/RenderSVGResourceContainer.cpp
@@ -1674,7 +1768,7 @@ IF (ENABLE_SVG)
         rendering/svg/RenderSVGResourceRadialGradient.cpp
         rendering/svg/RenderSVGResourceSolidColor.cpp
         rendering/svg/RenderSVGRoot.cpp
-        rendering/svg/RenderSVGShadowTreeRootContainer.cpp
+        rendering/svg/RenderSVGShape.cpp
         rendering/svg/RenderSVGTSpan.cpp
         rendering/svg/RenderSVGText.cpp
         rendering/svg/RenderSVGTextPath.cpp
@@ -1691,7 +1785,6 @@ IF (ENABLE_SVG)
         rendering/svg/SVGResourcesCache.cpp
         rendering/svg/SVGResourcesCycleSolver.cpp
         rendering/svg/SVGRootInlineBox.cpp
-        rendering/svg/SVGShadowTreeElements.cpp
         rendering/svg/SVGTextChunk.cpp
         rendering/svg/SVGTextChunkBuilder.cpp
         rendering/svg/SVGTextLayoutAttributes.cpp
@@ -1701,6 +1794,7 @@ IF (ENABLE_SVG)
         rendering/svg/SVGTextLayoutEngineSpacing.cpp
         rendering/svg/SVGTextRunRenderingContext.cpp
         rendering/svg/SVGTextMetrics.cpp
+        rendering/svg/SVGTextMetricsBuilder.cpp
         rendering/svg/SVGTextQuery.cpp
         svg/ColorDistance.cpp
         svg/SVGAElement.cpp
@@ -2013,6 +2107,10 @@ IF (ENABLE_SVG)
         ${SVG_IDL_FILES}
     )
 
+    LIST(APPEND WebCore_IDL_FILES
+        ${SVG_IDL_FILES}
+    )
+
     LIST(APPEND WebCore_CSS_PROPERTY_NAMES
         ${WEBCORE_DIR}/css/SVGCSSPropertyNames.in
     )
@@ -2028,8 +2126,9 @@ IF (ENABLE_VIDEO)
         html/HTMLMediaElement.cpp
         html/HTMLSourceElement.cpp
         html/HTMLVideoElement.cpp
-        html/shadow/MediaControlElements.cpp
+        html/MediaFragmentURIParser.cpp
         html/TimeRanges.cpp
+        html/shadow/MediaControlElements.cpp
         platform/graphics/MediaPlayer.cpp
         rendering/RenderMedia.cpp
         rendering/RenderVideo.cpp
@@ -2037,19 +2136,85 @@ IF (ENABLE_VIDEO)
 ENDIF()
 
 IF (ENABLE_WEB_SOCKETS)
+    LIST(APPEND WebCore_SOURCES
+        Modules/websockets/ThreadableWebSocketChannel.cpp
+        Modules/websockets/ThreadableWebSocketChannelClientWrapper.cpp
+        Modules/websockets/WebSocket.cpp
+        Modules/websockets/WebSocketChannel.cpp
+        Modules/websockets/WebSocketExtensionDispatcher.cpp
+        Modules/websockets/WebSocketHandshake.cpp
+        Modules/websockets/WebSocketHandshakeRequest.cpp
+        Modules/websockets/WebSocketHandshakeResponse.cpp
+    )
+
     LIST(APPEND WebCore_IDL_FILES
-        websockets/CloseEvent.idl
-        websockets/WebSocket.idl
+        Modules/websockets/WebSocket.idl
+    )
+ENDIF ()
+
+IF (ENABLE_WEB_SOCKETS AND ENABLE_WORKERS)
+    LIST(APPEND WebCore_SOURCES
+        Modules/websockets/WorkerThreadableWebSocketChannel.cpp
+    )
+ENDIF ()
+
+IF (ENABLE_WORKERS)
+    LIST(APPEND WebCore_SOURCES
+        loader/WorkerThreadableLoader.cpp
+
+        page/WorkerNavigator.cpp
+
+        workers/AbstractWorker.cpp
+        workers/DedicatedWorkerContext.cpp
+        workers/DedicatedWorkerThread.cpp
+        workers/Worker.cpp
+        workers/WorkerContext.cpp
+        workers/WorkerEventQueue.cpp
+        workers/WorkerLocation.cpp
+        workers/WorkerMessagingProxy.cpp
+        workers/WorkerRunLoop.cpp
+        workers/WorkerScriptLoader.cpp
+        workers/WorkerThread.cpp
+    )
+
+    LIST(APPEND WebCore_IDL_FILES
+        page/WorkerNavigator.idl
+
+        workers/AbstractWorker.idl
+        workers/DedicatedWorkerContext.idl
+        workers/Worker.idl
+        workers/WorkerContext.idl
+        workers/WorkerLocation.idl
+    )
+ENDIF ()
+
+IF (ENABLE_SHARED_WORKERS)
+    LIST(APPEND WebCore_SOURCES
+        workers/DefaultSharedWorkerRepository.cpp
+        workers/SharedWorker.cpp
+        workers/SharedWorkerContext.cpp
+        workers/SharedWorkerThread.cpp
+    )
+
+    LIST(APPEND WebCore_IDL_FILES
+        workers/SharedWorker.idl
+        workers/SharedWorkerContext.idl
+    )
+ENDIF ()
+
+IF (ENABLE_WORKERS OR ENABLE_SHARED_WORKERS)
+    LIST(APPEND WebCore_IDL_FILES
+        workers/DOMWindowWorker.idl
     )
 ENDIF ()
 
 IF (ENABLE_VIDEO_TRACK)
     LIST(APPEND WebCore_SOURCES
         html/HTMLTrackElement.cpp
-        html/LoadableTextTrack.cpp
-        html/TextTrack.cpp
-        html/TextTrackCue.cpp
-        html/TextTrackCueList.cpp
+        html/track/LoadableTextTrack.cpp
+        html/track/TextTrack.cpp
+        html/track/TextTrackCue.cpp
+        html/track/TextTrackCueList.cpp
         html/track/TextTrackList.cpp
         html/track/TrackBase.cpp
         html/track/TrackEvent.cpp
@@ -2129,22 +2294,26 @@ IF (ENABLE_WEBGL)
         html/canvas/OESTextureFloat.cpp
         html/canvas/OESVertexArrayObject.cpp
         html/canvas/WebGLBuffer.cpp
+        html/canvas/WebGLCompressedTextureS3TC.cpp
         html/canvas/WebGLContextAttributes.cpp
         html/canvas/WebGLContextEvent.cpp
+        html/canvas/WebGLContextGroup.cpp
+        html/canvas/WebGLContextObject.cpp
         html/canvas/WebGLDebugRendererInfo.cpp
         html/canvas/WebGLDebugShaders.cpp
         html/canvas/WebGLExtension.cpp
         html/canvas/WebGLFramebuffer.cpp
         html/canvas/WebGLGetInfo.cpp
+        html/canvas/WebGLLoseContext.cpp
         html/canvas/WebGLObject.cpp
         html/canvas/WebGLProgram.cpp
         html/canvas/WebGLRenderbuffer.cpp
         html/canvas/WebGLRenderingContext.cpp
         html/canvas/WebGLShader.cpp
+        html/canvas/WebGLSharedObject.cpp
         html/canvas/WebGLTexture.cpp
         html/canvas/WebGLUniformLocation.cpp
         html/canvas/WebGLVertexArrayObjectOES.cpp
-        html/canvas/WebKitLoseContext.cpp
 
         platform/graphics/GraphicsContext3D.cpp
         platform/graphics/gpu/DrawingBuffer.cpp
@@ -2166,19 +2335,38 @@ IF (ENABLE_REQUEST_ANIMATION_FRAME)
     )
 ENDIF ()
 
+IF (ENABLE_VIBRATION)
+    LIST(APPEND WebCore_INCLUDE_DIRECTORIES
+        ${WEBCORE_DIR}/Modules/vibration
+    )
+    LIST(APPEND WebCore_IDL_FILES
+        Modules/vibration/NavigatorVibration.idl
+    )
+    LIST(APPEND WebCore_SOURCES
+        Modules/vibration/NavigatorVibration.cpp
+        Modules/vibration/Vibration.cpp
+    )
+ENDIF ()
+
 # Modules that the bindings generator scripts may use
+SET(SCRIPTS_RESOLVE_SUPPLEMENTAL
+    ${WEBCORE_DIR}/bindings/scripts/IDLParser.pm
+)
 SET(SCRIPTS_BINDINGS
     ${WEBCORE_DIR}/bindings/scripts/IDLParser.pm
     ${WEBCORE_DIR}/bindings/scripts/IDLStructure.pm
     ${WEBCORE_DIR}/bindings/scripts/InFilesParser.pm
     ${WEBCORE_DIR}/bindings/scripts/preprocessor.pm
 )
+SET(IDL_FILES_TMP ${DERIVED_SOURCES_WEBCORE_DIR}/idl_files.tmp)
+SET(SUPPLEMENTAL_DEPENDENCY_FILE ${DERIVED_SOURCES_WEBCORE_DIR}/supplemental_dependency.tmp)
+SET(IDL_ATTRIBUTES_FILE ${WEBCORE_DIR}/bindings/scripts/IDLAttributes.txt)
 
 INCLUDE(${WEBCORE_DIR}/UseJSC.cmake)
 
 SET(WebCore_LIBRARIES ${JavaScriptCore_LIBRARY_NAME})
 SET(WebCore_LINK_FLAGS "")
-INCLUDE_IF_EXISTS(${WEBCORE_DIR}/Platform${PORT}.cmake)
+WEBKIT_INCLUDE_CONFIG_FILES_IF_EXISTS()
 
 # ANGLE tokenizer & parser
 ADD_CUSTOM_COMMAND(
@@ -2205,12 +2393,12 @@ ADD_CUSTOM_COMMAND(
 LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorProtocolVersion.h)
 
 ADD_CUSTOM_COMMAND(
-    OUTPUT ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.h ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.h
+    OUTPUT ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.h ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.h ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorTypeBuilder.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorTypeBuilder.h
     MAIN_DEPENDENCY inspector/Inspector.json
     DEPENDS ${WEBCORE_DIR}/inspector/CodeGeneratorInspector.py
-    COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/inspector/CodeGeneratorInspector.py ${WEBCORE_DIR}/inspector/Inspector.json --output_h_dir "${DERIVED_SOURCES_WEBCORE_DIR}" --output_cpp_dir "${DERIVED_SOURCES_WEBCORE_DIR}" --defines "${FEATURE_DEFINES_JAVASCRIPT}"
+    COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/inspector/CodeGeneratorInspector.py ${WEBCORE_DIR}/inspector/Inspector.json --output_h_dir "${DERIVED_SOURCES_WEBCORE_DIR}" --output_cpp_dir "${DERIVED_SOURCES_WEBCORE_DIR}"
     VERBATIM)
-LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.cpp)
+LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorBackendDispatcher.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorFrontend.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/InspectorTypeBuilder.cpp)
 
 
 # Generate InjectedScriptSource.h
@@ -2252,18 +2440,6 @@ ADD_CUSTOM_COMMAND(
     COMMAND ${PYTHON_EXECUTABLE} ${WEBCORE_DIR}/html/parser/create-html-entity-table -o ${DERIVED_SOURCES_WEBCORE_DIR}/HTMLEntityTable.cpp ${WEBCORE_DIR}/html/parser/HTMLEntityNames.in
     VERBATIM)
 LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/HTMLEntityTable.cpp)
-
-
-# Generate tokenizer
-FILE(TO_NATIVE_PATH ${PERL_EXECUTABLE} PERL_EXECUTABLE_NATIVE_PATH)
-ADD_CUSTOM_COMMAND(
-    OUTPUT ${DERIVED_SOURCES_WEBCORE_DIR}/tokenizer.cpp
-    MAIN_DEPENDENCY ${WEBCORE_DIR}/css/maketokenizer
-    DEPENDS ${WEBCORE_DIR}/css/tokenizer.flex
-    COMMAND ${FLEX_EXECUTABLE} -t ${WEBCORE_DIR}/css/tokenizer.flex | ${PERL_EXECUTABLE_NATIVE_PATH} ${WEBCORE_DIR}/css/maketokenizer > ${DERIVED_SOURCES_WEBCORE_DIR}/tokenizer.cpp
-    VERBATIM)
-ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/css/CSSParser.cpp tokenizer.cpp)
-
 
 # Generate CSS property names
 ADD_CUSTOM_COMMAND (
@@ -2324,7 +2500,11 @@ LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/XPathGrammar.cpp)
 
 ADD_SOURCE_WEBCORE_DERIVED_DEPENDENCIES(${WEBCORE_DIR}/html/HTMLTreeBuilder.cpp MathMLNames.cpp)
 
-GENERATE_EVENT_FACTORY(${WEBCORE_DIR}/dom/EventFactory.in EventFactory.cpp)
+GENERATE_DOM_NAMES(HTML ${WEBCORE_DIR}/html/HTMLAttributeNames.in ${WEBCORE_DIR}/html/HTMLTagNames.in "")
+LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/HTMLNames.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/HTMLElementFactory.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/JSHTMLElementWrapperFactory.cpp)
+
+
+GENERATE_EVENT_FACTORY(${WEBCORE_DIR}/dom/EventNames.in EventFactory.cpp)
 LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/EventFactory.cpp)
 
 
@@ -2350,8 +2530,16 @@ IF (ENABLE_MATHML)
     LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/MathMLElementFactory.cpp)
 ENDIF ()
 
+# SVG extra defines need to map to a numerical value for correct preprocessing of svgtags.in.
+SET(SVG_EXTRA_DEFINES "")
+IF (ENABLE_FILTERS)
+    LIST(APPEND SVG_EXTRA_DEFINES "ENABLE_FILTERS=1")
+ENDIF ()
+IF (ENABLE_SVG_FONTS)
+    LIST(APPEND SVG_EXTRA_DEFINES "ENABLE_SVG_FONTS=1")
+ENDIF ()
 
-GENERATE_DOM_NAMES(SVG ${WEBCORE_DIR}/svg/svgattrs.in ${WEBCORE_DIR}/svg/svgtags.in "${SVG_FEATURES}")
+GENERATE_DOM_NAMES(SVG ${WEBCORE_DIR}/svg/svgattrs.in ${WEBCORE_DIR}/svg/svgtags.in "${SVG_EXTRA_DEFINES}")
 LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/SVGNames.cpp)
 IF (ENABLE_SVG)
     LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/SVGElementFactory.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/JSSVGElementWrapperFactory.cpp)

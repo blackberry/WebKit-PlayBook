@@ -48,6 +48,10 @@ fi
 mkdir -p $DL_DIR
 mkdir -p $DEPS_PREFIX
 
+mkdir -p $DEPS_PREFIX/bin
+mkdir -p $DEPS_PREFIX/lib
+mkdir -p $DEPS_PREFIX/include
+ 
 ICU_VERSION="3.4.1"
 ICU_TARBALL="icu-$ICU_VERSION.tgz"
 ICU_URL="ftp://ftp.software.ibm.com/software/globalization/icu/$ICU_VERSION/$ICU_TARBALL"
@@ -110,8 +114,8 @@ if [ `which icu-config >/dev/null 2>&1` ]; then
 
   if [ "${OSTYPE:0:6}" == "darwin" ]; then  
     ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
-    make CFLAGS="-O -g -isysroot /Developer/SDKs/MacOSX10.4u.sdk -arch i386 -arch ppc" \
-    LDFLAGS="-arch i386 -arch ppc"
+    make CFLAGS="-O -g -isysroot $SDK $ARCH_FLAGS" \
+    LDFLAGS=$ARCH_FLAGS
     make install
   else
     ./configure --prefix=$DEPS_PREFIX
@@ -122,28 +126,6 @@ if [ `which icu-config >/dev/null 2>&1` ]; then
   fi
   cd $DL_DIR
   rm -rf icu
-fi
-
-# TODO: What would be a good way to test for this?
-if [ ! -f $DEPS_PREFIX/lib/libiconv.$DLLEXT ]; then
-  $DL_CMD -o $DL_DIR/$ICONV_TARBALL $ICONV_URL
-
-  tar xzvf $DL_DIR/$ICONV_TARBALL
-  cd $DL_DIR/libiconv-$ICONV_VERSION
-
-  if [ "${OSTYPE:0:6}" == "darwin" ]; then  
-    ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
-    make CFLAGS="-O -g -isysroot /Developer/SDKs/MacOSX10.4u.sdk -arch i386 -arch ppc" \
-    LDFLAGS="-arch i386 -arch ppc"
-    make install
-  else
-    ./configure --prefix=$DEPS_PREFIX
-  
-    make
-    make install
-  fi
-  cd $DL_DIR
-  rm -rf $DL_DIR/libiconv-$ICONV_VERSION
 fi
 
 if [ ! -f $DEPS_PREFIX/lib/libjpeg.a ]; then
@@ -157,8 +139,8 @@ if [ ! -f $DEPS_PREFIX/lib/libjpeg.a ]; then
 
   if [ "${OSTYPE:0:6}" == "darwin" ]; then
     ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
-    make CFLAGS="-O -g -isysroot /Developer/SDKs/MacOSX10.4u.sdk -arch i386 -arch ppc" \
-    LDFLAGS="-arch i386 -arch ppc"
+    make CFLAGS="-O -g -isysroot $SDK $ARCH_FLAGS" \
+    LDFLAGS="$ARCH_FLAGS"
     make install
   else
     ./configure --prefix=$DEPS_PREFIX
@@ -180,9 +162,9 @@ if [ ! -f $DEPS_PREFIX/lib/libpng.a ]; then
   cd $DL_DIR/libpng-$LIBPNG_VERSION
 
   if [ "${OSTYPE:0:6}" == "darwin" ]; then
-    ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
-    make CFLAGS="-O -g -isysroot /Developer/SDKs/MacOSX10.4u.sdk -arch i386 -arch ppc" \
-    LDFLAGS="-arch i386 -arch ppc"
+    ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking --disable-shared
+    make CFLAGS="-O -g -isysroot $SDK $ARCH_FLAGS" \
+    LDFLAGS="$ARCH_FLAGS"
     make install
   else
     ./configure --prefix=$DEPS_PREFIX
@@ -202,10 +184,44 @@ if [ ! -f $DEPS_PREFIX/lib/libcurl.$DLLEXT ]; then
   cd $DL_DIR/curl-$LIBCURL_VERSION
 
   if [ "${OSTYPE:0:6}" == "darwin" ]; then
+    # CURL creates different build headers for 32 and 64 bit, so to get a universal build,
+    # we must first create a 32 bit version of the header, then a 64 bit version, and
+    # have the original header simply decide which to use.
+    export CFLAGS="-O -g -isysroot $SDK -mmacosx-version-min=10.4 -arch i386 -arch ppc"
     ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
-    make CFLAGS="-O -g -isysroot /Developer/SDKs/MacOSX10.4u.sdk -arch i386 -arch ppc" \
-    LDFLAGS="-arch i386 -arch ppc"
+    
+    mkdir -p $DEPS_PREFIX/include/curl
+    
+    cp include/curl/curlbuild.h include/curl/curlbuild32.h
+    
+    make distclean
+    
+    export CFLAGS="-O -g -isysroot $SDK -mmacosx-version-min=10.4 -arch x86_64 -arch ppc64"
+    ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
+    
+    cp include/curl/curlbuild.h include/curl/curlbuild64.h
+    
+    make distclean
+    
+    export CFLAGS="-O -g -isysroot $SDK -mmacosx-version-min=10.4 $ARCH_FLAGS"
+    ./configure --prefix=$DEPS_PREFIX --disable-dependency-tracking
+    
+    cat > include/curl/curlbuild.h <<EOF
+#ifdef __LP64__
+#include "curlbuild64.h"
+#else
+#include "curlbuild32.h"
+#endif 
+EOF
+
+    make CFLAGS="-O -g -isysroot $SDK $ARCH_FLAGS" \
+    LDFLAGS="$ARCH_FLAGS"
     make install
+    
+    cp include/curl/curlbuild32.h $DEPS_PREFIX/include/curl/curlbuild32.h
+    cp include/curl/curlbuild64.h $DEPS_PREFIX/include/curl/curlbuild64.h
+    cp include/curl/curlbuild.h $DEPS_PREFIX/include/curl/curlbuild.h
+    
   else
     ./configure --prefix=$DEPS_PREFIX
   

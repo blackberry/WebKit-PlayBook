@@ -1,4 +1,4 @@
-// Copyright (C) 2011 Google Inc. All rights reserved.
+// Copyright (C) 2012 Google Inc. All rights reserved.
 //
 // Redistribution and use in source and binary forms, with or without
 // modification, are permitted provided that the following conditions are
@@ -67,9 +67,8 @@ function handleQueryParameterChange(params)
 var GTEST_EXPECTATIONS_MAP_ = {
     'P': 'PASS',
     'F': 'FAIL',
-    'L': 'FLAKY',
     'N': 'NO DATA',
-    'X': 'DISABLED'
+    'X': 'SKIPPED'
 };
 
 var LAYOUT_TEST_EXPECTATIONS_MAP_ = {
@@ -112,15 +111,40 @@ var TWO_WEEKS_SECONDS = 60 * 60 * 24 * 14;
 
 // These should match the testtype uploaded to test-results.appspot.com.
 // See http://test-results.appspot.com/testfile.
-var TEST_TYPES = ['app_unittests', 'base_unittests', 'browser_tests',
-        'cache_invalidation_unittests', 'courgette_unittests',
-        'crypto_unittests', 'googleurl_unittests', 'gpu_unittests',
-        'installer_util_unittests', 'interactive_ui_tests', 'ipc_tests',
-        'jingle_unittests', 'layout-tests', 'media_unittests',
-        'mini_installer_test', 'nacl_ui_tests', 'net_unittests',
-        'printing_unittests', 'remoting_unittests', 'safe_browsing_tests',
-        'sync_unit_tests', 'sync_integration_tests',
-        'test_shell_tests', 'ui_tests', 'unit_tests'];
+var TEST_TYPES = [
+    'aura_unittests',
+    'aura_shell_unittests',
+    'base_unittests',
+    'browser_tests',
+    'cacheinvalidation_unittests',
+    'compositor_unittests',
+    'content_unittests',
+    'courgette_unittests',
+    'crypto_unittests',
+    'googleurl_unittests',
+    'gfx_unittests',
+    'gpu_tests',
+    'gpu_unittests',
+    'installer_util_unittests',
+    'interactive_ui_tests',
+    'ipc_tests',
+    'jingle_unittests',
+    'layout-tests',
+    'media_unittests',
+    'mini_installer_test',
+    'nacl_ui_tests',
+    'net_unittests',
+    'printing_unittests',
+    'remoting_unittests',
+    'safe_browsing_tests',
+    'sql_unittests',
+    'sync_unit_tests',
+    'sync_integration_tests',
+    'test_shell_tests',
+    'ui_tests',
+    'unit_tests',
+    'views_unittests',
+];
 
 var RELOAD_REQUIRING_PARAMETERS = ['showAllRuns', 'group', 'testType'];
 
@@ -154,7 +178,11 @@ function handleValidHashParameterWrapper(key, value)
 
     case 'group':
         validateParameter(g_currentState, key, value,
-            function() { return value in LAYOUT_TESTS_BUILDER_GROUPS; });
+            function() {
+              return value in LAYOUT_TESTS_BUILDER_GROUPS ||
+                  value in CHROMIUM_GPU_TESTS_BUILDER_GROUPS ||
+                  value in CHROMIUM_GTESTS_BUILDER_GROUPS;
+            });
         return true;
 
     // FIXME: remove support for this parameter once the waterfall starts to
@@ -394,20 +422,25 @@ function isLayoutTestResults()
     return g_currentState.testType == 'layout-tests';
 }
 
-function currentBuilderGroup(opt_state)
+function currentBuilderGroupCategory(opt_state)
 {
     var state = opt_state || g_currentState;
     switch (state.testType) {
     case 'layout-tests':
-        return LAYOUT_TESTS_BUILDER_GROUPS[state.group]
-        break;
-    case 'app_unittests':
+        return LAYOUT_TESTS_BUILDER_GROUPS
+    case 'gpu_tests':
+        return CHROMIUM_GPU_TESTS_BUILDER_GROUPS
+    case 'aura_unittests':
+    case 'aura_shell_unittests':
     case 'base_unittests':
     case 'browser_tests':
     case 'cacheinvalidation_unittests':
+    case 'compositor_unittests':
+    case 'content_unittests':
     case 'courgette_unittests':
     case 'crypto_unittests':
     case 'googleurl_unittests':
+    case 'gfx_unittests':
     case 'gpu_unittests':
     case 'installer_util_unittests':
     case 'interactive_ui_tests':
@@ -420,16 +453,23 @@ function currentBuilderGroup(opt_state)
     case 'printing_unittests':
     case 'remoting_unittests':
     case 'safe_browsing_tests':
+    case 'sql_unittests':
     case 'sync_unit_tests':
     case 'sync_integration_tests':
     case 'test_shell_tests':
     case 'ui_tests':
     case 'unit_tests':
-        return G_TESTS_BUILDER_GROUP;
-        break;
+    case 'views_unittests':
+        return CHROMIUM_GTESTS_BUILDER_GROUPS
     default:
         console.log('invalid testType parameter: ' + state.testType);
     }
+}
+
+function currentBuilderGroup(opt_state)
+{
+    var state = opt_state || g_currentState;
+    return currentBuilderGroupCategory(state)[state.group]
 }
 
 function builderMaster(builderName)
@@ -469,6 +509,7 @@ var g_resultsByBuilder = {};
 var g_expectations;
 function ADD_RESULTS(builds)
 {
+    var json_version = builds['version'];
     for (var builderName in builds) {
         if (builderName == 'version')
             continue;
@@ -481,10 +522,32 @@ function ADD_RESULTS(builds)
         if ((Date.now() / 1000) - lastRunSeconds > TWO_WEEKS_SECONDS)
             continue;
 
+        if (json_version >= 4)
+            builds[builderName][TESTS_KEY] = flattenTrie(builds[builderName][TESTS_KEY]);
         g_resultsByBuilder[builderName] = builds[builderName];
     }
 
     handleResourceLoad();
+}
+
+// TODO(aboxhall): figure out whether this is a performance bottleneck and
+// change calling code to understand the trie structure instead if necessary.
+function flattenTrie(trie, prefix)
+{
+    var result = {};
+    for (var name in trie) {
+        var fullName = prefix ? prefix + "/" + name : name;
+        var data = trie[name];
+        if ("results" in data)
+            result[fullName] = data;
+        else {
+            var partialResult = flattenTrie(data, fullName);
+            for (var key in partialResult) {
+                result[key] = partialResult[key];
+            }
+        }
+    }
+    return result;
 }
 
 function pathToBuilderResultsFile(builderName)
@@ -526,7 +589,7 @@ function appendJSONScriptElementFor(builderName)
     else
         resultsFilename = 'results-small.json';
 
-    appendScript(pathToBuilderResultsFile(builderName) + resultsFilename,
+    appendScript(pathToBuilderResultsFile(builderName) + resultsFilename + '&callback=ADD_RESULTS',
             partial(handleResourceLoadError, builderName),
             partial(handleScriptLoaded, builderName));
 }
@@ -835,8 +898,8 @@ function htmlForTestTypeSwitcher(opt_noBuilderMenu, opt_extraHtml, opt_includeNo
         html += selectHTML('Builder', 'builder', buildersForMenu);
     }
 
-    if (isLayoutTestResults())
-        html += selectHTML('Group', 'group', Object.keys(LAYOUT_TESTS_BUILDER_GROUPS));
+    html += selectHTML('Group', 'group',
+        Object.keys(currentBuilderGroupCategory()));
 
     if (!isTreeMap())
         html += checkboxHTML('showAllRuns', 'Show all runs', g_currentState.showAllRuns);

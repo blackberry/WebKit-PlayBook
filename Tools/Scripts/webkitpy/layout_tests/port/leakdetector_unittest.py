@@ -50,7 +50,7 @@ class LeakDetectorTest(unittest.TestCase):
         detector = self._make_detector()
         detector._callstacks_to_exclude_from_leaks = lambda: ['foo bar', 'BAZ']
         detector._types_to_exlude_from_leaks = lambda: ['abcdefg', 'hi jklmno']
-        expected_args = ['--exclude-callstack="foo bar"', '--exclude-callstack="BAZ"', '--exclude-type="abcdefg"', '--exclude-type="hi jklmno"', 1234]
+        expected_args = ['--exclude-callstack=foo bar', '--exclude-callstack=BAZ', '--exclude-type=abcdefg', '--exclude-type=hi jklmno', 1234]
         self.assertEquals(detector._leaks_args(1234), expected_args)
 
     example_leaks_output = """Process 5122: 663744 nodes malloced for 78683 KB
@@ -78,8 +78,40 @@ Leak: 0x2a9c960  size=288  zone: DefaultMallocZone_0x1d94000
 Leak: 0x25102fe0  size=176  zone: DefaultMallocZone_0x1d94000   string 'NSException Data'
 """
 
+    example_leaks_output_with_exclusions = """
+Process 57064: 865808 nodes malloced for 81032 KB
+Process 57064: 282 leaks for 21920 total leaked bytes.
+Leak: 0x7fc506023960  size=576  zone: DefaultMallocZone_0x107c29000   URLConnectionLoader::LoaderConnectionEventQueue  C++  CFNetwork
+        0x73395460 0x00007fff 0x7488af40 0x00007fff     `T9s....@..t....
+        0x73395488 0x00007fff 0x46eecd74 0x0001ed83     .T9s....t..F....
+        0x0100000a 0x00000000 0x7488bfc0 0x00007fff     ...........t....
+        0x00000000 0x00000000 0x46eecd8b 0x0001ed83     ...........F....
+        0x00000000 0x00000000 0x00000000 0x00000000     ................
+        0x00000000 0x00000000 0x46eecda3 0x0001ed83     ...........F....
+        0x00000000 0x00000000 0x00000000 0x00000000     ................
+        0x00000000 0x00000000 0x46eecdbc 0x0001ed83     ...........F....
+        ...
+Leak: 0x7fc506025980  size=432  zone: DefaultMallocZone_0x107c29000   URLConnectionInstanceData  CFType  CFNetwork
+        0x74862b28 0x00007fff 0x00012b80 0x00000001     (+.t.....+......
+        0x73395310 0x00007fff 0x733953f8 0x00007fff     .S9s.....S9s....
+        0x4d555458 0x00000000 0x00000000 0x00002068     XTUM........h ..
+        0x00000000 0x00000000 0x00000b00 0x00000b00     ................
+        0x00000000 0x00000000 0x060259b8 0x00007fc5     .........Y......
+        0x060259bc 0x00007fc5 0x00000000 0x00000000     .Y..............
+        0x73395418 0x00007fff 0x06025950 0x00007fc5     .T9s....PY......
+        0x73395440 0x00007fff 0x00005013 0x00000001     @T9s.....P......
+        ...
+
+
+Binary Images:
+       0x107ac2000 -        0x107b4aff7 +DumpRenderTree (??? - ???) <5694BE03-A60A-30B2-9D40-27CFFCFB88EE> /Volumes/Data/WebKit-BuildSlave/lion-intel-leaks/build/WebKitBuild/Debug/DumpRenderTree
+       0x107c2f000 -        0x107c58fff +libWebCoreTestSupport.dylib (535.8.0 - compatibility 1.0.0) <E4F7A13E-5807-30F7-A399-62F8395F9106> /Volumes/Data/WebKit-BuildSlave/lion-intel-leaks/build/WebKitBuild/Debug/libWebCoreTestSupport.dylib
+17 leaks excluded (not printed)
+"""
+
     def test_parse_leaks_output(self):
         self.assertEquals(self._make_detector()._parse_leaks_output(self.example_leaks_output), (337301, 0, 6525216))
+        self.assertEquals(self._make_detector()._parse_leaks_output(self.example_leaks_output_with_exclusions), (282, 17, 21920))
 
     def test_leaks_files_in_directory(self):
         detector = self._make_detector()
@@ -98,13 +130,15 @@ Leak: 0x25102fe0  size=176  zone: DefaultMallocZone_0x1d94000   string 'NSExcept
             print "MOCK _run_script: %s %s" % (name, args)
             return """1 calls for 16 bytes: -[NSURLRequest mutableCopyWithZone:] | +[NSObject(NSObject) allocWithZone:] | _internal_class_createInstanceFromZone | calloc | malloc_zone_calloc
 
+147 calls for 9,408 bytes: _CFRuntimeCreateInstance | _ZN3WTF24StringWrapperCFAllocatorL8allocateElmPv StringImplCF.cpp:67 | WTF::fastMalloc(unsigned long) FastMalloc.cpp:268 | malloc | malloc_zone_malloc 
+
 total: 5,888 bytes (0 bytes excluded)."""
         detector._port._run_script = mock_run_script
 
         leak_files = ['/mock-results/DumpRenderTree-1234-leaks.txt', '/mock-results/DumpRenderTree-1235-leaks.txt']
         expected_stdout = "MOCK _run_script: parse-malloc-history ['--merge-depth', 5, '/mock-results/DumpRenderTree-1234-leaks.txt', '/mock-results/DumpRenderTree-1235-leaks.txt']\n"
         results_tuple = OutputCapture().assert_outputs(self, detector.count_total_bytes_and_unique_leaks, [leak_files], expected_stdout=expected_stdout)
-        self.assertEquals(results_tuple, ("5,888 bytes", 1))
+        self.assertEquals(results_tuple, ("5,888 bytes", 2))
 
     def test_count_total_leaks(self):
         detector = self._make_detector()

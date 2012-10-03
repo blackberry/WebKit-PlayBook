@@ -71,22 +71,20 @@ typedef PlatformWidget PlatformPluginWidget;
 #include "TextureMapperPlatformLayer.h"
 #endif
 
-#include <QGraphicsItem>
 #include <QImage>
 QT_BEGIN_NAMESPACE
 class QPainter;
 QT_END_NAMESPACE
 #endif
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-struct PluginWindowInfo
-{
+#if PLATFORM(BLACKBERRY)
+struct PluginWindowInfo {
     void* windowPtr;
     WebCore::IntRect windowRect;
 };
 #endif
 
-#if (PLATFORM(QT) && USE(ACCELERATED_COMPOSITING) && ENABLE(NETSCAPE_PLUGIN_API) && (defined(XP_UNIX) || OS(SYMBIAN))) || PLATFORM(BLACKBERRY)
+#if (PLATFORM(QT) && USE(ACCELERATED_COMPOSITING) && ENABLE(NETSCAPE_PLUGIN_API) && (defined(XP_UNIX) )) || PLATFORM(BLACKBERRY)
 #ifndef WTF_USE_ACCELERATED_COMPOSITING_PLUGIN_LAYER
 #define WTF_USE_ACCELERATED_COMPOSITING_PLUGIN_LAYER 1
 #endif
@@ -118,7 +116,7 @@ namespace WebCore {
     class PluginStream;
     class ResourceError;
     class ResourceResponse;
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     class WheelEvent;
     class TouchEvent;
     class PluginViewPrivate;
@@ -284,7 +282,12 @@ namespace WebCore {
 #endif
 #endif
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(QT) && ENABLE(NETSCAPE_PLUGIN_API) && defined(XP_UNIX)
+        // PluginViewQt (X11) needs a few workarounds when running under DRT
+        static void setIsRunningUnderDRT(bool flag) { s_isRunningUnderDRT = flag; }
+#endif
+
+#if PLATFORM(BLACKBERRY)
     friend class PluginViewPrivate;
 
     // Methods to send events to the plugin
@@ -293,8 +296,6 @@ namespace WebCore {
     void handleScrollEvent();
     void handleOnLoadEvent();
     void handleFreeMemoryEvent();
-    void handleFocusInEvent();
-    void handleFocusOutEvent();
     void handleBackgroundEvent();
     void handleForegroundEvent();
     void handleFullScreenAllowedEvent();
@@ -369,7 +370,6 @@ namespace WebCore {
         Element* m_element;
         bool m_isStarted;
         KURL m_url;
-        KURL m_baseURL;
         PluginStatus m_status;
         Vector<IntRect> m_invalidRects;
 
@@ -396,7 +396,7 @@ namespace WebCore {
 
         void handleKeyboardEvent(KeyboardEvent*);
         void handleMouseEvent(MouseEvent*);
-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(X11)
+#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
         void handleFocusInEvent();
         void handleFocusOutEvent();
 #endif
@@ -444,7 +444,7 @@ namespace WebCore {
         bool m_haveUpdatedPluginWidget;
 #endif
 
-#if ((PLATFORM(QT) || PLATFORM(WX)) && OS(WINDOWS)) || defined(XP_MACOSX)
+#if ((PLATFORM(QT) || PLATFORM(WX)) && OS(WINDOWS)) || defined(XP_MACOSX) || PLATFORM(EFL)
         // On Mac OSX and Qt/Windows the plugin does not have its own native widget,
         // but is using the containing window as its reference for positioning/painting.
         PlatformPluginWidget m_window;
@@ -479,7 +479,7 @@ private:
         Point mousePosForPlugin(MouseEvent* event = 0) const;
 #endif
 
-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(X11)
+#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && !PLATFORM(BLACKBERRY)
         bool m_hasPendingGeometryChange;
         Pixmap m_drawable;
         Visual* m_visual;
@@ -489,8 +489,10 @@ private:
         void initXEvent(XEvent* event);
 #endif
 
-#if PLATFORM(QT) 
+#if PLATFORM(QT)
 #if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
+        static bool s_isRunningUnderDRT;
+        static void setXKeyEventSpecificFields(XEvent*, KeyboardEvent*);
         void paintUsingXPixmap(QPainter* painter, const QRect &exposedRect);
 #endif
 #if USE(ACCELERATED_COMPOSITING_PLUGIN_LAYER)
@@ -519,7 +521,7 @@ private:
 
         static PluginView* s_currentPluginView;
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
         PluginViewPrivate* m_private;
 #endif
     };

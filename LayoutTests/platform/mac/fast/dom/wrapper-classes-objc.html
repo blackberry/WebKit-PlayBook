@@ -148,7 +148,7 @@ function runTest()
     debug('Other');
     debug('');
 
-    test("window", "DOMWindow", "DOMAbstractView");
+    test("window", "Window", "DOMAbstractView");
 
     debug('');
     debug('HTML DOM');
@@ -213,7 +213,6 @@ function runTest()
     testTag("img", "HTMLImageElement");
     testTag("input", "HTMLInputElement");
     testTag("ins", "HTMLModElement");
-    testTag("isindex", "HTMLIsIndexElement");
     testTag("kbd", "HTMLElement");
     testTag("keygen", "HTMLElement");
     testTag("label", "HTMLLabelElement");

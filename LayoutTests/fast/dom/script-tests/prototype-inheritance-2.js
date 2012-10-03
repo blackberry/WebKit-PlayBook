@@ -4,22 +4,34 @@ var subframe = document.createElement("iframe");
 document.body.appendChild(subframe);
 var inner = subframe.contentWindow; // Call it "inner" to make shouldBe output shorter
 
+// FIXME: It would be better to share this list with other tests that skip properties on the window object.
 var skippedProperties = [
     // These reach outside the frame:
     "parent", "top", "opener", "frameElement",
+
     // These are defined by DumpRenderTree
-    "GCController", "layoutTestController",
-    "objCController", "textInputController", "navigationController",
-    "eventSender", "objCPlugin", "objCPluginFunction",
-    "appleScriptController", "plainText", "accessibilityController",
+    "GCController",
+    "accessibilityController",
+    "appleScriptController",
+    "eventSender",
     "internals",
+    "layoutTestController",
+    "navigationController",
+    "objCController",
+    "objCPlugin",
+    "objCPluginFunction",
+    "plainText",
+    "textInputController",
+
     // Skip our test property
     "isInner",
+
     // Ignore fooConstructor.prototype, fooInstance.__proto__ is more likely to fail.
     "prototype",
-    // Skip Geolocation until it is supported on most platforms.
+
+    // Skip these until they are supported on most platforms.
     "geolocation",
-    // Skip webkitURL until it is supported on most platforms.
+    "webkitNotifications",
     "webkitURL",
 ];
 
@@ -79,6 +91,7 @@ function constructorNamesForWindow(globalObject)
             type =="Int16ArrayConstructor" ||
             type =="Int32ArrayConstructor" ||
             type =="Uint8ArrayConstructor" ||
+            type =="Uint8ClampedArrayConstructor" ||
             type =="Uint16ArrayConstructor" ||
             type =="Uint32ArrayConstructor" ||
             type == "FileErrorConstructor" ||
@@ -141,7 +154,7 @@ function pushPropertyValuesWithUnseenTypes(toCrawl, parentObject, parentPath)
             continue;
          // We already have other tests which cover window.Foo constructor objects, so skip them.
          // fooInstance.constructor is the case we want to catch here.
-        if (parentType == "DOMWindow" && type.match("Constructor$") && property != "constructor")
+        if (parentType == "Window" && type.match("Constructor$") && property != "constructor")
             continue;
         if (!resultsByType[type])
             toCrawl.push(makeCrawlObject(value, valuePath));

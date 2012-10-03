@@ -34,6 +34,7 @@
 
 #include "Document.h"
 #include "IntRect.h"
+#include "KURL.h"
 #include <wtf/Forward.h>
 #include <wtf/HashSet.h>
 #include <wtf/OwnPtr.h>
@@ -45,13 +46,9 @@
 #include "GraphicsLayer.h"
 #endif
 
-#ifdef __OBJC__
-@class AVPlayer;
-@class QTMovie;
-#else
-class AVPlayer;
-class QTMovie;
-#endif
+OBJC_CLASS AVPlayer;
+OBJC_CLASS QTMovie;
+
 class AVCFPlayer;
 class QTMovieGWorld;
 class QTMovieVisualContext;
@@ -140,6 +137,9 @@ public:
     // element to an <embed> in standalone documents
     virtual void mediaPlayerSawUnsupportedTracks(MediaPlayer*) { }
 
+    // The MediaPlayer could not discover an engine which supports the requested resource.
+    virtual void mediaPlayerResourceNotSupported(MediaPlayer*) { }
+
 // Presentation-related methods
     // a new frame of video is available
     virtual void mediaPlayerRepaint(MediaPlayer*) { }
@@ -156,9 +156,6 @@ public:
     // A characteristic of the media file, eg. video, audio, closed captions, etc, has changed.
     virtual void mediaPlayerCharacteristicChanged(MediaPlayer*) { }
 
-    // none supported media type
-    virtual void mediaPlayerNoneSupportedType(MediaPlayer*) {}
-    
 #if USE(ACCELERATED_COMPOSITING)
     // whether the rendering system can accelerate the display of this MediaPlayer.
     virtual bool mediaPlayerRenderingCanBeAccelerated(MediaPlayer*) { return false; }
@@ -172,6 +169,8 @@ public:
     virtual void mediaPlayerSourceOpened() { }
     virtual String mediaPlayerSourceURL() const { return "x-media-source-unsupported:"; }
 #endif
+
+    virtual String mediaPlayerReferrer() const { return String(); }
 };
 
 class MediaPlayer {
@@ -212,7 +211,7 @@ public:
     IntSize size() const { return m_size; }
     void setSize(const IntSize& size);
 
-    bool load(const String& url, const ContentType&);
+    bool load(const KURL& url, const ContentType&);
     void cancelLoad();
 
     bool visible() const;
@@ -291,7 +290,6 @@ public:
     void firstVideoFrameAvailable();
     void characteristicChanged();
 
-
     void repaint();
 
     MediaPlayerClient* mediaPlayerClient() const { return m_mediaPlayerClient; }
@@ -340,6 +338,8 @@ public:
     void sourceOpened();
     String sourceURL() const;
 #endif
+
+    String referrer() const;
 
 private:
     MediaPlayer(MediaPlayerClient*);

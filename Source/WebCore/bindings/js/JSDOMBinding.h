@@ -22,7 +22,8 @@
 #ifndef JSDOMBinding_h
 #define JSDOMBinding_h
 
-#include "CSSRule.h"
+#include "CSSImportRule.h"
+#include "CSSStyleDeclaration.h"
 #include "CSSStyleSheet.h"
 #include "JSDOMGlobalObject.h"
 #include "JSDOMWrapper.h"
@@ -30,21 +31,24 @@
 #include "Document.h"
 #include "Element.h"
 #include "MediaList.h"
+#include "StylePropertySet.h"
+#include "StyledElement.h"
 #include <heap/Weak.h>
 #include <runtime/FunctionPrototype.h>
 #include <runtime/Lookup.h>
 #include <runtime/ObjectPrototype.h>
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
+#include <wtf/Vector.h>
 
 namespace WebCore {
 
-enum ParameterMissingPolicy {
-    MissingIsUndefined,
-    MissingIsEmpty
+enum ParameterDefaultPolicy {
+    DefaultIsUndefined,
+    DefaultIsNullString
 };
 
-#define MAYBE_MISSING_PARAMETER(exec, index, policy) (((policy) == MissingIsEmpty && (index) >= (exec)->argumentCount()) ? (JSValue()) : ((exec)->argument(index)))
+#define MAYBE_MISSING_PARAMETER(exec, index, policy) (((policy) == DefaultIsNullString && (index) >= (exec)->argumentCount()) ? (JSValue()) : ((exec)->argument(index)))
 
     class Frame;
     class KURL;
@@ -125,23 +129,20 @@ enum ParameterMissingPolicy {
     inline bool setInlineCachedWrapper(DOMWrapperWorld*, void*, JSDOMWrapper*) { return false; }
     inline bool clearInlineCachedWrapper(DOMWrapperWorld*, void*, JSDOMWrapper*) { return false; }
 
-    // Overload these functions to provide a custom WeakHandleOwner.
-    inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld* world, void*) { return world->defaultWrapperOwner(); }
-    inline void* wrapperContext(DOMWrapperWorld*, void* domObject) { return domObject; }
-
     template <typename DOMClass> inline JSDOMWrapper* getCachedWrapper(DOMWrapperWorld* world, DOMClass* domObject)
     {
         if (JSDOMWrapper* wrapper = getInlineCachedWrapper(world, domObject))
             return wrapper;
-        return world->m_wrappers.get(domObject).get();
+        return world->m_wrappers.get(domObject);
     }
 
     template <typename DOMClass> inline void cacheWrapper(DOMWrapperWorld* world, DOMClass* domObject, JSDOMWrapper* wrapper)
     {
         if (setInlineCachedWrapper(world, domObject, wrapper))
             return;
-        ASSERT(!world->m_wrappers.contains(domObject));
-        world->m_wrappers.set(domObject, JSC::Weak<JSDOMWrapper>(*world->globalData(), wrapper, wrapperOwner(world, domObject), wrapperContext(world, domObject)));
+        JSC::PassWeak<JSDOMWrapper> passWeak(*world->globalData(), wrapper, wrapperOwner(world, domObject), wrapperContext(world, domObject));
+        pair<DOMObjectWrapperMap::iterator, bool> result = world->m_wrappers.add(domObject, passWeak);
+        ASSERT_UNUSED(result, result.second);
     }
 
     template <typename DOMClass> inline void uncacheWrapper(DOMWrapperWorld* world, DOMClass* domObject, JSDOMWrapper* wrapper)
@@ -196,8 +197,8 @@ enum ParameterMissingPolicy {
 
     inline void* root(StyleSheet* styleSheet)
     {
-        if (styleSheet->parentRule())
-            return root(styleSheet->parentRule());
+        if (styleSheet->ownerRule())
+            return root(styleSheet->ownerRule());
         if (styleSheet->ownerNode())
             return root(styleSheet->ownerNode());
         return styleSheet;
@@ -209,17 +210,6 @@ enum ParameterMissingPolicy {
             return root(parentRule);
         if (CSSStyleSheet* styleSheet = style->parentStyleSheet())
             return root(styleSheet);
-        return style;
-    }
-
-    inline void* root(CSSMutableStyleDeclaration* style)
-    {
-        if (CSSRule* parentRule = style->parentRule())
-            return root(parentRule);
-        if (CSSStyleSheet* styleSheet = style->parentStyleSheet())
-            return root(styleSheet);
-        if (Node* node = style->node())
-            return root(node);
         return style;
     }
 
@@ -291,21 +281,20 @@ enum ParameterMissingPolicy {
     // Validates that the passed object is a sequence type per section 4.1.13 of the WebIDL spec.
     JSC::JSObject* toJSSequence(JSC::ExecState*, JSC::JSValue, unsigned&);
 
-    bool checkNodeSecurity(JSC::ExecState*, Node*);
+    // FIXME: Implement allowAccessToContext(JSC::ExecState*, ScriptExecutionContext*);
+    bool shouldAllowAccessToNode(JSC::ExecState*, Node*);
+    bool shouldAllowAccessToFrame(JSC::ExecState*, Frame*);
+    bool shouldAllowAccessToFrame(JSC::ExecState*, Frame*, String& message);
+    // FIXME: Implement allowAccessToDOMWindow(JSC::ExecState*, DOMWindow*);
 
-    // Helpers for Window, History, and Location classes to implement cross-domain policy.
-    // Besides the cross-domain check, they need non-caching versions of staticFunctionGetter for
-    // because we do not want current property values involved at all.
-    // FIXME: These functions should be named frameAllowsAccessFrom, because the access is *to* the frame.
-    bool allowsAccessFromFrame(JSC::ExecState*, Frame*);
-    bool allowsAccessFromFrame(JSC::ExecState*, Frame*, String& message);
+    // FIXME: Remove these functions in favor of activeContext and
+    // firstContext, which return ScriptExecutionContext*. We prefer to use
+    // ScriptExecutionContext* as the context object in the bindings.
     DOMWindow* activeDOMWindow(JSC::ExecState*);
     DOMWindow* firstDOMWindow(JSC::ExecState*);
 
     void printErrorMessageForFrame(Frame*, const String& message);
     JSC::JSValue objectToStringFunctionGetter(JSC::ExecState*, JSC::JSValue, const JSC::Identifier& propertyName);
-
-    Frame* toDynamicFrame(JSC::ExecState*);
 
     inline JSC::JSValue jsString(JSC::ExecState* exec, const String& s)
     {
@@ -354,6 +343,23 @@ enum ParameterMissingPolicy {
         return AtomicString(identifier.impl());
     }
 
+    inline Vector<unsigned long> jsUnsignedLongArrayToVector(JSC::ExecState* exec, JSC::JSValue value)
+    {
+        unsigned length;
+        JSC::JSObject* object = toJSSequence(exec, value, length);
+        if (exec->hadException())
+            return Vector<unsigned long>();
+
+        Vector<unsigned long> result;
+        for (unsigned i = 0; i < length; i++) {
+            JSC::JSValue indexedValue;
+            indexedValue = object->get(exec, i);
+            if (exec->hadException() || indexedValue.isUndefinedOrNull() || !indexedValue.isNumber())
+                return Vector<unsigned long>();
+            result.append(indexedValue.toUInt32(exec));
+        }
+        return result;
+    }
 } // namespace WebCore
 
 #endif // JSDOMBinding_h

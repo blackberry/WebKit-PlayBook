@@ -273,6 +273,7 @@ public:
     static const GPRReg argumentGPR1 = X86Registers::edx; // regT1
     static const GPRReg returnValueGPR = X86Registers::eax; // regT0
     static const GPRReg returnValueGPR2 = X86Registers::edx; // regT1
+    static const GPRReg nonPreservedNonReturnGPR = X86Registers::ecx;
 
     static GPRReg toRegister(unsigned index)
     {
@@ -291,7 +292,6 @@ public:
         return result;
     }
 
-#ifndef NDEBUG
     static const char* debugName(GPRReg reg)
     {
         ASSERT(reg != InvalidGPRReg);
@@ -302,7 +302,6 @@ public:
         };
         return nameForRegister[reg];
     }
-#endif
 private:
 
     static const unsigned InvalidIndex = 0xffffffff;
@@ -343,6 +342,7 @@ public:
     static const GPRReg argumentGPR5 = X86Registers::r9;  // regT7
     static const GPRReg returnValueGPR = X86Registers::eax; // regT0
     static const GPRReg returnValueGPR2 = X86Registers::edx; // regT1
+    static const GPRReg nonPreservedNonReturnGPR = X86Registers::esi;
 
     static GPRReg toRegister(unsigned index)
     {
@@ -361,7 +361,6 @@ public:
         return result;
     }
 
-#ifndef NDEBUG
     static const char* debugName(GPRReg reg)
     {
         ASSERT(reg != InvalidGPRReg);
@@ -374,7 +373,6 @@ public:
         };
         return nameForRegister[reg];
     }
-#endif
 private:
 
     static const unsigned InvalidIndex = 0xffffffff;
@@ -415,6 +413,7 @@ public:
     static const GPRReg argumentGPR3 = ARMRegisters::r3; // FIXME!
     static const GPRReg returnValueGPR = ARMRegisters::r0; // regT0
     static const GPRReg returnValueGPR2 = ARMRegisters::r1; // regT1
+    static const GPRReg nonPreservedNonReturnGPR = ARMRegisters::r2;
 
     static GPRReg toRegister(unsigned index)
     {
@@ -433,7 +432,6 @@ public:
         return result;
     }
 
-#ifndef NDEBUG
     static const char* debugName(GPRReg reg)
     {
         ASSERT(reg != InvalidGPRReg);
@@ -446,7 +444,6 @@ public:
         };
         return nameForRegister[reg];
     }
-#endif
 private:
 
     static const unsigned InvalidIndex = 0xffffffff;

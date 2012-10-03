@@ -21,35 +21,41 @@
 #ifndef qquickwebpage_p_h
 #define qquickwebpage_p_h
 
-#include "QtSGUpdateQueue.h"
-#include "QtViewInterface.h"
-#include "QtWebPageProxy.h"
-#include "qquickwebpage.h"
+#include "qwebkitglobal.h"
 
-QT_BEGIN_NAMESPACE
-class QRectF;
-class QSGNode;
-class QString;
-QT_END_NAMESPACE
+#include <QtCore/QSharedPointer>
+#include <QtQuick/QQuickItem>
 
-class QQuickWebPage;
+class QQuickWebPagePrivate;
+class QQuickWebView;
+class QtWebPageEventHandler;
+class QWebPreferences;
 
-class QQuickWebPagePrivate {
+class QWEBKIT_EXPORT QQuickWebPage : public QQuickItem {
+    Q_OBJECT
 public:
-    QQuickWebPagePrivate(QQuickWebPage* view);
+    QQuickWebPage(QQuickWebView* view = 0);
+    virtual ~QQuickWebPage();
 
-    void setPageProxy(QtWebPageProxy*);
+    void setContentsSize(const QSizeF& size);
+    const QSizeF& contentsSize() const;
+    void setContentsScale(qreal);
+    qreal contentsScale() const;
 
-    void initializeSceneGraphConnections();
+    QTransform transformFromItem() const;
+    QTransform transformToItem() const;
 
-    void _q_onAfterSceneRender();
-    void _q_onSceneGraphInitialized();
-    void paintToCurrentGLContext();
+    QtWebPageEventHandler* eventHandler() const;
 
-    QQuickWebPage* const q;
-    QtWebPageProxy* pageProxy;
-    WebKit::QtSGUpdateQueue sgUpdateQueue;
-    bool paintingIsInitialized;
+protected:
+    virtual QSGNode* updatePaintNode(QSGNode*, UpdatePaintNodeData*);
+
+private:
+    QQuickWebPagePrivate* d;
+    friend class QQuickWebView;
+    friend class QQuickWebViewPrivate;
 };
 
-#endif /* qquickwebpage_p_h */
+QML_DECLARE_TYPE(QQuickWebPage)
+
+#endif // qquickwebpage_p_h

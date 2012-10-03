@@ -23,6 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "LayoutTestController.h"
 
 #include "InjectedBundle.h"
@@ -56,6 +57,17 @@ void LayoutTestController::initializeWaitToDumpWatchdogTimerIfNeeded()
         return;
 
     m_waitToDumpWatchdogTimer = ::SetTimer(0, waitToDumpWatchdogTimerIdentifier, waitToDumpWatchdogTimerInterval * 1000, WTR::waitToDumpWatchdogTimerFired);
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pathToLocalResource(JSStringRef url)
+{
+    return JSStringRetain(url); // TODO.
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::platformName()
+{
+    JSRetainPtr<JSStringRef> platformName(Adopt, JSStringCreateWithUTF8CString("win"));
+    return platformName;
 }
 
 } // namespace WTR

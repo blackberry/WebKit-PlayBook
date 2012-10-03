@@ -7,6 +7,8 @@
 TEMPLATE = lib
 TARGET = TestNetscapePlugIn
 
+CONFIG += plugin
+
 SOURCES += \
     PluginObject.cpp \
     PluginTest.cpp \
@@ -28,27 +30,25 @@ SOURCES += \
     Tests/PluginScriptableNPObjectInvokeDefault.cpp \
     Tests/PrivateBrowsing.cpp
 
-load(webcore)
+WEBKIT += webcore # For NPAPI headers
 
 VPATH = ../../unix/TestNetscapePlugin ../../TestNetscapePlugIn
 
 
 INCLUDEPATH += \
-    ../../unix/TestNetscapePlugin/ForwardingHeaders \
-    ../../unix/TestNetscapePlugin/ForwardingHeaders/WebKit \
+    ../../TestNetscapePlugIn/unix/ForwardingHeaders \
+    ../../TestNetscapePlugIn/unix/ForwardingHeaders/WebKit \
     ../../TestNetscapePlugIn
 
 DESTDIR = $${ROOT_BUILD_DIR}/lib/plugins
 
 mac {
-    CONFIG += plugin
     CONFIG += plugin_bundle
     QMAKE_INFO_PLIST = ../../TestNetscapePlugIn/mac/Info.plist
     QMAKE_PLUGIN_BUNDLE_NAME = $$TARGET
     QMAKE_BUNDLE_LOCATION += "Contents/MacOS"
 
     !build_pass:CONFIG += build_all
-    debug_and_release:TARGET = $$qtLibraryTarget($$TARGET)
 
     OBJECTIVE_SOURCES += PluginObjectMac.mm
     LIBS += -framework Carbon -framework Cocoa -framework QuartzCore

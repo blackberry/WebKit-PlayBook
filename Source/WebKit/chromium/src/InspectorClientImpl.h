@@ -49,6 +49,8 @@ public:
     // InspectorClient methods:
     virtual void inspectorDestroyed();
     virtual void openInspectorFrontend(WebCore::InspectorController*);
+    virtual void closeInspectorFrontend();
+    virtual void bringFrontendToFront();
 
     virtual void highlight();
     virtual void hideHighlight();
@@ -57,7 +59,9 @@ public:
 
     virtual void updateInspectorStateCookie(const WTF::String&);
 
+    virtual bool canClearBrowserCache();
     virtual void clearBrowserCache();
+    virtual bool canClearBrowserCookies();
     virtual void clearBrowserCookies();
 private:
     WebDevToolsAgentImpl* devToolsAgent();

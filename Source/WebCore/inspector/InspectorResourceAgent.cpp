@@ -103,10 +103,10 @@ static PassRefPtr<InspectorObject> buildObjectForHeaders(const HTTPHeaderMap& he
     return headersObject;
 }
 
-static PassRefPtr<InspectorObject> buildObjectForTiming(const ResourceLoadTiming& timing)
+static PassRefPtr<InspectorObject> buildObjectForTiming(const ResourceLoadTiming& timing, DocumentLoader* loader)
 {
     RefPtr<InspectorObject> timingObject = InspectorObject::create();
-    timingObject->setNumber("requestTime", timing.requestTime);
+    timingObject->setNumber("requestTime", timing.convertResourceLoadTimeToDocumentTime(loader->timing(), 0));
     timingObject->setNumber("proxyStart", timing.proxyStart);
     timingObject->setNumber("proxyEnd", timing.proxyEnd);
     timingObject->setNumber("dnsStart", timing.dnsStart);
@@ -132,7 +132,7 @@ static PassRefPtr<InspectorObject> buildObjectForResourceRequest(const ResourceR
     return requestObject;
 }
 
-static PassRefPtr<InspectorObject> buildObjectForResourceResponse(const ResourceResponse& response)
+static PassRefPtr<InspectorObject> buildObjectForResourceResponse(const ResourceResponse& response, DocumentLoader* loader)
 {
     if (response.isNull())
         return 0;
@@ -152,7 +152,7 @@ static PassRefPtr<InspectorObject> buildObjectForResourceResponse(const Resource
     responseObject->setNumber("connectionId", response.connectionID());
     responseObject->setBoolean("fromDiskCache", response.wasCached());
     if (response.resourceLoadTiming())
-        responseObject->setObject("timing", buildObjectForTiming(*response.resourceLoadTiming()));
+        responseObject->setObject("timing", buildObjectForTiming(*response.resourceLoadTiming(), loader));
 
     if (response.resourceLoadInfo()) {
         responseObject->setObject("headers", buildObjectForHeaders(response.resourceLoadInfo()->responseHeaders));
@@ -168,13 +168,13 @@ static PassRefPtr<InspectorObject> buildObjectForResourceResponse(const Resource
     return responseObject;
 }
 
-static PassRefPtr<InspectorObject> buildObjectForCachedResource(const CachedResource& cachedResource)
+static PassRefPtr<InspectorObject> buildObjectForCachedResource(const CachedResource& cachedResource, DocumentLoader* loader)
 {
     RefPtr<InspectorObject> resourceObject = InspectorObject::create();
     resourceObject->setString("url", cachedResource.url());
     resourceObject->setString("type", InspectorPageAgent::cachedResourceTypeString(cachedResource));
     resourceObject->setNumber("bodySize", cachedResource.encodedSize());
-    RefPtr<InspectorObject> resourceResponse = buildObjectForResourceResponse(cachedResource.response());
+    RefPtr<InspectorObject> resourceResponse = buildObjectForResourceResponse(cachedResource.response(), loader);
     if (resourceResponse)
         resourceObject->setObject("response", resourceResponse);
     return resourceObject;
@@ -221,7 +221,7 @@ void InspectorResourceAgent::willSendRequest(unsigned long identifier, DocumentL
     else
         callStackValue = InspectorArray::create();
     RefPtr<InspectorObject> initiatorObject = buildInitiatorObject(loader->frame() ? loader->frame()->document() : 0);
-    m_frontend->requestWillBeSent(requestId, m_pageAgent->frameId(loader->frame()), m_pageAgent->loaderId(loader), loader->url().string(), buildObjectForResourceRequest(request), currentTime(), initiatorObject, callStackValue, buildObjectForResourceResponse(redirectResponse));
+    m_frontend->requestWillBeSent(requestId, m_pageAgent->frameId(loader->frame()), m_pageAgent->loaderId(loader), loader->url().string(), buildObjectForResourceRequest(request), currentTime(), initiatorObject, callStackValue, buildObjectForResourceResponse(redirectResponse, loader));
 }
 
 void InspectorResourceAgent::markResourceAsCached(unsigned long identifier)
@@ -232,7 +232,7 @@ void InspectorResourceAgent::markResourceAsCached(unsigned long identifier)
 void InspectorResourceAgent::didReceiveResponse(unsigned long identifier, DocumentLoader* loader, const ResourceResponse& response)
 {
     String requestId = IdentifiersFactory::requestId(identifier);
-    RefPtr<InspectorObject> resourceResponse = buildObjectForResourceResponse(response);
+    RefPtr<InspectorObject> resourceResponse = buildObjectForResourceResponse(response, loader);
     InspectorPageAgent::ResourceType type = InspectorPageAgent::OtherResource;
     long cachedResourceSize = 0;
 
@@ -242,7 +242,7 @@ void InspectorResourceAgent::didReceiveResponse(unsigned long identifier, Docume
             type = InspectorPageAgent::cachedResourceType(*cachedResource);
             cachedResourceSize = cachedResource->encodedSize();
             // Use mime type from cached resource in case the one in response is empty.
-            if (response.mimeType().isEmpty())
+            if (resourceResponse && response.mimeType().isEmpty())
                 resourceResponse->setString("mimeType", cachedResource->response().mimeType());
 
             m_resourcesData->addCachedResource(requestId, cachedResource);
@@ -253,13 +253,13 @@ void InspectorResourceAgent::didReceiveResponse(unsigned long identifier, Docume
             type = InspectorPageAgent::ScriptResource;
         else if (equalIgnoringFragmentIdentifier(response.url(), loader->frameLoader()->icon()->url()))
             type = InspectorPageAgent::ImageResource;
-        else if (equalIgnoringFragmentIdentifier(response.url(), loader->url()) && type == InspectorPageAgent::OtherResource)
+        else if (equalIgnoringFragmentIdentifier(response.url(), loader->url()) && !loader->isCommitted())
             type = InspectorPageAgent::DocumentResource;
 
         m_resourcesData->responseReceived(requestId, m_pageAgent->frameId(loader->frame()), response);
     }
     m_resourcesData->setResourceType(requestId, type);
-    m_frontend->responseReceived(requestId, currentTime(), InspectorPageAgent::resourceTypeString(type), resourceResponse);
+    m_frontend->responseReceived(requestId, m_pageAgent->frameId(loader->frame()), m_pageAgent->loaderId(loader), currentTime(), InspectorPageAgent::resourceTypeString(type), resourceResponse);
     // If we revalidated the resource and got Not modified, send content length following didReceiveResponse
     // as there will be no calls to didReceiveData from the network stack.
     if (cachedResourceSize && response.httpStatusCode() == 304)
@@ -313,7 +313,7 @@ void InspectorResourceAgent::didLoadResourceFromMemoryCache(DocumentLoader* load
     m_resourcesData->addCachedResource(requestId, resource);
     RefPtr<InspectorObject> initiatorObject = buildInitiatorObject(loader->frame() ? loader->frame()->document() : 0);
 
-    m_frontend->requestServedFromMemoryCache(requestId, frameId, loaderId, loader->url().string(), currentTime(), initiatorObject, buildObjectForCachedResource(*resource));
+    m_frontend->requestServedFromMemoryCache(requestId, frameId, loaderId, loader->url().string(), currentTime(), initiatorObject, buildObjectForCachedResource(*resource, loader));
 }
 
 void InspectorResourceAgent::setInitialScriptContent(unsigned long identifier, const String& sourceString)
@@ -328,7 +328,10 @@ void InspectorResourceAgent::didReceiveScriptResponse(unsigned long identifier)
 
 void InspectorResourceAgent::setInitialXHRContent(unsigned long identifier, const String& sourceString)
 {
-    m_resourcesData->setResourceContent(IdentifiersFactory::requestId(identifier), sourceString);
+    // For Asynchronous XHRs, the inspector can grab the data directly off of the CachedResource. For sync XHRs, we need to
+    // provide the data here, since no CachedResource was involved.
+    if (m_loadingXHRSynchronously)
+        m_resourcesData->setResourceContent(IdentifiersFactory::requestId(identifier), sourceString);
 }
 
 void InspectorResourceAgent::didReceiveXHRResponse(unsigned long identifier)
@@ -473,7 +476,7 @@ void InspectorResourceAgent::setUserAgentOverride(ErrorString*, const String& us
     m_state->setString(ResourceAgentState::userAgentOverride, userAgent);
 }
 
-void InspectorResourceAgent::setExtraHTTPHeaders(ErrorString*, PassRefPtr<InspectorObject> headers)
+void InspectorResourceAgent::setExtraHTTPHeaders(ErrorString*, const RefPtr<InspectorObject>& headers)
 {
     m_state->setObject(ResourceAgentState::extraRequestHeaders, headers);
 }
@@ -506,9 +509,19 @@ void InspectorResourceAgent::getResponseBody(ErrorString* errorString, const Str
     *errorString = "No data found for resource with given identifier";
 }
 
+void InspectorResourceAgent::canClearBrowserCache(ErrorString*, bool* result)
+{
+    *result = m_client->canClearBrowserCache();
+}
+
 void InspectorResourceAgent::clearBrowserCache(ErrorString*)
 {
     m_client->clearBrowserCache();
+}
+
+void InspectorResourceAgent::canClearBrowserCookies(ErrorString*, bool* result)
+{
+    *result = m_client->canClearBrowserCookies();
 }
 
 void InspectorResourceAgent::clearBrowserCookies(ErrorString*)
@@ -519,6 +532,8 @@ void InspectorResourceAgent::clearBrowserCookies(ErrorString*)
 void InspectorResourceAgent::setCacheDisabled(ErrorString*, bool cacheDisabled)
 {
     m_state->setBoolean(ResourceAgentState::cacheDisabled, cacheDisabled);
+    if (cacheDisabled)
+        memoryCache()->evictResources();
 }
 
 void InspectorResourceAgent::mainFrameNavigated(DocumentLoader* loader)
@@ -530,10 +545,9 @@ void InspectorResourceAgent::mainFrameNavigated(DocumentLoader* loader)
 }
 
 InspectorResourceAgent::InspectorResourceAgent(InstrumentingAgents* instrumentingAgents, InspectorPageAgent* pageAgent, InspectorClient* client, InspectorState* state)
-    : m_instrumentingAgents(instrumentingAgents)
+    : InspectorBaseAgent<InspectorResourceAgent>("Network", instrumentingAgents, state)
     , m_pageAgent(pageAgent)
     , m_client(client)
-    , m_state(state)
     , m_frontend(0)
     , m_resourcesData(adoptPtr(new NetworkResourcesData()))
     , m_loadingXHRSynchronously(false)

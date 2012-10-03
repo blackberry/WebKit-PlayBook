@@ -28,12 +28,17 @@
 
 #if ENABLE(CSS_FILTERS)
 
+#include "Color.h"
 #include "Length.h"
-#include "ShadowData.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/PassOwnPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/text/AtomicString.h>
+
+// Annoyingly, wingdi.h #defines this.
+#ifdef PASSTHROUGH
+#undef PASSTHROUGH
+#endif
 
 namespace WebCore {
 
@@ -49,13 +54,14 @@ public:
         HUE_ROTATE,
         INVERT,
         OPACITY,
-        GAMMA,
+        BRIGHTNESS,
+        CONTRAST,
         BLUR,
-        SHARPEN,
         DROP_SHADOW,
 #if ENABLE(CSS_SHADERS)
         CUSTOM,
 #endif
+        PASSTHROUGH,
         NONE
     };
 
@@ -64,8 +70,17 @@ public:
     virtual bool operator==(const FilterOperation&) const = 0;
     bool operator!=(const FilterOperation& o) const { return !(*this == o); }
 
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* /*from*/, double /*progress*/, bool /*blendToPassthrough*/ = false) { return 0; }
+
     virtual OperationType getOperationType() const { return m_type; }
     virtual bool isSameType(const FilterOperation& o) const { return o.getOperationType() == m_type; }
+    
+    virtual bool isDefault() const { return false; }
+
+    // True if the alpha channel of any pixel can change under this operation.
+    virtual bool affectsOpacity() const { return false; }
+    // True if the the value of one pixel can affect the value of another pixel under this operation, such as blur.
+    virtual bool movesPixels() const { return false; }
 
 protected:
     FilterOperation(OperationType type)
@@ -76,9 +91,47 @@ protected:
     OperationType m_type;
 };
 
-// Each of the individual operations are provided here. Once they actually
-// have code to apply their effect they'll move to separate files.
-// At the moment we're just storing the data for roundtripping.
+class DefaultFilterOperation : public FilterOperation {
+public:
+    static PassRefPtr<DefaultFilterOperation> create(OperationType type)
+    {
+        return adoptRef(new DefaultFilterOperation(type));
+    }
+
+private:
+
+    virtual bool operator==(const FilterOperation& o) const
+    {
+        return isSameType(o);
+    }
+
+    virtual bool isDefault() const { return true; }
+
+    DefaultFilterOperation(OperationType type)
+        : FilterOperation(type)
+    {
+    }
+};
+
+class PassthroughFilterOperation : public FilterOperation {
+public:
+    static PassRefPtr<PassthroughFilterOperation> create()
+    {
+        return adoptRef(new PassthroughFilterOperation());
+    }
+
+private:
+
+    virtual bool operator==(const FilterOperation& o) const
+    {
+        return isSameType(o);
+    }
+
+    PassthroughFilterOperation()
+        : FilterOperation(PASSTHROUGH)
+    {
+    }
+};
 
 class ReferenceFilterOperation : public FilterOperation {
 public:
@@ -86,6 +139,9 @@ public:
     {
         return adoptRef(new ReferenceFilterOperation(reference, type));
     }
+
+    virtual bool affectsOpacity() const { return true; }
+    virtual bool movesPixels() const { return true; }
 
     const AtomicString& reference() const { return m_reference; }
 
@@ -110,7 +166,6 @@ private:
 
 // GRAYSCALE, SEPIA, SATURATE and HUE_ROTATE are variations on a basic color matrix effect.
 // For HUE_ROTATE, the angle of rotation is stored in m_amount.
-
 class BasicColorMatrixFilterOperation : public FilterOperation {
 public:
     static PassRefPtr<BasicColorMatrixFilterOperation> create(double amount, OperationType type)
@@ -120,8 +175,9 @@ public:
 
     double amount() const { return m_amount; }
 
-private:
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* from, double progress, bool blendToPassthrough = false);
 
+private:
     virtual bool operator==(const FilterOperation& o) const
     {
         if (!isSameType(o))
@@ -129,7 +185,9 @@ private:
         const BasicColorMatrixFilterOperation* other = static_cast<const BasicColorMatrixFilterOperation*>(&o);
         return m_amount == other->m_amount;
     }
-
+    
+    double passthroughAmount() const;
+    
     BasicColorMatrixFilterOperation(double amount, OperationType type)
         : FilterOperation(type)
         , m_amount(amount)
@@ -139,8 +197,7 @@ private:
     double m_amount;
 };
 
-// INVERT and OPACITY are variations on a basic component transfer effect.
-
+// INVERT, BRIGHTNESS, CONTRAST and OPACITY are variations on a basic component transfer effect.
 class BasicComponentTransferFilterOperation : public FilterOperation {
 public:
     static PassRefPtr<BasicComponentTransferFilterOperation> create(double amount, OperationType type)
@@ -150,8 +207,11 @@ public:
 
     double amount() const { return m_amount; }
 
-private:
+    virtual bool affectsOpacity() const { return m_type == OPACITY; }
 
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* from, double progress, bool blendToPassthrough = false);
+
+private:
     virtual bool operator==(const FilterOperation& o) const
     {
         if (!isSameType(o))
@@ -159,6 +219,8 @@ private:
         const BasicComponentTransferFilterOperation* other = static_cast<const BasicComponentTransferFilterOperation*>(&o);
         return m_amount == other->m_amount;
     }
+
+    double passthroughAmount() const;
 
     BasicComponentTransferFilterOperation(double amount, OperationType type)
         : FilterOperation(type)
@@ -180,8 +242,9 @@ public:
     double exponent() const { return m_exponent; }
     double offset() const { return m_offset; }
 
-private:
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* from, double progress, bool blendToPassthrough = false);
 
+private:
     virtual bool operator==(const FilterOperation& o) const
     {
         if (!isSameType(o))
@@ -205,77 +268,52 @@ private:
 
 class BlurFilterOperation : public FilterOperation {
 public:
-    static PassRefPtr<BlurFilterOperation> create(Length stdDeviationX, Length stdDeviationY, OperationType type)
+    static PassRefPtr<BlurFilterOperation> create(Length stdDeviation, OperationType type)
     {
-        return adoptRef(new BlurFilterOperation(stdDeviationX, stdDeviationY, type));
+        return adoptRef(new BlurFilterOperation(stdDeviation, type));
     }
 
-    Length stdDeviationX() const { return m_stdDeviationX; }
-    Length stdDeviationY() const { return m_stdDeviationY; }
+    Length stdDeviation() const { return m_stdDeviation; }
+
+    virtual bool affectsOpacity() const { return true; }
+    virtual bool movesPixels() const { return true; }
+
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* from, double progress, bool blendToPassthrough = false);
 
 private:
-
     virtual bool operator==(const FilterOperation& o) const
     {
         if (!isSameType(o))
             return false;
         const BlurFilterOperation* other = static_cast<const BlurFilterOperation*>(&o);
-        return m_stdDeviationX == other->m_stdDeviationX && m_stdDeviationY == other->m_stdDeviationY;
+        return m_stdDeviation == other->m_stdDeviation;
     }
 
-    BlurFilterOperation(Length stdDeviationX, Length stdDeviationY, OperationType type)
+    BlurFilterOperation(Length stdDeviation, OperationType type)
         : FilterOperation(type)
-        , m_stdDeviationX(stdDeviationX)
-        , m_stdDeviationY(stdDeviationY)
+        , m_stdDeviation(stdDeviation)
     {
     }
 
-    Length m_stdDeviationX;
-    Length m_stdDeviationY;
-};
-
-class SharpenFilterOperation : public FilterOperation {
-public:
-    static PassRefPtr<SharpenFilterOperation> create(double amount, Length radius, double threshold, OperationType type)
-    {
-        return adoptRef(new SharpenFilterOperation(amount, radius, threshold, type));
-    }
-
-    double amount() const { return m_amount; }
-    Length radius() const { return m_radius; }
-    double threshold() const { return m_threshold; }
-
-private:
-
-    virtual bool operator==(const FilterOperation& o) const
-    {
-        if (!isSameType(o))
-            return false;
-        const SharpenFilterOperation* other = static_cast<const SharpenFilterOperation*>(&o);
-        return m_radius == other->m_radius && m_threshold == other->m_threshold && m_amount == other->m_amount;
-    }
-
-    SharpenFilterOperation(double amount, Length radius, double threshold, OperationType type)
-        : FilterOperation(type)
-        , m_amount(amount)
-        , m_radius(radius)
-        , m_threshold(threshold)
-    {
-    }
-
-    double m_amount;
-    Length m_radius;
-    double m_threshold;
+    Length m_stdDeviation;
 };
 
 class DropShadowFilterOperation : public FilterOperation {
 public:
-    static PassRefPtr<DropShadowFilterOperation> create(PassOwnPtr<ShadowData> shadow, OperationType type)
+    static PassRefPtr<DropShadowFilterOperation> create(int x, int y, int stdDeviation, Color color, OperationType type)
     {
-        return adoptRef(new DropShadowFilterOperation(shadow, type));
+        return adoptRef(new DropShadowFilterOperation(x, y, stdDeviation, color, type));
     }
 
-    const ShadowData* shadow() const { return m_shadow.get(); }
+    int x() const { return m_x; }
+    int y() const { return m_y; }
+    int stdDeviation() const { return m_stdDeviation; }
+    Color color() const { return m_color; }
+
+    virtual bool affectsOpacity() const { return true; }
+    virtual bool movesPixels() const { return true; }
+
+    virtual PassRefPtr<FilterOperation> blend(const FilterOperation* from, double progress, bool blendToPassthrough = false);
 
 private:
 
@@ -284,16 +322,22 @@ private:
         if (!isSameType(o))
             return false;
         const DropShadowFilterOperation* other = static_cast<const DropShadowFilterOperation*>(&o);
-        return *m_shadow == *(other->m_shadow);
+        return m_x == other->m_x && m_y == other->m_y && m_stdDeviation == other->m_stdDeviation && m_color == other->m_color;
     }
 
-    DropShadowFilterOperation(PassOwnPtr<ShadowData> shadow, OperationType type)
+    DropShadowFilterOperation(int x, int y, int stdDeviation, Color color, OperationType type)
         : FilterOperation(type)
-        , m_shadow(shadow)
+        , m_x(x)
+        , m_y(y)
+        , m_stdDeviation(stdDeviation)
+        , m_color(color)
     {
     }
 
-    OwnPtr<ShadowData> m_shadow;
+    int m_x; // FIXME: x and y should be Lengths?
+    int m_y;
+    int m_stdDeviation;
+    Color m_color;
 };
 
 } // namespace WebCore

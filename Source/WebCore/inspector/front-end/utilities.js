@@ -29,20 +29,6 @@
  * http://ejohn.org/files/jsdiff.js (released under the MIT license).
  */
 
-Function.prototype.bind = function(thisObject)
-{
-    var func = this;
-    var args = Array.prototype.slice.call(arguments, 1);
-    function bound()
-    {
-        return func.apply(thisObject, args.concat(Array.prototype.slice.call(arguments, 0)));
-    }
-    bound.toString = function() {
-        return "bound: " + func;
-    };
-    return bound;
-}
-
 /**
  * @param {string=} direction
  */
@@ -248,7 +234,7 @@ Element.prototype.isInsertionCaretInside = function()
     if (!selection.rangeCount || !selection.isCollapsed)
         return false;
     var selectionRange = selection.getRangeAt(0);
-    return selectionRange.startContainer === this || selectionRange.startContainer.isDescendant(this);
+    return selectionRange.startContainer.isSelfOrDescendant(this);
 }
 
 /**
@@ -265,20 +251,49 @@ Element.prototype.createChild = function(elementName, className)
 
 DocumentFragment.prototype.createChild = Element.prototype.createChild;
 
+/**
+ * @return {number}
+ */
 Element.prototype.totalOffsetLeft = function()
 {
-    var total = 0;
-    for (var element = this; element; element = element.offsetParent)
-        total += element.offsetLeft + (this !== element ? element.clientLeft : 0);
-    return total;
+    return this.totalOffset().left;
 }
 
+/**
+ * @return {number}
+ */
 Element.prototype.totalOffsetTop = function()
 {
-    var total = 0;
-    for (var element = this; element; element = element.offsetParent)
-        total += element.offsetTop + (this !== element ? element.clientTop : 0);
-    return total;
+    return this.totalOffset().top;
+
+}
+
+Element.prototype.totalOffset = function()
+{
+    var totalLeft = 0;
+    var totalTop = 0;
+
+    for (var element = this; element; element = element.offsetParent) {
+        totalLeft += element.offsetLeft;
+        totalTop += element.offsetTop;
+        if (this !== element) {
+            totalLeft += element.clientLeft - element.scrollLeft;
+            totalTop += element.clientTop - element.scrollTop;
+        }
+    }
+
+    return { left: totalLeft, top: totalTop };
+}
+
+Element.prototype.scrollOffset = function()
+{
+    var curLeft = 0;
+    var curTop = 0;
+    for (var element = this; element; element = element.scrollParent) {
+        curLeft += element.scrollLeft;
+        curTop += element.scrollTop;
+    }
+    return { left: curLeft, top: curTop };
 }
 
 /**
@@ -297,6 +312,7 @@ function AnchorBox(x, y, width, height)
 }
 
 /**
+ * @param {Window} targetWindow
  * @return {AnchorBox}
  */
 Element.prototype.offsetRelativeToWindow = function(targetWindow)
@@ -318,33 +334,23 @@ Element.prototype.offsetRelativeToWindow = function(targetWindow)
 }
 
 /**
+ * @param {Window} targetWindow
  * @return {AnchorBox}
  */
-Element.prototype.boxInWindow = function(targetWindow, relativeParent)
+Element.prototype.boxInWindow = function(targetWindow)
 {
     targetWindow = targetWindow || this.ownerDocument.defaultView;
-    var bodyElement = this.ownerDocument.body;
-    relativeParent = relativeParent || bodyElement;
 
     var anchorBox = this.offsetRelativeToWindow(window);
-    anchorBox.width = this.offsetWidth;
-    anchorBox.height = this.offsetHeight;
+    anchorBox.width = Math.min(this.offsetWidth, window.innerWidth - anchorBox.x);
+    anchorBox.height = Math.min(this.offsetHeight, window.innerHeight - anchorBox.y);
 
-    var anchorElement = this;
-    while (anchorElement && anchorElement !== relativeParent && anchorElement !== bodyElement) {
-        if (anchorElement.scrollLeft)
-            anchorBox.x -= anchorElement.scrollLeft;
-        if (anchorElement.scrollTop)
-            anchorBox.y -= anchorElement.scrollTop;
-        anchorElement = anchorElement.parentElement;
-    }
-
-    var parentOffset = relativeParent.offsetRelativeToWindow(window);
-    anchorBox.x -= parentOffset.x;
-    anchorBox.y -= parentOffset.y;
     return anchorBox;
 }
 
+/**
+ * @param {string} text
+ */
 Element.prototype.setTextAndTitle = function(text)
 {
     this.textContent = text;
@@ -453,6 +459,22 @@ String.prototype.asParsedURL = function()
     result.port = match[3];
     result.path = match[4] || "/";
     result.fragment = match[5];
+
+    result.lastPathComponent = "";
+    if (result.path) {
+        // First cut the query params.
+        var path = result.path;
+        var indexOfQuery = path.indexOf("?");
+        if (indexOfQuery !== -1)
+            path = path.substring(0, indexOfQuery);
+
+        // Then take last path component.
+        var lastSlashIndex = path.lastIndexOf("/");
+        if (lastSlashIndex !== -1) {
+            result.firstPathComponents = path.substring(0, lastSlashIndex + 1);
+            result.lastPathComponent = path.substring(lastSlashIndex + 1);
+        }
+    } 
     return result;
 }
 
@@ -503,6 +525,13 @@ String.prototype.trimMiddle = function(maxLength)
     return this.substr(0, leftHalf) + "\u2026" + this.substr(this.length - rightHalf, rightHalf);
 }
 
+String.prototype.trimEnd = function(maxLength)
+{
+    if (this.length <= maxLength)
+        return this;
+    return this.substr(0, maxLength - 1) + "\u2026";
+}
+
 String.prototype.trimURL = function(baseURLDomain)
 {
     var result = this.replace(/^(https|http|file):\/\//i, "");
@@ -536,6 +565,16 @@ Node.prototype.isAncestor = function(node)
 Node.prototype.isDescendant = function(descendant)
 {
     return !!descendant && descendant.isAncestor(this);
+}
+
+Node.prototype.isSelfOrAncestor = function(node)
+{
+    return !!node && (node === this || this.isAncestor(node));
+}
+
+Node.prototype.isSelfOrDescendant = function(node)
+{
+    return !!node && (node === this || this.isDescendant(node));
 }
 
 Node.prototype.traverseNextNode = function(stayWithin)
@@ -877,6 +916,11 @@ function isEnterKey(event) {
     return event.keyCode !== 229 && event.keyIdentifier === "Enter";
 }
 
+function stopPropagation(e)
+{
+    e.stopPropagation();
+}
+
 /**
  * @param {Element} element
  * @param {number} offset
@@ -1129,4 +1173,58 @@ TextDiff.compute = function(baseContent, newContent)
             offset = i - right[i].row;
     }
     return diffData;
+}
+
+/**
+ * @constructor
+ */
+var Map = function()
+{
+    this._map = {};
+}
+
+Map._lastObjectIdentifier = 0;
+
+Map.prototype = {
+    /**
+     * @param {Object} key
+     */
+    put: function(key, value)
+    {
+        var objectIdentifier = key.__identifier;
+        if (!objectIdentifier) {
+            objectIdentifier = ++Map._lastObjectIdentifier;
+            key.__identifier = objectIdentifier;
+        }
+        this._map[objectIdentifier] = value;
+    },
+    
+    /**
+     * @param {Object} key
+     */
+    remove: function(key)
+    {
+        delete this._map[key.__identifier];
+    },
+    
+    keys: function()
+    {
+        var result = [];
+        for (var key in this._map)
+            result.push(key);
+        return result;
+    },
+    
+    /**
+     * @param {Object} key
+     */
+    get: function(key)
+    {
+        return this._map[key.__identifier];
+    },
+    
+    clear: function()
+    {
+        this._map = {};
+    }
 }

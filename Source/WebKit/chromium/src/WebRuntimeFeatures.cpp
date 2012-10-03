@@ -34,7 +34,7 @@
 #include "AbstractDatabase.h"
 #include "RuntimeEnabledFeatures.h"
 #include "WebMediaPlayerClientImpl.h"
-#include "WebSocket.h"
+#include "Modules/websockets/WebSocket.h"
 
 #include <wtf/UnusedParam.h>
 
@@ -101,7 +101,7 @@ bool WebRuntimeFeatures::isMediaPlayerEnabled()
 void WebRuntimeFeatures::enableSockets(bool enable)
 {
 #if ENABLE(WEB_SOCKETS)
-    WebSocket::setIsAvailable(enable);
+    WebCore::WebSocket::setIsAvailable(enable);
 #endif
 }
 
@@ -413,5 +413,60 @@ bool WebRuntimeFeatures::isVideoTrackEnabled()
     return false;
 #endif
 }
+
+void WebRuntimeFeatures::enableGamepad(bool enable)
+{
+#if ENABLE(GAMEPAD)
+    RuntimeEnabledFeatures::setWebkitGamepadsEnabled(enable);
+#else
+    UNUSED_PARAM(enable);
+#endif
+}
+
+bool WebRuntimeFeatures::isGamepadEnabled()
+{
+#if ENABLE(GAMEPAD)
+    return RuntimeEnabledFeatures::webkitGamepadsEnabled();
+#else
+    return false;
+#endif
+}
+
+void WebRuntimeFeatures::enableShadowDOM(bool enable)
+{
+#if ENABLE(SHADOW_DOM)
+    RuntimeEnabledFeatures::setShadowDOMEnabled(enable);
+#else
+    UNUSED_PARAM(enable);
+#endif
+}
+
+bool WebRuntimeFeatures::isShadowDOMEnabled()
+{
+#if ENABLE(SHADOW_DOM)
+    return RuntimeEnabledFeatures::shadowDOMEnabled();
+#else
+    return false;
+#endif
+}
+
+void WebRuntimeFeatures::enableStyleScoped(bool enable)
+{
+#if ENABLE(STYLE_SCOPED)
+    RuntimeEnabledFeatures::setStyleScopedEnabled(enable);
+#else
+    UNUSED_PARAM(enable);
+#endif
+}
+
+bool WebRuntimeFeatures::isStyleScopedEnabled()
+{
+#if ENABLE(STYLE_SCOPED)
+    return RuntimeEnabledFeatures::styleScopedEnabled();
+#else
+    return false;
+#endif
+}
+
 
 } // namespace WebKit

@@ -1,13 +1,5 @@
-// These are all values accepted for CSS2.
 //
-// WARNING:
-// --------
-//
-// The Values are sorted according to the properties they belong to,
-// and have to be in the same order as the enums in RenderStyleConstants.h.
-//
-// If not, the optimizations in the cssparser and style selector will fail,
-// and produce incorrect results.
+// CSS value names
 //
 inherit
 initial
@@ -16,6 +8,7 @@ initial
 // CSS_PROP_BORDER_TOP_STYLE
 // CSS_PROP_BORDER_BOTTOM_STYLE
 // CSS_PROP_BORDER_LEFT_STYLE
+// The order here must match the order of the EBorderStyle enum in RenderStyleConstants.h.
 none
 hidden
 inset
@@ -52,6 +45,17 @@ all
 //
 //normal
 small-caps
+
+// -webkit-font-variant-ligatures:
+//
+// normal
+common-ligatures
+no-common-ligatures
+discretionary-ligatures
+no-discretionary-ligatures
+historical-ligatures
+no-historical-ligatures
+
 //
 // CSS_PROP_FONT_WEIGHT:
 //
@@ -204,6 +208,7 @@ bottom
 -webkit-baseline-middle
 //
 // CSS_PROP_TEXT_ALIGN:
+// The order here must match the order of the ETextAlign enum in RenderStyleConstants.h.
 //
 -webkit-auto
 left
@@ -221,6 +226,7 @@ outside
 inside
 //
 // CSS_PROP_LIST_STYLE_TYPE:
+// The order here must match the order of the EListStyleType enum in RenderStyleConstants.h.
 //
 disc
 circle
@@ -305,6 +311,7 @@ katakana-iroha
 //none
 //
 // CSS_PROP_DISPLAY:
+// The order here must match the order of the EDisplay enum in RenderStyleConstants.h.
 //
 inline
 block
@@ -326,9 +333,14 @@ table-caption
 -webkit-inline-box
 -webkit-flexbox
 -webkit-inline-flexbox
+#if defined(ENABLE_CSS_GRID_LAYOUT) && ENABLE_CSS_GRID_LAYOUT
+-webkit-grid
+-webkit-inline-grid
+#endif
 //none
 //
 // CSS_PROP_CURSOR:
+// The order here must match the order of the ECursor enum in RenderStyleConstants.h.
 //
 auto
 crosshair
@@ -477,12 +489,21 @@ multiple
 // baseline
 // stretch
 
+// CSS_PROP_FLEX_PACK
+// start
+// end
+// center
+// justify
+distribute
+
 // CSS_PROP_FLEX_FLOW
-// FIXME: Add the wrap values.
 row
 row-reverse
 column
 column-reverse
+// none
+// wrap
+wrap-reverse
 
 // CSS_PROP_MARQUEE_DIRECTION
 forwards
@@ -579,7 +600,7 @@ space
 after-white-space
 
 // -webkit-appearance
-// The order here should match the order in the ControlPart enum in ThemeTypes.h.
+// The order here must match the order in the ControlPart enum in ThemeTypes.h.
 // All appearance values that should be accepted by the parser should be listed between 'checkbox' and 'textarea':
 checkbox
 radio
@@ -594,6 +615,8 @@ list-button
 listbox
 listitem
 media-fullscreen-button
+media-fullscreen-volume-slider
+media-fullscreen-volume-slider-thumb
 media-mute-button
 media-play-button
 media-seek-back-button
@@ -678,6 +701,8 @@ lines
 // CSS_PROP__WEBKIT_ANIMATION_DIRECTION
 //
 // alternate
+
+alternate-reverse
 
 //
 // CSS_PROP__WEBKIT_ANIMATION_FILL_MODE
@@ -779,6 +804,12 @@ no-limit
 manual
 // auto
 
+#if defined(ENABLE_OVERFLOW_SCROLLING)
+// -webkit-overflow-scrolling
+// auto
+touch
+#endif
+
 // -webkit-writing-mode
 // SVG compatibility
 lr
@@ -826,11 +857,6 @@ glyphs
 inline-box
 replaced
 
-// -webkit-line-grid-snap
-//none
-//baseline
-bounds
-
 // -webkit-font-feature-settings
 on
 off
@@ -851,6 +877,21 @@ evenodd
 // -webkit-region-overflow
 // auto
 break
+
+// -webkit-wrap-flow
+// auto
+// both
+// left
+// right
+maximum
+// clear
+
+// -webkit-wrap-through
+wrap
+// none
+
+// -webkit-line-align
+edges
 
 #if defined(ENABLE_CSS_FILTERS) && ENABLE_CSS_FILTERS
 // -webkit-filter

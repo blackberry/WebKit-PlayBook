@@ -41,82 +41,122 @@
 
 namespace WebCore {
 
+const int InvalidPort = 0;
 const int MaxAllowedPort = 65535;
 
-static bool schemeRequiresAuthority(const String& scheme)
+static bool schemeRequiresAuthority(const KURL& url)
 {
-    DEFINE_STATIC_LOCAL(URLSchemesMap, schemes, ());
-
-    if (schemes.isEmpty()) {
-        schemes.add("http");
-        schemes.add("https");
-        schemes.add("ftp");
-    }
-
-    return schemes.contains(scheme);
+    // We expect URLs with these schemes to have authority components. If the
+    // URL lacks an authority component, we get concerned and mark the origin
+    // as unique.
+    return url.protocolIsInHTTPFamily() || url.protocolIs("ftp");
 }
 
-SecurityOrigin::SecurityOrigin(const KURL& url, bool forceUnique)
+// Some URL schemes use nested URLs for their security context. For example,
+// filesystem URLs look like the following:
+//
+//   filesystem:http://example.com/temporary/path/to/file.png
+//
+// We're supposed to use "http://example.com" as the origin.
+//
+// Generally, we add URL schemes to this list when WebKit support them. For
+// example, we don't include the "jar" scheme, even though Firefox understands
+// that jar uses an inner URL for it's security origin.
+//
+static bool shouldUseInnerURL(const KURL& url)
+{
+#if ENABLE(BLOB)
+    if (url.protocolIs("blob"))
+        return true;
+#endif
+#if ENABLE(FILE_SYSTEM)
+    if (url.protocolIs("filesystem"))
+        return true;
+#endif
+    UNUSED_PARAM(url);
+    return false;
+}
+
+// In general, extracting the inner URL varies by scheme. It just so happens
+// that all the URL schemes we currently support that use inner URLs for their
+// security origin can be parsed using this algorithm.
+static KURL extractInnerURL(const KURL& url)
+{
+    if (url.innerURL())
+        return *url.innerURL();
+    // FIXME: Update this callsite to use the innerURL member function when
+    // we finish implementing it.
+    return KURL(ParsedURLString, decodeURLEscapeSequences(url.path()));
+}
+
+static bool shouldTreatAsUniqueOrigin(const KURL& url)
+{
+    if (!url.isValid())
+        return true;
+
+    // FIXME: Do we need to unwrap the URL further?
+    KURL innerURL = shouldUseInnerURL(url) ? extractInnerURL(url) : url;
+
+    // FIXME: Check whether innerURL is valid.
+
+    // For edge case URLs that were probably misparsed, make sure that the origin is unique.
+    // FIXME: Do we really need to do this? This looks to be a hack around a
+    // security bug in CFNetwork that might have been fixed.
+    if (schemeRequiresAuthority(innerURL) && innerURL.host().isEmpty())
+        return true;
+
+    // SchemeRegistry needs a lower case protocol because it uses HashMaps
+    // that assume the scheme has already been canonicalized.
+    String protocol = innerURL.protocol().lower();
+
+    if (SchemeRegistry::shouldTreatURLSchemeAsNoAccess(protocol))
+        return true;
+
+    // This is the common case.
+    return false;
+}
+
+SecurityOrigin::SecurityOrigin(const KURL& url)
     : m_protocol(url.protocol().isNull() ? "" : url.protocol().lower())
     , m_host(url.host().isNull() ? "" : url.host().lower())
     , m_port(url.port())
-    , m_isUnique(forceUnique || SchemeRegistry::shouldTreatURLSchemeAsNoAccess(m_protocol))
+    , m_isUnique(false)
     , m_universalAccess(false)
     , m_domainWasSetInDOM(false)
     , m_enforceFilePathSeparation(false)
+    , m_needsDatabaseIdentifierQuirkForFiles(false)
 {
-    // These protocols do not create security origins; the owner frame provides the origin
-    if (m_protocol == "about" || m_protocol == "javascript")
-        m_protocol = "";
-
-#if ENABLE(BLOB) || ENABLE(FILE_SYSTEM)
-    bool isBlobOrFileSystemProtocol = false;
-#if ENABLE(BLOB)
-    if (m_protocol == BlobURL::blobProtocol())
-        isBlobOrFileSystemProtocol = true;
-#endif
-#if ENABLE(FILE_SYSTEM)
-    if (m_protocol == "filesystem")
-        isBlobOrFileSystemProtocol = true;
-#endif
-    if (isBlobOrFileSystemProtocol) {
-        KURL originURL(ParsedURLString, decodeURLEscapeSequences(url.path()));
-        if (originURL.isValid()) {
-            m_protocol = originURL.protocol().lower();
-            m_host = originURL.host().lower();
-            m_port = originURL.port();
-        } else
-            m_isUnique = true;
-    }
-#endif
-
-    // For edge case URLs that were probably misparsed, make sure that the origin is unique.
-    if (schemeRequiresAuthority(m_protocol) && m_host.isEmpty())
-        m_isUnique = true;
-    if (m_protocol.isEmpty())
-        m_isUnique = true;
-
     // document.domain starts as m_host, but can be set by the DOM.
     m_domain = m_host;
 
+    if (isDefaultPortForProtocol(m_port, m_protocol))
+        m_port = InvalidPort;
+
     // By default, only local SecurityOrigins can load local resources.
     m_canLoadLocalResources = isLocal();
-    if (m_canLoadLocalResources) {
-        // Directories should never be readable.
-        // Note that we do not do this check for blob or filesystem url because its origin is file:/// when it is created from local file urls.
-#if ENABLE(BLOB) || ENABLE(FILE_SYSTEM)
-        bool doDirectoryCheck = !isBlobOrFileSystemProtocol;
-#else
-        bool doDirectoryCheck = true;
-#endif
-        if (doDirectoryCheck && (!url.hasPath() || url.path().endsWith("/")))
-            m_isUnique = true;
-        // Store the path in case we are doing per-file origin checking.
-        m_filePath = url.path();
-    }
 
-    if (isDefaultPortForProtocol(m_port, m_protocol))
-        m_port = 0;
+    if (m_canLoadLocalResources) {
+        m_filePath = url.path(); // In case enforceFilePathSeparation() is called.
+#if PLATFORM(BLACKBERRY)
+        size_t folderEnd = m_filePath.reverseFind('/');
+        if (folderEnd != WTF::notFound)
+            m_folderPath = m_filePath.left(folderEnd + 1);
+#endif
+    }
+}
+
+SecurityOrigin::SecurityOrigin()
+    : m_protocol("")
+    , m_host("")
+    , m_domain("")
+    , m_port(InvalidPort)
+    , m_isUnique(true)
+    , m_universalAccess(false)
+    , m_domainWasSetInDOM(false)
+    , m_canLoadLocalResources(false)
+    , m_enforceFilePathSeparation(false)
+    , m_needsDatabaseIdentifierQuirkForFiles(false)
+{
 }
 
 SecurityOrigin::SecurityOrigin(const SecurityOrigin* other)
@@ -125,25 +165,44 @@ SecurityOrigin::SecurityOrigin(const SecurityOrigin* other)
     , m_encodedHost(other->m_encodedHost.isolatedCopy())
     , m_domain(other->m_domain.isolatedCopy())
     , m_filePath(other->m_filePath.isolatedCopy())
+#if PLATFORM(BLACKBERRY)
+    , m_folderPath(other->m_folderPath.isolatedCopy())
+#endif
     , m_port(other->m_port)
     , m_isUnique(other->m_isUnique)
     , m_universalAccess(other->m_universalAccess)
     , m_domainWasSetInDOM(other->m_domainWasSetInDOM)
     , m_canLoadLocalResources(other->m_canLoadLocalResources)
     , m_enforceFilePathSeparation(other->m_enforceFilePathSeparation)
+    , m_needsDatabaseIdentifierQuirkForFiles(other->m_needsDatabaseIdentifierQuirkForFiles)
 {
 }
 
-PassRefPtr<SecurityOrigin> SecurityOrigin::create(const KURL& url, bool forceUnique)
+PassRefPtr<SecurityOrigin> SecurityOrigin::create(const KURL& url)
 {
-    if (!url.isValid())
-        return adoptRef(new SecurityOrigin(blankURL(), forceUnique));
-    return adoptRef(new SecurityOrigin(url, forceUnique));
+    if (shouldTreatAsUniqueOrigin(url)) {
+        RefPtr<SecurityOrigin> origin = adoptRef(new SecurityOrigin());
+
+        if (url.protocolIs("file")) {
+            // Unfortunately, we can't represent all unique origins exactly
+            // the same way because we need to produce a quirky database
+            // identifier for file URLs due to persistent storage in some
+            // embedders of WebKit.
+            origin->m_needsDatabaseIdentifierQuirkForFiles = true;
+        }
+
+        return origin.release();
+    }
+
+    if (shouldUseInnerURL(url))
+        return adoptRef(new SecurityOrigin(extractInnerURL(url)));
+
+    return adoptRef(new SecurityOrigin(url));
 }
 
 PassRefPtr<SecurityOrigin> SecurityOrigin::createUnique()
 {
-    RefPtr<SecurityOrigin> origin = create(KURL());
+    RefPtr<SecurityOrigin> origin = adoptRef(new SecurityOrigin());
     ASSERT(origin->isUnique());
     return origin.release();
 }
@@ -201,8 +260,13 @@ bool SecurityOrigin::canAccess(const SecurityOrigin* other) const
         }
     }
 
-    if (canAccess && isLocal())
-       canAccess = passesFileCheck(other);
+    if (canAccess && isLocal()) {
+        canAccess = passesFileCheck(other);
+#if PLATFORM(BLACKBERRY)
+        if (!canAccess)
+            canAccess = containsInFolder(other);
+#endif
+    }
 
     return canAccess;
 }
@@ -234,6 +298,11 @@ bool SecurityOrigin::canRequest(const KURL& url) const
     // to ignore document.domain effects.
     if (isSameSchemeHostPort(targetOrigin.get()))
         return true;
+
+#if PLATFORM(BLACKBERRY)
+    if (containsInFolder(targetOrigin.get()))
+        return true;
+#endif
 
     if (SecurityPolicy::isAccessWhiteListed(this, targetOrigin.get()))
         return true;
@@ -409,6 +478,14 @@ PassRefPtr<SecurityOrigin> SecurityOrigin::create(const String& protocol, const 
 
 String SecurityOrigin::databaseIdentifier() const 
 {
+    // Historically, we've used the following (somewhat non-sensical) string
+    // for the databaseIdentifier of local files. We used to compute this
+    // string because of a bug in how we handled the scheme for file URLs.
+    // Now that we've fixed that bug, we still need to produce this string
+    // to avoid breaking existing persistent state.
+    if (m_needsDatabaseIdentifierQuirkForFiles)
+        return "file__0";
+
     String separatorString(&SeparatorCharacter, 1);
 
     if (m_encodedHost.isEmpty())
@@ -450,5 +527,12 @@ bool SecurityOrigin::isSameSchemeHostPort(const SecurityOrigin* other) const
 
     return true;
 }
+
+#if PLATFORM(BLACKBERRY)
+bool SecurityOrigin::containsInFolder(const SecurityOrigin* other) const
+{
+    return isLocal() && other->m_folderPath.startsWith(m_folderPath);
+}
+#endif
 
 } // namespace WebCore

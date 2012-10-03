@@ -26,7 +26,13 @@
 #import <Foundation/Foundation.h>
 #import <WebKit2/WKBase.h>
 
-@class WKProcessGroupData;
+@class WKProcessGroup, WKProcessGroupData, WKConnection;
+
+@protocol WKProcessGroupDelegate <NSObject>
+
+- (void)processGroup:(WKProcessGroup *)processGroup didCreateConnectionToWebProcessPlugIn:(WKConnection *)connection;
+
+@end
 
 WK_EXPORT
 @interface WKProcessGroup : NSObject {
@@ -35,5 +41,10 @@ WK_EXPORT
 }
 
 - (id)initWithInjectedBundleURL:(NSURL *)bundleURL;
+
+
+#pragma mark Delegates
+
+@property(assign) id<WKProcessGroupDelegate> delegate;
 
 @end

@@ -203,7 +203,7 @@ public:
     virtual void dispatchDidBecomeFrameset(bool);
 
     virtual bool canCachePage() const;
-    virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
+    virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 
     virtual PassRefPtr<Frame> createFrame(const KURL& url, const String& name, HTMLFrameOwnerElement* ownerElement,
                                const String& referrer, bool allowsScrolling, int marginWidth, int marginHeight);
@@ -223,8 +223,8 @@ public:
 
 #if USE(V8)
     // A frame's V8 context was created or destroyed.
-    virtual void didCreateScriptContextForFrame();
-    virtual void didDestroyScriptContextForFrame();
+    virtual void didCreateScriptContext(v8::Handle<v8::Context>, int);
+    virtual void willReleaseScriptContext(v8::Handle<v8::Context>, int);
 
     // A context untied to a frame was created (through evaluateInIsolatedWorld).
     // This context is not tied to the lifetime of its frame, and is destroyed
@@ -249,6 +249,7 @@ public:
     static bool dumpUserGestureInFrameLoaderCallbacks;
     static bool dumpResourceLoadCallbacks;
     static bool dumpResourceResponseMIMETypes;
+    static bool dumpWillCacheResponseCallbacks;
     static QString dumpResourceLoadCallbacksPath;
     static bool sendRequestReturnsNullOnRedirect;
     static bool sendRequestReturnsNull;

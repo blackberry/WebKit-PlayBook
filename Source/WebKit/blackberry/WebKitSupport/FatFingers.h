@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,6 +25,9 @@
 #include <BlackBerryPlatformIntRectRegion.h>
 
 #include <utility>
+
+#include <wtf/HashSet.h>
+#include <wtf/ListHashSet.h>
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -47,6 +50,7 @@ class TouchEventHandler;
 
 class FatFingersResult {
 public:
+
     FatFingersResult(const WebCore::IntPoint& p = WebCore::IntPoint::zero())
         : m_originalPosition(p)
         , m_adjustedPosition(p)
@@ -71,15 +75,38 @@ public:
     bool positionWasAdjusted() const { return m_isValid && m_positionWasAdjusted; }
     bool isTextInput() const { return m_isValid && !!m_nodeUnderFatFinger && m_isTextInput; }
     bool isValid() const { return m_isValid; }
-    WebCore::Node* validNode() const { return m_nodeUnderFatFinger && m_nodeUnderFatFinger->inDocument() ? m_nodeUnderFatFinger.get() : 0; }
-    WebCore::Element* nodeAsElementIfApplicable() const
+
+    enum ContentType { ShadowContentAllowed, ShadowContentNotAllowed };
+
+    WebCore::Node* node(ContentType type = ShadowContentAllowed) const
     {
-        return static_cast<WebCore::Element*>(m_nodeUnderFatFinger && m_nodeUnderFatFinger->inDocument() && m_nodeUnderFatFinger->isElementNode() ? m_nodeUnderFatFinger.get() : 0);
+        if (!m_nodeUnderFatFinger || !m_nodeUnderFatFinger->inDocument())
+            return 0;
+
+        WebCore::Node* result = m_nodeUnderFatFinger.get();
+
+        if (type == ShadowContentAllowed)
+            return result;
+
+        // Shadow trees can be nested.
+        while (result->isInShadowTree())
+            result = toElement(result->shadowAncestorNode());
+
+        return result;
+    }
+
+    WebCore::Element* nodeAsElementIfApplicable(ContentType type = ShadowContentAllowed) const
+    {
+        WebCore::Node* result = node(type);
+        if (!result || !result->isElementNode())
+            return 0;
+
+        return static_cast<WebCore::Element*>(result);
     }
 
 private:
-    friend class BlackBerry::WebKit::FatFingers;
-    friend class BlackBerry::WebKit::TouchEventHandler;
+    friend class WebKit::FatFingers;
+    friend class WebKit::TouchEventHandler;
 
     WebCore::IntPoint m_originalPosition; // Main frame contents coordinates.
     WebCore::IntPoint m_adjustedPosition; // Main frame contents coordinates.
@@ -109,33 +136,35 @@ public:
 #endif
 
 private:
-
     enum MatchingApproachForClickable { ClickableByDefault = 0, MadeClickableByTheWebpage, Done };
 
-    typedef std::pair<WebCore::Node*, BlackBerry::Platform::IntRectRegion> IntersectingRegion;
+    typedef std::pair<WebCore::Node*, Platform::IntRectRegion> IntersectingRegion;
 
-    bool checkFingerIntersection(const BlackBerry::Platform::IntRectRegion&,
-                                 const BlackBerry::Platform::IntRectRegion& remainingFingerRegion,
+    enum CachedResultsStrategy { GetFromRenderTree = 0, GetFromCache };
+    CachedResultsStrategy cachingStrategy() const;
+    typedef HashMap<RefPtr<WebCore::Document>, ListHashSet<RefPtr<WebCore::Node> > > CachedRectHitTestResults;
+
+    bool checkFingerIntersection(const Platform::IntRectRegion&,
+                                 const Platform::IntRectRegion& remainingFingerRegion,
                                  WebCore::Node*,
                                  Vector<IntersectingRegion>& intersectingRegions);
 
     bool findIntersectingRegions(WebCore::Document*,
                                  Vector<IntersectingRegion>& intersectingRegions,
-                                 BlackBerry::Platform::IntRectRegion& remainingFingerRegion);
+                                 Platform::IntRectRegion& remainingFingerRegion);
 
     bool checkForClickableElement(WebCore::Element*,
                                   Vector<IntersectingRegion>& intersectingRegions,
-                                  BlackBerry::Platform::IntRectRegion& remainingFingerRegion,
+                                  Platform::IntRectRegion& remainingFingerRegion,
                                   WebCore::RenderLayer*& lowestPositionedEnclosingLayerSoFar);
 
     bool checkForText(WebCore::Node*,
                       Vector<IntersectingRegion>& intersectingRegions,
-                      BlackBerry::Platform::IntRectRegion& fingerRegion);
+                      Platform::IntRectRegion& fingerRegion);
 
     void setSuccessfulFatFingersResult(FatFingersResult&, WebCore::Node*, const WebCore::IntPoint&);
 
-    // It mimics Document::nodesFromRect, but has a different return value to fit our needs.
-    WebCore::HitTestResult nodesFromRect(WebCore::Document*, const WebCore::IntPoint&) const;
+    void getNodesFromRect(WebCore::Document*, const WebCore::IntPoint&, ListHashSet<RefPtr<WebCore::Node> >&);
 
     // It mimics Document::elementFromPoint, but recursively hit-tests in case an inner frame is found.
     void getRelevantInfoFromPoint(WebCore::Document*,
@@ -152,6 +181,7 @@ private:
     WebCore::IntPoint m_contentPos;
     TargetType m_targetType;
     MatchingApproachForClickable m_matchingApproach;
+    CachedRectHitTestResults m_cachedRectHitTestResults;
 };
 
 }

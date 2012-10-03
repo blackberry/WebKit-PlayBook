@@ -27,56 +27,88 @@
 #ifndef ShadowRoot_h
 #define ShadowRoot_h
 
+#include "DocumentFragment.h"
+#include "ExceptionCode.h"
 #include "TreeScope.h"
+#include <wtf/DoublyLinkedList.h>
 
 namespace WebCore {
 
 class Document;
-class ShadowContentElement;
-class ShadowInclusionSelector;
+class HTMLContentElement;
+class HTMLContentSelector;
+class InsertionPoint;
+class ShadowTree;
 
-class ShadowRoot : public TreeScope {
+class ShadowRoot : public DocumentFragment, public TreeScope, public DoublyLinkedListNode<ShadowRoot> {
+    friend class WTF::DoublyLinkedListNode<ShadowRoot>;
 public:
-    static PassRefPtr<ShadowRoot> create(Document*);
+    static PassRefPtr<ShadowRoot> create(Element*, ExceptionCode&);
+
+    // FIXME: We will support multiple shadow subtrees, however current implementation does not work well
+    // if a shadow root is dynamically created. So we prohibit multiple shadow subtrees
+    // in several elements for a while.
+    // See https://bugs.webkit.org/show_bug.cgi?id=77503 and related bugs.
+    enum ShadowRootCreationPurpose {
+        CreatingUserAgentShadowRoot,
+        CreatingAuthorShadowRoot,
+    };
+    static PassRefPtr<ShadowRoot> create(Element*, ShadowRootCreationPurpose, ExceptionCode& = ASSERT_NO_EXCEPTION);
 
     void recalcShadowTreeStyle(StyleChange);
 
-    ShadowContentElement* includerFor(Node*) const;
-    void hostChildrenChanged();
-    bool isInclusionSelectorActive() const;
+    void setNeedsReattachHostChildrenAndShadow();
+    void clearNeedsReattachHostChildrenAndShadow();
+    bool needsReattachHostChildrenAndShadow();
 
-    virtual void attach();
+    InsertionPoint* insertionPointFor(Node*) const;
+    void hostChildrenChanged();
 
     virtual bool applyAuthorSheets() const;
     void setApplyAuthorSheets(bool);
 
-    ShadowInclusionSelector* inclusions() const;
-    ShadowInclusionSelector* ensureInclusions();
+    Element* host() const { return shadowHost(); }
+    ShadowTree* tree() const;
+
+    String innerHTML() const;
+    void setInnerHTML(const String&, ExceptionCode&);
+
+    ShadowRoot* youngerShadowRoot() const { return prev(); }
+    ShadowRoot* olderShadowRoot() const { return next(); }
+
+    bool isYoungest() const { return !youngerShadowRoot(); }
+    bool isOldest() const { return !olderShadowRoot(); }
+
+    bool hasInsertionPoint() const;
 
 private:
     ShadowRoot(Document*);
     virtual ~ShadowRoot();
 
     virtual String nodeName() const;
-    virtual NodeType nodeType() const;
     virtual PassRefPtr<Node> cloneNode(bool deep);
     virtual bool childTypeAllowed(NodeType) const;
 
-    bool hasContentElement() const;
-
-    bool m_applyAuthorSheets;
-    OwnPtr<ShadowInclusionSelector> m_inclusions;
+    ShadowRoot* m_prev;
+    ShadowRoot* m_next;
+    bool m_applyAuthorSheets : 1;
 };
 
-inline PassRefPtr<ShadowRoot> ShadowRoot::create(Document* document)
+inline const ShadowRoot* toShadowRoot(const Node* node)
 {
-    return adoptRef(new ShadowRoot(document));
+    ASSERT(!node || node->isShadowRoot());
+    return static_cast<const ShadowRoot*>(node);
 }
 
 inline ShadowRoot* toShadowRoot(Node* node)
 {
-    ASSERT(!node || node->nodeType() == Node::SHADOW_ROOT_NODE);
-    return static_cast<ShadowRoot*>(node);
+    return const_cast<ShadowRoot*>(toShadowRoot(static_cast<const Node*>(node)));
+}
+
+// Put this TreeScope method here to inline it.
+inline bool TreeScope::isShadowRoot() const
+{
+    return m_rootNode->isShadowRoot();
 }
 
 } // namespace

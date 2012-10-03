@@ -21,6 +21,12 @@
 /**
  * @file    ewk_cookies.h
  * @brief   The Ewk cookies API.
+ *
+ * @note If the libsoup network backend is being used the functions here will
+ * only work with the @b default SoupSession, which can be retrieved with
+ * ewk_network_defaul_soup_session_get(). If a different SoupSession is used
+ * and associated with a view with ewk_view_soup_session_set(), all cookie
+ * management will have to be done manually.
  */
 
 #ifndef ewk_cookies_h
@@ -95,7 +101,7 @@ EAPI void               ewk_cookies_clear(void);
  *
  * @return an @c Eina_List with all the cookies in the cookie jar
  */
-EAPI Eina_List*         ewk_cookies_get_all(void);
+EAPI Eina_List          *ewk_cookies_get_all(void);
 
 /**
  * Deletes a cookie from the cookie jar.

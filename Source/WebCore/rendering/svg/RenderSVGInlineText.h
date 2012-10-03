@@ -35,25 +35,24 @@ public:
     RenderSVGInlineText(Node*, PassRefPtr<StringImpl>);
 
     bool characterStartsNewTextChunk(int position) const;
-
-    SVGTextLayoutAttributes& layoutAttributes() { return m_attributes; }
-    const SVGTextLayoutAttributes& layoutAttributes() const { return m_attributes; }
-    void storeLayoutAttributes(const SVGTextLayoutAttributes& attributes) { m_attributes = attributes; }
+    SVGTextLayoutAttributes* layoutAttributes() { return &m_layoutAttributes; }
 
     float scalingFactor() const { return m_scalingFactor; }
     const Font& scaledFont() const { return m_scaledFont; }
     void updateScaledFont();
     static void computeNewScaledFontForStyle(RenderObject*, const RenderStyle*, float& scalingFactor, Font& scaledFont);
 
+    // Preserves floating point precision for the use in DRT. It knows how to round and does a better job than enclosingIntRect.
+    FloatRect floatLinesBoundingBox() const;
+
 private:
     virtual const char* renderName() const { return "RenderSVGInlineText"; }
 
     virtual void willBeDestroyed();
-    
-    virtual void setStyle(PassRefPtr<RenderStyle>);
+    virtual void setTextInternal(PassRefPtr<StringImpl>);
     virtual void styleDidChange(StyleDifference, const RenderStyle*);
 
-    virtual FloatRect objectBoundingBox() const { return linesBoundingBox(); }
+    virtual FloatRect objectBoundingBox() const { return floatLinesBoundingBox(); }
 
     virtual bool requiresLayer() const { return false; }
     virtual bool isSVGInlineText() const { return true; }
@@ -65,7 +64,7 @@ private:
 
     float m_scalingFactor;
     Font m_scaledFont;
-    SVGTextLayoutAttributes m_attributes;
+    SVGTextLayoutAttributes m_layoutAttributes;
 };
 
 inline RenderSVGInlineText* toRenderSVGInlineText(RenderObject* object)

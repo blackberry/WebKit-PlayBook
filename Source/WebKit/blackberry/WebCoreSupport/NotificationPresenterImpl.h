@@ -29,7 +29,7 @@
 #include <wtf/OwnPtr.h>
 #include <wtf/text/StringHash.h>
 
-namespace WebKit {
+namespace WebCore {
 
 class NotificationPresenterImpl : public WebCore::NotificationPresenter, public BlackBerry::Platform::NotificationAckListener {
 public:
@@ -46,6 +46,8 @@ public:
     // (such as by a page transition). The presenter may continue showing
     // the notification, but must not attempt to call the event handlers.
     virtual void notificationObjectDestroyed(WebCore::Notification*);
+
+    virtual void notificationControllerDestroyed();
 
     // Requests user permission to show desktop notifications from a particular
     // script context. The callback parameter should be run when the user has

@@ -37,6 +37,7 @@
 
 namespace WebCore {
 
+class CachedResource;
 class Frame;
 class KURL;
 class NetscapePlugInStreamLoader;
@@ -44,20 +45,20 @@ class NetscapePlugInStreamLoaderClient;
 class ResourceLoader;
 class ResourceRequest;
 class SubresourceLoader;
-class SubresourceLoaderClient;
 
 class ResourceLoadScheduler {
     WTF_MAKE_NONCOPYABLE(ResourceLoadScheduler);
 public:
     friend ResourceLoadScheduler* resourceLoadScheduler();
 
-    PassRefPtr<SubresourceLoader> scheduleSubresourceLoad(Frame*, SubresourceLoaderClient*, const ResourceRequest&, ResourceLoadPriority, const ResourceLoaderOptions&);
+    PassRefPtr<SubresourceLoader> scheduleSubresourceLoad(Frame*, CachedResource*, const ResourceRequest&, ResourceLoadPriority, const ResourceLoaderOptions&);
     PassRefPtr<NetscapePlugInStreamLoader> schedulePluginStreamLoad(Frame*, NetscapePlugInStreamLoaderClient*, const ResourceRequest&);
     void addMainResourceLoad(ResourceLoader*);
     void remove(ResourceLoader*);
     void crossOriginRedirectReceived(ResourceLoader*, const KURL& redirectURL);
     
     void servePendingRequests(ResourceLoadPriority minimumPriority = ResourceLoadPriorityVeryLow);
+    bool isSuspendingPendingRequests() const { return !!m_suspendPendingRequestsCount; }
     void suspendPendingRequests();
     void resumePendingRequests();
     
@@ -110,7 +111,7 @@ private:
         
     Timer<ResourceLoadScheduler> m_requestTimer;
 
-    bool m_isSuspendingPendingRequests;
+    unsigned m_suspendPendingRequestsCount;
     bool m_isSerialLoadingEnabled;
 };
 

@@ -45,13 +45,6 @@ public:
     double y() const { return m_y; }
     double z() const { return m_z; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s (%f, %f, %f)]", TransformOperation::toString().latin1().data(), x(), y(), z());
-    }
-#endif
-
 private:
     virtual bool isIdentity() const { return m_x == 1 &&  m_y == 1 &&  m_z == 1; }
 

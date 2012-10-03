@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  * Copyright (C) 2007, 2008, 2009 Apple Inc. All rights reserved.
  *
@@ -36,8 +36,6 @@
 
 #include "LayerCompositingThread.h"
 
-#include "GLES2Context.h"
-#include "HTMLCanvasElement.h"
 #include "LayerMessage.h"
 #include "LayerRenderer.h"
 #include "LayerWebKitThread.h"
@@ -47,19 +45,14 @@
 #endif
 #include "PluginView.h"
 #include "TextureCacheCompositingThread.h"
-#include "UnitBezier.h"
 
 #include <BlackBerryPlatformGraphics.h>
 #include <BlackBerryPlatformLog.h>
-#include <GLES2/gl2.h>
-#include <algorithm>
 #include <wtf/Assertions.h>
 
 #define DEBUG_VIDEO_CLIPPING 0
 
 namespace WebCore {
-
-using namespace std;
 
 PassRefPtr<LayerCompositingThread> LayerCompositingThread::create(LayerType type, PassRefPtr<LayerTiler> tiler)
 {
@@ -80,20 +73,7 @@ LayerCompositingThread::LayerCompositingThread(LayerType type, PassRefPtr<LayerT
 
 LayerCompositingThread::~LayerCompositingThread()
 {
-    // Unfortunately, ThreadSafeShared<T> is hardwired to call T::~T().
-    // To switch threads in case the last reference is released on the
-    // WebKit thread, we send a sync message to the compositing thread.
-    destroyOnCompositingThread();
-}
-
-void LayerCompositingThread::destroyOnCompositingThread()
-{
-    if (!isCompositingThread()) {
-        dispatchSyncCompositingMessage(BlackBerry::Platform::createMethodCallMessage(
-            &LayerCompositingThread::destroyOnCompositingThread,
-            this));
-        return;
-    }
+    ASSERT(isCompositingThread());
 
     m_tiler->layerCompositingThreadDestroyed();
 
@@ -151,20 +131,21 @@ static FloatQuad getTransformedRect(const IntSize& bounds, const IntRect& rect, 
     float h = rect.height();
     FloatQuad result;
     result.setP1(drawTransform.mapPoint(FloatPoint(x, y)));
-    result.setP2(drawTransform.mapPoint(FloatPoint(x, y+h)));
-    result.setP3(drawTransform.mapPoint(FloatPoint(x+w, y+h)));
-    result.setP4(drawTransform.mapPoint(FloatPoint(x+w, y)));
+    result.setP2(drawTransform.mapPoint(FloatPoint(x, y + h)));
+    result.setP3(drawTransform.mapPoint(FloatPoint(x + w, y + h)));
+    result.setP4(drawTransform.mapPoint(FloatPoint(x + w, y)));
 
     return result;
 }
 
-// FIXME: the following line disables clipping a video in an iframe i.e. the fix associated with PR 99638.
-// Some revised test case (e.g. video-iframe.html) show that the original fix works correctly when scrolling
-// the contents of the frame, but fails to clip correctly if the page (main frame) is scrolled.
-static bool enableVideoClipping = false;
 
 FloatQuad LayerCompositingThread::getTransformedHolePunchRect() const
 {
+    // FIXME: the following line disables clipping a video in an iframe i.e. the fix associated with PR 99638.
+    // Some revised test case (e.g. video-iframe.html) show that the original fix works correctly when scrolling
+    // the contents of the frame, but fails to clip correctly if the page (main frame) is scrolled.
+    static bool enableVideoClipping = false;
+
     if (!mediaPlayer() || !enableVideoClipping) {
         // m_holePunchClipRect is valid only when there's a media player.
         return getTransformedRect(m_bounds, m_holePunchRect, m_drawTransform);
@@ -194,16 +175,17 @@ FloatQuad LayerCompositingThread::getTransformedHolePunchRect() const
     drawRect.move(-location.x(), -location.y());
 
 #if DEBUG_VIDEO_CLIPPING
-     BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "LayerCompositingThread::getTransformedHolePunchRect() - drawRect=%s clipRect=%s clippedRect=%s.",
-        m_layerRenderer->toWebKitDocumentCoordinates(m_drawRect).toString().utf8().data(),
-        m_holePunchClipRect.toString().utf8().data(),
-        drawRect.toString().utf8().data());
+     IntRect drawRectInWebKitDocumentCoordination = m_layerRenderer->toWebKitDocumentCoordinates(m_drawRect);
+     BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "LayerCompositingThread::getTransformedHolePunchRect() - drawRect=(x=%d,y=%d,width=%d,height=%d) clipRect=(x=%d,y=%d,width=%d,height=%d) clippedRect=(x=%d,y=%d,width=%d,height=%d).",
+        drawRectInWebKitDocumentCoordination.x(), drawRectInWebKitDocumentCoordination.y(), drawRectInWebKitDocumentCoordination.width(), drawRectInWebKitDocumentCoordination.height(),
+        m_holePunchClipRect.x(), m_holePunchClipRect.y(), m_holePunchClipRect.width(), m_holePunchClipRect.height(),
+        drawRect.x(), drawRect.y(), drawRect.width(), drawRect.height());
 #endif
 
     return getTransformedRect(m_bounds, drawRect, m_drawTransform);
 }
 
-void LayerCompositingThread::drawTextures(GLES2Context* context, int positionLocation, int texCoordLocation, const FloatRect& visibleRect)
+void LayerCompositingThread::drawTextures(int positionLocation, int texCoordLocation, const FloatRect& visibleRect)
 {
     float texcoords[4 * 2] = { 0, 0,  0, 1,  1, 1,  1, 0 };
 
@@ -238,7 +220,7 @@ void LayerCompositingThread::drawTextures(GLES2Context* context, int positionLoc
             float vrh2 = visibleRect.height() / 2.0;
             float x = m_transformedBounds.p1().x() * vrw2 + vrw2 + visibleRect.x();
             float y = -m_transformedBounds.p1().y() * vrh2 + vrh2 + visibleRect.y();
-            m_mediaPlayer->paint(0, IntRect((int)(x+0.5), (int)(y+0.5), m_bounds.width(), m_bounds.height()));
+            m_mediaPlayer->paint(0, IntRect((int)(x + 0.5), (int)(y + 0.5), m_bounds.width(), m_bounds.height()));
             MediaPlayerPrivate* mpp = static_cast<MediaPlayerPrivate*>(m_mediaPlayer->platformMedia().media.qnxMediaPlayer);
             mpp->drawBufferingAnimation(m_drawTransform, positionLocation, texCoordLocation);
         }
@@ -249,7 +231,7 @@ void LayerCompositingThread::drawTextures(GLES2Context* context, int positionLoc
     if (layerType() == LayerData::WebGLLayer) {
         pthread_mutex_lock(m_frontBufferLock);
         glVertexAttribPointer(positionLocation, 2, GL_FLOAT, GL_FALSE, 0, &m_transformedBounds);
-        float canvasWidthRatio = 1.0f; // FIXME
+        float canvasWidthRatio = 1.0f;
         float canvasHeightRatio = 1.0f;
         float upsideDown[4 * 2] = { 0, 1,  0, 1 - canvasHeightRatio,  canvasWidthRatio, 1 - canvasHeightRatio,  canvasWidthRatio, 1 };
         // Flip the texture Y axis because OpenGL and Skia have different origins
@@ -257,7 +239,7 @@ void LayerCompositingThread::drawTextures(GLES2Context* context, int positionLoc
         glBindTexture(GL_TEXTURE_2D, m_texID);
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
         pthread_mutex_unlock(m_frontBufferLock);
-        // TODO: If the canvas/texture is larger than 2048x2048, then we'll die here
+        // FIXME: If the canvas/texture is larger than 2048x2048, then we'll die here
         return;
     }
 #endif
@@ -267,26 +249,24 @@ void LayerCompositingThread::drawTextures(GLES2Context* context, int positionLoc
 
         glBindTexture(GL_TEXTURE_2D, m_texID);
         glVertexAttribPointer(positionLocation, 2, GL_FLOAT, GL_FALSE, 0, &m_transformedBounds);
-        float canvasWidthRatio = (float)m_canvas->width() / m_texWidth;
-        float canvasHeightRatio = (float)m_canvas->height() / m_texHeight;
-        float upsideDown[4 * 2] = { 0, 1,  0, 1 - canvasHeightRatio,  canvasWidthRatio, 1 - canvasHeightRatio,  canvasWidthRatio, 1 };
+        float upsideDown[4 * 2] = { 0, 1,  0, 0,  1, 0,  1, 1 };
         glVertexAttribPointer(texCoordLocation, 2, GL_FLOAT, GL_FALSE, 0, upsideDown);
         glDrawArrays(GL_TRIANGLE_FAN, 0, 4);
         return;
     }
 
-    m_tiler->drawTextures(context, this, positionLocation, texCoordLocation);
+    m_tiler->drawTextures(this, positionLocation, texCoordLocation);
 }
 
-void LayerCompositingThread::drawSurface(GLES2Context*, const TransformationMatrix& drawTransform, LayerCompositingThread* mask, int positionLocation, int texCoordLocation)
+void LayerCompositingThread::drawSurface(const TransformationMatrix& drawTransform, LayerCompositingThread* mask, int positionLocation, int texCoordLocation)
 {
     if (m_layerRenderer->layerAlreadyOnSurface(this)) {
-        unsigned texID = renderSurface()->texture()->textureId();
+        unsigned texID = layerRendererSurface()->texture()->textureId();
         if (!texID) {
-            // FIXME: is this going to happen?
+            ASSERT_NOT_REACHED();
             return;
         }
-        textureCacheCompositingThread()->textureAccessed(renderSurface()->texture());
+        textureCacheCompositingThread()->textureAccessed(layerRendererSurface()->texture());
         glBindTexture(GL_TEXTURE_2D, texID);
 
         if (mask) {
@@ -295,7 +275,7 @@ void LayerCompositingThread::drawSurface(GLES2Context*, const TransformationMatr
             glActiveTexture(GL_TEXTURE0);
         }
 
-        FloatQuad surfaceQuad = getTransformedRect(m_bounds, IntRect(IntPoint(), m_bounds), drawTransform);
+        FloatQuad surfaceQuad = getTransformedRect(m_bounds, IntRect(IntPoint::zero(), m_bounds), drawTransform);
         glVertexAttribPointer(positionLocation, 2, GL_FLOAT, GL_FALSE, 0, &surfaceQuad);
 
         float texcoords[4 * 2] = { 0, 0,  0, 1,  1, 1,  1, 0 };
@@ -304,7 +284,7 @@ void LayerCompositingThread::drawSurface(GLES2Context*, const TransformationMatr
     }
 }
 
-void LayerCompositingThread::drawMissingTextures(GLES2Context* context, int positionLocation, int texCoordLocation, const FloatRect& visibleRect)
+void LayerCompositingThread::drawMissingTextures(int positionLocation, int texCoordLocation, const FloatRect& visibleRect)
 {
     if (m_pluginView || m_texID)
         return;
@@ -314,7 +294,7 @@ void LayerCompositingThread::drawMissingTextures(GLES2Context* context, int posi
         return;
 #endif
 
-    m_tiler->drawMissingTextures(context, this, positionLocation, texCoordLocation);
+    m_tiler->drawMissingTextures(this, positionLocation, texCoordLocation);
 }
 
 void LayerCompositingThread::releaseTextureResources()
@@ -399,11 +379,6 @@ const LayerCompositingThread* LayerCompositingThread::rootLayer() const
     return layer;
 }
 
-LayerCompositingThread* LayerCompositingThread::superlayer() const
-{
-    return m_superlayer;
-}
-
 void LayerCompositingThread::removeFromSuperlayer()
 {
     if (m_superlayer)
@@ -432,9 +407,9 @@ void LayerCompositingThread::setSublayers(const Vector<RefPtr<LayerCompositingTh
     }
 }
 
-void LayerCompositingThread::updateTextureContentsIfNeeded(GLES2Context* context)
+void LayerCompositingThread::updateTextureContentsIfNeeded()
 {
-    if (canvas() || pluginView())
+    if (m_texID || pluginView())
         return;
 
 #if ENABLE(VIDEO)
@@ -442,7 +417,7 @@ void LayerCompositingThread::updateTextureContentsIfNeeded(GLES2Context* context
         return;
 #endif
 
-    m_tiler->uploadTexturesIfNeeded(context);
+    m_tiler->uploadTexturesIfNeeded();
 }
 
 void LayerCompositingThread::setVisible(bool visible)
@@ -452,7 +427,7 @@ void LayerCompositingThread::setVisible(bool visible)
 
     m_visible = visible;
 
-    if (canvas() || pluginView())
+    if (m_texID || pluginView())
         return;
 
 #if ENABLE(VIDEO)
@@ -483,162 +458,9 @@ void LayerCompositingThread::scheduleCommit()
 
     m_commitScheduled = false;
 
-    // FIXME: the only way to get at our LayerWebKitThread is to go through
-    // the tiler
-    LayerWebKitThread* layer = m_tiler->layer();
-    if (layer)
+    // FIXME: The only way to get at our LayerWebKitThread is to go through the tiler.
+    if (LayerWebKitThread* layer = m_tiler->layer())
         layer->setNeedsCommit();
-}
-
-// FIXME: Copy pasted from WebCore::AnimationBase!!!
-// The epsilon value we pass to UnitBezier::solve given that the animation is going to run over |dur| seconds. The longer the
-// animation, the more precision we need in the timing function result to avoid ugly discontinuities.
-static inline double solveEpsilon(double duration)
-{
-    return 1.0 / (200.0 * duration);
-}
-
-// FIXME: Copy pasted from WebCore::AnimationBase!!!
-static inline double solveCubicBezierFunction(double p1x, double p1y, double p2x, double p2y, double t, double duration)
-{
-    // Convert from input time to parametric value in curve, then from
-    // that to output time.
-    UnitBezier bezier(p1x, p1y, p2x, p2y);
-    return bezier.solve(t, solveEpsilon(duration));
-}
-
-// FIXME: Copy pasted from WebCore::AnimationBase!!!
-static inline double solveStepsFunction(int numSteps, bool stepAtStart, double t)
-{
-    if (stepAtStart)
-        return min(1.0, (floor(numSteps * t) + 1) / numSteps);
-    return floor(numSteps * t) / numSteps;
-}
-
-// FIXME: Copy pasted from WebCore::GraphicsLayerCA!!!
-static const TimingFunction* timingFunctionForAnimationValue(const AnimationValue* animValue, const LayerAnimation* anim)
-{
-    if (animValue->timingFunction())
-        return animValue->timingFunction();
-    if (anim->timingFunction())
-        return anim->timingFunction();
-
-    return CubicBezierTimingFunction::defaultTimingFunction();
-}
-
-// FIXME: Copy pasted from WebCore::AnimationBase!!!
-static double progress(double elapsedTime, const LayerAnimation* layerAnimation, double scale, double offset, const TimingFunction* tf)
-{
-    double dur = layerAnimation->duration();
-    if (layerAnimation->iterationCount() > 0)
-        dur *= layerAnimation->iterationCount();
-
-    if (!layerAnimation->duration())
-        return 1.0;
-    if (layerAnimation->iterationCount() > 0 && elapsedTime >= dur)
-        return (layerAnimation->iterationCount() % 2) ? 1.0 : 0.0;
-
-    // Compute the fractional time, taking into account direction.
-    // There is no need to worry about iterations, we assume that we would have
-    // short circuited above if we were done.
-    double fractionalTime = elapsedTime / layerAnimation->duration();
-    int integralTime = static_cast<int>(fractionalTime);
-    fractionalTime -= integralTime;
-
-    if ((layerAnimation->direction() == Animation::AnimationDirectionAlternate) && (integralTime & 1))
-        fractionalTime = 1 - fractionalTime;
-
-    if (scale != 1 || offset)
-        fractionalTime = (fractionalTime - offset) * scale;
-
-    if (!tf)
-        tf = layerAnimation->timingFunction();
-
-    if (tf->isCubicBezierTimingFunction()) {
-        const CubicBezierTimingFunction* ctf = static_cast<const CubicBezierTimingFunction*>(tf);
-        return solveCubicBezierFunction(ctf->x1(),
-                                        ctf->y1(),
-                                        ctf->x2(),
-                                        ctf->y2(),
-                                        fractionalTime, layerAnimation->duration());
-    } else if (tf->isStepsTimingFunction()) {
-        const StepsTimingFunction* stf = static_cast<const StepsTimingFunction*>(tf);
-        return solveStepsFunction(stf->numberOfSteps(), stf->stepAtStart(), fractionalTime);
-    } else
-        return fractionalTime;
-}
-
-// FIXME: Copy pasted from WebCore::KeyframeAnimation!!!
-static void fetchIntervalEndpoints(double elapsedTime, const LayerAnimation* layerAnimation, const AnimationValue*& fromValue, const AnimationValue*& toValue, double& prog)
-{
-    // Find the first key
-    if (layerAnimation->duration() && layerAnimation->iterationCount() != Animation::IterationCountInfinite)
-        elapsedTime = min(elapsedTime, layerAnimation->duration() * layerAnimation->iterationCount());
-
-    double fractionalTime = layerAnimation->duration() ? (elapsedTime / layerAnimation->duration()) : 1;
-
-    // FIXME: startTime can be before the current animation "frame" time. This is to sync with the frame time
-    // concept in AnimationTimeController. So we need to somehow sync the two. Until then, the possible
-    // error is small and will probably not be noticeable. Until we fix this, remove the assert.
-    // https://bugs.webkit.org/show_bug.cgi?id=52037
-    // ASSERT(fractionalTime >= 0);
-    if (fractionalTime < 0)
-        fractionalTime = 0;
-
-    // FIXME: share this code with AnimationBase::progress().
-    int iteration = static_cast<int>(fractionalTime);
-    if (layerAnimation->iterationCount() != Animation::IterationCountInfinite)
-        iteration = min(iteration, layerAnimation->iterationCount() - 1);
-
-    fractionalTime -= iteration;
-
-    bool reversing = (layerAnimation->direction() == Animation::AnimationDirectionAlternate) && (iteration & 1);
-    if (reversing)
-        fractionalTime = 1 - fractionalTime;
-
-    size_t numKeyframes = layerAnimation->valueCount();
-    if (!numKeyframes)
-        return;
-
-    ASSERT(!layerAnimation->valueAt(0)->keyTime());
-    ASSERT(layerAnimation->valueAt(layerAnimation->valueCount() - 1)->keyTime() == 1);
-
-    int prevIndex = -1;
-    int nextIndex = -1;
-
-    // FIXME: with a lot of keys, this linear search will be slow. We could binary search.
-    for (size_t i = 0; i < numKeyframes; ++i) {
-        const AnimationValue* currKeyframe = layerAnimation->valueAt(i);
-
-        if (fractionalTime < currKeyframe->keyTime()) {
-            nextIndex = i;
-            break;
-        }
-
-        prevIndex = i;
-    }
-
-    double scale = 1;
-    double offset = 0;
-
-    if (prevIndex == -1)
-        prevIndex = 0;
-
-    if (nextIndex == -1)
-        nextIndex = layerAnimation->valueCount() - 1;
-
-    const AnimationValue* prevKeyframe = layerAnimation->valueAt(prevIndex);
-    const AnimationValue* nextKeyframe = layerAnimation->valueAt(nextIndex);
-
-    fromValue = prevKeyframe;
-    toValue = nextKeyframe;
-
-    offset = prevKeyframe->keyTime();
-    scale = 1.0 / (nextKeyframe->keyTime() - prevKeyframe->keyTime());
-
-    const TimingFunction* timingFunction = timingFunctionForAnimationValue(prevKeyframe, layerAnimation);
-
-    prog = progress(elapsedTime, layerAnimation, scale, offset, timingFunction);
 }
 
 bool LayerCompositingThread::updateAnimations(double currentTime)
@@ -652,44 +474,16 @@ bool LayerCompositingThread::updateAnimations(double currentTime)
         // is paused, the timeOffset is modified so it will be an appropriate
         // elapsedTime.
         double elapsedTime = animation->timeOffset();
-        updateAnimation(animation, elapsedTime);
+        animation->apply(this, elapsedTime);
     }
 
     for (size_t i = 0; i < m_runningAnimations.size(); ++i) {
         LayerAnimation* animation = m_runningAnimations[i].get();
         double elapsedTime = (m_suspendTime ? m_suspendTime : currentTime) - animation->startTime() + animation->timeOffset();
-        updateAnimation(animation, elapsedTime);
+        animation->apply(this, elapsedTime);
     }
 
     return !m_runningAnimations.isEmpty();
-}
-
-void LayerCompositingThread::updateAnimation(const LayerAnimation* layerAnimation, double elapsedTime)
-{
-    const AnimationValue* from = 0;
-    const AnimationValue* to = 0;
-    double progress;
-
-    fetchIntervalEndpoints(elapsedTime, layerAnimation, from, to, progress);
-
-#if DEBUG_LAYER_ANIMATION
-    fprintf(stderr, "LayerAnimation 0x%08x: progress = %f, from = %s, to = %s\n", layerAnimation, progress, from ? from->toString().latin1().data() : "", to ? to->toString().latin1().data() : "");
-#endif
-
-    switch (layerAnimation->property()) {
-    case AnimatedPropertyInvalid:
-        ASSERT_NOT_REACHED();
-        break;
-    case AnimatedPropertyWebkitTransform:
-        m_transform = layerAnimation->blendTransform(static_cast<const TransformAnimationValue*>(from)->value(), static_cast<const TransformAnimationValue*>(to)->value(), progress);
-        break;
-    case AnimatedPropertyOpacity:
-        m_opacity = layerAnimation->blendOpacity(static_cast<const FloatAnimationValue*>(from)->value(), static_cast<const FloatAnimationValue*>(to)->value(), progress);
-        break;
-    case AnimatedPropertyBackgroundColor:
-        ASSERT_NOT_REACHED();
-        break;
-    }
 }
 
 bool LayerCompositingThread::hasVisibleHolePunchRect() const
@@ -705,10 +499,10 @@ bool LayerCompositingThread::hasVisibleHolePunchRect() const
     return hasHolePunchRect();
 }
 
-void LayerCompositingThread::createRenderSurface()
+void LayerCompositingThread::createLayerRendererSurface()
 {
-    ASSERT(!m_renderSurface);
-    m_renderSurface = adoptPtr(new RenderSurface(m_layerRenderer, this));
+    ASSERT(!m_layerRendererSurface);
+    m_layerRendererSurface = adoptPtr(new LayerRendererSurface(m_layerRenderer, this));
 }
 
 }

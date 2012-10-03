@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2008, 2009, 2010 Apple Inc. All Rights Reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -98,6 +97,24 @@ static JSValueRef getElementAtPointCallback(JSContextRef context, JSObjectRef fu
     return AccessibilityUIElement::makeJSAccessibilityUIElement(context, controller->elementAtPoint(x, y));
 }
 
+static JSValueRef addNotificationListenerCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    if (argumentCount != 1)
+        return JSValueMakeBoolean(context, false);
+    
+    AccessibilityController* controller = static_cast<AccessibilityController*>(JSObjectGetPrivate(thisObject));
+    JSObjectRef callback = JSValueToObject(context, arguments[0], exception);
+    bool succeeded = controller->addNotificationListener(callback);
+    return JSValueMakeBoolean(context, succeeded);
+}
+
+static JSValueRef removeNotificationListenerCallback(JSContextRef context, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    AccessibilityController* controller = static_cast<AccessibilityController*>(JSObjectGetPrivate(thisObject));
+    controller->removeNotificationListener();
+    return JSValueMakeUndefined(context);
+}
+
 JSClassRef AccessibilityController::getJSClass()
 {
     static JSStaticFunction staticFunctions[] = {
@@ -106,6 +123,8 @@ JSClassRef AccessibilityController::getJSClass()
         { "logScrollingStartEvents", logScrollingStartEventsCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "logAccessibilityEvents", logAccessibilityEventsCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { "elementAtPoint", getElementAtPointCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "addNotificationListener", addNotificationListenerCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { "removeNotificationListener", removeNotificationListenerCallback, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
         { 0, 0, 0 }
     };
 
@@ -120,13 +139,7 @@ JSClassRef AccessibilityController::getJSClass()
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     };
 
-    static JSClassRef ref = 0;
-    if (!ref)
-        ref = JSClassCreate(&classDefinition);
-    else
-        JSClassRetain(ref);
-
-    return ref;
+    return JSClassCreate(&classDefinition);
 }
 
 void AccessibilityController::resetToConsistentState()

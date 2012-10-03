@@ -36,17 +36,27 @@
 #include "Base64.h"
 #include "BitmapImage.h"
 #include "BitmapImageSingleFrameSkia.h"
-#include <gpu/DrawingBuffer.h>
+#if PLATFORM(BLACKBERRY)
+#include "CanvasLayerWebKitThread.h"
+#else
+#include "Canvas2DLayerChromium.h"
+#endif
+#include "GrContext.h"
 #include "GraphicsContext.h"
 #include "ImageData.h"
 #include "JPEGImageEncoder.h"
 #include "MIMETypeRegistry.h"
 #include "PNGImageEncoder.h"
 #include "PlatformContextSkia.h"
+#if ENABLE(ACCELERATED_2D_CANVAS)
+#include "SharedGraphicsContext3D.h"
+#endif
 #include "SkColorPriv.h"
+#include "SkDeferredCanvas.h"
+#include "SkGpuDevice.h"
 #include "SkiaUtils.h"
+#include "WEBPImageEncoder.h"
 
-#include <BlackBerryPlatformGraphics.h>
 #include <wtf/text/WTFString.h>
 
 using namespace std;
@@ -62,19 +72,96 @@ ImageBufferData::ImageBufferData(const IntSize& size)
 {
 }
 
-ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace, RenderingMode renderingMode, bool& success)
+#if ENABLE(ACCELERATED_2D_CANVAS)
+#if PLATFORM(BLACKBERRY)
+GrContext* GraphicsContext3D::grContext()
+{
+    return BlackBerry::Platform::Graphics::getGrContext();
+}
+#endif
+
+class AcceleratedDeviceContext : public SkDeferredCanvas::DeviceContext {
+public:
+    AcceleratedDeviceContext(GraphicsContext3D* context3D)
+    {
+        ASSERT(context3D);
+        m_context3D = context3D;
+    }
+
+    virtual void prepareForDraw()
+    {
+        m_context3D->makeContextCurrent();
+    }
+
+private:
+    GraphicsContext3D* m_context3D;
+};
+
+static SkCanvas* createAcceleratedCanvas(const IntSize& size, ImageBufferData* data, DeferralMode deferralMode)
+{
+    GraphicsContext3D* context3D = SharedGraphicsContext3D::get();
+    if (!context3D)
+        return 0;
+    GrContext* gr = context3D->grContext();
+    if (!gr)
+        return 0;
+    gr->resetContext();
+    GrTextureDesc desc;
+    desc.fFlags = kRenderTarget_GrTextureFlagBit;
+    desc.fAALevel = kNone_GrAALevel;
+    desc.fWidth = size.width();
+    desc.fHeight = size.height();
+    desc.fConfig = kRGBA_8888_GrPixelConfig;
+    SkAutoTUnref<GrTexture> texture(gr->createUncachedTexture(desc, 0, 0));
+    if (!texture.get())
+        return 0;
+    SkCanvas* canvas;
+    SkAutoTUnref<SkDevice> device(new SkGpuDevice(gr, texture.get()));
+    if (deferralMode == Deferred) {
+        SkAutoTUnref<AcceleratedDeviceContext> deviceContext(new AcceleratedDeviceContext(context3D));
+        canvas = new SkDeferredCanvas(device.get(), deviceContext.get());
+    } else
+        canvas = new SkCanvas(device.get());
+    data->m_platformContext.setGraphicsContext3D(context3D);
+#if USE(ACCELERATED_COMPOSITING)
+#if PLATFORM(BLACKBERRY)
+    data->m_platformLayer = CanvasLayerWebKitThread::create((SkGpuDevice*)device.get());
+#else
+    data->m_platformLayer = Canvas2DLayerChromium::create(context3D, size);
+    data->m_platformLayer->setTextureId(texture.get()->getTextureHandle());
+    data->m_platformLayer->setCanvas(canvas);
+#endif
+#endif
+    return canvas;
+}
+#endif
+
+static SkCanvas* createNonPlatformCanvas(const IntSize& size)
+{
+    SkCanvas* canvas = new SkCanvas();
+    canvas->setDevice(new SkDevice(SkBitmap::kARGB_8888_Config, size.width(), size.height()))->unref();
+    return canvas;
+}
+
+ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace, RenderingMode renderingMode, DeferralMode deferralMode, bool& success)
     : m_data(size)
     , m_size(size)
 {
-#if PLATFORM(BLACKBERRY) && ENABLE(SKIA_GPU_CANVAS)
     OwnPtr<SkCanvas> canvas;
-    if (renderingMode == Accelerated) {
-        BlackBerry::Platform::Graphics::makeSharedResourceContextCurrent(BlackBerry::Platform::Graphics::GLES2);
-        canvas = adoptPtr(skia::CreateBitmapCanvas(size.width(), size.height(), false, BlackBerry::Platform::Graphics::getGpuDeviceFactory()));
-    } else
-        canvas = adoptPtr(skia::CreateBitmapCanvas(size.width(), size.height(), false));
+
+#if ENABLE(ACCELERATED_2D_CANVAS)
+    if (renderingMode == Accelerated)
+        canvas = adoptPtr(createAcceleratedCanvas(size, &m_data, deferralMode));
+    else
+#endif
+    if (renderingMode == UnacceleratedNonPlatformBuffer)
+        canvas = adoptPtr(createNonPlatformCanvas(size));
+
+    if (!canvas)
+#if PLATFORM(BLACKBERRY)
+        canvas = adoptPtr(createNonPlatformCanvas(size));
 #else
-    OwnPtr<SkCanvas> canvas = adoptPtr(skia::CreateBitmapCanvas(size.width(), size.height(), false));
+        canvas = adoptPtr(skia::TryCreateBitmapCanvas(size.width(), size.height(), false));
 #endif
 
     if (!canvas) {
@@ -91,11 +178,20 @@ ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace, RenderingMode renderin
     // required, but the canvas is currently filled with the magic transparency
     // color. Can we have another way to manage this?
     m_data.m_canvas->drawARGB(0, 0, 0, 0, SkXfermode::kClear_Mode);
+
     success = true;
 }
 
 ImageBuffer::~ImageBuffer()
 {
+#if USE(ACCELERATED_COMPOSITING)
+    if (m_data.m_platformLayer)
+#if PLATFORM(BLACKBERRY)
+        m_data.m_platformLayer->setDevice(0);
+#else
+        m_data.m_platformLayer->setTextureId(0);
+#endif
+#endif
 }
 
 GraphicsContext* ImageBuffer::context() const
@@ -103,48 +199,48 @@ GraphicsContext* ImageBuffer::context() const
     return m_context.get();
 }
 
-size_t ImageBuffer::dataSize() const
-{
-    return m_size.width() * m_size.height() * 4;
-}
-
 PassRefPtr<Image> ImageBuffer::copyImage(BackingStoreCopy copyBehavior) const
 {
-    ASSERT(copyBehavior == CopyBackingStore);
-    m_context->platformContext()->makeGrContextCurrent();
-    return BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), true);
+    return BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), copyBehavior == CopyBackingStore);
 }
+
+#if USE(ACCELERATED_COMPOSITING)
+PlatformLayer* ImageBuffer::platformLayer() const
+{
+    return m_data.m_platformLayer.get();
+}
+#endif
 
 void ImageBuffer::clip(GraphicsContext* context, const FloatRect& rect) const
 {
     context->platformContext()->beginLayerClippedToImage(rect, this);
 }
 
+static bool drawNeedsCopy(GraphicsContext* src, GraphicsContext* dst)
+{
+    return dst->platformContext()->isDeferred() || src == dst;
+}
+
 void ImageBuffer::draw(GraphicsContext* context, ColorSpace styleColorSpace, const FloatRect& destRect, const FloatRect& srcRect,
                        CompositeOperator op, bool useLowQualityScale)
 {
-    // Set both graphics contexts current. This looks a little weird, but is
-    // necessary since we may be drawing from an accelerated to
-    // non-accelerated context (e.g., printing), or vice versa. Note that it
-    // only works because the context is actually the same underlying context
-    // (or null), since we use one context for accelerated drawing. If that
-    // assumption changes, we'll have to revisit this code.
-    context->platformContext()->makeGrContextCurrent();
-    m_context->platformContext()->makeGrContextCurrent();
-    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), context == m_context);
+    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), drawNeedsCopy(m_context.get(), context));
     context->drawImage(image.get(), styleColorSpace, destRect, srcRect, op, useLowQualityScale);
 }
 
 void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform,
                               const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
 {
-    context->platformContext()->makeGrContextCurrent();
-    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), context == m_context);
+    RefPtr<Image> image = BitmapImageSingleFrameSkia::create(*m_data.m_platformContext.bitmap(), drawNeedsCopy(m_context.get(), context));
     image->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
 }
 
 void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
 {
+    // FIXME: Disable color space conversions on accelerated canvases (for now).
+    if (m_data.m_platformContext.isAccelerated()) 
+        return;
+
     const SkBitmap& bitmap = *context()->platformContext()->bitmap();
     if (bitmap.isNull())
         return;
@@ -164,7 +260,7 @@ void ImageBuffer::platformTransformColorSpace(const Vector<int>& lookUpTable)
 }
 
 template <Multiply multiplied>
-PassRefPtr<ByteArray> getImageData(const IntRect& rect, SkDevice& srcDevice,
+PassRefPtr<ByteArray> getImageData(const IntRect& rect, SkCanvas* canvas,
                                    const IntSize& size)
 {
     float area = 4.0f * rect.width() * rect.height();
@@ -172,14 +268,6 @@ PassRefPtr<ByteArray> getImageData(const IntRect& rect, SkDevice& srcDevice,
         return 0;
 
     RefPtr<ByteArray> result = ByteArray::create(rect.width() * rect.height() * 4);
-
-    SkBitmap::Config srcConfig = srcDevice.accessBitmap(false).config();
-
-    if (srcConfig == SkBitmap::kNo_Config) {
-        // This is an empty SkBitmap that could not be configured.
-        ASSERT(!size.width() || !size.height());
-        return result.release();
-    }
 
     unsigned char* data = result->data();
 
@@ -189,219 +277,125 @@ PassRefPtr<ByteArray> getImageData(const IntRect& rect, SkDevice& srcDevice,
         || rect.maxY() > size.height())
         memset(data, 0, result->length());
 
-    int originX = rect.x();
-    int destX = 0;
-    if (originX < 0) {
-        destX = -originX;
-        originX = 0;
-    }
-    int endX = rect.maxX();
-    if (endX > size.width())
-        endX = size.width();
-    int numColumns = endX - originX;
-
-    if (numColumns <= 0)
-        return result.release();
-
-    int originY = rect.y();
-    int destY = 0;
-    if (originY < 0) {
-        destY = -originY;
-        originY = 0;
-    }
-    int endY = rect.maxY();
-    if (endY > size.height())
-        endY = size.height();
-    int numRows = endY - originY;
-
-    if (numRows <= 0)
-        return result.release();
-
-    ASSERT(srcConfig == SkBitmap::kARGB_8888_Config);
-
     unsigned destBytesPerRow = 4 * rect.width();
+    SkBitmap destBitmap;
+    destBitmap.setConfig(SkBitmap::kARGB_8888_Config, rect.width(), rect.height(), destBytesPerRow);
+    destBitmap.setPixels(data);
 
-    SkBitmap srcBitmap;
-#if PLATFORM(BLACKBERRY) && ENABLE(SKIA_GPU_CANVAS)
-    // FIXME: Reading anything but the full buffer isn't supported in the GL driver.
-    // Remove this workaround once we fix the driver issue.
-    SkBitmap tempBitmap;
-    if (srcDevice.accessTexture() && (originX || originY || numColumns != srcDevice.width() || numRows != srcDevice.height())) {
-        srcDevice.readPixels(SkIRect::MakeWH(srcDevice.width(), srcDevice.height()), &tempBitmap);
-        if (!tempBitmap.extractSubset(&srcBitmap, SkIRect::MakeXYWH(originX, originY, numColumns, numRows)))
-            return result.release();
-        srcBitmap.lockPixels(); // This is a local variable and will be unlocked in the destructor.
-    } else
-#endif
-    srcDevice.readPixels(SkIRect::MakeXYWH(originX, originY, numColumns, numRows), &srcBitmap);
+    SkCanvas::Config8888 config8888;
+    if (multiplied == Premultiplied)
+        config8888 = SkCanvas::kRGBA_Premul_Config8888;
+    else
+        config8888 = SkCanvas::kRGBA_Unpremul_Config8888;
 
-    unsigned char* destRow = data + destY * destBytesPerRow + destX * 4;
-
-    // Do conversion of byte order and alpha divide (if necessary)
-    for (int y = 0; y < numRows; ++y) {
-        SkPMColor* srcBitmapRow = srcBitmap.getAddr32(0, y);
-        for (int x = 0; x < numColumns; ++x) {
-            SkPMColor srcPMColor = srcBitmapRow[x];
-            unsigned char* destPixel = &destRow[x * 4];
-            if (multiplied == Unmultiplied) {
-                unsigned char a = SkGetPackedA32(srcPMColor);
-                destPixel[0] = a ? SkGetPackedR32(srcPMColor) * 255 / a : 0;
-                destPixel[1] = a ? SkGetPackedG32(srcPMColor) * 255 / a : 0;
-                destPixel[2] = a ? SkGetPackedB32(srcPMColor) * 255 / a : 0;
-                destPixel[3] = a;
-            } else {
-                // Input and output are both pre-multiplied, we just need to re-arrange the
-                // bytes from the bitmap format to RGBA.
-                destPixel[0] = SkGetPackedR32(srcPMColor);
-                destPixel[1] = SkGetPackedG32(srcPMColor);
-                destPixel[2] = SkGetPackedB32(srcPMColor);
-                destPixel[3] = SkGetPackedA32(srcPMColor);
-            }
-        }
-        destRow += destBytesPerRow;
-    }
-
+    canvas->readPixels(&destBitmap, rect.x(), rect.y(), config8888);
     return result.release();
 }
 
 PassRefPtr<ByteArray> ImageBuffer::getUnmultipliedImageData(const IntRect& rect) const
 {
-    m_context->platformContext()->makeGrContextCurrent();
-    return getImageData<Unmultiplied>(rect, *context()->platformContext()->canvas()->getDevice(), m_size);
+    return getImageData<Unmultiplied>(rect, context()->platformContext()->canvas(), m_size);
 }
 
 PassRefPtr<ByteArray> ImageBuffer::getPremultipliedImageData(const IntRect& rect) const
 {
-    m_context->platformContext()->makeGrContextCurrent();
-    return getImageData<Premultiplied>(rect, *context()->platformContext()->canvas()->getDevice(), m_size);
+    return getImageData<Premultiplied>(rect, context()->platformContext()->canvas(), m_size);
 }
 
-template <Multiply multiplied>
-void putImageData(ByteArray*& source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint,
-                  SkDevice* dstDevice, const IntSize& size)
+void ImageBuffer::putByteArray(Multiply multiplied, ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
 {
+    SkCanvas* canvas = context()->platformContext()->canvas();
     ASSERT(sourceRect.width() > 0);
     ASSERT(sourceRect.height() > 0);
 
     int originX = sourceRect.x();
     int destX = destPoint.x() + sourceRect.x();
     ASSERT(destX >= 0);
-    ASSERT(destX < size.width());
+    ASSERT(destX < m_size.width());
     ASSERT(originX >= 0);
     ASSERT(originX < sourceRect.maxX());
 
     int endX = destPoint.x() + sourceRect.maxX();
-    ASSERT(endX <= size.width());
+    ASSERT(endX <= m_size.width());
 
     int numColumns = endX - destX;
 
     int originY = sourceRect.y();
     int destY = destPoint.y() + sourceRect.y();
     ASSERT(destY >= 0);
-    ASSERT(destY < size.height());
+    ASSERT(destY < m_size.height());
     ASSERT(originY >= 0);
     ASSERT(originY < sourceRect.maxY());
 
     int endY = destPoint.y() + sourceRect.maxY();
-    ASSERT(endY <= size.height());
+    ASSERT(endY <= m_size.height());
     int numRows = endY - destY;
 
     unsigned srcBytesPerRow = 4 * sourceSize.width();
+    SkBitmap srcBitmap;
+    srcBitmap.setConfig(SkBitmap::kARGB_8888_Config, numColumns, numRows, srcBytesPerRow);
+    srcBitmap.setPixels(source->data() + originY * srcBytesPerRow + originX * 4);
 
-    SkBitmap deviceBitmap = dstDevice->accessBitmap(true);
+    SkCanvas::Config8888 config8888;
+    if (multiplied == Premultiplied)
+        config8888 = SkCanvas::kRGBA_Premul_Config8888;
+    else
+        config8888 = SkCanvas::kRGBA_Unpremul_Config8888;
 
-    // If the device's bitmap doesn't have pixels we will make a temp and call writePixels on the device.
-    bool temporaryBitmap = !!deviceBitmap.getTexture();
-    SkBitmap destBitmap;
-
-    if (temporaryBitmap) {
-        destBitmap.setConfig(SkBitmap::kARGB_8888_Config, numColumns, numRows, srcBytesPerRow);
-        if (!destBitmap.allocPixels())
-            CRASH();
-    } else
-        deviceBitmap.extractSubset(&destBitmap, SkIRect::MakeXYWH(destX, destY, numColumns, numRows));
-
-    // Whether we made a temporary or not destBitmap is always configured to be written at 0,0
-    SkAutoLockPixels destAutoLock(destBitmap);
-    const unsigned char* srcRow = source->data() + originY * srcBytesPerRow + originX * 4;
-    for (int y = 0; y < numRows; ++y) {
-        SkPMColor* destRow = destBitmap.getAddr32(0, y);
-        for (int x = 0; x < numColumns; ++x) {
-            const unsigned char* srcPixel = &srcRow[x * 4];
-            if (multiplied == Unmultiplied) {
-                unsigned char alpha = srcPixel[3];
-                unsigned char r = SkMulDiv255Ceiling(srcPixel[0], alpha);
-                unsigned char g = SkMulDiv255Ceiling(srcPixel[1], alpha);
-                unsigned char b = SkMulDiv255Ceiling(srcPixel[2], alpha);
-                destRow[x] = SkPackARGB32(alpha, r, g, b);
-            } else
-                destRow[x] = SkPackARGB32NoCheck(srcPixel[3], srcPixel[0], srcPixel[1], srcPixel[2]);
-        }
-        srcRow += srcBytesPerRow;
-    }
-
-    // If we used a temporary then write it to the device
-    if (temporaryBitmap)
-        dstDevice->writePixels(destBitmap, destX, destY);
-}
-
-void ImageBuffer::putUnmultipliedImageData(ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
-{
-    m_context->platformContext()->makeGrContextCurrent();
-    putImageData<Unmultiplied>(source, sourceSize, sourceRect, destPoint, context()->platformContext()->canvas()->getDevice(), m_size);
-}
-
-void ImageBuffer::putPremultipliedImageData(ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
-{
-    m_context->platformContext()->makeGrContextCurrent();
-    putImageData<Premultiplied>(source, sourceSize, sourceRect, destPoint, context()->platformContext()->canvas()->getDevice(), m_size);
+    canvas->writePixels(srcBitmap, destX, destY, config8888);
 }
 
 template <typename T>
-static String ImageToDataURL(T& source, const String& mimeType, const double* quality)
+static bool encodeImage(T& source, const String& mimeType, const double* quality, Vector<char>* output)
 {
-    ASSERT(MIMETypeRegistry::isSupportedImageMIMETypeForEncoding(mimeType));
+    Vector<unsigned char>* encodedImage = reinterpret_cast<Vector<unsigned char>*>(output);
 
-    Vector<unsigned char> encodedImage;
     if (mimeType == "image/jpeg") {
         int compressionQuality = JPEGImageEncoder::DefaultCompressionQuality;
         if (quality && *quality >= 0.0 && *quality <= 1.0)
             compressionQuality = static_cast<int>(*quality * 100 + 0.5);
-        //if (!JPEGImageEncoder::encode(source, compressionQuality, &encodedImage))
-        //    return "data:,";
+        if (!JPEGImageEncoder::encode(source, compressionQuality, encodedImage))
+            return false;
+#if USE(WEBP)
+    } else if (mimeType == "image/webp") {
+        int compressionQuality = WEBPImageEncoder::DefaultCompressionQuality;
+        if (quality && *quality >= 0.0 && *quality <= 1.0)
+            compressionQuality = static_cast<int>(*quality * 100 + 0.5);
+        if (!WEBPImageEncoder::encode(source, compressionQuality, encodedImage))
+            return false;
+#endif
     } else {
-        if (!PNGImageEncoder::encode(source, &encodedImage))
-            return "data:,";
+        if (!PNGImageEncoder::encode(source, encodedImage))
+            return false;
         ASSERT(mimeType == "image/png");
     }
 
-    Vector<char> base64Data;
-    base64Encode(*reinterpret_cast<Vector<char>*>(&encodedImage), base64Data);
-
-    return "data:" + mimeType + ";base64," + base64Data;
+    return true;
 }
 
 String ImageBuffer::toDataURL(const String& mimeType, const double* quality) const
 {
+    ASSERT(MIMETypeRegistry::isSupportedImageMIMETypeForEncoding(mimeType));
+
+    Vector<char> encodedImage, base64Data;
     SkDevice* device = context()->platformContext()->canvas()->getDevice();
-    SkBitmap bitmap = device->accessBitmap(false);
+    if (!encodeImage(device->accessBitmap(false), mimeType, quality, &encodedImage))
+        return "data:,";
 
-    // if we can't see the pixels directly, call readPixels() to get a copy.
-    // this could happen if the device is backed by a GPU.
-    bitmap.lockPixels(); // balanced by our destructor, or explicitly if getPixels() fails
-    if (!bitmap.getPixels()) {
-        bitmap.unlockPixels();
-        SkIRect bounds = SkIRect::MakeWH(device->width(), device->height());
-        if (!device->readPixels(bounds, &bitmap))
-            return "data:,";
-    }
-
-    return ImageToDataURL(bitmap, mimeType, quality);
+    base64Encode(encodedImage, base64Data);
+    return "data:" + mimeType + ";base64," + base64Data;
 }
 
-String ImageDataToDataURL(const ImageData& source, const String& mimeType, const double* quality)
+String ImageDataToDataURL(const ImageData& imageData, const String& mimeType, const double* quality)
 {
-    return ImageToDataURL(source, mimeType, quality);
+    ASSERT(MIMETypeRegistry::isSupportedImageMIMETypeForEncoding(mimeType));
+
+    Vector<char> encodedImage, base64Data;
+    if (!encodeImage(imageData, mimeType, quality, &encodedImage))
+        return "data:,";
+
+    base64Encode(encodedImage, base64Data);
+    return "data:" + mimeType + ";base64," + base64Data;
 }
 
 } // namespace WebCore

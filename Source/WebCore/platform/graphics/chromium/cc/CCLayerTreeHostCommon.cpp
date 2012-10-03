@@ -33,6 +33,7 @@
 #include "RenderSurfaceChromium.h"
 #include "TransformationMatrix.h"
 #include "cc/CCLayerImpl.h"
+#include "cc/CCLayerIterator.h"
 #include "cc/CCLayerSorter.h"
 #include "cc/CCRenderSurface.h"
 
@@ -71,7 +72,7 @@ static bool isScaleOrTranslation(const TransformationMatrix& m)
 }
 
 template<typename LayerType>
-bool layerShouldBeSkipped(LayerType* layer)
+static bool layerShouldBeSkipped(LayerType* layer)
 {
     // Layers can be skipped if any of these conditions are met.
     //   - does not draw content.
@@ -103,12 +104,54 @@ bool layerShouldBeSkipped(LayerType* layer)
     return false;
 }
 
+template<typename LayerType>
+static bool subtreeShouldRenderToSeparateSurface(LayerType* layer, bool axisAlignedWithRespectToParent)
+{
+    // FIXME: If we decide to create a render surface here while this layer does
+    //        preserve-3d, then we may be sorting incorrectly because we will not be
+    //        sorting the individual layers of this subtree with other layers outside of
+    //        this subtree.
+
+    // Cache this value, because otherwise it walks the entire subtree several times.
+    bool descendantDrawsContent = layer->descendantDrawsContent();
+
+    //
+    // A layer and its descendants should render onto a new RenderSurface if any of these rules hold:
+    //
+
+    // If the layer uses a mask.
+    if (layer->maskLayer())
+        return true;
+
+    // If the layer has a reflection.
+    if (layer->replicaLayer())
+        return true;
+
+    // If the layer uses a CSS filter.
+    if (!layer->filters().isEmpty())
+        return true;
+
+    // If the layer flattens its subtree (i.e. the layer doesn't preserve-3d), but it is
+    // treated as a 3D object by its parent (i.e. parent does preserve-3d).
+    if (layer->parent() && layer->parent()->preserves3D() && !layer->preserves3D() && descendantDrawsContent)
+        return true;
+
+    // If the layer clips its descendants but it is not axis-aligned with respect to its parent.
+    if (layer->masksToBounds() && !axisAlignedWithRespectToParent && descendantDrawsContent)
+        return true;
+
+    // If the layer has opacity != 1 and does not have a preserves-3d transform style.
+    if (layer->opacity() != 1 && !layer->preserves3D() && descendantDrawsContent)
+        return true;
+
+    return false;
+}
+
 // Recursively walks the layer tree starting at the given node and computes all the
 // necessary transformations, clipRects, render surfaces, etc.
-template<typename LayerType, typename RenderSurfaceType, typename LayerSorter>
-static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, LayerType* rootLayer, const TransformationMatrix& parentMatrix, const TransformationMatrix& fullHierarchyMatrix, Vector<RefPtr<LayerType> >& renderSurfaceLayerList, Vector<RefPtr<LayerType> >& layerList, LayerSorter* layerSorter, int maxTextureSize)
+template<typename LayerType, typename LayerList, typename RenderSurfaceType, typename LayerSorter>
+static bool calculateDrawTransformsAndVisibilityInternal(LayerType* layer, LayerType* rootLayer, const TransformationMatrix& parentMatrix, const TransformationMatrix& fullHierarchyMatrix, RenderSurfaceType* nearestAncestorThatMovesPixels, LayerList& renderSurfaceLayerList, LayerList& layerList, LayerSorter* layerSorter, int maxTextureSize)
 {
-    typedef Vector<RefPtr<LayerType> > LayerList;
     // This function computes the new matrix transformations recursively for this
     // layer and all its descendants. It also computes the appropriate render surfaces.
     // Some important points to remember:
@@ -187,6 +230,15 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
     //        S is the scale adjustment (to scale up to the layer size)
     //
 
+    float drawOpacity = layer->opacity();
+    if (layer->parent() && layer->parent()->preserves3D())
+        drawOpacity *= layer->parent()->drawOpacity();
+    // The opacity of a layer always applies to its children (either implicitly
+    // via a render surface or explicitly if the parent preserves 3D), so the
+    // entire subtree can be skipped if this layer is fully transparent.
+    if (!drawOpacity)
+        return false;
+
     IntSize bounds = layer->bounds();
     FloatPoint anchorPoint = layer->anchorPoint();
     FloatPoint position = layer->position() - layer->scrollDelta();
@@ -196,15 +248,13 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
     float centerOffsetY = (0.5 - anchorPoint.y()) * bounds.height();
 
     TransformationMatrix layerLocalTransform;
-    // LT = Tr[origin] * M[zoomAnimator]
-    layerLocalTransform.multiply(layer->zoomAnimatorTransform());
-    // LT = Tr[origin] * M[zoomAnimator] * S[scaleDelta]
-    layerLocalTransform.scale(layer->scaleDelta());
-    // LT = Tr[origin] * M[zoomAnimator] * S[scaleDelta] * Tr[origin2anchor]
+    // LT = Tr[origin] * S[pageScaleDelta]
+    layerLocalTransform.scale(layer->pageScaleDelta());
+    // LT = Tr[origin] * S[pageScaleDelta] * Tr[origin2anchor]
     layerLocalTransform.translate3d(position.x(), position.y(), layer->anchorPointZ());
-    // LT = Tr[origin] * M[zoomAnimator] * S[scaleDelta] * Tr[origin2anchor] * M[layer]
+    // LT = Tr[origin] * S[pageScaleDelta] * Tr[origin2anchor] * M[layer]
     layerLocalTransform.multiply(layer->transform());
-    // LT = Tr[origin] * M[zoomAnimator] * S[scaleDelta] * Tr[origin2anchor] * M[layer] * Tr[anchor2center]
+    // LT = Tr[origin] * S[pageScaleDelta] * Tr[origin2anchor] * M[layer] * Tr[anchor2center]
     layerLocalTransform.translate3d(centerOffsetX, centerOffsetY, -layer->anchorPointZ());
 
     TransformationMatrix combinedTransform = parentMatrix;
@@ -220,25 +270,12 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
     // FIXME: This seems like the wrong place to set this
     layer->setUsesLayerClipping(false);
 
-    // The layer and its descendants render on a new RenderSurface if any of
-    // these conditions hold:
-    // 1. The layer clips its descendants and its transform is not a simple translation.
-    // 2. If the layer has opacity != 1 and does not have a preserves-3d transform style.
-    // 3. The layer uses a mask
-    // 4. The layer has a replica (used for reflections)
-    // 5. The layer doesn't preserve-3d but is the child of a layer which does.
-    // If a layer preserves-3d then we don't create a RenderSurface for it to avoid flattening
-    // out its children. The opacity value of the children layers is multiplied by the opacity
-    // of their parent.
-    bool useSurfaceForClipping = layer->masksToBounds() && !isScaleOrTranslation(combinedTransform);
-    bool useSurfaceForOpacity = layer->opacity() != 1 && !layer->preserves3D();
-    bool useSurfaceForMasking = layer->maskLayer();
-    bool useSurfaceForReflection = layer->replicaLayer();
-    bool useSurfaceForFlatDescendants = layer->parent() && layer->parent()->preserves3D() && !layer->preserves3D() && layer->descendantDrawsContent();
-    if (useSurfaceForMasking || useSurfaceForReflection || useSurfaceForFlatDescendants || ((useSurfaceForClipping || useSurfaceForOpacity) && layer->descendantDrawsContent())) {
+    if (subtreeShouldRenderToSeparateSurface(layer, isScaleOrTranslation(combinedTransform))) {
         if (!layer->renderSurface())
             layer->createRenderSurface();
+
         RenderSurfaceType* renderSurface = layer->renderSurface();
+        renderSurface->clearLayerList();
 
         // The origin of the new surface is the upper left corner of the layer.
         TransformationMatrix drawTransform;
@@ -247,10 +284,7 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
 
         transformedLayerRect = IntRect(0, 0, bounds.width(), bounds.height());
 
-        // Layer's opacity will be applied when drawing the render surface.
-        float drawOpacity = layer->opacity();
-        if (layer->parent() && layer->parent()->preserves3D())
-            drawOpacity *= layer->parent()->drawOpacity();
+        // The opacity value is moved from the layer to its surface, so that the entire subtree properly inherits opacity.
         renderSurface->setDrawOpacity(drawOpacity);
         layer->setDrawOpacity(1);
 
@@ -266,8 +300,6 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
         // surface and is therefore expressed in the parent's coordinate system.
         renderSurface->setClipRect(layer->parent() ? layer->parent()->clipRect() : layer->clipRect());
 
-        renderSurface->clearLayerList();
-
         if (layer->maskLayer()) {
             renderSurface->setMaskLayer(layer->maskLayer());
             layer->maskLayer()->setTargetRenderSurface(renderSurface);
@@ -277,27 +309,30 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
         if (layer->replicaLayer() && layer->replicaLayer()->maskLayer())
             layer->replicaLayer()->maskLayer()->setTargetRenderSurface(renderSurface);
 
+        renderSurface->setFilters(layer->filters());
+        if (renderSurface->filters().hasFilterThatMovesPixels())
+            nearestAncestorThatMovesPixels = renderSurface;
+        renderSurface->setNearestAncestorThatMovesPixels(nearestAncestorThatMovesPixels);
+
         renderSurfaceLayerList.append(layer);
     } else {
         layer->setDrawTransform(combinedTransform);
         transformedLayerRect = enclosingIntRect(layer->drawTransform().mapRect(layerRect));
 
-        layer->setDrawOpacity(layer->opacity());
+        layer->setDrawOpacity(drawOpacity);
 
-        if (layer->parent()) {
-            if (layer->parent()->preserves3D())
-               layer->setDrawOpacity(layer->drawOpacity() * layer->parent()->drawOpacity());
+        if (layer != rootLayer) {
+            ASSERT(layer->parent());
+            layer->clearRenderSurface();
 
             // Layers inherit the clip rect from their parent.
             layer->setClipRect(layer->parent()->clipRect());
             if (layer->parent()->usesLayerClipping())
                 layer->setUsesLayerClipping(true);
 
+            // Layers without their own renderSurface will render into the nearest ancestor surface.
             layer->setTargetRenderSurface(layer->parent()->targetRenderSurface());
         }
-
-        if (layer != rootLayer)
-            layer->clearRenderSurface();
 
         if (layer->masksToBounds()) {
             IntRect clipRect = transformedLayerRect;
@@ -313,13 +348,6 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
     layerScreenSpaceTransform.multiply(layer->drawTransform());
     layerScreenSpaceTransform.translate3d(-0.5 * bounds.width(), -0.5 * bounds.height(), 0);
     layer->setScreenSpaceTransform(layerScreenSpaceTransform);
-
-    if (layer->renderSurface())
-        layer->setTargetRenderSurface(layer->renderSurface());
-    else {
-        ASSERT(layer->parent());
-        layer->setTargetRenderSurface(layer->parent()->targetRenderSurface());
-    }
 
     // drawableContentRect() is always stored in the coordinate system of the
     // RenderSurface the layer draws into.
@@ -360,22 +388,24 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
 
     for (size_t i = 0; i < layer->children().size(); ++i) {
         LayerType* child = layer->children()[i].get();
-        calculateDrawTransformsAndVisibilityInternal<LayerType, RenderSurfaceType, LayerSorter>(child, rootLayer, sublayerMatrix, nextHierarchyMatrix, renderSurfaceLayerList, descendants, layerSorter, maxTextureSize);
+        bool drawsContent = calculateDrawTransformsAndVisibilityInternal<LayerType, LayerList, RenderSurfaceType, LayerSorter>(child, rootLayer, sublayerMatrix, nextHierarchyMatrix, nearestAncestorThatMovesPixels, renderSurfaceLayerList, descendants, layerSorter, maxTextureSize);
 
-        if (child->renderSurface()) {
-            RenderSurfaceType* childRenderSurface = child->renderSurface();
-            IntRect drawableContentRect = layer->drawableContentRect();
-            drawableContentRect.unite(enclosingIntRect(childRenderSurface->drawableContentRect()));
-            layer->setDrawableContentRect(drawableContentRect);
-            descendants.append(child);
-        } else {
-            IntRect drawableContentRect = layer->drawableContentRect();
-            drawableContentRect.unite(child->drawableContentRect());
-            layer->setDrawableContentRect(drawableContentRect);
+        if (drawsContent) {
+            if (child->renderSurface()) {
+                RenderSurfaceType* childRenderSurface = child->renderSurface();
+                IntRect drawableContentRect = layer->drawableContentRect();
+                drawableContentRect.unite(enclosingIntRect(childRenderSurface->drawableContentRect()));
+                layer->setDrawableContentRect(drawableContentRect);
+                descendants.append(child);
+            } else {
+                IntRect drawableContentRect = layer->drawableContentRect();
+                drawableContentRect.unite(child->drawableContentRect());
+                layer->setDrawableContentRect(drawableContentRect);
+            }
         }
     }
 
-    if (layer->masksToBounds() || useSurfaceForMasking) {
+    if (layer->masksToBounds() || layer->maskLayer()) {
         IntRect drawableContentRect = layer->drawableContentRect();
         drawableContentRect.intersect(transformedLayerRect);
         layer->setDrawableContentRect(drawableContentRect);
@@ -428,23 +458,66 @@ static void calculateDrawTransformsAndVisibilityInternal(LayerType* layer, Layer
             replicaDrawTransform.translate3d(surfaceCenter.x() - anchorPoint.x() * bounds.width(), surfaceCenter.y() - anchorPoint.y() * bounds.height(), 0);
             renderSurface->setReplicaDrawTransform(replicaDrawTransform);
         }
+
+        // If a render surface has no layer list, then it and none of its children needed to get drawn.
+        if (!layer->renderSurface()->layerList().size()) {
+            // FIXME: Originally we asserted that this layer was already at the end of the
+            //        list, and only needed to remove that layer. For now, we remove the
+            //        entire subtree of surfaces to fix a crash bug. The root cause is
+            //        https://bugs.webkit.org/show_bug.cgi?id=74147 and we should be able
+            //        to put the original assert after fixing that.
+            while (renderSurfaceLayerList.last() != layer) {
+                renderSurfaceLayerList.last()->clearRenderSurface();
+                renderSurfaceLayerList.removeLast();
+            }
+            ASSERT(renderSurfaceLayerList.last() == layer);
+            renderSurfaceLayerList.removeLast();
+            layer->clearRenderSurface();
+            return false;
+        }
     }
+
+    // If neither this layer nor any of its children were added, early out.
+    if (sortingStartIndex == descendants.size())
+        return false;
 
     // If preserves-3d then sort all the descendants in 3D so that they can be
     // drawn from back to front. If the preserves-3d property is also set on the parent then
     // skip the sorting as the parent will sort all the descendants anyway.
     if (descendants.size() && layer->preserves3D() && (!layer->parent() || !layer->parent()->preserves3D()))
         sortLayers(&descendants.at(sortingStartIndex), descendants.end(), layerSorter);
+
+    return true;
+}
+
+// FIXME: Instead of using the following function to set visibility rects on a second
+// tree pass, revise calculateVisibleLayerRect() so that this can be done in a single
+// pass inside calculateDrawTransformsAndVisibilityInternal<>().
+template<typename LayerType, typename LayerList, typename RenderSurfaceType>
+static void walkLayersAndCalculateVisibleLayerRects(const LayerList& renderSurfaceLayerList)
+{
+    // Use BackToFront since it's cheap and this isn't order-dependent.
+    typedef CCLayerIterator<LayerType, LayerList, RenderSurfaceType, CCLayerIteratorActions::BackToFront> CCLayerIteratorType;
+
+    CCLayerIteratorType end = CCLayerIteratorType::end(&renderSurfaceLayerList);
+    for (CCLayerIteratorType it = CCLayerIteratorType::begin(&renderSurfaceLayerList); it != end; ++it) {
+        if (!it.representsTargetRenderSurface()) {
+            IntRect visibleLayerRect = CCLayerTreeHostCommon::calculateVisibleLayerRect<LayerType>(*it);
+            it->setVisibleLayerRect(visibleLayerRect);
+        }
+    }
 }
 
 void CCLayerTreeHostCommon::calculateDrawTransformsAndVisibility(LayerChromium* layer, LayerChromium* rootLayer, const TransformationMatrix& parentMatrix, const TransformationMatrix& fullHierarchyMatrix, Vector<RefPtr<LayerChromium> >& renderSurfaceLayerList, Vector<RefPtr<LayerChromium> >& layerList, int maxTextureSize)
 {
-    return WebCore::calculateDrawTransformsAndVisibilityInternal<LayerChromium, RenderSurfaceChromium, void*>(layer, rootLayer, parentMatrix, fullHierarchyMatrix, renderSurfaceLayerList, layerList, 0, maxTextureSize);
+    WebCore::calculateDrawTransformsAndVisibilityInternal<LayerChromium, Vector<RefPtr<LayerChromium> >, RenderSurfaceChromium, void>(layer, rootLayer, parentMatrix, fullHierarchyMatrix, 0, renderSurfaceLayerList, layerList, 0, maxTextureSize);
+    walkLayersAndCalculateVisibleLayerRects<LayerChromium, Vector<RefPtr<LayerChromium> >, RenderSurfaceChromium>(renderSurfaceLayerList);
 }
 
-void CCLayerTreeHostCommon::calculateDrawTransformsAndVisibility(CCLayerImpl* layer, CCLayerImpl* rootLayer, const TransformationMatrix& parentMatrix, const TransformationMatrix& fullHierarchyMatrix, Vector<RefPtr<CCLayerImpl> >& renderSurfaceLayerList, Vector<RefPtr<CCLayerImpl> >& layerList, CCLayerSorter* layerSorter, int maxTextureSize)
+void CCLayerTreeHostCommon::calculateDrawTransformsAndVisibility(CCLayerImpl* layer, CCLayerImpl* rootLayer, const TransformationMatrix& parentMatrix, const TransformationMatrix& fullHierarchyMatrix, Vector<CCLayerImpl*>& renderSurfaceLayerList, Vector<CCLayerImpl*>& layerList, CCLayerSorter* layerSorter, int maxTextureSize)
 {
-    return calculateDrawTransformsAndVisibilityInternal<CCLayerImpl, CCRenderSurface, CCLayerSorter>(layer, rootLayer, parentMatrix, fullHierarchyMatrix, renderSurfaceLayerList, layerList, layerSorter, maxTextureSize);
+    calculateDrawTransformsAndVisibilityInternal<CCLayerImpl, Vector<CCLayerImpl*>, CCRenderSurface, CCLayerSorter>(layer, rootLayer, parentMatrix, fullHierarchyMatrix, 0, renderSurfaceLayerList, layerList, layerSorter, maxTextureSize);
+    walkLayersAndCalculateVisibleLayerRects<CCLayerImpl, Vector<CCLayerImpl*>, CCRenderSurface>(renderSurfaceLayerList);
 }
 
 } // namespace WebCore

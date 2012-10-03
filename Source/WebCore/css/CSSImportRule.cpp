@@ -39,10 +39,11 @@ CSSImportRule::CSSImportRule(CSSStyleSheet* parent, const String& href, PassRefP
     , m_cachedSheet(0)
     , m_loading(false)
 {
+    ASSERT(parent);
     if (m_lstMedia)
         m_lstMedia->setParentStyleSheet(parent);
     else
-        m_lstMedia = MediaList::create(this, String());
+        m_lstMedia = MediaList::create(parent, String());
 }
 
 CSSImportRule::~CSSImportRule()
@@ -50,7 +51,7 @@ CSSImportRule::~CSSImportRule()
     if (m_lstMedia)
         m_lstMedia->setParentStyleSheet(0);
     if (m_styleSheet)
-        m_styleSheet->setParentRule(0);
+        m_styleSheet->clearOwnerRule();
     if (m_cachedSheet)
         m_cachedSheet->removeClient(&m_styleSheetClient);
 }
@@ -58,7 +59,7 @@ CSSImportRule::~CSSImportRule()
 void CSSImportRule::setCSSStyleSheet(const String& href, const KURL& baseURL, const String& charset, const CachedCSSStyleSheet* sheet)
 {
     if (m_styleSheet)
-        m_styleSheet->setParentRule(0);
+        m_styleSheet->clearOwnerRule();
     m_styleSheet = CSSStyleSheet::create(this, href, baseURL, charset);
 
     bool crossOriginCSS = false;
@@ -102,8 +103,10 @@ void CSSImportRule::setCSSStyleSheet(const String& href, const KURL& baseURL, co
 
     m_loading = false;
 
-    if (parent)
+    if (parent) {
+        parent->notifyLoadedSheet(sheet);
         parent->checkLoaded();
+    }
 }
 
 bool CSSImportRule::isLoading() const

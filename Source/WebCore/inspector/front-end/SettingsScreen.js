@@ -38,8 +38,21 @@ WebInspector.SettingsScreen = function()
 
     this._leftColumnElement = document.createElement("td");
     this._rightColumnElement = document.createElement("td");
+    var p;
 
-    var p = this._appendSection(WebInspector.UIString("Elements"));
+    if (Preferences.showDockToRight || Preferences.exposeDisableCache) {
+        p = this._appendSection(WebInspector.UIString("General"));
+        if (Preferences.showDockToRight)
+            p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Dock to right"), WebInspector.settings.dockToRight));
+        if (Preferences.exposeDisableCache)
+            p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Disable cache"), WebInspector.settings.cacheDisabled));
+    }
+    
+    p = this._appendSection(WebInspector.UIString("Rendering"));
+    p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Show paint rectangles"), WebInspector.settings.showPaintRects));
+    WebInspector.settings.showPaintRects.addChangeListener(this._showPaintRectsChanged, this);
+
+    p = this._appendSection(WebInspector.UIString("Elements"));
     p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Word wrap"), WebInspector.settings.domWordWrap));
 
     p = this._appendSection(WebInspector.UIString("Styles"));
@@ -58,24 +71,37 @@ WebInspector.SettingsScreen = function()
             [ WebInspector.UIString("Tab character"), WebInspector.TextEditorModel.Indent.TabCharacter ]
         ], WebInspector.settings.textEditorIndent));
 
-    p = this._appendSection(WebInspector.UIString("Network"), true);
-    if (Preferences.canDisableCache)
-        p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Disable cache"), WebInspector.settings.cacheDisabled));
+    p = this._appendSection(WebInspector.UIString("User Agent"), true);
     p.appendChild(this._createUserActionControl());
+    p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Emulate touch events"), WebInspector.settings.emulateTouchEvents));
 
     p = this._appendSection(WebInspector.UIString("Scripts"), true);
+    p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Use file navigator and tabbed editor container in scripts panel"), WebInspector.settings.useScriptsNavigator));
     p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Show script folders"), WebInspector.settings.showScriptFolders));
     p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Search in content scripts"), WebInspector.settings.searchInContentScripts));
+    p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Enable source maps"), WebInspector.settings.sourceMapsEnabled));
+
+    p = this._appendSection(WebInspector.UIString("Profiler"), true);
+    p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Show objects' hidden properties"), WebInspector.settings.showHeapSnapshotObjectsHiddenProperties));
 
     p = this._appendSection(WebInspector.UIString("Console"), true);
     p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Log XMLHttpRequests"), WebInspector.settings.monitoringXHREnabled));
     p.appendChild(this._createCheckboxSetting(WebInspector.UIString("Preserve log upon navigation"), WebInspector.settings.preserveConsoleLog));
 
-    if (Preferences.haveExtensions) {
+    if (WebInspector.extensionServer.hasExtensions()) {
         var handlerSelector = new WebInspector.HandlerSelector(WebInspector.openAnchorLocationRegistry);
         p = this._appendSection(WebInspector.UIString("Extensions"), true);
         p.appendChild(this._createCustomSetting(WebInspector.UIString("Open links in"), handlerSelector.element));
     }
+
+    var experiments = WebInspector.experimentsSettings.experiments;
+    if (WebInspector.experimentsSettings.experimentsEnabled && experiments.length) {
+        var experimentsSection = this._appendSection(WebInspector.UIString("Experiments"), true);
+        experimentsSection.appendChild(this._createExperimentsWarningSubsection());
+        for (var i = 0; i < experiments.length; ++i)
+            experimentsSection.appendChild(this._createExperimentCheckbox(experiments[i]));
+    }
+    
     var table = document.createElement("table");
     table.className = "help-table";
     var tr = document.createElement("tr");
@@ -102,6 +128,20 @@ WebInspector.SettingsScreen.prototype = {
         return p;
     },
 
+    /**
+     * @return {Element} element
+     */
+    _createExperimentsWarningSubsection: function()
+    {
+        var subsection = document.createElement("div");
+        var warning = subsection.createChild("span", "settings-experiments-warning-subsection-warning");
+        warning.textContent = WebInspector.UIString("WARNING:");
+        subsection.appendChild(document.createTextNode(" "));
+        var message = subsection.createChild("span", "settings-experiments-warning-subsection-message");
+        message.textContent = WebInspector.UIString("These experiments could be dangerous and may require restart.");
+        return subsection;
+    },
+
     _columnElement: function(right)
     {
         return right ? this._rightColumnElement : this._leftColumnElement;
@@ -123,6 +163,26 @@ WebInspector.SettingsScreen.prototype = {
         var label = document.createElement("label");
         label.appendChild(input);
         label.appendChild(document.createTextNode(name));
+        p.appendChild(label);
+        return p;
+    },
+
+    _createExperimentCheckbox: function(experiment)
+    {
+        var input = document.createElement("input");
+        input.type = "checkbox";
+        input.name = experiment.name;
+        input.checked = experiment.isEnabled();
+        function listener()
+        {
+            experiment.setEnabled(input.checked);
+        }
+        input.addEventListener("click", listener, false);
+
+        var p = document.createElement("p");
+        var label = document.createElement("label");
+        label.appendChild(input);
+        label.appendChild(document.createTextNode(WebInspector.UIString(experiment.title)));
         p.appendChild(label);
         return p;
     },
@@ -237,9 +297,9 @@ WebInspector.SettingsScreen.prototype = {
     {
         var userAgent = WebInspector.settings.userAgent.get();
         const userAgents = [
-            ["Internet Explorer 9", "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0"],
-            ["Internet Explorer 8", "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.0; Trident/4.0"],
-            ["Internet Explorer 7", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0"],
+            ["Internet Explorer 9", "Mozilla/5.0 (compatible; MSIE 9.0; Windows NT 6.1; Trident/5.0)"],
+            ["Internet Explorer 8", "Mozilla/4.0 (compatible; MSIE 8.0; Windows NT 6.0; Trident/4.0)"],
+            ["Internet Explorer 7", "Mozilla/4.0 (compatible; MSIE 7.0; Windows NT 6.0)"],
 
             ["Firefox 7 \u2014 Windows", "Mozilla/5.0 (Windows NT 6.1; Intel Mac OS X 10.6; rv:7.0.1) Gecko/20100101 Firefox/7.0.1"],
             ["Firefox 7 \u2014 Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.6; rv:7.0.1) Gecko/20100101 Firefox/7.0.1"],
@@ -253,9 +313,10 @@ WebInspector.SettingsScreen.prototype = {
 
             ["Android 2.3 \u2014 Nexus S", "Mozilla/5.0 (Linux; U; Android 2.3.6; en-us; Nexus S Build/GRK39F) AppleWebKit/533.1 (KHTML, like Gecko) Version/4.0 Mobile Safari/533.1"],
 
-            ["BlackBerry \u2014 PlayBook 1.0","Mozilla/5.0 (PlayBook; U; RIM Tablet OS 1.0.0; en-US) AppleWebKit/534.11+ (KHTML, like Gecko) Version/7.1.0.7 Safari/534.11+"],
-            ["BlackBerry \u2014 PlayBook 2.0", "Mozilla/5.0 (PlayBook; U; RIM Tablet OS 2.0.0; en-US) AppleWebKit/535.8+ (KHTML, like Gecko) Version/7.2.0.0 Safari/535.8+"],
+            ["BlackBerry \u2014 PlayBook 2.1", "Mozilla/5.0 (PlayBook; U; RIM Tablet OS 2.1.0; en-US) AppleWebKit/536.2+ (KHTML, like Gecko) Version/7.2.1.0 Safari/536.2+"],
             ["BlackBerry \u2014 9900", "Mozilla/5.0 (BlackBerry; U; BlackBerry 9900; en-US) AppleWebKit/534.11+ (KHTML, like Gecko) Version/7.0.0.187 Mobile Safari/534.11+"],
+
+            ["MeeGo \u2014 Nokia N9", "Mozilla/5.0 (MeeGo; NokiaN9) AppleWebKit/534.13 (KHTML, like Gecko) NokiaBrowser/8.5.0 Mobile Safari/534.13"],
 
             [WebInspector.UIString("Other..."), "Other"]
         ];
@@ -315,6 +376,11 @@ WebInspector.SettingsScreen.prototype = {
 
         selectionChanged.call(this);
         return fieldsetElement;
+    },
+
+    _showPaintRectsChanged: function()
+    {
+        PageAgent.setShowPaintRects(WebInspector.settings.showPaintRects.get());
     }
 }
 

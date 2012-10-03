@@ -27,6 +27,7 @@
 #define DeviceOrientationController_h
 
 #include "DOMWindow.h"
+#include "Page.h"
 #include "Timer.h"
 
 #include <wtf/HashCountedSet.h>
@@ -35,12 +36,12 @@ namespace WebCore {
 
 class DeviceOrientation;
 class DeviceOrientationClient;
-class Page;
 
-class DeviceOrientationController {
+class DeviceOrientationController : public Supplement<Page> {
 public:
-    DeviceOrientationController(Page*, DeviceOrientationClient*);
     ~DeviceOrientationController();
+
+    static PassOwnPtr<DeviceOrientationController> create(Page*, DeviceOrientationClient*);
 
     void addListener(DOMWindow*);
     void removeListener(DOMWindow*);
@@ -53,7 +54,15 @@ public:
 
     bool isActive() { return !m_listeners.isEmpty(); }
 
+    DeviceOrientationClient* client() const { return m_client; }
+
+    static const AtomicString& supplementName();
+    static DeviceOrientationController* from(Page* page) { return static_cast<DeviceOrientationController*>(Supplement<Page>::from(page, supplementName())); }
+    static bool isActiveAt(Page*);
+
 private:
+    DeviceOrientationController(Page*, DeviceOrientationClient*);
+
     void timerFired(Timer<DeviceOrientationController>*);
 
     Page* m_page;

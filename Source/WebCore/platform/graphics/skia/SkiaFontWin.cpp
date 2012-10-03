@@ -32,18 +32,21 @@
 #include "SkiaFontWin.h"
 
 #include "AffineTransform.h"
-#include "PlatformContextSkia.h"
 #include "Gradient.h"
 #include "Pattern.h"
+#include "PlatformContextSkia.h"
+#include "PlatformSupport.h"
+#include "SimpleFontData.h"
 #include "SkCanvas.h"
+#include "SkDevice.h"
 #include "SkPaint.h"
 #include "SkShader.h"
 #include "SkTemplates.h"
-#include "SkTypeface_win.h"
 
 namespace WebCore {
 
-bool windowsCanHandleDrawTextShadow(GraphicsContext *context)
+#if !USE(SKIA_TEXT)
+bool windowsCanHandleDrawTextShadow(GraphicsContext* context)
 {
     FloatSize shadowOffset;
     float shadowBlur;
@@ -74,7 +77,7 @@ bool windowsCanHandleTextDrawingWithoutShadow(GraphicsContext* context)
     // which look weird. All else being equal, it's better to use Windows' text
     // drawing, so we don't check for zooms.
     const AffineTransform& matrix = context->getCTM();
-    if (matrix.b() != 0 || matrix.c() != 0)  // Check for skew.
+    if (matrix.b() || matrix.c()) // Check for skew.
         return false;
 
     // Check for stroke effects.
@@ -94,6 +97,7 @@ bool windowsCanHandleTextDrawingWithoutShadow(GraphicsContext* context)
 
     return true;
 }
+#endif
 
 static void skiaDrawText(SkCanvas* canvas,
                          const SkPoint& point,
@@ -103,19 +107,34 @@ static void skiaDrawText(SkCanvas* canvas,
                          const GOFFSET* offsets,
                          int numGlyphs)
 {
-    // Reserve space for 64 glyphs on the stack. If numGlyphs is larger, the array
-    // will dynamically allocate it space for numGlyph glyphs.
+    // Reserve space for 64 SkPoints on the stack. If numGlyphs is larger, the array
+    // will dynamically allocate it space for numGlyph glyphs. This is used to store
+    // the computed x,y locations. In the case where offsets==null, then we use it
+    // to store (twice as many) SkScalars for x[]
     static const size_t kLocalGlyphMax = 64;
-    SkAutoSTArray<kLocalGlyphMax, SkPoint> posStorage(numGlyphs);
-    SkPoint* pos = posStorage.get();
+
     SkScalar x = point.fX;
     SkScalar y = point.fY;
-    for (int i = 0; i < numGlyphs; i++) {
-        pos[i].set(x + (offsets ? offsets[i].du : 0),
-                   y + (offsets ? offsets[i].dv : 0));
-        x += SkIntToScalar(advances[i]);
+    if (offsets) {
+        SkAutoSTArray<kLocalGlyphMax, SkPoint> storage(numGlyphs);
+        SkPoint* pos = storage.get();
+        for (int i = 0; i < numGlyphs; i++) {
+            // GDI has dv go up, so we negate it
+            pos[i].set(x + SkIntToScalar(offsets[i].du),
+                       y + -SkIntToScalar(offsets[i].dv));
+            x += SkIntToScalar(advances[i]);
+        }
+        canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, *paint);
+    } else {
+        SkAutoSTArray<kLocalGlyphMax * 2, SkScalar> storage(numGlyphs);
+        SkScalar* xpos = storage.get();
+        for (int i = 0; i < numGlyphs; i++) {
+            xpos[i] = x;
+            x += SkIntToScalar(advances[i]);
+        }
+        canvas->drawPosTextH(glyphs, numGlyphs * sizeof(uint16_t),
+                             xpos, y, *paint);
     }
-    canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, *paint);
 }
 
 static bool isCanvasMultiLayered(SkCanvas* canvas)
@@ -136,69 +155,98 @@ static bool disableTextLCD(PlatformContextSkia* skiaContext)
            || skiaContext->isDrawingToImageBuffer();
 }
 
-static void setupPaintForFont(HFONT hfont, SkPaint* paint, PlatformContextSkia* pcs)
+// Lookup the current system settings for font smoothing.
+// We cache these values for performance, but if the browser has away to be
+// notified when these change, we could re-query them at that time.
+static uint32_t getDefaultGDITextFlags()
 {
-    //  FIXME:
-    //  Much of this logic could also happen in
-    //  FontCustomPlatformData::fontPlatformData and be cached,
-    //  allowing us to avoid talking to GDI at this point.
-    //
-    LOGFONT info;
-    GetObject(hfont, sizeof(info), &info);
-    int size = info.lfHeight;
-    if (size < 0)
-        size = -size; // We don't let GDI dpi-scale us (see SkFontHost_win.cpp).
-    paint->setTextSize(SkIntToScalar(size));
+    static bool gInited;
+    static uint32_t gFlags;
+    if (!gInited) {
+        BOOL enabled;
+        gFlags = 0;
+        if (SystemParametersInfo(SPI_GETFONTSMOOTHING, 0, &enabled, 0) && enabled) {
+            gFlags |= SkPaint::kAntiAlias_Flag;
 
-    SkTypeface* face = SkCreateTypefaceFromLOGFONT(info);
+            UINT smoothType;
+            if (SystemParametersInfo(SPI_GETFONTSMOOTHINGTYPE, 0, &smoothType, 0)) {
+                if (FE_FONTSMOOTHINGCLEARTYPE == smoothType)
+                    gFlags |= SkPaint::kLCDRenderText_Flag;
+            }
+        }
+        gInited = true;
+    }
+    return gFlags;
+}
+
+static void setupPaintForFont(SkPaint* paint, PlatformContextSkia* pcs,
+                              SkTypeface* face, float size, int quality)
+{
+    paint->setTextSize(SkFloatToScalar(size));
     paint->setTypeface(face);
-    SkSafeUnref(face);
 
-    uint32_t flags = paint->getFlags();
-    // our defaults
-    flags |= SkPaint::kAntiAlias_Flag;
-    if (disableTextLCD(pcs))
-        flags &= ~SkPaint::kLCDRenderText_Flag;
-    else
-        flags |= SkPaint::kLCDRenderText_Flag;
-
-    switch (info.lfQuality) {
+    // turn quality into text flags
+    uint32_t textFlags;
+    switch (quality) {
     case NONANTIALIASED_QUALITY:
-        flags &= ~SkPaint::kAntiAlias_Flag;
-        flags &= ~SkPaint::kLCDRenderText_Flag;
+        textFlags = 0;
         break;
     case ANTIALIASED_QUALITY:
-        flags &= ~SkPaint::kLCDRenderText_Flag;
+        textFlags = SkPaint::kAntiAlias_Flag;
+        break;
+    case CLEARTYPE_QUALITY:
+        textFlags = (SkPaint::kAntiAlias_Flag | SkPaint::kLCDRenderText_Flag);
         break;
     default:
+        textFlags = getDefaultGDITextFlags();
         break;
     }
+    // only allow features that SystemParametersInfo allows
+    textFlags &= getDefaultGDITextFlags();
+
+    // do this check after our switch on lfQuality
+    if (disableTextLCD(pcs)) {
+        textFlags &= ~SkPaint::kLCDRenderText_Flag;
+        // If we *just* clear our request for LCD, then GDI seems to
+        // sometimes give us AA text, and sometimes give us BW text. Since the
+        // original intent was LCD, we want to force AA (rather than BW), so we
+        // add a special bit to tell Skia to do its best to avoid the BW: by
+        // drawing LCD offscreen and downsampling that to AA.
+        textFlags |= SkPaint::kGenA8FromLCD_Flag;
+    }
+
+    static const uint32_t textFlagsMask = SkPaint::kAntiAlias_Flag |
+                                          SkPaint::kLCDRenderText_Flag |
+                                          SkPaint::kGenA8FromLCD_Flag;
+
+    // now copy in just the text flags
+    SkASSERT(!(textFlags & ~textFlagsMask));
+    uint32_t flags = paint->getFlags();
+    flags &= ~textFlagsMask;
+    flags |= textFlags;
     paint->setFlags(flags);
 }
 
-void paintSkiaText(GraphicsContext* context,
-                   HFONT hfont,
-                   int numGlyphs,
-                   const WORD* glyphs,
-                   const int* advances,
-                   const GOFFSET* offsets,
-                   const SkPoint* origin)
+static void paintSkiaText(GraphicsContext* context, HFONT hfont,
+                          SkTypeface* face, float size, int quality,
+                          int numGlyphs,
+                          const WORD* glyphs,
+                          const int* advances,
+                          const GOFFSET* offsets,
+                          const SkPoint* origin)
 {
-    HDC dc = GetDC(0);
-    HGDIOBJ oldFont = SelectObject(dc, hfont);
-
     PlatformContextSkia* platformContext = context->platformContext();
     SkCanvas* canvas = platformContext->canvas();
     TextDrawingModeFlags textMode = platformContext->getTextDrawingMode();
-
-    // If platformContext is GPU-backed make its GL context current.
-    platformContext->makeGrContextCurrent();
+    // Ensure font load for printing, because PDF device needs it.
+    if (canvas->getTopDevice()->getDeviceCapabilities() & SkDevice::kVector_Capability)
+        PlatformSupport::ensureFontLoaded(hfont);
 
     // Filling (if necessary). This is the common case.
     SkPaint paint;
     platformContext->setupPaintForFilling(&paint);
     paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
-    setupPaintForFont(hfont, &paint, platformContext);
+    setupPaintForFont(&paint, platformContext, face, size, quality);
 
     bool didFill = false;
 
@@ -215,7 +263,7 @@ void paintSkiaText(GraphicsContext* context,
         paint.reset();
         platformContext->setupPaintForStroking(&paint, 0, 0);
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
-        setupPaintForFont(hfont, &paint, platformContext);
+        setupPaintForFont(&paint, platformContext, face, size, quality);
 
         if (didFill) {
             // If there is a shadow and we filled above, there will already be
@@ -232,9 +280,36 @@ void paintSkiaText(GraphicsContext* context,
 
         skiaDrawText(canvas, *origin, &paint, &glyphs[0], &advances[0], &offsets[0], numGlyphs);
     }
+}
 
-    SelectObject(dc, oldFont);
-    ReleaseDC(0, dc);
+///////////////////////////////////////////////////////////////////////////////////////////
+
+void paintSkiaText(GraphicsContext* context,
+                   const FontPlatformData& data,
+                   int numGlyphs,
+                   const WORD* glyphs,
+                   const int* advances,
+                   const GOFFSET* offsets,
+                   const SkPoint* origin)
+{
+    paintSkiaText(context, data.hfont(), data.typeface(), data.size(), data.lfQuality(),
+                  numGlyphs, glyphs, advances, offsets, origin);
+}
+
+void paintSkiaText(GraphicsContext* context,
+                   HFONT hfont,
+                   int numGlyphs,
+                   const WORD* glyphs,
+                   const int* advances,
+                   const GOFFSET* offsets,
+                   const SkPoint* origin)
+{
+    int size;
+    int quality;
+    SkTypeface* face = CreateTypefaceFromHFont(hfont, &size, &quality);
+    SkAutoUnref aur(face);
+
+    paintSkiaText(context, hfont, face, size, quality, numGlyphs, glyphs, advances, offsets, origin);
 }
 
 }  // namespace WebCore

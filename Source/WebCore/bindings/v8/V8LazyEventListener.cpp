@@ -65,8 +65,11 @@ v8::Local<v8::Value> V8LazyEventListener::callListenerFunction(ScriptExecutionCo
 
     v8::Handle<v8::Value> parameters[1] = { jsEvent };
 
-    if (V8Proxy* proxy = V8Proxy::retrieve(context))
-        return proxy->callFunction(handlerFunction, receiver, 1, parameters);
+    if (V8Proxy* proxy = V8Proxy::retrieve(context)) {
+        Frame* frame = static_cast<Document*>(context)->frame();
+        if (frame->script()->canExecuteScripts(AboutToExecuteScript))
+            return proxy->callFunction(handlerFunction, receiver, 1, parameters);
+    }
 
     return v8::Local<v8::Value>();
 }
@@ -88,6 +91,9 @@ void V8LazyEventListener::prepareListenerObject(ScriptExecutionContext* context)
 
     V8Proxy* proxy = V8Proxy::retrieve(context);
     if (!proxy)
+        return;
+    ASSERT(context->isDocument());
+    if (!static_cast<Document*>(context)->frame()->script()->canExecuteScripts(NotAboutToExecuteScript))
         return;
 
     // Use the outer scope to hold context.
@@ -123,7 +129,9 @@ void V8LazyEventListener::prepareListenerObject(ScriptExecutionContext* context)
     v8::Handle<v8::String> codeExternalString = v8ExternalString(code);
     v8::Handle<v8::Script> script = V8Proxy::compileScript(codeExternalString, m_sourceURL, m_position);
     if (!script.IsEmpty()) {
-        v8::Local<v8::Value> value = proxy->runScript(script, false);
+        // Call v8::Script::Run() directly to avoid an erroneous call to V8RecursionScope::didLeaveScriptContext().
+        // FIXME: Remove this code when we stop doing the 'with' hack above.
+        v8::Local<v8::Value> value = script->Run();
         if (!value.IsEmpty()) {
             ASSERT(value->IsFunction());
 

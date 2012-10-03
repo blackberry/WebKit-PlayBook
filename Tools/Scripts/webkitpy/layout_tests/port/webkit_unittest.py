@@ -25,12 +25,13 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import logging
 import unittest
 
-from webkitpy.common.host_mock import MockHost
 from webkitpy.common.system.executive_mock import MockExecutive
 from webkitpy.common.system.filesystem_mock import MockFileSystem
 from webkitpy.common.system.outputcapture import OutputCapture
+from webkitpy.common.system.systemhost_mock import MockSystemHost
 from webkitpy.layout_tests.models.test_configuration import TestConfiguration
 from webkitpy.layout_tests.port import port_testcase
 from webkitpy.layout_tests.port.webkit import WebKitPort, WebKitDriver
@@ -45,11 +46,11 @@ class TestWebKitPort(WebKitPort):
                  **kwargs):
         self.symbols_string = symbols_string  # Passing "" disables all staticly-detectable features.
         self.feature_list = feature_list  # Passing [] disables all runtime-detectable features.
-        host = host or MockHost()
+        host = host or MockSystemHost()
         WebKitPort.__init__(self, host=host, **kwargs)
 
     def all_test_configurations(self):
-        return [TestConfiguration.from_port(self)]
+        return [self.test_configuration()]
 
     def _runtime_feature_list(self):
         return self.feature_list
@@ -68,18 +69,19 @@ class WebKitPortUnitTests(unittest.TestCase):
     def test_default_options(self):
         # The WebKit ports override new-run-webkit-test default options.
         options = MockOptions(pixel_tests=None, time_out_ms=None)
-        port = WebKitPort(MockHost(), options=options)
+        port = WebKitPort(MockSystemHost(), options=options)
         self.assertEquals(port._options.pixel_tests, False)
         self.assertEquals(port._options.time_out_ms, 35000)
 
         # Note that we don't override options if specified by the user.
         options = MockOptions(pixel_tests=True, time_out_ms=6000)
-        port = WebKitPort(MockHost(), options=options)
+        port = WebKitPort(MockSystemHost(), options=options)
         self.assertEquals(port._options.pixel_tests, True)
         self.assertEquals(port._options.time_out_ms, 6000)
 
 
 class WebKitPortTest(port_testcase.PortTestCase):
+    port_name = 'webkit'
     port_maker = TestWebKitPort
 
     def test_check_build(self):
@@ -90,6 +92,13 @@ class WebKitPortTest(port_testcase.PortTestCase):
 
     def test_baseline_search_path(self):
         pass
+
+    def test_path_to_test_expectations_file(self):
+        port = TestWebKitPort()
+        port._options = MockOptions(webkit_test_runner=False)
+        self.assertEqual(port.path_to_test_expectations_file(), '/mock-checkout/LayoutTests/platform/testwebkitport/test_expectations.txt')
+        port._options = MockOptions(webkit_test_runner=True)
+        self.assertEqual(port.path_to_test_expectations_file(), '/mock-checkout/LayoutTests/platform/testwebkitport/test_expectations.txt')
 
     def test_skipped_directories_for_symbols(self):
         # This first test confirms that the commonly found symbols result in the expected skipped directories.
@@ -102,7 +111,7 @@ class WebKitPortTest(port_testcase.PortTestCase):
             "mhtml",  # Requires MHTMLArchive
         ])
 
-        result_directories = set(TestWebKitPort(symbols_string, None)._skipped_tests_for_unsupported_features())
+        result_directories = set(TestWebKitPort(symbols_string, None)._skipped_tests_for_unsupported_features(test_list=['mathml/foo.html']))
         self.assertEqual(result_directories, expected_directories)
 
         # Test that the nm string parsing actually works:
@@ -113,11 +122,11 @@ class WebKitPortTest(port_testcase.PortTestCase):
 """
         # Note 'compositing' is not in the list of skipped directories (hence the parsing of GraphicsLayer worked):
         expected_directories = set(['mathml', 'transforms/3d', 'compositing/webgl', 'fast/canvas/webgl', 'animations/3d', 'mhtml', 'http/tests/canvas/webgl'])
-        result_directories = set(TestWebKitPort(symbols_string, None)._skipped_tests_for_unsupported_features())
+        result_directories = set(TestWebKitPort(symbols_string, None)._skipped_tests_for_unsupported_features(test_list=['mathml/foo.html']))
         self.assertEqual(result_directories, expected_directories)
 
     def test_runtime_feature_list(self):
-        port = WebKitPort(MockHost())
+        port = WebKitPort(MockSystemHost())
         port._executive.run_command = lambda command, cwd=None, error_handler=None: "Nonsense"
         # runtime_features_list returns None when its results are meaningless (it couldn't run DRT or parse the output, etc.)
         self.assertEquals(port._runtime_feature_list(), None)
@@ -127,11 +136,23 @@ class WebKitPortTest(port_testcase.PortTestCase):
     def test_skipped_directories_for_features(self):
         supported_features = ["Accelerated Compositing", "Foo Feature"]
         expected_directories = set(["animations/3d", "transforms/3d"])
-        result_directories = set(TestWebKitPort(None, supported_features)._skipped_tests_for_unsupported_features())
+        result_directories = set(TestWebKitPort(None, supported_features)._skipped_tests_for_unsupported_features(test_list=["animations/3d/foo.html"]))
+        self.assertEqual(result_directories, expected_directories)
+
+    def test_skipped_directories_for_features_no_matching_tests_in_test_list(self):
+        supported_features = ["Accelerated Compositing", "Foo Feature"]
+        expected_directories = set([])
+        result_directories = set(TestWebKitPort(None, supported_features)._skipped_tests_for_unsupported_features(test_list=['foo.html']))
+        self.assertEqual(result_directories, expected_directories)
+
+    def test_skipped_tests_for_unsupported_features_empty_test_list(self):
+        supported_features = ["Accelerated Compositing", "Foo Feature"]
+        expected_directories = set([])
+        result_directories = set(TestWebKitPort(None, supported_features)._skipped_tests_for_unsupported_features(test_list=None))
         self.assertEqual(result_directories, expected_directories)
 
     def test_skipped_layout_tests(self):
-        self.assertEqual(TestWebKitPort(None, None).skipped_layout_tests(), set(['media']))
+        self.assertEqual(TestWebKitPort(None, None).skipped_layout_tests(test_list=[]), set(['media']))
 
     def test_skipped_file_search_paths(self):
         port = TestWebKitPort()
@@ -147,29 +168,12 @@ class WebKitPortTest(port_testcase.PortTestCase):
         self.assertEqual(port._path_to_driver(), "/foo/DumpRenderTree")
 
     def test_test_expectations(self):
-        # Check that we read both the expectations file and anything in a
-        # Skipped file, and that we include the feature and platform checks.
-        files = {
-            '/mock-checkout/LayoutTests/platform/testwebkitport/test_expectations.txt': 'BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL\n',
-            '/mock-checkout/LayoutTests/platform/testwebkitport/Skipped': 'fast/html/keygen.html',
-        }
-        mock_fs = MockFileSystem(files)
-        port = TestWebKitPort(filesystem=mock_fs)
-        self.assertEqual(port.test_expectations(),
-        """BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL\n
-BUG_SKIPPED SKIP : fast/html/keygen.html = FAIL
-BUG_SKIPPED SKIP : media = FAIL""")
-        files = {
-            '/mock-checkout/LayoutTests/platform/testwebkitport/test_expectations.txt': 'BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL',
-            '/mock-checkout/LayoutTests/platform/testwebkitport/Skipped': 'fast/html/keygen.html',
-        }
-        mock_fs = MockFileSystem(files)
-        port = TestWebKitPort(filesystem=mock_fs)
-        self.assertEqual(port.test_expectations(),
-        """BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL
-BUG_SKIPPED SKIP : fast/html/keygen.html = FAIL
-BUG_SKIPPED SKIP : media = FAIL""")
-
+        # Check that we read the expectations file
+        host = MockSystemHost()
+        host.filesystem.write_text_file('/mock-checkout/LayoutTests/platform/testwebkitport/test_expectations.txt',
+            'BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL\n')
+        port = TestWebKitPort(host=host)
+        self.assertEqual(port.test_expectations(), 'BUG_TESTEXPECTATIONS SKIP : fast/html/article-element.html = FAIL\n')
 
     def test_build_driver(self):
         output = OutputCapture()
@@ -177,19 +181,28 @@ BUG_SKIPPED SKIP : media = FAIL""")
         # Delay setting _executive to avoid logging during construction
         port._executive = MockExecutive(should_log=True)
         port._options = MockOptions(configuration="Release")  # This should not be necessary, but I think TestWebKitPort is actually reading from disk (and thus detects the current configuration).
-        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout\n"
-        self.assertTrue(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr))
+        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout, env={'LC_ALL': 'C', 'MOCK_ENVIRON_COPY': '1'}\n"
+        self.assertTrue(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr, expected_logs=''))
 
-        # Make sure when passed --webkit-test-runner web build the right tool.
+        # Make sure when passed --webkit-test-runner we build the right tool.
         port._options = MockOptions(webkit_test_runner=True, configuration="Release")
-        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout\nMOCK run_command: ['Tools/Scripts/build-webkittestrunner', '--release'], cwd=/mock-checkout\n"
-        self.assertTrue(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr))
+        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout, env={'LC_ALL': 'C', 'MOCK_ENVIRON_COPY': '1'}\nMOCK run_command: ['Tools/Scripts/build-webkittestrunner', '--release'], cwd=/mock-checkout, env={'LC_ALL': 'C', 'MOCK_ENVIRON_COPY': '1'}\n"
+        self.assertTrue(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr, expected_logs=''))
+
+        # Make sure we show the build log when --verbose is passed, which we simulate by setting the logging level to DEBUG.
+        output.set_log_level(logging.DEBUG)
+        port._options = MockOptions(configuration="Release")
+        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout, env={'LC_ALL': 'C', 'MOCK_ENVIRON_COPY': '1'}\n"
+        expected_logs = "Output of ['Tools/Scripts/build-dumprendertree', '--release']:\nMOCK output of child process\n"
+        self.assertTrue(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr, expected_logs=expected_logs))
+        output.set_log_level(logging.INFO)
 
         # Make sure that failure to build returns False.
         port._executive = MockExecutive(should_log=True, should_throw=True)
         # Because WK2 currently has to build both webkittestrunner and DRT, if DRT fails, that's the only one it tries.
-        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout\n"
-        self.assertFalse(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr))
+        expected_stderr = "MOCK run_command: ['Tools/Scripts/build-dumprendertree', '--release'], cwd=/mock-checkout, env={'LC_ALL': 'C', 'MOCK_ENVIRON_COPY': '1'}\n"
+        expected_logs = "MOCK ScriptError\n\nMOCK output of child process\n"
+        self.assertFalse(output.assert_outputs(self, port._build_driver, expected_stderr=expected_stderr, expected_logs=expected_logs))
 
     def _assert_config_file_for_platform(self, port, platform, config_file):
         self.assertEquals(port._apache_config_file_name_for_platform(platform), config_file)
@@ -255,7 +268,7 @@ class MockServerProcess(object):
 class WebKitDriverTest(unittest.TestCase):
     def test_read_block(self):
         port = TestWebKitPort()
-        driver = WebKitDriver(port, 0)
+        driver = WebKitDriver(port, 0, pixel_tests=False)
         driver._server_process = MockServerProcess([
             'ActualHash: foobar',
             'Content-Type: my_type',
@@ -269,7 +282,7 @@ class WebKitDriverTest(unittest.TestCase):
 
     def test_read_binary_block(self):
         port = TestWebKitPort()
-        driver = WebKitDriver(port, 0)
+        driver = WebKitDriver(port, 0, pixel_tests=True)
         driver._server_process = MockServerProcess([
             'ActualHash: actual',
             'ExpectedHash: expected',
@@ -283,3 +296,8 @@ class WebKitDriverTest(unittest.TestCase):
         self.assertEquals(content_block.content_hash, 'actual')
         self.assertEquals(content_block.content, '12345678')
         self.assertEquals(content_block.decoded_content, '12345678')
+
+    def test_no_timeout(self):
+        port = TestWebKitPort()
+        driver = WebKitDriver(port, 0, pixel_tests=True, no_timeout=True)
+        self.assertEquals(driver.cmd_line(True, []), ['MOCK output of child process/DumpRenderTree', '--no-timeout', '--pixel-tests', '-'])

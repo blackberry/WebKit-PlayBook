@@ -1,25 +1,25 @@
 var initialize_ResourceTest = function() {
 
-InspectorTest.HARNondeterministicProperties = {
-    bodySize: 1,
-    compression: 1,
-    headers: 1,
-    headersSize: 1,
-    id: 1,
-    onContentLoad: 1,
-    onLoad: 1,
-    receive: 1,
-    startedDateTime: 1,
-    time: 1,
-    timings: 1,
-    version: 1,
-    wait: 1,
+InspectorTest.HARPropertyFormatters = {
+    bodySize: "formatAsTypeName",
+    compression: "formatAsTypeName",
+    headers: "formatAsTypeName",
+    headersSize: "formatAsTypeName",
+    id: "formatAsTypeName",
+    onContentLoad: "formatAsTypeName",
+    onLoad: "formatAsTypeName",
+    receive: "formatAsTypeName",
+    startedDateTime: "formatAsRecentTime",
+    time: "formatAsTypeName",
+    timings: "formatAsTypeName",
+    version: "formatAsTypeName",
+    wait: "formatAsTypeName",
 };
 
 // addObject checks own properties only, so make a deep copy rather than use prototype.
 
-InspectorTest.HARNondeterministicPropertiesWithSize = JSON.parse(JSON.stringify(InspectorTest.HARNondeterministicProperties));
-InspectorTest.HARNondeterministicPropertiesWithSize.size = 1;
+InspectorTest.HARPropertyFormattersWithSize = JSON.parse(JSON.stringify(InspectorTest.HARPropertyFormatters));
+InspectorTest.HARPropertyFormattersWithSize.size = "formatAsTypeName";
 
 
 InspectorTest.resourceURLComparer = function(r1, r2)
@@ -27,50 +27,57 @@ InspectorTest.resourceURLComparer = function(r1, r2)
     return r1.request.url.localeCompare(r2.request.url);
 }
 
-InspectorTest.runAfterResourcesAreFinished = function(resourceURLs, callback)
+InspectorTest.runAfterCachedResourcesProcessed = function(callback)
 {
-    InspectorTest._runAfterResourcesAreFinished(resourceURLs.keySet(), callback);
+    if (!WebInspector.resourceTreeModel._cachedResourcesProcessed)
+        WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.CachedResourcesLoaded, callback);
+    else
+        callback();
 }
 
-InspectorTest._runAfterResourcesAreFinished = function(resourceURLs, callback)
+InspectorTest.runAfterResourcesAreFinished = function(resourceURLs, callback)
 {
-    function checkResource(resource)
-    {
-        for (var url in resourceURLs) {
-            if (resource.url.indexOf(url) !== -1)
-                delete resourceURLs[url];
-        }
-    }
+    var resourceURLsMap = resourceURLs.keySet();
 
-    function maybeCallback()
+    function checkResources()
     {
-        if (!Object.keys(resourceURLs).length) {
+        WebInspector.resourceTreeModel.forAllResources(visit);
+        function visit(resource)
+        {
+            for (url in resourceURLsMap) {
+                if (resource.url.indexOf(url) !== -1)
+                    delete resourceURLsMap[url];
+            }
+        }
+        if (!Object.keys(resourceURLsMap).length) {
+            WebInspector.resourceTreeModel.removeEventListener(WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, checkResources);
             callback();
-            return true;
         }
     }
+    checkResources();
+    if (Object.keys(resourceURLsMap).length)
+        WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.ResourceAdded, checkResources);
+}
 
-    function addSniffer(resource)
+InspectorTest.showResource = function(resourceURL, callback)
+{
+    function showResourceCallback()
     {
-        InspectorTest.addSniffer(WebInspector.ResourceTreeModel.prototype, "_addResourceToFrame", resourceAddedToFrame.bind(this));
+        WebInspector.resourceTreeModel.forAllResources(visit);
+        function visit(resource)
+        {
+            if (resource.url.indexOf(resourceURL) !== -1) {
+                WebInspector.panels.resources.showResource(resource, 1);
+                var sourceFrame = WebInspector.panels.resources._resourceViewForResource(resource);
+                if (sourceFrame.loaded)
+                    callback(sourceFrame);
+                else
+                    sourceFrame.addEventListener(WebInspector.SourceFrame.Events.Loaded, callback.bind(null, sourceFrame));
+                return true;
+            }
+        }
     }
-
-    function resourceAddedToFrame(resource)
-    {
-        checkResource(resource);
-        if (!maybeCallback())
-            addSniffer();
-    }
-
-    function visit(resource)
-    {
-        checkResource(resource);
-        return maybeCallback();
-    }
-
-    var succeeded = WebInspector.resourceTreeModel.forAllResources(visit);
-    if (!succeeded)
-        addSniffer();
+    InspectorTest.runAfterResourcesAreFinished([resourceURL], showResourceCallback);
 }
 
 }

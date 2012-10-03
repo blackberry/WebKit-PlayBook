@@ -171,9 +171,8 @@ shouldBe("resultArray[2].item", "cssRuleList.item(2)");
 
 // CSSStyleDeclaration
 //debug(escapeHTML(document.getElementsByTagName('style')));
-var cssStyleDeclaration = document.styleSheets[1].cssRules[0].style;
+var cssStyleDeclaration = document.styleSheets[2].cssRules[0].style;
 resultArray = iterateList(cssStyleDeclaration);
-shouldBe("resultArray.length", "14");
 shouldBe("resultArray[0].i", "'0'");
 shouldBe("resultArray[0].item", "cssStyleDeclaration.item(0)");
 shouldBe("resultArray[1].i", "'1'");
@@ -191,7 +190,7 @@ shouldBe("resultArray[1].i", "'1'");
 shouldBe("resultArray[1].item", "cssValueList.item(1)");
 
 // MediaList
-var mediaList = document.styleSheets[2].cssRules[0].media;
+var mediaList = document.styleSheets[3].cssRules[0].media;
 resultArray = iterateList(mediaList);
 shouldBe("resultArray.length", "8");
 shouldBe("resultArray[0].i", "'0'");

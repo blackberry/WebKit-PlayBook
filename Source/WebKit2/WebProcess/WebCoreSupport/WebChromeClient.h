@@ -108,15 +108,15 @@ private:
     virtual WebCore::IntRect windowResizerRect() const OVERRIDE;
     
     // HostWindow member function overrides.
-    virtual void invalidateWindow(const WebCore::IntRect&, bool) OVERRIDE;
-    virtual void invalidateContentsAndWindow(const WebCore::IntRect&, bool) OVERRIDE;
+    virtual void invalidateRootView(const WebCore::IntRect&, bool) OVERRIDE;
+    virtual void invalidateContentsAndRootView(const WebCore::IntRect&, bool) OVERRIDE;
     virtual void invalidateContentsForSlowScroll(const WebCore::IntRect&, bool) OVERRIDE;
     virtual void scroll(const WebCore::IntSize& scrollOffset, const WebCore::IntRect& scrollRect, const WebCore::IntRect& clipRect) OVERRIDE;
 #if USE(TILED_BACKING_STORE)
     virtual void delegatedScrollRequested(const WebCore::IntPoint& scrollOffset) OVERRIDE;
 #endif
-    virtual WebCore::IntPoint screenToWindow(const WebCore::IntPoint&) const OVERRIDE;
-    virtual WebCore::IntRect windowToScreen(const WebCore::IntRect&) const OVERRIDE;
+    virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const OVERRIDE;
+    virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const OVERRIDE;
     virtual PlatformPageClient platformPageClient() const OVERRIDE;
     virtual void contentsSizeChanged(WebCore::Frame*, const WebCore::IntSize&) const OVERRIDE;
     virtual void scrollRectIntoView(const WebCore::IntRect&) const OVERRIDE; // Currently only Mac has a non empty implementation.
@@ -170,21 +170,24 @@ private:
 
     virtual bool selectItemWritingDirectionIsNatural() OVERRIDE;
     virtual bool selectItemAlignmentFollowsMenuWritingDirection() OVERRIDE;
+    virtual bool hasOpenedPopup() const OVERRIDE;
     virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const OVERRIDE;
     virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const OVERRIDE;
-
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() OVERRIDE;
-#endif
 
 #if USE(ACCELERATED_COMPOSITING)
     virtual void attachRootGraphicsLayer(WebCore::Frame*, WebCore::GraphicsLayer*) OVERRIDE;
     virtual void setNeedsOneShotDrawingSynchronization() OVERRIDE;
     virtual void scheduleCompositingLayerSync() OVERRIDE;
-#endif
 
-#if ENABLE(NOTIFICATIONS)
-    virtual WebCore::NotificationPresenter* notificationPresenter() const OVERRIDE;
+    virtual CompositingTriggerFlags allowedCompositingTriggers() const
+    {
+        return static_cast<CompositingTriggerFlags>(
+            ThreeDTransformTrigger |
+            VideoTrigger |
+            PluginTrigger| 
+            CanvasTrigger |
+            AnimationTrigger);
+    }
 #endif
 
 #if ENABLE(TOUCH_EVENTS)
@@ -208,15 +211,12 @@ private:
     
     virtual void dispatchViewportPropertiesDidChange(const WebCore::ViewportArguments&) const OVERRIDE;
 
-    virtual void didStartRubberBandForFrame(WebCore::Frame*, const WebCore::IntSize&) const OVERRIDE;
-    virtual void didCompleteRubberBandForFrame(WebCore::Frame*, const WebCore::IntSize&) const OVERRIDE;
-    virtual void didStartAnimatedScroll() const OVERRIDE;
-    virtual void didCompleteAnimatedScroll() const OVERRIDE;
-
     virtual void notifyScrollerThumbIsVisibleInRect(const WebCore::IntRect&) OVERRIDE;
+    virtual void recommendedScrollbarStyleDidChange(int32_t newStyle) OVERRIDE;
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const OVERRIDE;
     
     virtual void numWheelEventHandlersChanged(unsigned) OVERRIDE;
+    virtual void numTouchEventHandlersChanged(unsigned) OVERRIDE { }
 
     String m_cachedToolTip;
     mutable RefPtr<WebFrame> m_cachedFrameSetLargestFrame;

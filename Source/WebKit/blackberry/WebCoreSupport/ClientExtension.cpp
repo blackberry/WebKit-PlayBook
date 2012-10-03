@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,12 +27,9 @@
 #include <JavaScriptCore/JSValueRef.h>
 #include <JavaScriptCore/JavaScript.h>
 #include <string>
-#include <wtf/OwnArrayPtr.h>
 
-using namespace WTF;
 using namespace WebCore;
 using namespace BlackBerry::WebKit;
-
 using namespace std;
 
 static JSValueRef clientExtensionMethod(
@@ -40,28 +37,26 @@ static JSValueRef clientExtensionMethod(
     size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
 {
     JSValueRef jsRetVal = JSValueMakeUndefined(ctx);
+    if (argumentCount <= 0)
+        return jsRetVal;
 
-    if (argumentCount > 0) {
-        char** strArgs = new char*[argumentCount];
-        for (unsigned int i = 0; i < argumentCount; ++i) {
-            JSStringRef string = JSValueToStringCopy(ctx, arguments[i], 0);
-            size_t sizeUTF8 = JSStringGetMaximumUTF8CStringSize(string);
-            strArgs[i] = new char[sizeUTF8];
-            JSStringGetUTF8CString(string, strArgs[i], sizeUTF8);
-            JSStringRelease(string);
-        }
-
-        WebPageClient* client = reinterpret_cast<WebPageClient*>(JSObjectGetPrivate(thisObject));
-
-        string retVal = client->invokeClientJavaScriptCallback(strArgs, argumentCount).utf8();
-
-        if (!retVal.empty())
-            jsRetVal = JSValueMakeString(ctx, JSStringCreateWithUTF8CString(retVal.c_str()));
-
-        for (unsigned int i = 0; i < argumentCount; ++i)
-            delete[] strArgs[i];
-        delete[] strArgs;
+    char** strArgs = new char*[argumentCount];
+    for (unsigned i = 0; i < argumentCount; ++i) {
+        JSStringRef string = JSValueToStringCopy(ctx, arguments[i], 0);
+        size_t sizeUTF8 = JSStringGetMaximumUTF8CStringSize(string);
+        strArgs[i] = new char[sizeUTF8];
+        JSStringGetUTF8CString(string, strArgs[i], sizeUTF8);
+        JSStringRelease(string);
     }
+
+    WebPageClient* client = reinterpret_cast<WebPageClient*>(JSObjectGetPrivate(thisObject));
+    string retVal = client->invokeClientJavaScriptCallback(strArgs, argumentCount).utf8();
+    if (!retVal.empty())
+        jsRetVal = JSValueMakeString(ctx, JSStringCreateWithUTF8CString(retVal.c_str()));
+
+    for (unsigned i = 0; i < argumentCount; ++i)
+        delete[] strArgs[i];
+    delete[] strArgs;
 
     return jsRetVal;
 }
@@ -86,8 +81,7 @@ static JSStaticValue clientExtensionStaticValues[] = {
     { 0, 0, 0, 0 }
 };
 
-// FIXME: Revisit the creation of this class and make sure this is the best way to approach it
-
+// FIXME: Revisit the creation of this class and make sure this is the best way to approach it.
 void attachExtensionObjectToFrame(Frame* frame, WebPageClient* client)
 {
     JSC::JSLock lock(JSC::SilenceAssertionsOnly);

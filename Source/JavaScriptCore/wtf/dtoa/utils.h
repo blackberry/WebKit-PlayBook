@@ -28,7 +28,7 @@
 #ifndef DOUBLE_CONVERSION_UTILS_H_
 #define DOUBLE_CONVERSION_UTILS_H_
 
-#include "Assertions.h"
+#include <wtf/Assertions.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -49,7 +49,7 @@
 defined(__ARMEL__) || \
 defined(_MIPS_ARCH_MIPS32R2)
 #define DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS 1
-#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X)
+#elif CPU(MIPS) || CPU(PPC) || CPU(PPC64) || OS(WINCE) || CPU(SH4) || CPU(S390) || CPU(S390X) || CPU(IA64) || CPU(SPARC) || CPU(ALPHA)
 #define DOUBLE_CONVERSION_CORRECT_DOUBLE_OPERATIONS 1
 #elif defined(_M_IX86) || defined(__i386__)
 #if defined(_WIN32)
@@ -196,6 +196,14 @@ namespace double_conversion {
         int position() const {
             ASSERT(!is_finalized());
             return position_;
+        }
+         
+        // Set the current position in the builder.
+        void SetPosition(int position)
+        {
+            ASSERT(!is_finalized());
+            ASSERT(position < size());
+            position_ = position;
         }
         
         // Reset the position.

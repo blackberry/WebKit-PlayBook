@@ -22,6 +22,8 @@
 
 package CodeGeneratorGObject;
 
+use constant FileNamePrefix => "WebKitDOM";
+
 # Global Variables
 my %implIncludes = ();
 my %hdrIncludes = ();
@@ -47,9 +49,6 @@ sub new {
     mkdir $outputDir;
 
     bless($reference, $object);
-}
-
-sub finish {
 }
 
 my $licenceTemplate = << "EOF";
@@ -153,9 +152,10 @@ sub GetCoreObject {
 
 sub SkipAttribute {
     my $attribute = shift;
-    
-    if ($attribute->signature->extendedAttributes->{"CustomGetter"} ||
-        $attribute->signature->extendedAttributes->{"CustomSetter"}) {
+
+    if ($attribute->signature->extendedAttributes->{"Custom"}
+        || $attribute->signature->extendedAttributes->{"CustomGetter"}
+        || $attribute->signature->extendedAttributes->{"CustomSetter"}) {
         return 1;
     }
 
@@ -188,10 +188,11 @@ sub SkipFunction {
     my $prefix = shift;
 
     my $functionName = "webkit_dom_" . $decamelize . "_" . $prefix . decamelize($function->signature->name);
-    my $isCustomFunction = $function->signature->extendedAttributes->{"Custom"} ||
-        $function->signature->extendedAttributes->{"CustomArgumentHandling"};
+    my $isCustomFunction = $function->signature->extendedAttributes->{"Custom"};
+    my $callWith = $function->signature->extendedAttributes->{"CallWith"};
+    my $isUnsupportedCallWith = $codeGenerator->ExtendedAttributeContains($callWith, "ScriptArguments") || $codeGenerator->ExtendedAttributeContains($callWith, "CallStack");
 
-    if ($isCustomFunction &&
+    if (($isCustomFunction || $isUnsupportedCallWith) &&
         $functionName ne "webkit_dom_node_replace_child" &&
         $functionName ne "webkit_dom_node_insert_before" &&
         $functionName ne "webkit_dom_node_remove_child" &&
@@ -379,43 +380,46 @@ sub GenerateProperty {
         $convertFunction = "WTF::String::fromUTF8";
     }
 
-    my $getterExpressionPrefix = $codeGenerator->GetterExpressionPrefix(\%implIncludes, $interfaceName, $attribute);
-    my $setterExpressionPrefix = $codeGenerator->SetterExpressionPrefix(\%implIncludes, $interfaceName, $attribute);
+    my ($getterFunctionName, @getterArguments) = $codeGenerator->GetterExpression(\%implIncludes, $interfaceName, $attribute);
+    my ($setterFunctionName, @setterArguments) = $codeGenerator->SetterExpression(\%implIncludes, $interfaceName, $attribute);
 
-    my $getterContentHead = "coreSelf->$getterExpressionPrefix";
-    my $setterContentHead = "coreSelf->$setterExpressionPrefix${convertFunction}(g_value_get_$gtype(value))";
+    if ($attribute->signature->extendedAttributes->{"ImplementedBy"}) {
+        my $implementedBy = $attribute->signature->extendedAttributes->{"ImplementedBy"};
+        $implIncludes{"${implementedBy}.h"} = 1;
+        push(@setterArguments, "${convertFunction}(g_value_get_$gtype(value))");
+        unshift(@getterArguments, "coreSelf");
+        unshift(@setterArguments, "coreSelf");
+        $getterFunctionName = "WebCore::${implementedBy}::$getterFunctionName";
+        $setterFunctionName = "WebCore::${implementedBy}::$setterFunctionName";
+    } else {
+        push(@setterArguments, "${convertFunction}(g_value_get_$gtype(value))");
+        $getterFunctionName = "coreSelf->$getterFunctionName";
+        $setterFunctionName = "coreSelf->$setterFunctionName";
+    }
+    push(@getterArguments, "ec") if @{$attribute->getterExceptions};
+    push(@setterArguments, "ec") if @{$attribute->setterExceptions};
 
     if (grep {$_ eq $attribute} @writeableProperties) {
         push(@txtSetProps, "#if ${conditionalString}\n") if $conditionalString;
         push(@txtSetProps, "    case ${propEnum}:\n    {\n");
         push(@txtSetProps, "        WebCore::ExceptionCode ec = 0;\n") if @{$attribute->setterExceptions};
-        push(@txtSetProps, "        ${setterContentHead}");
-        push(@txtSetProps, ", ec") if @{$attribute->setterExceptions};
-        push(@txtSetProps, ");\n");
+        push(@txtSetProps, "        ${setterFunctionName}(" . join(", ", @setterArguments) . ");\n");
         push(@txtSetProps, "        break;\n    }\n");
         push(@txtSetProps, "#endif /* ${conditionalString} */\n") if $conditionalString;
     }
 
     push(@txtGetProps, "#if ${conditionalString}\n") if $conditionalString;
     push(@txtGetProps, "    case ${propEnum}:\n    {\n");
-
-    my $exception = "";
-    if (@{$attribute->getterExceptions}) {
-        $exception = "ec";
-        push(@txtGetProps, "        WebCore::ExceptionCode ec = 0;\n");
-    }
+    push(@txtGetProps, "        WebCore::ExceptionCode ec = 0;\n") if @{$attribute->getterExceptions};
 
     my $postConvertFunction = "";
     my $done = 0;
     if ($gtype eq "string") {
-        push(@txtGetProps, "        g_value_take_string(value, convertToUTF8String(${getterContentHead}${exception})));\n");
+        push(@txtGetProps, "        g_value_take_string(value, convertToUTF8String(${getterFunctionName}(" . join(", ", @getterArguments) . ")));\n");
         $done = 1;
     } elsif ($gtype eq "object") {
-        $txtGetProp = << "EOF";
-        RefPtr<WebCore::${propType}> ptr = coreSelf->${getPropNameFunction}(${exception});
-        g_value_set_object(value, WebKit::kit(ptr.get()));
-EOF
-        push(@txtGetProps, $txtGetProp);
+        push(@txtGetProps, "        RefPtr<WebCore::${propType}> ptr = ${getterFunctionName}(" . join(", ", @getterArguments) . ");\n");
+        push(@txtGetProps, "        g_value_set_object(value, WebKit::kit(ptr.get()));\n");
         $done = 1;
     }
 
@@ -426,7 +430,13 @@ EOF
     }
 
     if (!$done) {
-        push(@txtGetProps, "        g_value_set_$_gtype(value, ${convertFunction}coreSelf->${getterExpressionPrefix}${exception})${postConvertFunction});\n");
+        if ($attribute->signature->extendedAttributes->{"ImplementedBy"}) {
+            my $implementedBy = $attribute->signature->extendedAttributes->{"ImplementedBy"};
+            $implIncludes{"${implementedBy}.h"} = 1;
+            push(@txtGetProps, "        g_value_set_$_gtype(value, ${convertFunction}${getterFunctionName}(" . join(", ", @getterArguments) .  ")${postConvertFunction});\n");
+        } else {
+            push(@txtGetProps, "        g_value_set_$_gtype(value, ${convertFunction}${getterFunctionName}(" . join(", ", @getterArguments) . ")${postConvertFunction});\n");
+        }
     }
 
     push(@txtGetProps, "        break;\n    }\n");
@@ -727,11 +737,7 @@ sub GenerateFunction {
 
     my $functionSig = "${className}* self";
 
-    my $callImplParams = "";
-
-    # skip some custom functions for now
-    my $isCustomFunction = $function->signature->extendedAttributes->{"Custom"} ||
-                       $function->signature->extendedAttributes->{"CustomArgumentHandling"};
+    my @callImplParams;
 
     foreach my $param (@{$function->parameters}) {
         my $paramIDLType = $param->type;
@@ -755,20 +761,7 @@ sub GenerateFunction {
         if ($paramIsGDOMType || ($paramIDLType eq "DOMString") || ($paramIDLType eq "CompareHow")) {
             $paramName = "converted_" . $paramName;
         }
-        if ($callImplParams) {
-            $callImplParams .= ", $paramName";
-        } else {
-            $callImplParams = "$paramName";
-        }
-    }
-
-    # Not quite sure what to do with this yet, but we need to take into
-    # account the difference in parameters between the IDL file and the
-    # actual implementation.
-    if ($function->signature->extendedAttributes->{"NeedsUserGestureCheck"}) {
-        $functionSig .= ", gboolean isUserGesture";
-        $callImplParams .= ", " if $callImplParams;
-        $callImplParams .= "false";
+        push(@callImplParams, $paramName);
     }
 
     if ($returnType ne "void" && $returnValueIsGDOMType && $functionSigType ne "DOMObject") {
@@ -872,7 +865,7 @@ sub GenerateFunction {
 
             push(@cBody, "    }\n");
         }
-        $returnParamName = "converted_".$paramName if $param->extendedAttributes->{"Return"};
+        $returnParamName = "converted_".$paramName if $param->extendedAttributes->{"CustomReturn"};
     }
 
     my $assign = "";
@@ -896,19 +889,15 @@ sub GenerateFunction {
             $assign = "${returnType} res = ";
         }
     }
-    my $exceptions = "";
+
     if (@{$function->raisesExceptions}) {
-        push(@cBody, "    WebCore::ExceptionCode ec = 0;\n");
-        if (${callImplParams} ne "") {
-            $exceptions = ", ec";
-        } else {
-            $exceptions = "ec";
-        }
+        push(@cBody, "    WebCore::ExceptionCode ec = 0;\n") ;
+        push(@callImplParams, "ec");
     }
 
     if ($functionHasCustomReturn) {
+        push(@cBody, "    bool ok = item->${functionSigName}(" . join(", ", @callImplParams) . ");\n");
         my $customNodeAppendChild = << "EOF";
-    bool ok = item->${functionSigName}(${callImplParams}${exceptions});
     if (ok)
     {
         ${returnType} res = WebKit::kit($returnParamName);
@@ -931,22 +920,66 @@ EOF
     } elsif ($functionSigType eq "DOMString") {
         my $getterContentHead;
         if ($prefix) {
-            my $getterExpressionPrefix = $codeGenerator->GetterExpressionPrefix(\%implIncludes, $interfaceName, $function);
-            $getterContentHead = "${assign}convertToUTF8String(item->$getterExpressionPrefix${exceptions}));\n";
+            my ($functionName, @arguments) = $codeGenerator->GetterExpression(\%implIncludes, $interfaceName, $function);
+            push(@arguments, @callImplParams);
+            if ($function->signature->extendedAttributes->{"ImplementedBy"}) {
+                my $implementedBy = $function->signature->extendedAttributes->{"ImplementedBy"};
+                $implIncludes{"${implementedBy}.h"} = 1;
+                unshift(@arguments, "item");
+                $functionName = "WebCore::${implementedBy}::${functionName}";
+            } else {
+                $functionName = "item->${functionName}";
+            }
+            $getterContentHead = "${assign}convertToUTF8String(${functionName}(" . join(", ", @arguments) . "));\n";
         } else {
-            $getterContentHead = "${assign}convertToUTF8String(item->${functionSigName}(${callImplParams}${exceptions}));\n";
+            my @arguments = @callImplParams;
+            if ($function->signature->extendedAttributes->{"ImplementedBy"}) {
+                my $implementedBy = $function->signature->extendedAttributes->{"ImplementedBy"};
+                $implIncludes{"${implementedBy}.h"} = 1;
+                unshift(@arguments, "item");
+                $getterContentHead = "${assign}convertToUTF8String(WebCore::${implementedBy}::${functionSigName}(" . join(", ", @arguments) . "));\n";
+            } else {
+                $getterContentHead = "${assign}convertToUTF8String(item->${functionSigName}(" . join(", ", @arguments) . "));\n";
+            }
         }
         push(@cBody, "    ${getterContentHead}");
     } else {
         my $contentHead;
         if ($prefix eq "get_") {
-            my $getterExpressionPrefix = $codeGenerator->GetterExpressionPrefix(\%implIncludes, $interfaceName, $function);
-            $contentHead = "${assign}${assignPre}item->$getterExpressionPrefix${callImplParams}${exceptions}${assignPost});\n";
+            my ($functionName, @arguments) = $codeGenerator->GetterExpression(\%implIncludes, $interfaceName, $function);
+            push(@arguments, @callImplParams);
+            if ($function->signature->extendedAttributes->{"ImplementedBy"}) {
+                my $implementedBy = $function->signature->extendedAttributes->{"ImplementedBy"};
+                $implIncludes{"${implementedBy}.h"} = 1;
+                unshift(@arguments, "item");
+                $functionName = "WebCore::${implementedBy}::${functionName}";
+            } else {
+                $functionName = "item->${functionName}";
+            }
+            $contentHead = "${assign}${assignPre}${functionName}(" . join(", ", @arguments) . "${assignPost});\n";
         } elsif ($prefix eq "set_") {
-            my $setterExpressionPrefix = $codeGenerator->SetterExpressionPrefix(\%implIncludes, $interfaceName, $function);
-            $contentHead = "${assign}${assignPre}item->$setterExpressionPrefix${callImplParams}${exceptions}${assignPost});\n";
+            my ($functionName, @arguments) = $codeGenerator->SetterExpression(\%implIncludes, $interfaceName, $function);
+            push(@arguments, @callImplParams);
+            if ($function->signature->extendedAttributes->{"ImplementedBy"}) {
+                my $implementedBy = $function->signature->extendedAttributes->{"ImplementedBy"};
+                $implIncludes{"${implementedBy}.h"} = 1;
+                unshift(@arguments, "item");
+                $functionName = "WebCore::${implementedBy}::${functionName}";
+                $contentHead = "${assign}${assignPre}${functionName}(" . join(", ", @arguments) . "${assignPost});\n";
+            } else {
+                $functionName = "item->${functionName}";
+                $contentHead = "${assign}${assignPre}${functionName}(" . join(", ", @arguments) . "${assignPost});\n";
+            }
         } else {
-            $contentHead = "${assign}${assignPre}item->${functionSigName}(${callImplParams}${exceptions}${assignPost});\n";
+            my @arguments = @callImplParams;
+            if ($function->signature->extendedAttributes->{"ImplementedBy"}) {
+                my $implementedBy = $function->signature->extendedAttributes->{"ImplementedBy"};
+                $implIncludes{"${implementedBy}.h"} = 1;
+                unshift(@arguments, "item");
+                $contentHead = "${assign}${assignPre}WebCore::${implementedBy}::${functionSigName}(" . join(", ", @arguments) . "${assignPost});\n";
+            } else {
+                $contentHead = "${assign}${assignPre}item->${functionSigName}(" . join(", ", @arguments) . "${assignPost});\n";
+            }
         }
         push(@cBody, "    ${contentHead}");
         
@@ -1134,68 +1167,6 @@ sub GenerateEndHeader {
     push(@hPrefixGuardEnd, "#endif /* $guard */\n");
 }
 
-sub GeneratePrivateHeader {
-    my $object = shift;
-    my $dataNode = shift;
-
-    my $interfaceName = $dataNode->name;
-    my $filename = "$outputDir/" . $className . "Private.h";
-    my $guard = uc(decamelize($className)) . "_PRIVATE_H";
-    my $parentClassName = GetParentClassName($dataNode);
-    my $hasLegacyParent = $dataNode->extendedAttributes->{"LegacyParent"};
-    my $hasRealParent = @{$dataNode->parents} > 0;
-    my $hasParent = $hasLegacyParent || $hasRealParent;
-    
-    open(PRIVHEADER, ">$filename") or die "Couldn't open file $filename for writing";
-    
-    print PRIVHEADER split("\r", $licenceTemplate);
-    print PRIVHEADER "\n";
-    
-    my $text = << "EOF";
-#ifndef $guard
-#define $guard
-
-#include <glib-object.h>
-#include <webkit/${parentClassName}.h>
-#include "${interfaceName}.h"
-EOF
-
-    print PRIVHEADER $text;
-    
-    print PRIVHEADER map { "#include \"$_\"\n" } sort keys(%hdrPropIncludes);
-    print PRIVHEADER "\n" if keys(%hdrPropIncludes);
-    
-    $text = << "EOF";
-namespace WebKit {
-    ${className} *
-    wrap${interfaceName}(WebCore::${interfaceName} *coreObject);
-
-    WebCore::${interfaceName} *
-    core(${className} *request);
-
-EOF
-
-    print PRIVHEADER $text;
-
-    if ($className ne "WebKitDOMNode") {
-        $text = << "EOF";
-    ${className}*
-    kit(WebCore::${interfaceName}* node);
-
-EOF
-        print PRIVHEADER $text;
-    }
-
-    $text = << "EOF";
-} // namespace WebKit
-
-#endif /* ${guard} */
-EOF
-    print PRIVHEADER $text;
-
-    close(PRIVHEADER);
-}
-
 sub UsesManualKitImplementation {
     my $type = shift;
 
@@ -1258,9 +1229,6 @@ EOF
 sub Generate {
     my ($object, $dataNode) = @_;
 
-    my $hasLegacyParent = $dataNode->extendedAttributes->{"LegacyParent"};
-    my $hasRealParent = @{$dataNode->parents} > 0;
-    my $hasParent = $hasLegacyParent || $hasRealParent;
     my $parentClassName = GetParentClassName($dataNode);
     my $parentGObjType = GetParentGObjType($dataNode);
     my $interfaceName = $dataNode->name;
@@ -1311,16 +1279,71 @@ EOF
     $object->GenerateHeader($interfaceName, $parentClassName);
     $object->GenerateCFile($interfaceName, $parentClassName, $parentGObjType, $dataNode);
     $object->GenerateEndHeader();
-    $object->GeneratePrivateHeader($dataNode);
-
 }
 
 # Internal helper
 sub WriteData {
-    my ($object, $name) = @_;
+    my $object = shift;
+    my $dataNode = shift;
+
+    # Write a private header.
+    my $interfaceName = $dataNode->name;
+    my $filename = "$outputDir/" . $className . "Private.h";
+    my $guard = uc(decamelize($className)) . "_PRIVATE_H";
+    my $parentClassName = GetParentClassName($dataNode);
+
+    open(PRIVHEADER, ">$filename") or die "Couldn't open file $filename for writing";
+
+    print PRIVHEADER split("\r", $licenceTemplate);
+    print PRIVHEADER "\n";
+
+    my $text = << "EOF";
+#ifndef $guard
+#define $guard
+
+#include <glib-object.h>
+#include <webkit/${parentClassName}.h>
+#include "${interfaceName}.h"
+EOF
+
+    print PRIVHEADER $text;
+    print PRIVHEADER map { "#include \"$_\"\n" } sort keys(%hdrPropIncludes);
+    print PRIVHEADER "\n" if keys(%hdrPropIncludes);
+    $text = << "EOF";
+namespace WebKit {
+    ${className} *
+    wrap${interfaceName}(WebCore::${interfaceName} *coreObject);
+
+    WebCore::${interfaceName} *
+    core(${className} *request);
+
+EOF
+
+    print PRIVHEADER $text;
+
+    if ($className ne "WebKitDOMNode") {
+        $text = << "EOF";
+    ${className}*
+    kit(WebCore::${interfaceName}* node);
+
+EOF
+        print PRIVHEADER $text;
+    }
+
+    $text = << "EOF";
+} // namespace WebKit
+
+#endif /* ${guard} */
+EOF
+    print PRIVHEADER $text;
+
+    close(PRIVHEADER);
+
+    my $basename = FileNamePrefix . $interfaceName;
+    $basename =~ s/_//g;
 
     # Write public header.
-    my $hdrFName = "$outputDir/" . $name . ".h";
+    my $hdrFName = "$outputDir/" . $basename . ".h";
     open(HEADER, ">$hdrFName") or die "Couldn't open file $hdrFName";
 
     print HEADER @hPrefix;
@@ -1338,7 +1361,7 @@ sub WriteData {
     close(HEADER);
 
     # Write the implementation sources
-    my $implFileName = "$outputDir/" . $name . ".cpp";
+    my $implFileName = "$outputDir/" . $basename . ".cpp";
     open(IMPL, ">$implFileName") or die "Couldn't open file $implFileName";
 
     print IMPL @cPrefix;
@@ -1369,14 +1392,12 @@ sub WriteData {
 
 sub GenerateInterface {
     my ($object, $dataNode, $defines) = @_;
-    my $name = $dataNode->name;
 
     # Set up some global variables
     $className = GetClassName($dataNode->name);
-    $object->Generate($dataNode);
 
-    # Write changes
-    my $fname = "WebKitDOM_" . $name;
-    $fname =~ s/_//g;
-    $object->WriteData($fname);
+    $object->Generate($dataNode);
+    $object->WriteData($dataNode);
 }
+
+1;

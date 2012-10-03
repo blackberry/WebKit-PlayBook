@@ -27,10 +27,14 @@
 #define CCLayerImpl_h
 
 #include "Color.h"
+#include "FilterOperations.h"
 #include "FloatRect.h"
 #include "IntRect.h"
+#include "Region.h"
 #include "TextStream.h"
 #include "TransformationMatrix.h"
+#include "cc/CCLayerAnimationControllerImpl.h"
+#include "cc/CCRenderPass.h"
 #include "cc/CCRenderSurface.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/PassRefPtr.h>
@@ -43,34 +47,46 @@ class CCLayerSorter;
 class LayerChromium;
 class LayerRendererChromium;
 
-class CCLayerImpl : public RefCounted<CCLayerImpl> {
+class CCLayerImpl : public CCLayerAnimationControllerImplClient {
 public:
-    static PassRefPtr<CCLayerImpl> create(int id)
+    static PassOwnPtr<CCLayerImpl> create(int id)
     {
-        return adoptRef(new CCLayerImpl(id));
+        return adoptPtr(new CCLayerImpl(id));
     }
+
+    // CCLayerAnimationControllerImplClient implementation.
+    virtual int id() const { return m_layerId; }
+    virtual void setOpacity(float);
+    virtual float opacity() const { return m_opacity; }
+    virtual void setTransform(const TransformationMatrix&);
+    virtual const TransformationMatrix& transform() const { return m_transform; }
+    virtual const IntSize& bounds() const { return m_bounds; }
+
     virtual ~CCLayerImpl();
 
     // Tree structure.
     CCLayerImpl* parent() const { return m_parent; }
-    const Vector<RefPtr<CCLayerImpl> >& children() const { return m_children; }
-    void addChild(PassRefPtr<CCLayerImpl>);
+    const Vector<OwnPtr<CCLayerImpl> >& children() const { return m_children; }
+    void addChild(PassOwnPtr<CCLayerImpl>);
     void removeFromParent();
     void removeAllChildren();
 
-    void setMaskLayer(PassRefPtr<CCLayerImpl>);
+    void setMaskLayer(PassOwnPtr<CCLayerImpl>);
     CCLayerImpl* maskLayer() const { return m_maskLayer.get(); }
 
-    void setReplicaLayer(PassRefPtr<CCLayerImpl>);
+    void setReplicaLayer(PassOwnPtr<CCLayerImpl>);
     CCLayerImpl* replicaLayer() const { return m_replicaLayer.get(); }
-
-    int id() const { return m_layerId; }
 
 #ifndef NDEBUG
     int debugID() const { return m_debugID; }
 #endif
 
-    virtual void draw(LayerRendererChromium*);
+    PassOwnPtr<CCSharedQuadState> createSharedQuadState() const;
+    virtual void willDraw(LayerRendererChromium*) { }
+    virtual void appendQuads(CCQuadList&, const CCSharedQuadState*);
+    virtual void didDraw() { }
+    void appendDebugBorderQuad(CCQuadList&, const CCSharedQuadState*) const;
+
     void unreserveContentsTexture();
     virtual void bindContentsTexture(LayerRendererChromium*);
 
@@ -92,14 +108,17 @@ public:
     void setBackgroundColor(const Color&);
     Color backgroundColor() const { return m_backgroundColor; }
 
+    void setBackgroundCoversViewport(bool);
+    bool backgroundCoversViewport() const { return m_backgroundCoversViewport; }
+
+    void setFilters(const FilterOperations&);
+    const FilterOperations& filters() const { return m_filters; }
+
     void setMasksToBounds(bool);
     bool masksToBounds() const { return m_masksToBounds; }
 
     void setOpaque(bool);
     bool opaque() const { return m_opaque; }
-
-    void setOpacity(float);
-    float opacity() const { return m_opacity; }
 
     void setPosition(const FloatPoint&);
     const FloatPoint& position() const { return m_position; }
@@ -116,22 +135,16 @@ public:
     void setSublayerTransform(const TransformationMatrix&);
     const TransformationMatrix& sublayerTransform() const { return m_sublayerTransform; }
 
-    void setTransform(const TransformationMatrix&);
-    const TransformationMatrix& transform() const { return m_transform; }
-
-    void setZoomAnimatorTransform(const TransformationMatrix&);
-    const TransformationMatrix& zoomAnimatorTransform() const { return m_zoomAnimatorTransform; }
-
-    void setName(const String& name) { m_name = name; }
-    const String& name() const { return m_name; }
-
     // Debug layer border - visual effect only, do not change geometry/clipping/etc.
     void setDebugBorderColor(Color);
     Color debugBorderColor() const { return m_debugBorderColor; }
     void setDebugBorderWidth(float);
     float debugBorderWidth() const { return m_debugBorderWidth; }
+    bool hasDebugBorders() const;
 
-    void drawDebugBorder(LayerRendererChromium*);
+    // Debug layer name.
+    void setDebugName(const String& debugName) { m_debugName = debugName; }
+    String debugName() const { return m_debugName; }
 
     CCRenderSurface* renderSurface() const { return m_renderSurface.get(); }
     void createRenderSurface();
@@ -145,7 +158,6 @@ public:
     CCRenderSurface* targetRenderSurface() const { return m_targetRenderSurface; }
     void setTargetRenderSurface(CCRenderSurface* surface) { m_targetRenderSurface = surface; }
 
-    const IntSize& bounds() const { return m_bounds; }
     void setBounds(const IntSize&);
 
     const IntSize& contentBounds() const { return m_contentBounds; }
@@ -160,8 +172,8 @@ public:
     const IntSize& scrollDelta() const { return m_scrollDelta; }
     void setScrollDelta(const IntSize&);
 
-    float scaleDelta() const { return m_scaleDelta; }
-    void setScaleDelta(float);
+    float pageScaleDelta() const { return m_pageScaleDelta; }
+    void setPageScaleDelta(float);
 
     const IntSize& sentScrollDelta() const { return m_sentScrollDelta; }
     void setSentScrollDelta(const IntSize& sentScrollDelta) { m_sentScrollDelta = sentScrollDelta; }
@@ -170,6 +182,15 @@ public:
 
     bool scrollable() const { return m_scrollable; }
     void setScrollable(bool scrollable) { m_scrollable = scrollable; }
+
+    bool shouldScrollOnMainThread() const { return m_shouldScrollOnMainThread; }
+    void setShouldScrollOnMainThread(bool shouldScrollOnMainThread) { m_shouldScrollOnMainThread = shouldScrollOnMainThread; }
+
+    bool haveWheelEventHandlers() const { return m_haveWheelEventHandlers; }
+    void setHaveWheelEventHandlers(bool haveWheelEventHandlers) { m_haveWheelEventHandlers = haveWheelEventHandlers; }
+
+    const Region& nonFastScrollableRegion() const { return m_nonFastScrollableRegion; }
+    void setNonFastScrollableRegion(const Region& region) { m_nonFastScrollableRegion = region; }
 
     const IntRect& visibleLayerRect() const { return m_visibleLayerRect; }
     void setVisibleLayerRect(const IntRect& visibleLayerRect) { m_visibleLayerRect = visibleLayerRect; }
@@ -192,13 +213,20 @@ public:
     String layerTreeAsText() const;
 
     bool layerPropertyChanged() const { return m_layerPropertyChanged; }
-    void resetLayerPropertyChanged() { m_layerPropertyChanged = false; }
+    void resetAllChangeTrackingForSubtree();
+
+    CCLayerAnimationControllerImpl* layerAnimationController() { return m_layerAnimationController.get(); }
 
 protected:
     explicit CCLayerImpl(int);
 
     virtual void dumpLayerProperties(TextStream&, int indent) const;
     static void writeIndent(TextStream&, int indent);
+
+    // Transformation used to transform quads provided in appendQuads.
+    virtual TransformationMatrix quadTransform() const;
+
+    void appendGutterQuads(CCQuadList&, const CCSharedQuadState*);
 
 private:
     void setParent(CCLayerImpl* parent) { m_parent = parent; }
@@ -216,9 +244,12 @@ private:
 
     // Properties internal to CCLayerImpl
     CCLayerImpl* m_parent;
-    Vector<RefPtr<CCLayerImpl> > m_children;
-    RefPtr<CCLayerImpl> m_maskLayer;
-    RefPtr<CCLayerImpl> m_replicaLayer;
+    Vector<OwnPtr<CCLayerImpl> > m_children;
+    // m_maskLayer can be temporarily stolen during tree sync, we need this ID to confirm newly assigned layer is still the previous one
+    int m_maskLayerId;
+    OwnPtr<CCLayerImpl> m_maskLayer;
+    int m_replicaLayerId; // ditto
+    OwnPtr<CCLayerImpl> m_replicaLayer;
     int m_layerId;
 
     // Properties synchronized from the associated LayerChromium.
@@ -228,7 +259,11 @@ private:
     IntSize m_contentBounds;
     IntPoint m_scrollPosition;
     bool m_scrollable;
+    bool m_shouldScrollOnMainThread;
+    bool m_haveWheelEventHandlers;
+    Region m_nonFastScrollableRegion;
     Color m_backgroundColor;
+    bool m_backgroundCoversViewport;
 
     // Whether the "back" of this layer should draw.
     bool m_doubleSided;
@@ -242,7 +277,6 @@ private:
     float m_opacity;
     FloatPoint m_position;
     bool m_preserves3D;
-    TransformationMatrix m_zoomAnimatorTransform;
     TransformationMatrix m_sublayerTransform;
     TransformationMatrix m_transform;
     bool m_usesLayerClipping;
@@ -253,15 +287,13 @@ private:
     IntSize m_scrollDelta;
     IntSize m_sentScrollDelta;
     IntSize m_maxScrollPosition;
-    float m_scaleDelta;
+    float m_pageScaleDelta;
 
     // Properties owned exclusively by this CCLayerImpl.
     // Debugging.
 #ifndef NDEBUG
     int m_debugID;
 #endif
-
-    String m_name;
 
     // Render surface this layer draws into. This is a surface that can belong
     // either to this layer (if m_targetRenderSurface == m_renderSurface) or
@@ -277,6 +309,11 @@ private:
     // Debug borders.
     Color m_debugBorderColor;
     float m_debugBorderWidth;
+
+    // Debug layer name.
+    String m_debugName;
+
+    FilterOperations m_filters;
 
     TransformationMatrix m_drawTransform;
     TransformationMatrix m_screenSpaceTransform;
@@ -296,9 +333,12 @@ private:
     // Rect indicating what was repainted/updated during update.
     // Note that plugin layers bypass this and leave it empty.
     FloatRect m_updateRect;
+
+    // Manages animations for this layer.
+    OwnPtr<CCLayerAnimationControllerImpl> m_layerAnimationController;
 };
 
-void sortLayers(Vector<RefPtr<CCLayerImpl> >::iterator first, Vector<RefPtr<CCLayerImpl> >::iterator end, CCLayerSorter*);
+void sortLayers(Vector<CCLayerImpl*>::iterator first, Vector<CCLayerImpl*>::iterator end, CCLayerSorter*);
 
 }
 

@@ -27,15 +27,13 @@
 #define LayerTreeHostCAMac_h
 
 #include "LayerTreeHostCA.h"
-#include <wtf/RetainPtr.h>
-
-#define CoreAnimationRunLoopOrder 2000000
-
-typedef struct __WKCARemoteLayerClientRef* WKCARemoteLayerClientRef;
+#include "RemoteLayerClient.h"
+#include <WebCore/LayerFlushScheduler.h>
+#include <WebCore/LayerFlushSchedulerClient.h>
 
 namespace WebKit {
 
-class LayerTreeHostCAMac : public LayerTreeHostCA {
+class LayerTreeHostCAMac : public LayerTreeHostCA, public WebCore::LayerFlushSchedulerClient {
 public:
     static PassRefPtr<LayerTreeHostCAMac> create(WebPage*);
     virtual ~LayerTreeHostCAMac();
@@ -56,10 +54,13 @@ private:
     virtual void platformInitialize(LayerTreeContext&);
     virtual void didPerformScheduledLayerFlush();
 
-    static void flushPendingLayerChangesRunLoopObserverCallback(CFRunLoopObserverRef, CFRunLoopActivity, void*);
+    virtual bool flushPendingLayerChanges();
 
-    RetainPtr<WKCARemoteLayerClientRef> m_remoteLayerClient;
-    RetainPtr<CFRunLoopObserverRef> m_flushPendingLayerChangesRunLoopObserver;
+    // LayerFlushSchedulerClient
+    virtual bool flushLayers();
+
+    OwnPtr<RemoteLayerClient> m_remoteLayerClient;
+    WebCore::LayerFlushScheduler m_layerFlushScheduler;
 };
 
 } // namespace WebKit

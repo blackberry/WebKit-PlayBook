@@ -30,10 +30,10 @@
 // changes in its ouput.
 module test {
     interface [
-        CustomConstructor=Event
+        ConstructorTemplate=Event
     ] TestEventConstructor {
         // Attributes
         readonly attribute DOMString attr1;
-        readonly attribute [InitializedAtConstructor] DOMString attr2;
+        readonly attribute [InitializedByEventConstructor] DOMString attr2;
     };
 }

@@ -43,10 +43,6 @@
 #include <QPrintPreviewDialog>
 #endif
 
-#ifndef QT_NO_UITOOLS
-#include <QtUiTools/QUiLoader>
-#endif
-
 #include <QDebug>
 
 #include <cstdio>
@@ -56,7 +52,6 @@
 #include <qwebinspector.h>
 #include <qwebsettings.h>
 
-#include "DumpRenderTreeSupportQt.h"
 #include "mainwindow.h"
 #include "urlloader.h"
 #include "utils.h"
@@ -65,6 +60,7 @@
 #include "webview.h"
 
 class QPropertyAnimation;
+class QLineEdit;
 
 class WindowOptions {
 public:
@@ -86,9 +82,6 @@ public:
         , offlineStorageDefaultQuotaSize(0)
 #ifndef QT_NO_OPENGL
         , useQGLWidgetViewport(false)
-#endif
-#if defined(Q_WS_X11)
-        , useTestFonts(false)
 #endif
         , printLoadedUrls(false)
         , startMaximized(false)
@@ -112,9 +105,6 @@ public:
     quint64 offlineStorageDefaultQuotaSize;
 #ifndef QT_NO_OPENGL
     bool useQGLWidgetViewport;
-#endif
-#if defined(Q_WS_X11)
-    bool useTestFonts;
 #endif
     bool printLoadedUrls;
     QUrl inspectorUrl;

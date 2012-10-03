@@ -1,183 +1,179 @@
-layer at (0,0) size 800x1464
+layer at (0,0) size 800x1227
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x1464
-  RenderBlock {HTML} at (0,0) size 800x1464
-    RenderBody {BODY} at (8,8) size 784x1448 [bgcolor=#FFFFFF]
-      RenderBlock {H1} at (0,0) size 784x35
-        RenderText {#text} at (0,0) size 476x35
-          text run at (0,0) width 476: "Safari 1.0 PRE width bug"
-      RenderBlock (anonymous) at (0,57) size 784x90
-        RenderText {#text} at (0,0) size 133x18
-          text run at (0,0) width 133: "As noted in my "
-        RenderInline {A} at (0,0) size 37x18 [color=#0000EE]
-          RenderText {#text} at (133,0) size 37x18
-            text run at (133,0) width 37: "blog"
-        RenderText {#text} at (170,0) size 773x90
-          text run at (170,0) width 10: ", "
-          text run at (180,0) width 577: "in certain cases Safari will miscalculate the width of a PRE element. "
-          text run at (757,0) width 5: "I"
-          text run at (0,18) width 621: "think I've found the trigger. If a nested container element is preceded by "
-          text run at (621,18) width 145: "uncontained text"
-          text run at (0,36) width 459: "and a blank line, and there are \"too many\" characters "
-          text run at (459,36) width 314: "contained in the nested element, the"
-          text run at (0,54) width 233: "PRE width will be too wide. "
-          text run at (233,54) width 510: "In the examples below, the nested element is a SPAN whose"
-          text run at (0,72) width 70: "content "
-          text run at (70,72) width 298: "is the days-of-week line, as follows:"
-      RenderBlock {PRE} at (0,164) size 784x21
-        RenderText {#text} at (0,0) size 470x21
-          text run at (0,0) width 470: "    <SPAN CLASS=dow> D  M  T  W  J  F  S</SPAN>"
-          text run at (470,0) width 0: " "
-      RenderBlock {H2} at (0,206) size 784x27
-        RenderText {#text} at (0,0) size 153x27
-          text run at (0,0) width 153: "Example 1"
-      RenderTable {TABLE} at (0,254) size 784x234
-        RenderTableSection {TBODY} at (0,0) size 784x234
-          RenderTableRow {TR} at (0,2) size 784x230
-            RenderTableCell {TD} at (2,2) size 220x230 [r=0 c=0 rs=1 cs=1]
-              RenderBlock {PRE} at (1,1) size 218x228 [bgcolor=#CCCC99] [border: (1px solid #000000)]
-                RenderText {#text} at (9,9) size 120x42
-                  text run at (9,9) width 120: "        2003"
-                  text run at (129,9) width 0: " "
-                  text run at (9,30) width 0: " "
-                RenderInline {SPAN} at (0,0) size 200x24 [border: (1px solid #000000) none (2px solid #000000) none]
-                  RenderText {#text} at (9,51) size 200x21
-                    text run at (9,51) width 200: " D  M  T  W  J  F  S"
-                RenderText {#text} at (209,51) size 200x168
-                  text run at (209,51) width 0: " "
-                  text run at (9,72) width 0: " "
-                  text run at (9,93) width 150: "      September"
-                  text run at (159,93) width 0: " "
-                  text run at (9,114) width 200: "    1  2  3  4  5  6"
-                  text run at (209,114) width 0: " "
-                  text run at (9,135) width 200: " 7  8  9 10 11 12 13"
-                  text run at (209,135) width 0: " "
-                  text run at (9,156) width 200: "14 15 16 17 18 19 20"
-                  text run at (209,156) width 0: " "
-                  text run at (9,177) width 200: "21 22 23 24 25 26 27"
-                  text run at (209,177) width 0: " "
-                  text run at (9,198) width 80: "28 29 30"
-            RenderTableCell {TD} at (224,2) size 558x38 [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 537x36
-                text run at (1,1) width 470: "The blank line between '2003' and the nested element "
-                text run at (471,1) width 67: "triggers"
-                text run at (1,19) width 124: "the width bug."
-      RenderBlock (anonymous) at (0,488) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
-      RenderBlock {H2} at (0,527) size 784x27
-        RenderText {#text} at (0,0) size 153x27
-          text run at (0,0) width 153: "Example 2"
-      RenderTable {TABLE} at (0,575) size 784x234
-        RenderTableSection {TBODY} at (0,0) size 784x234
-          RenderTableRow {TR} at (0,2) size 784x230
-            RenderTableCell {TD} at (2,2) size 220x230 [r=0 c=0 rs=1 cs=1]
-              RenderBlock {PRE} at (1,1) size 218x228 [bgcolor=#CCCC99] [border: (1px solid #000000)]
-                RenderText {#text} at (9,9) size 120x42
-                  text run at (9,9) width 120: "        2003"
-                  text run at (129,9) width 0: " "
-                  text run at (9,30) width 0: " "
-                RenderInline {SPAN} at (0,0) size 120x24 [border: (1px solid #000000) none (2px solid #000000) none]
-                  RenderText {#text} at (9,51) size 120x21
-                    text run at (9,51) width 120: " D  M  TWJFS"
-                RenderText {#text} at (129,51) size 200x168
-                  text run at (129,51) width 0: " "
-                  text run at (9,72) width 0: " "
-                  text run at (9,93) width 150: "      September"
-                  text run at (159,93) width 0: " "
-                  text run at (9,114) width 200: "    1  2  3  4  5  6"
-                  text run at (209,114) width 0: " "
-                  text run at (9,135) width 200: " 7  8  9 10 11 12 13"
-                  text run at (209,135) width 0: " "
-                  text run at (9,156) width 200: "14 15 16 17 18 19 20"
-                  text run at (209,156) width 0: " "
-                  text run at (9,177) width 200: "21 22 23 24 25 26 27"
-                  text run at (209,177) width 0: " "
-                  text run at (9,198) width 80: "28 29 30"
-            RenderTableCell {TD} at (224,2) size 558x91 [r=0 c=1 rs=1 cs=1]
-              RenderBlock (anonymous) at (1,1) size 556x36
-                RenderText {#text} at (0,0) size 537x36
-                  text run at (0,0) width 470: "The blank line between '2003' and the nested element "
-                  text run at (470,0) width 67: "triggers"
-                  text run at (0,18) width 124: "the width bug."
-              RenderBlock {P} at (1,54) size 556x36
-                RenderText {#text} at (0,0) size 545x36
-                  text run at (0,0) width 478: "Here, the excess whitespace is reduced by reducing the "
-                  text run at (478,0) width 67: "number"
-                  text run at (0,18) width 401: "of characters contained by the nested element."
-      RenderBlock (anonymous) at (0,809) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
-      RenderBlock {H2} at (0,848) size 784x27
-        RenderText {#text} at (0,0) size 153x27
-          text run at (0,0) width 153: "Example 3"
-      RenderTable {TABLE} at (0,896) size 784x213
-        RenderTableSection {TBODY} at (0,0) size 784x213
-          RenderTableRow {TR} at (0,2) size 784x209
-            RenderTableCell {TD} at (2,2) size 220x209 [r=0 c=0 rs=1 cs=1]
-              RenderBlock {PRE} at (1,1) size 218x207 [bgcolor=#CCCC99] [border: (1px solid #000000)]
-                RenderText {#text} at (9,9) size 120x21
-                  text run at (9,9) width 120: "        2003"
-                  text run at (129,9) width 0: " "
-                RenderInline {SPAN} at (0,0) size 200x24 [border: (1px solid #000000) none (2px solid #000000) none]
-                  RenderText {#text} at (9,30) size 200x21
-                    text run at (9,30) width 200: " D  M  T  W  J  F  S"
-                RenderText {#text} at (209,30) size 200x168
-                  text run at (209,30) width 0: " "
-                  text run at (9,51) width 0: " "
-                  text run at (9,72) width 150: "      September"
-                  text run at (159,72) width 0: " "
-                  text run at (9,93) width 200: "    1  2  3  4  5  6"
-                  text run at (209,93) width 0: " "
-                  text run at (9,114) width 200: " 7  8  9 10 11 12 13"
-                  text run at (209,114) width 0: " "
-                  text run at (9,135) width 200: "14 15 16 17 18 19 20"
-                  text run at (209,135) width 0: " "
-                  text run at (9,156) width 200: "21 22 23 24 25 26 27"
-                  text run at (209,156) width 0: " "
-                  text run at (9,177) width 80: "28 29 30"
-            RenderTableCell {TD} at (224,2) size 558x38 [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 547x36
-                text run at (1,1) width 470: "The blank line between '2003' and the nested element "
-                text run at (471,1) width 77: "has been"
-                text run at (1,19) width 316: "removed, so the bug is not triggered."
-      RenderBlock (anonymous) at (0,1109) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
-      RenderBlock {H2} at (0,1148) size 784x27
-        RenderText {#text} at (0,0) size 153x27
-          text run at (0,0) width 153: "Example 4"
-      RenderTable {TABLE} at (0,1196) size 784x234
-        RenderTableSection {TBODY} at (0,0) size 784x234
-          RenderTableRow {TR} at (0,2) size 784x230
-            RenderTableCell {TD} at (2,2) size 220x230 [r=0 c=0 rs=1 cs=1]
-              RenderBlock {PRE} at (1,1) size 218x228 [bgcolor=#CCCC99] [border: (1px solid #000000)]
-                RenderInline {SPAN} at (0,0) size 120x21
-                  RenderText {#text} at (9,9) size 120x21
-                    text run at (9,9) width 120: "        2003"
-                RenderText {#text} at (129,9) size 120x42
-                  text run at (129,9) width 0: " "
-                  text run at (9,30) width 0: " "
-                RenderInline {SPAN} at (0,0) size 200x24 [border: (1px solid #000000) none (2px solid #000000) none]
-                  RenderText {#text} at (9,51) size 200x21
-                    text run at (9,51) width 200: " D  M  T  W  J  F  S"
-                RenderText {#text} at (209,51) size 200x168
-                  text run at (209,51) width 0: " "
-                  text run at (9,72) width 0: " "
-                  text run at (9,93) width 150: "      September"
-                  text run at (159,93) width 0: " "
-                  text run at (9,114) width 200: "    1  2  3  4  5  6"
-                  text run at (209,114) width 0: " "
-                  text run at (9,135) width 200: " 7  8  9 10 11 12 13"
-                  text run at (209,135) width 0: " "
-                  text run at (9,156) width 200: "14 15 16 17 18 19 20"
-                  text run at (209,156) width 0: " "
-                  text run at (9,177) width 200: "21 22 23 24 25 26 27"
-                  text run at (209,177) width 0: " "
-                  text run at (9,198) width 80: "28 29 30"
-            RenderTableCell {TD} at (224,2) size 558x56 [r=0 c=1 rs=1 cs=1]
-              RenderText {#text} at (1,1) size 550x54
-                text run at (1,1) width 470: "The blank line between '2003' and the nested element "
-                text run at (471,1) width 80: "no longer"
-                text run at (1,19) width 469: "triggers the width bug, because now the '2003' is itself"
-                text run at (1,37) width 115: "contained by "
-                text run at (116,37) width 394: "a nested element (in this case, another SPAN)."
-      RenderBlock (anonymous) at (0,1430) size 784x18
-        RenderBR {BR} at (0,0) size 0x18
+layer at (0,0) size 800x1227
+  RenderBlock {HTML} at (0,0) size 800x1227
+    RenderBody {BODY} at (8,8) size 784x1211 [bgcolor=#FFFFFF]
+      RenderBlock {H1} at (0,0) size 784x37
+        RenderText {#text} at (0,0) size 351x36
+          text run at (0,0) width 351: "Safari 1.0 PRE width bug"
+      RenderBlock (anonymous) at (0,58) size 784x80
+        RenderText {#text} at (0,0) size 101x19
+          text run at (0,0) width 101: "As noted in my "
+        RenderInline {A} at (0,0) size 28x19 [color=#0000EE]
+          RenderText {#text} at (101,0) size 28x19
+            text run at (101,0) width 28: "blog"
+        RenderText {#text} at (129,0) size 777x79
+          text run at (129,0) width 8: ", "
+          text run at (137,0) width 431: "in certain cases Safari will miscalculate the width of a PRE element. "
+          text run at (568,0) width 206: "I think I've found the trigger. If a"
+          text run at (0,20) width 254: "nested container element is preceded by "
+          text run at (254,20) width 445: "uncontained text and a blank line, and there are \"too many\" characters "
+          text run at (699,20) width 77: "contained in"
+          text run at (0,40) width 331: "the nested element, the PRE width will be too wide. "
+          text run at (331,40) width 436: "In the examples below, the nested element is a SPAN whose content "
+          text run at (767,40) width 10: "is"
+          text run at (0,60) width 212: "the days-of-week line, as follows:"
+      RenderBlock {PRE} at (0,151) size 784x16
+        RenderText {#text} at (0,0) size 376x16
+          text run at (0,0) width 376: "    <SPAN CLASS=dow> D  M  T  W  J  F  S</SPAN>"
+          text run at (376,0) width 0: " "
+      RenderBlock {H2} at (0,186) size 784x27
+        RenderText {#text} at (0,0) size 109x26
+          text run at (0,0) width 109: "Example 1"
+      RenderTable {TABLE} at (0,232) size 784x180
+        RenderTableSection {TBODY} at (0,0) size 784x180
+          RenderTableRow {TR} at (0,2) size 784x176
+            RenderTableCell {TD} at (2,2) size 176x176 [r=0 c=0 rs=1 cs=1]
+              RenderBlock {PRE} at (1,1) size 174x174 [bgcolor=#CCCC99] [border: (1px solid #000000)]
+                RenderText {#text} at (7,7) size 96x32
+                  text run at (7,7) width 96: "        2003"
+                  text run at (103,7) width 0: " "
+                  text run at (7,23) width 0: " "
+                RenderInline {SPAN} at (0,0) size 160x19 [border: (1px solid #000000) none (2px solid #000000) none]
+                  RenderText {#text} at (7,39) size 160x16
+                    text run at (7,39) width 160: " D  M  T  W  J  F  S"
+                RenderText {#text} at (167,39) size 160x128
+                  text run at (167,39) width 0: " "
+                  text run at (7,55) width 0: " "
+                  text run at (7,71) width 120: "      September"
+                  text run at (127,71) width 0: " "
+                  text run at (7,87) width 160: "    1  2  3  4  5  6"
+                  text run at (167,87) width 0: " "
+                  text run at (7,103) width 160: " 7  8  9 10 11 12 13"
+                  text run at (167,103) width 0: " "
+                  text run at (7,119) width 160: "14 15 16 17 18 19 20"
+                  text run at (167,119) width 0: " "
+                  text run at (7,135) width 160: "21 22 23 24 25 26 27"
+                  text run at (167,135) width 0: " "
+                  text run at (7,151) width 64: "28 29 30"
+            RenderTableCell {TD} at (180,2) size 602x22 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 483x19
+                text run at (1,1) width 341: "The blank line between '2003' and the nested element "
+                text run at (342,1) width 142: "triggers the width bug."
+      RenderBlock (anonymous) at (0,412) size 784x20
+        RenderBR {BR} at (0,0) size 0x19
+      RenderBlock {H2} at (0,451) size 784x27
+        RenderText {#text} at (0,0) size 109x26
+          text run at (0,0) width 109: "Example 2"
+      RenderTable {TABLE} at (0,497) size 784x180
+        RenderTableSection {TBODY} at (0,0) size 784x180
+          RenderTableRow {TR} at (0,2) size 784x176
+            RenderTableCell {TD} at (2,2) size 176x176 [r=0 c=0 rs=1 cs=1]
+              RenderBlock {PRE} at (1,1) size 174x174 [bgcolor=#CCCC99] [border: (1px solid #000000)]
+                RenderText {#text} at (7,7) size 96x32
+                  text run at (7,7) width 96: "        2003"
+                  text run at (103,7) width 0: " "
+                  text run at (7,23) width 0: " "
+                RenderInline {SPAN} at (0,0) size 96x19 [border: (1px solid #000000) none (2px solid #000000) none]
+                  RenderText {#text} at (7,39) size 96x16
+                    text run at (7,39) width 96: " D  M  TWJFS"
+                RenderText {#text} at (103,39) size 160x128
+                  text run at (103,39) width 0: " "
+                  text run at (7,55) width 0: " "
+                  text run at (7,71) width 120: "      September"
+                  text run at (127,71) width 0: " "
+                  text run at (7,87) width 160: "    1  2  3  4  5  6"
+                  text run at (167,87) width 0: " "
+                  text run at (7,103) width 160: " 7  8  9 10 11 12 13"
+                  text run at (167,103) width 0: " "
+                  text run at (7,119) width 160: "14 15 16 17 18 19 20"
+                  text run at (167,119) width 0: " "
+                  text run at (7,135) width 160: "21 22 23 24 25 26 27"
+                  text run at (167,135) width 0: " "
+                  text run at (7,151) width 64: "28 29 30"
+            RenderTableCell {TD} at (180,2) size 602x78 [r=0 c=1 rs=1 cs=1]
+              RenderBlock (anonymous) at (1,1) size 600x20
+                RenderText {#text} at (0,0) size 483x19
+                  text run at (0,0) width 341: "The blank line between '2003' and the nested element "
+                  text run at (341,0) width 142: "triggers the width bug."
+              RenderBlock {P} at (1,37) size 600x40
+                RenderText {#text} at (0,0) size 591x39
+                  text run at (0,0) width 351: "Here, the excess whitespace is reduced by reducing the "
+                  text run at (351,0) width 240: "number of characters contained by the"
+                  text run at (0,20) width 97: "nested element."
+      RenderBlock (anonymous) at (0,677) size 784x20
+        RenderBR {BR} at (0,0) size 0x19
+      RenderBlock {H2} at (0,716) size 784x27
+        RenderText {#text} at (0,0) size 109x26
+          text run at (0,0) width 109: "Example 3"
+      RenderTable {TABLE} at (0,762) size 784x164
+        RenderTableSection {TBODY} at (0,0) size 784x164
+          RenderTableRow {TR} at (0,2) size 784x160
+            RenderTableCell {TD} at (2,2) size 176x160 [r=0 c=0 rs=1 cs=1]
+              RenderBlock {PRE} at (1,1) size 174x158 [bgcolor=#CCCC99] [border: (1px solid #000000)]
+                RenderText {#text} at (7,7) size 96x16
+                  text run at (7,7) width 96: "        2003"
+                  text run at (103,7) width 0: " "
+                RenderInline {SPAN} at (0,0) size 160x19 [border: (1px solid #000000) none (2px solid #000000) none]
+                  RenderText {#text} at (7,23) size 160x16
+                    text run at (7,23) width 160: " D  M  T  W  J  F  S"
+                RenderText {#text} at (167,23) size 160x128
+                  text run at (167,23) width 0: " "
+                  text run at (7,39) width 0: " "
+                  text run at (7,55) width 120: "      September"
+                  text run at (127,55) width 0: " "
+                  text run at (7,71) width 160: "    1  2  3  4  5  6"
+                  text run at (167,71) width 0: " "
+                  text run at (7,87) width 160: " 7  8  9 10 11 12 13"
+                  text run at (167,87) width 0: " "
+                  text run at (7,103) width 160: "14 15 16 17 18 19 20"
+                  text run at (167,103) width 0: " "
+                  text run at (7,119) width 160: "21 22 23 24 25 26 27"
+                  text run at (167,119) width 0: " "
+                  text run at (7,135) width 64: "28 29 30"
+            RenderTableCell {TD} at (180,2) size 602x42 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 566x39
+                text run at (1,1) width 341: "The blank line between '2003' and the nested element "
+                text run at (342,1) width 225: "has been removed, so the bug is not"
+                text run at (1,21) width 60: "triggered."
+      RenderBlock (anonymous) at (0,926) size 784x20
+        RenderBR {BR} at (0,0) size 0x19
+      RenderBlock {H2} at (0,965) size 784x27
+        RenderText {#text} at (0,0) size 109x26
+          text run at (0,0) width 109: "Example 4"
+      RenderTable {TABLE} at (0,1011) size 784x180
+        RenderTableSection {TBODY} at (0,0) size 784x180
+          RenderTableRow {TR} at (0,2) size 784x176
+            RenderTableCell {TD} at (2,2) size 176x176 [r=0 c=0 rs=1 cs=1]
+              RenderBlock {PRE} at (1,1) size 174x174 [bgcolor=#CCCC99] [border: (1px solid #000000)]
+                RenderInline {SPAN} at (0,0) size 96x16
+                  RenderText {#text} at (7,7) size 96x16
+                    text run at (7,7) width 96: "        2003"
+                RenderText {#text} at (103,7) size 96x32
+                  text run at (103,7) width 0: " "
+                  text run at (7,23) width 0: " "
+                RenderInline {SPAN} at (0,0) size 160x19 [border: (1px solid #000000) none (2px solid #000000) none]
+                  RenderText {#text} at (7,39) size 160x16
+                    text run at (7,39) width 160: " D  M  T  W  J  F  S"
+                RenderText {#text} at (167,39) size 160x128
+                  text run at (167,39) width 0: " "
+                  text run at (7,55) width 0: " "
+                  text run at (7,71) width 120: "      September"
+                  text run at (127,71) width 0: " "
+                  text run at (7,87) width 160: "    1  2  3  4  5  6"
+                  text run at (167,87) width 0: " "
+                  text run at (7,103) width 160: " 7  8  9 10 11 12 13"
+                  text run at (167,103) width 0: " "
+                  text run at (7,119) width 160: "14 15 16 17 18 19 20"
+                  text run at (167,119) width 0: " "
+                  text run at (7,135) width 160: "21 22 23 24 25 26 27"
+                  text run at (167,135) width 0: " "
+                  text run at (7,151) width 64: "28 29 30"
+            RenderTableCell {TD} at (180,2) size 602x42 [r=0 c=1 rs=1 cs=1]
+              RenderText {#text} at (1,1) size 576x39
+                text run at (1,1) width 341: "The blank line between '2003' and the nested element "
+                text run at (342,1) width 206: "no longer triggers the width bug,"
+                text run at (1,21) width 284: "because now the '2003' is itself contained by "
+                text run at (285,21) width 292: "a nested element (in this case, another SPAN)."
+      RenderBlock (anonymous) at (0,1191) size 784x20
+        RenderBR {BR} at (0,0) size 0x19

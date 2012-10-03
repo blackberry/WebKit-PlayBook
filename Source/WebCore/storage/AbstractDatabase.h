@@ -43,6 +43,7 @@
 namespace WebCore {
 
 class DatabaseAuthorizer;
+class DatabaseContext;
 class ScriptExecutionContext;
 class SecurityOrigin;
 
@@ -59,6 +60,7 @@ public:
 
     bool opened() const { return m_opened; }
     bool isNew() const { return m_new; }
+    bool isSyncDatabase() const { return m_isSyncDatabase; }
 
     virtual ScriptExecutionContext* scriptExecutionContext() const;
     virtual SecurityOrigin* securityOrigin() const;
@@ -86,13 +88,22 @@ public:
     virtual void markAsDeletedAndClose() = 0;
     virtual void closeImmediately() = 0;
 
+    DatabaseContext* databaseContext() const { return m_databaseContext; }
+
 protected:
+    friend class ChangeVersionWrapper;
+    friend class SQLStatement;
+    friend class SQLStatementSync;
     friend class SQLTransactionSync;
     friend class SQLTransaction;
-    friend class ChangeVersionWrapper;
+
+    enum DatabaseType {
+        AsyncDatabase,
+        SyncDatabase
+    };
 
     AbstractDatabase(ScriptExecutionContext*, const String& name, const String& expectedVersion,
-                     const String& displayName, unsigned long estimatedSize);
+                     const String& displayName, unsigned long estimatedSize, DatabaseType);
 
     void closeDatabase();
 
@@ -108,10 +119,18 @@ protected:
 
     void logErrorMessage(const String& message);
 
+    void reportOpenDatabaseResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode);
+    void reportChangeVersionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode);
+    void reportStartTransactionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode);
+    void reportCommitTransactionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode);
+    void reportExecuteStatementResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode);
+    void reportVacuumDatabaseResult(int sqliteErrorCode);
+
     static const char* databaseInfoTableName();
 
-    RefPtr<ScriptExecutionContext> m_scriptExecutionContext;
     RefPtr<SecurityOrigin> m_contextThreadSecurityOrigin;
+    RefPtr<ScriptExecutionContext> m_scriptExecutionContext;
+    DatabaseContext* m_databaseContext; // Owned by m_scriptExecutionContext.
 
     String m_name;
     String m_expectedVersion;
@@ -127,6 +146,7 @@ private:
     int m_guid;
     bool m_opened;
     bool m_new;
+    const bool m_isSyncDatabase;
 
     SQLiteDatabase m_sqliteDatabase;
 

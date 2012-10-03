@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,6 +19,8 @@
 #ifndef DumpRenderTreeSupport_h
 #define DumpRenderTreeSupport_h
 
+#include <JavaScriptCore/JSObjectRef.h>
+
 namespace BlackBerry {
 namespace WebKit {
 class WebPage;
@@ -27,6 +29,7 @@ class WebPage;
 
 namespace WebCore {
 class Frame;
+class Page;
 }
 
 namespace WTF {
@@ -37,6 +40,8 @@ class DumpRenderTreeSupport {
 public:
     DumpRenderTreeSupport();
     ~DumpRenderTreeSupport();
+
+    static WebCore::Page* corePage(BlackBerry::WebKit::WebPage*);
 
     static void setLinksIncludedInFocusChain(bool);
     static bool linksIncludedInFocusChain();
@@ -53,6 +58,7 @@ public:
     static void setMockGeolocationPermission(BlackBerry::WebKit::WebPage*, bool allowed);
     static void setMockGeolocationPosition(BlackBerry::WebKit::WebPage*, double latitude, double longitude, double accuracy);
     static void scalePageBy(BlackBerry::WebKit::WebPage*, float, float, float);
+    static JSValueRef computedStyleIncludingVisitedInfo(JSContextRef, JSValueRef);
 
 private:
     static bool s_linksIncludedInTabChain;

@@ -115,6 +115,8 @@ public:
     FloatRect convertLogicalToDevice(const FloatRect&) const;
     FloatSize convertLogicalToDevice(const FloatSize&) const;
 
+    FloatSize convertDeviceToLogical(const FloatSize&) const;
+
     SecurityOrigin* securityOrigin() const;
     void setOriginTainted() { m_originClean = false; }
     bool originClean() const { return m_originClean; }
@@ -135,7 +137,7 @@ public:
 private:
     HTMLCanvasElement(const QualifiedName&, Document*);
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
 
     void reset();
@@ -143,6 +145,10 @@ private:
     void createImageBuffer() const;
 
     void setSurfaceSize(const IntSize&);
+
+    bool shouldDefer() const;
+
+    bool paintsIntoCanvasBuffer() const;
 
     HashSet<CanvasObserver*> m_observers;
 

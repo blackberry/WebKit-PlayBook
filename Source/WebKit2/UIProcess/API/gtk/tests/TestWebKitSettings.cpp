@@ -37,9 +37,6 @@
 
 static void testWebKitSettings(Test*, gconstpointer)
 {
-    /* Skip running this test for now till a bug in WKPreferencesCreate
-       https://bugs.webkit.org/show_bug.cgi?id=70127 gets fixed. */
-#if 0
     WebKitSettings* settings = webkit_settings_new();
 
     // JavaScript is enabled by default.
@@ -137,18 +134,18 @@ static void testWebKitSettings(Test*, gconstpointer)
     webkit_settings_set_pictograph_font_family(settings, "sans-serif");
     g_assert_cmpstr(webkit_settings_get_pictograph_font_family(settings), ==, "sans-serif");
 
-    // Default font size is 12.
-    g_assert_cmpuint(webkit_settings_get_default_font_size(settings), ==, 12);
+    // Default font size is 16.
+    g_assert_cmpuint(webkit_settings_get_default_font_size(settings), ==, 16);
     webkit_settings_set_default_font_size(settings, 14);
     g_assert_cmpuint(webkit_settings_get_default_font_size(settings), ==, 14);
 
-    // Default monospace font size is 10.
+    // Default monospace font size is 13.
+    g_assert_cmpuint(webkit_settings_get_default_monospace_font_size(settings), ==, 13);
+    webkit_settings_set_default_monospace_font_size(settings, 10);
     g_assert_cmpuint(webkit_settings_get_default_monospace_font_size(settings), ==, 10);
-    webkit_settings_set_default_monospace_font_size(settings, 12);
-    g_assert_cmpuint(webkit_settings_get_default_monospace_font_size(settings), ==, 12);
 
-    // Default minimum font size is 5.
-    g_assert_cmpuint(webkit_settings_get_minimum_font_size(settings), ==, 5);
+    // Default minimum font size is 0.
+    g_assert_cmpuint(webkit_settings_get_minimum_font_size(settings), ==, 0);
     webkit_settings_set_minimum_font_size(settings, 7);
     g_assert_cmpuint(webkit_settings_get_minimum_font_size(settings), ==, 7);
 
@@ -157,20 +154,61 @@ static void testWebKitSettings(Test*, gconstpointer)
     webkit_settings_set_default_charset(settings, "utf8");
     g_assert_cmpstr(webkit_settings_get_default_charset(settings), ==, "utf8");
 
+    g_assert(!webkit_settings_get_enable_private_browsing(settings));
+    webkit_settings_set_enable_private_browsing(settings, TRUE);
+    g_assert(webkit_settings_get_enable_private_browsing(settings));
+
+    g_assert(!webkit_settings_get_enable_developer_extras(settings));
+    webkit_settings_set_enable_developer_extras(settings, TRUE);
+    g_assert(webkit_settings_get_enable_developer_extras(settings));
+
+    g_assert(webkit_settings_get_enable_resizable_text_areas(settings));
+    webkit_settings_set_enable_resizable_text_areas(settings, FALSE);
+    g_assert(!webkit_settings_get_enable_resizable_text_areas(settings));
+
+    g_assert(webkit_settings_get_enable_tabs_to_links(settings));
+    webkit_settings_set_enable_tabs_to_links(settings, FALSE);
+    g_assert(!webkit_settings_get_enable_tabs_to_links(settings));
+
+    g_assert(!webkit_settings_get_enable_dns_prefetching(settings));
+    webkit_settings_set_enable_dns_prefetching(settings, TRUE);
+    g_assert(webkit_settings_get_enable_dns_prefetching(settings));
+
     // Caret browsing is disabled by default.
     g_assert(!webkit_settings_get_enable_caret_browsing(settings));
     webkit_settings_set_enable_caret_browsing(settings, TRUE);
     g_assert(webkit_settings_get_enable_caret_browsing(settings));
 
+    // Fullscreen JavaScript API is disabled by default.
+    g_assert(!webkit_settings_get_enable_fullscreen(settings));
+    webkit_settings_set_enable_fullscreen(settings, TRUE);
+    g_assert(webkit_settings_get_enable_fullscreen(settings));
+
+    // Print backgrounds is enabled by default
+    g_assert(webkit_settings_get_print_backgrounds(settings));
+    webkit_settings_set_print_backgrounds(settings, FALSE);
+    g_assert(!webkit_settings_get_print_backgrounds(settings));
+
+    // WebAudio is disabled by default.
+    g_assert(!webkit_settings_get_enable_webaudio(settings));
+    webkit_settings_set_enable_webaudio(settings, TRUE);
+    g_assert(webkit_settings_get_enable_webaudio(settings));
+
+    // WebGL is disabled by default.
+    g_assert(!webkit_settings_get_enable_webgl(settings));
+    webkit_settings_set_enable_webgl(settings, TRUE);
+    g_assert(webkit_settings_get_enable_webgl(settings));
+
+    // Zoom text only is disabled by default.
+    g_assert(!webkit_settings_get_zoom_text_only(settings));
+    webkit_settings_set_zoom_text_only(settings, TRUE);
+    g_assert(webkit_settings_get_zoom_text_only(settings));
+
     g_object_unref(G_OBJECT(settings));
-#endif
 }
 
 void testWebKitSettingsNewWithSettings(Test* test, gconstpointer)
 {
-    /* Skip running this test for now till a bug in WKPreferencesCreate
-       https://bugs.webkit.org/show_bug.cgi?id=70127 gets fixed. */
-#if 0
     GRefPtr<WebKitSettings> settings = adoptGRef(webkit_settings_new_with_settings("enable-javascript", FALSE,
                                                                                    "auto-load-images", FALSE,
                                                                                    "load-icons-ignoring-image-load-setting", TRUE,
@@ -179,7 +217,6 @@ void testWebKitSettingsNewWithSettings(Test* test, gconstpointer)
     g_assert(!webkit_settings_get_enable_javascript(settings.get()));
     g_assert(!webkit_settings_get_auto_load_images(settings.get()));
     g_assert(webkit_settings_get_load_icons_ignoring_image_load_setting(settings.get()));
-#endif
 }
 
 void beforeAll()

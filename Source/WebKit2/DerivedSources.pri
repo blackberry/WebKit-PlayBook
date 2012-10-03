@@ -4,7 +4,12 @@
 # See 'Tools/qmake/README' for an overview of the build system
 # -------------------------------------------------------------------
 
-TEMPLATE = derived
+# This file is both a top level target, and included from Target.pri,
+# so that the resulting generated sources can be added to SOURCES.
+# We only set the template if we're a top level target, so that we
+# don't override what Target.pri has already set.
+sanitizedFile = $$toSanitizedPath($$_FILE_)
+equals(sanitizedFile, $$toSanitizedPath($$_PRO_FILE_)):TEMPLATE = derived
 
 load(features)
 
@@ -41,6 +46,7 @@ VPATH = \
     WebProcess/IconDatabase \
     WebProcess/KeyValueStorage \
     WebProcess/MediaCache \
+    WebProcess/Notifications \
     WebProcess/Plugins \
     WebProcess/ResourceCache \
     WebProcess/WebCoreSupport \
@@ -48,6 +54,7 @@ VPATH = \
     WebProcess \
     UIProcess \
     UIProcess/Downloads \
+    UIProcess/Notifications \
     UIProcess/Plugins \
     Shared/Plugins
 
@@ -55,6 +62,7 @@ MESSAGE_RECEIVERS = \
     AuthenticationManager.messages.in \
     DownloadProxy.messages.in \
     DrawingAreaProxy.messages.in \
+    EventDispatcher.messages.in \
     LayerTreeHostProxy.messages.in \
     PluginControllerProxy.messages.in \
     PluginProcess.messages.in \
@@ -77,6 +85,8 @@ MESSAGE_RECEIVERS = \
     WebKeyValueStorageManagerProxy.messages.in \
     WebMediaCacheManager.messages.in \
     WebMediaCacheManagerProxy.messages.in \
+    WebNotificationManagerProxy.messages.in \
+    WebNotificationManager.messages.in \
     WebFullScreenManager.messages.in \
     WebFullScreenManagerProxy.messages.in \
     WebPage/DrawingArea.messages.in \
@@ -103,6 +113,7 @@ message_header_generator.commands = $${PYTHON} $${SOURCE_DIR}/WebKit2/Scripts/ge
 message_header_generator.input = MESSAGE_RECEIVERS
 message_header_generator.depends = $$SCRIPTS
 message_header_generator.output_function = message_header_generator_output
+message_header_generator.add_output_to_sources = false
 GENERATORS += message_header_generator
 
 message_receiver_generator.commands = $${PYTHON} $${SOURCE_DIR}/WebKit2/Scripts/generate-message-receiver.py  ${QMAKE_FILE_IN} > ${QMAKE_FILE_OUT}
@@ -111,22 +122,22 @@ message_receiver_generator.depends = $$SCRIPTS
 message_receiver_generator.output_function = message_receiver_generator_output
 GENERATORS += message_receiver_generator
 
-fwheader_generator.commands = perl $${SOURCE_DIR}/WebKit2/Scripts/generate-forwarding-headers.pl $${SOURCE_DIR}/WebKit2 $$buildDirForSource(Source/include) qt
+fwheader_generator.commands = perl $${SOURCE_DIR}/WebKit2/Scripts/generate-forwarding-headers.pl $${SOURCE_DIR}/WebKit2 $${ROOT_BUILD_DIR}/Source/include qt
 fwheader_generator.depends = $${SOURCE_DIR}/WebKit2/Scripts/generate-forwarding-headers.pl
 generated_files.depends += fwheader_generator
 GENERATORS += fwheader_generator
 
-for(HEADER, WEBCORE_GENERATED_HEADERS_FOR_WEBKIT2) {
-    HEADER_NAME = $$basename(HEADER)
-    HEADER_PATH = $$HEADER
-    HEADER_TARGET = $$replace(HEADER_PATH, [^a-zA-Z0-9_], -)
-    HEADER_TARGET = "qtheader-$${HEADER_TARGET}"
-    DESTDIR = $$buildDirForSource(Source/include/WebCore)
+for(header, WEBCORE_GENERATED_HEADERS_FOR_WEBKIT2) {
+    header_name = $$basename(header)
+    header_path = $$header
+    header_target = $$replace(header_path, [^a-zA-Z0-9_], -)
+    header_target = "qtheader-$${header_target}"
+    dest_dir = $${ROOT_BUILD_DIR}/Source/include/WebCore
 
-    eval($${HEADER_TARGET}.target = $$DESTDIR/$$HEADER_NAME)
-    eval($${HEADER_TARGET}.depends = $$HEADER_PATH)
-    eval($${HEADER_TARGET}.commands = echo $${DOUBLE_ESCAPED_QUOTE}\$${LITERAL_HASH}include \\\"$$HEADER_PATH\\\"$${DOUBLE_ESCAPED_QUOTE} > $$eval($${HEADER_TARGET}.target))
+    eval($${header_target}.target = $$dest_dir/$$header_name)
+    eval($${header_target}.depends = $$header_path)
+    eval($${header_target}.commands = $${QMAKE_MKDIR} $$dest_dir && echo $${DOUBLE_ESCAPED_QUOTE}\$${LITERAL_HASH}include \\\"$$header_path\\\"$${DOUBLE_ESCAPED_QUOTE} > $$eval($${header_target}.target))
 
-    GENERATORS += $$HEADER_TARGET
+    GENERATORS += $$header_target
 }
 

@@ -40,7 +40,7 @@
 
 namespace JSC {
 
-void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executablePool, JSGlobalData* globalData, TrampolineStructure *trampolines)
+PassRefPtr<ExecutableMemoryHandle> JIT::privateCompileCTIMachineTrampolines(JSGlobalData* globalData, TrampolineStructure *trampolines)
 {
 #if ENABLE(JIT_USE_SOFT_MODULO)
     Label softModBegin = align();
@@ -52,7 +52,7 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     // regT0 holds payload, regT1 holds tag
 
     Jump string_failureCases1 = branch32(NotEqual, regT1, TrustedImm32(JSValue::CellTag));
-    Jump string_failureCases2 = branchPtr(NotEqual, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr));
+    Jump string_failureCases2 = branchPtr(NotEqual, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info));
 
     // Checks out okay! - get the length from the Ustring.
     load32(Address(regT0, OBJECT_OFFSETOF(JSString, m_length)), regT2);
@@ -105,6 +105,8 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     emitPutToCallFrameHeader(regLink, RegisterFile::ReturnPC);
 #else
     emitPutToCallFrameHeader(regT3, RegisterFile::ReturnPC);
+    
+    storePtr(callFrameRegister, &m_globalData->topCallFrame);
 #endif
 
     restoreArgumentReference();
@@ -125,6 +127,8 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     loadPtr(Address(regT0, OBJECT_OFFSETOF(JSFunction, m_executable)), regT2);
     Jump hasCodeBlock1 = branch32(GreaterThanOrEqual, Address(regT2, OBJECT_OFFSETOF(FunctionExecutable, m_numParametersForCall)), TrustedImm32(0));
     preserveReturnAddressAfterCall(regT3);
+    
+    storePtr(callFrameRegister, &m_globalData->topCallFrame);
     restoreArgumentReference();
     Call callCompileCall = call();
     restoreReturnAddressBeforeReturn(regT3);
@@ -147,6 +151,8 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     loadPtr(Address(regT0, OBJECT_OFFSETOF(JSFunction, m_executable)), regT2);
     Jump hasCodeBlock2 = branch32(GreaterThanOrEqual, Address(regT2, OBJECT_OFFSETOF(FunctionExecutable, m_numParametersForConstruct)), TrustedImm32(0));
     preserveReturnAddressAfterCall(regT3);
+    
+    storePtr(callFrameRegister, &m_globalData->topCallFrame);
     restoreArgumentReference();
     Call callCompileConstruct = call();
     restoreReturnAddressBeforeReturn(regT3);
@@ -201,7 +207,7 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     Call string_failureCases3Call = makeTailRecursiveCall(string_failureCases3);
 
     // All trampolines constructed! copy the code, link up calls, and set the pointers on the Machine object.
-    LinkBuffer patchBuffer(*m_globalData, this, m_globalData->executableAllocator);
+    LinkBuffer patchBuffer(*m_globalData, this, GLOBAL_THUNK_ID);
 
     patchBuffer.link(string_failureCases1Call, FunctionPtr(cti_op_get_by_id_string_fail));
     patchBuffer.link(string_failureCases2Call, FunctionPtr(cti_op_get_by_id_string_fail));
@@ -214,7 +220,7 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
     patchBuffer.link(callConstructNotJSFunction, FunctionPtr(cti_op_construct_NotJSConstruct));
 
     CodeRef finalCode = patchBuffer.finalizeCode();
-    *executablePool = finalCode.m_executablePool;
+    RefPtr<ExecutableMemoryHandle> executableMemory = finalCode.executableMemory();
 
     trampolines->ctiVirtualCallLink = patchBuffer.trampolineAt(virtualCallLinkBegin);
     trampolines->ctiVirtualConstructLink = patchBuffer.trampolineAt(virtualConstructLinkBegin);
@@ -227,6 +233,8 @@ void JIT::privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executable
 #if ENABLE(JIT_USE_SOFT_MODULO)
     trampolines->ctiSoftModulo = patchBuffer.trampolineAt(softModBegin);
 #endif
+
+    return executableMemory.release();
 }
 
 JIT::Label JIT::privateCompileCTINativeCall(JSGlobalData* globalData, bool isConstruct)
@@ -354,7 +362,8 @@ JIT::Label JIT::privateCompileCTINativeCall(JSGlobalData* globalData, bool isCon
     move(TrustedImmPtr(&globalData->exceptionLocation), regT2);
     storePtr(regT1, regT2);
     poke(callFrameRegister, OBJECT_OFFSETOF(struct JITStackFrame, callFrame) / sizeof(void*));
-
+    
+    storePtr(callFrameRegister, &m_globalData->topCallFrame);
     // Set the return address.
     move(TrustedImmPtr(FunctionPtr(ctiVMThrowTrampoline).value()), regT1);
     restoreReturnAddressBeforeReturn(regT1);
@@ -364,10 +373,9 @@ JIT::Label JIT::privateCompileCTINativeCall(JSGlobalData* globalData, bool isCon
     return nativeCallThunk;
 }
 
-JIT::CodePtr JIT::privateCompileCTINativeCall(PassRefPtr<ExecutablePool> executablePool, JSGlobalData* globalData, NativeFunction func)
+JIT::CodeRef JIT::privateCompileCTINativeCall(JSGlobalData* globalData, NativeFunction func)
 {
     Call nativeCall;
-    Label nativeCallThunk = align();
 
     emitPutImmediateToCallFrameHeader(0, RegisterFile::CodeBlock);
 
@@ -491,7 +499,8 @@ JIT::CodePtr JIT::privateCompileCTINativeCall(PassRefPtr<ExecutablePool> executa
     move(TrustedImmPtr(&globalData->exceptionLocation), regT2);
     storePtr(regT1, regT2);
     poke(callFrameRegister, OBJECT_OFFSETOF(struct JITStackFrame, callFrame) / sizeof(void*));
-
+    
+    storePtr(callFrameRegister, &m_globalData->topCallFrame);
     // Set the return address.
     move(TrustedImmPtr(FunctionPtr(ctiVMThrowTrampoline).value()), regT1);
     restoreReturnAddressBeforeReturn(regT1);
@@ -499,12 +508,10 @@ JIT::CodePtr JIT::privateCompileCTINativeCall(PassRefPtr<ExecutablePool> executa
     ret();
 
     // All trampolines constructed! copy the code, link up calls, and set the pointers on the Machine object.
-    LinkBuffer patchBuffer(*m_globalData, this, executablePool);
+    LinkBuffer patchBuffer(*m_globalData, this, GLOBAL_THUNK_ID);
 
     patchBuffer.link(nativeCall, FunctionPtr(func));
-    patchBuffer.finalizeCode();
-
-    return patchBuffer.trampolineAt(nativeCallThunk);
+    return patchBuffer.finalizeCode();
 }
 
 void JIT::emit_op_mov(Instruction* currentInstruction)
@@ -669,7 +676,7 @@ void JIT::emit_op_resolve(Instruction* currentInstruction)
 {
     JITStubCall stubCall(this, cti_op_resolve);
     stubCall.addArgument(TrustedImmPtr(&m_codeBlock->identifier(currentInstruction[2].u.operand)));
-    stubCall.callWithValueProfiling(currentInstruction[1].u.operand, FirstProfilingSite);
+    stubCall.callWithValueProfiling(currentInstruction[1].u.operand);
 }
 
 void JIT::emit_op_to_primitive(Instruction* currentInstruction)
@@ -680,7 +687,7 @@ void JIT::emit_op_to_primitive(Instruction* currentInstruction)
     emitLoad(src, regT1, regT0);
 
     Jump isImm = branch32(NotEqual, regT1, TrustedImm32(JSValue::CellTag));
-    addSlowCase(branchPtr(NotEqual, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr)));
+    addSlowCase(branchPtr(NotEqual, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
     isImm.link(this);
 
     if (dst != src)
@@ -711,7 +718,7 @@ void JIT::emit_op_resolve_base(Instruction* currentInstruction)
 {
     JITStubCall stubCall(this, currentInstruction[3].u.operand ? cti_op_resolve_base_strict_put : cti_op_resolve_base);
     stubCall.addArgument(TrustedImmPtr(&m_codeBlock->identifier(currentInstruction[2].u.operand)));
-    stubCall.callWithValueProfiling(currentInstruction[1].u.operand, FirstProfilingSite);
+    stubCall.callWithValueProfiling(currentInstruction[1].u.operand);
 }
 
 void JIT::emit_op_ensure_property_exists(Instruction* currentInstruction)
@@ -727,7 +734,7 @@ void JIT::emit_op_resolve_skip(Instruction* currentInstruction)
     JITStubCall stubCall(this, cti_op_resolve_skip);
     stubCall.addArgument(TrustedImmPtr(&m_codeBlock->identifier(currentInstruction[2].u.operand)));
     stubCall.addArgument(Imm32(currentInstruction[3].u.operand));
-    stubCall.callWithValueProfiling(currentInstruction[1].u.operand, FirstProfilingSite);
+    stubCall.callWithValueProfiling(currentInstruction[1].u.operand);
 }
 
 void JIT::emit_op_resolve_global(Instruction* currentInstruction, bool dynamic)
@@ -752,7 +759,7 @@ void JIT::emit_op_resolve_global(Instruction* currentInstruction, bool dynamic)
     load32(Address(regT3, OBJECT_OFFSETOF(GlobalResolveInfo, offset)), regT3);
     load32(BaseIndex(regT2, regT3, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload)), regT0); // payload
     load32(BaseIndex(regT2, regT3, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag)), regT1); // tag
-    emitValueProfilingSite(FirstProfilingSite);
+    emitValueProfilingSite();
     emitStore(dst, regT1, regT0);
     map(m_bytecodeOffset + (dynamic ? OPCODE_LENGTH(op_resolve_global_dynamic) : OPCODE_LENGTH(op_resolve_global)), dst, regT1, regT0);
 }
@@ -768,7 +775,7 @@ void JIT::emitSlow_op_resolve_global(Instruction* currentInstruction, Vector<Slo
     JITStubCall stubCall(this, cti_op_resolve_global);
     stubCall.addArgument(TrustedImmPtr(ident));
     stubCall.addArgument(Imm32(currentIndex));
-    stubCall.callWithValueProfiling(dst, SubsequentProfilingSite);
+    stubCall.callWithValueProfiling(dst);
 }
 
 void JIT::emit_op_not(Instruction* currentInstruction)
@@ -972,8 +979,8 @@ void JIT::emitSlow_op_eq(Instruction* currentInstruction, Vector<SlowCaseEntry>:
     genericCase.append(getSlowCase(iter)); // tags not equal
 
     linkSlowCase(iter); // tags equal and JSCell
-    genericCase.append(branchPtr(NotEqual, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr)));
-    genericCase.append(branchPtr(NotEqual, Address(regT2), TrustedImmPtr(m_globalData->jsStringVPtr)));
+    genericCase.append(branchPtr(NotEqual, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
+    genericCase.append(branchPtr(NotEqual, Address(regT2, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
 
     // String case.
     JITStubCall stubCallEqStrings(this, cti_op_eq_strings);
@@ -1020,8 +1027,8 @@ void JIT::emitSlow_op_neq(Instruction* currentInstruction, Vector<SlowCaseEntry>
     genericCase.append(getSlowCase(iter)); // tags not equal
 
     linkSlowCase(iter); // tags equal and JSCell
-    genericCase.append(branchPtr(NotEqual, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr)));
-    genericCase.append(branchPtr(NotEqual, Address(regT2), TrustedImmPtr(m_globalData->jsStringVPtr)));
+    genericCase.append(branchPtr(NotEqual, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
+    genericCase.append(branchPtr(NotEqual, Address(regT2, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
 
     // String case.
     JITStubCall stubCallEqStrings(this, cti_op_eq_strings);
@@ -1057,8 +1064,8 @@ void JIT::compileOpStrictEq(Instruction* currentInstruction, CompileOpStrictEqTy
 
     // Jump to a slow case if both are strings.
     Jump notCell = branch32(NotEqual, regT1, TrustedImm32(JSValue::CellTag));
-    Jump firstNotString = branchPtr(NotEqual, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr));
-    addSlowCase(branchPtr(Equal, Address(regT2), TrustedImmPtr(m_globalData->jsStringVPtr)));
+    Jump firstNotString = branchPtr(NotEqual, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info));
+    addSlowCase(branchPtr(Equal, Address(regT2, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
     notCell.link(this);
     firstNotString.link(this);
 
@@ -1166,7 +1173,7 @@ void JIT::emit_op_resolve_with_base(Instruction* currentInstruction)
     JITStubCall stubCall(this, cti_op_resolve_with_base);
     stubCall.addArgument(TrustedImmPtr(&m_codeBlock->identifier(currentInstruction[3].u.operand)));
     stubCall.addArgument(Imm32(currentInstruction[1].u.operand));
-    stubCall.callWithValueProfiling(currentInstruction[2].u.operand, FirstProfilingSite);
+    stubCall.callWithValueProfiling(currentInstruction[2].u.operand);
 }
 
 void JIT::emit_op_resolve_with_this(Instruction* currentInstruction)
@@ -1174,7 +1181,7 @@ void JIT::emit_op_resolve_with_this(Instruction* currentInstruction)
     JITStubCall stubCall(this, cti_op_resolve_with_this);
     stubCall.addArgument(TrustedImmPtr(&m_codeBlock->identifier(currentInstruction[3].u.operand)));
     stubCall.addArgument(Imm32(currentInstruction[1].u.operand));
-    stubCall.callWithValueProfiling(currentInstruction[2].u.operand, FirstProfilingSite);
+    stubCall.callWithValueProfiling(currentInstruction[2].u.operand);
 }
 
 void JIT::emit_op_throw(Instruction* currentInstruction)
@@ -1478,11 +1485,7 @@ void JIT::emit_op_create_arguments(Instruction* currentInstruction)
 
     Jump argsCreated = branch32(NotEqual, tagFor(dst), TrustedImm32(JSValue::EmptyValueTag));
 
-    if (m_codeBlock->m_numParameters == 1)
-        JITStubCall(this, cti_op_create_arguments_no_params).call();
-    else
-        JITStubCall(this, cti_op_create_arguments).call();
-
+    JITStubCall(this, cti_op_create_arguments).call();
     emitStore(dst, regT1, regT0);
     emitStore(unmodifiedArgumentsRegister(dst), regT1, regT0);
 
@@ -1549,7 +1552,7 @@ void JIT::emit_op_convert_this(Instruction* currentInstruction)
     emitLoad(thisRegister, regT1, regT0);
 
     addSlowCase(branch32(NotEqual, regT1, TrustedImm32(JSValue::CellTag)));
-    addSlowCase(branchPtr(Equal, Address(regT0), TrustedImmPtr(m_globalData->jsStringVPtr)));
+    addSlowCase(branchPtr(Equal, Address(regT0, JSCell::classInfoOffset()), TrustedImmPtr(&JSString::s_info)));
 
     map(m_bytecodeOffset + OPCODE_LENGTH(op_convert_this), thisRegister, regT1, regT0);
 }
@@ -1600,7 +1603,7 @@ void JIT::emit_op_get_arguments_length(Instruction* currentInstruction)
     int dst = currentInstruction[1].u.operand;
     int argumentsRegister = currentInstruction[2].u.operand;
     addSlowCase(branch32(NotEqual, tagFor(argumentsRegister), TrustedImm32(JSValue::EmptyValueTag)));
-    emitGetFromCallFrameHeader32(RegisterFile::ArgumentCount, regT0);
+    load32(payloadFor(RegisterFile::ArgumentCount), regT0);
     sub32(TrustedImm32(1), regT0);
     emitStoreInt32(dst, regT0);
 }
@@ -1628,27 +1631,12 @@ void JIT::emit_op_get_argument_by_val(Instruction* currentInstruction)
     addSlowCase(branch32(NotEqual, regT1, TrustedImm32(JSValue::Int32Tag)));
     add32(TrustedImm32(1), regT2);
     // regT2 now contains the integer index of the argument we want, including this
-    emitGetFromCallFrameHeader32(RegisterFile::ArgumentCount, regT3);
+    load32(payloadFor(RegisterFile::ArgumentCount), regT3);
     addSlowCase(branch32(AboveOrEqual, regT2, regT3));
     
-    Jump skipOutofLineParams;
-    int numArgs = m_codeBlock->m_numParameters;
-    if (numArgs) {
-        Jump notInInPlaceArgs = branch32(AboveOrEqual, regT2, Imm32(numArgs));
-        addPtr(Imm32(static_cast<unsigned>(-(RegisterFile::CallFrameHeaderSize + numArgs) * sizeof(Register))), callFrameRegister, regT1);
-        loadPtr(BaseIndex(regT1, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload)), regT0);
-        loadPtr(BaseIndex(regT1, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag)), regT1);
-        skipOutofLineParams = jump();
-        notInInPlaceArgs.link(this);
-    }
-
-    addPtr(Imm32(static_cast<unsigned>(-(RegisterFile::CallFrameHeaderSize + numArgs) * sizeof(Register))), callFrameRegister, regT1);
-    mul32(TrustedImm32(sizeof(Register)), regT3, regT3);
-    subPtr(regT3, regT1);
-    loadPtr(BaseIndex(regT1, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload)), regT0);
-    loadPtr(BaseIndex(regT1, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag)), regT1);
-    if (numArgs)
-        skipOutofLineParams.link(this);
+    neg32(regT2);
+    loadPtr(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.payload) + CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register))), regT0);
+    loadPtr(BaseIndex(callFrameRegister, regT2, TimesEight, OBJECT_OFFSETOF(JSValue, u.asBits.tag) + CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register))), regT1);
     emitStore(dst, regT1, regT0);
 }
 
@@ -1663,11 +1651,7 @@ void JIT::emitSlow_op_get_argument_by_val(Instruction* currentInstruction, Vecto
 
     linkSlowCase(iter);
     linkSlowCase(iter);
-    if (m_codeBlock->m_numParameters == 1)
-        JITStubCall(this, cti_op_create_arguments_no_params).call();
-    else
-        JITStubCall(this, cti_op_create_arguments).call();
-    
+    JITStubCall(this, cti_op_create_arguments).call();
     emitStore(arguments, regT1, regT0);
     emitStore(unmodifiedArgumentsRegister(arguments), regT1, regT0);
     
@@ -1681,11 +1665,10 @@ void JIT::emitSlow_op_get_argument_by_val(Instruction* currentInstruction, Vecto
 #if ENABLE(JIT_USE_SOFT_MODULO)
 void JIT::softModulo()
 {
-    push(regT1);
-    push(regT3);
     move(regT2, regT3);
     move(regT0, regT2);
     move(TrustedImm32(0), regT1);
+    JumpList exitBranch;
 
     // Check for negative result reminder
     Jump positiveRegT3 = branch32(GreaterThanOrEqual, regT3, TrustedImm32(0));
@@ -1701,19 +1684,26 @@ void JIT::softModulo()
     // Save the condition for negative reminder
     push(regT1);
 
-    Jump exitBranch = branch32(LessThan, regT2, regT3);
+    exitBranch.append(branch32(LessThan, regT2, regT3));
 
     // Power of two fast case
     move(regT3, regT0);
     sub32(TrustedImm32(1), regT0);
-    Jump powerOfTwo = branchTest32(NonZero, regT0, regT3);
+    Jump notPowerOfTwo = branchTest32(NonZero, regT0, regT3);
     and32(regT0, regT2);
-    powerOfTwo.link(this);
+    exitBranch.append(jump());
 
-    and32(regT3, regT0);
+    notPowerOfTwo.link(this);
 
-    Jump exitBranch2 = branchTest32(Zero, regT0);
-
+#if CPU(X86) || CPU(X86_64)
+    move(regT2, regT0);
+    m_assembler.cdq();
+    m_assembler.idivl_r(regT3);
+    move(regT1, regT2);
+#elif CPU(MIPS)
+    m_assembler.div(regT2, regT3);
+    m_assembler.mfhi(regT2);
+#else
     countLeadingZeros32(regT2, regT0);
     countLeadingZeros32(regT3, regT1);
     sub32(regT0, regT1);
@@ -1750,9 +1740,9 @@ void JIT::softModulo()
     Jump lower = branch32(Below, regT2, regT3);
     sub32(regT3, regT2);
     lower.link(this);
+#endif
 
     exitBranch.link(this);
-    exitBranch2.link(this);
 
     // Check for negative reminder
     pop(regT1);
@@ -1761,9 +1751,6 @@ void JIT::softModulo()
     positiveResult.link(this);
 
     move(regT2, regT0);
-
-    pop(regT3);
-    pop(regT1);
     ret();
 }
 #endif // ENABLE(JIT_USE_SOFT_MODULO)

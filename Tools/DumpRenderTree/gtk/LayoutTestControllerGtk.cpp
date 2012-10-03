@@ -124,11 +124,6 @@ JSValueRef LayoutTestController::computedStyleIncludingVisitedInfo(JSContextRef 
     return JSValueMakeUndefined(context);
 }
 
-JSValueRef LayoutTestController::nodesFromRect(JSContextRef context, JSValueRef value, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping)
-{
-    return DumpRenderTreeSupportGtk::nodesFromRect(context, value, x, y, top, right, bottom, left, ignoreClipping);
-}
-
 JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
 {
     // FIXME: implement
@@ -201,8 +196,14 @@ void LayoutTestController::notifyDone()
 
 JSStringRef LayoutTestController::pathToLocalResource(JSContextRef context, JSStringRef url)
 {
-    // Function introduced in r28690. This may need special-casing on Windows.
-    return JSStringRetain(url); // Do nothing on Unix.
+    GOwnPtr<char> urlCString(JSStringCopyUTF8CString(url));
+    if (!g_str_has_prefix(urlCString.get(), "file:///tmp/LayoutTests/"))
+        return JSStringRetain(url);
+
+    const char* layoutTestsSuffix = urlCString.get() + strlen("file:///tmp/");
+    GOwnPtr<char> testPath(g_build_filename(getTopLevelPath().data(), layoutTestsSuffix, NULL));
+    GOwnPtr<char> testURI(g_filename_to_uri(testPath.get(), 0, 0));
+    return JSStringCreateWithUTF8CString(testURI.get());
 }
 
 void LayoutTestController::queueLoad(JSStringRef url, JSStringRef target)
@@ -367,7 +368,7 @@ void LayoutTestController::setSmartInsertDeleteEnabled(bool flag)
 
 static gboolean waitToDumpWatchdogFired(void*)
 {
-    waitToDumpWatchdog = 0;
+    setWaitToDumpWatchdog(0);
     gLayoutTestController->waitToDumpWatchdogTimerFired();
     return FALSE;
 }
@@ -377,8 +378,8 @@ void LayoutTestController::setWaitToDump(bool waitUntilDone)
     static const int timeoutSeconds = 30;
 
     m_waitToDump = waitUntilDone;
-    if (m_waitToDump && !waitToDumpWatchdog)
-        waitToDumpWatchdog = g_timeout_add_seconds(timeoutSeconds, waitToDumpWatchdogFired, 0);
+    if (m_waitToDump && shouldSetWaitToDumpWatchdog())
+        setWaitToDumpWatchdog(g_timeout_add_seconds(timeoutSeconds, waitToDumpWatchdogFired, 0));
 }
 
 int LayoutTestController::windowCount()
@@ -520,6 +521,12 @@ void LayoutTestController::addMockSpeechInputResult(JSStringRef result, double c
     // See https://bugs.webkit.org/show_bug.cgi?id=39485.
 }
 
+void LayoutTestController::setMockSpeechInputDumpRect(bool flag)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
+}
+
 void LayoutTestController::startSpeechInput(JSContextRef inputElement)
 {
     // FIXME: Implement for speech input layout tests.
@@ -573,8 +580,7 @@ void LayoutTestController::setPluginsEnabled(bool flag)
 
 bool LayoutTestController::elementDoesAutoCompleteForElementWithId(JSStringRef id) 
 {
-    // FIXME: implement
-    return false;
+    return DumpRenderTreeSupportGtk::elementDoesAutoCompleteForElementWithId(mainFrame, id);
 }
 
 void LayoutTestController::execCommand(JSStringRef name, JSStringRef value)
@@ -776,16 +782,6 @@ bool LayoutTestController::pauseTransitionAtTimeOnElementWithId(JSStringRef prop
     return returnValue;
 }
 
-bool LayoutTestController::sampleSVGAnimationForElementAtTime(JSStringRef animationId, double time, JSStringRef elementId)
-{    
-    gchar* name = JSStringCopyUTF8CString(animationId);
-    gchar* element = JSStringCopyUTF8CString(elementId);
-    bool returnValue = DumpRenderTreeSupportGtk::pauseSVGAnimation(mainFrame, name, time, element);
-    g_free(name);
-    g_free(element);
-    return returnValue;
-}
-
 unsigned LayoutTestController::numberOfActiveAnimations() const
 {
     return DumpRenderTreeSupportGtk::numberOfActiveAnimations(mainFrame);
@@ -827,8 +823,13 @@ void LayoutTestController::overridePreference(JSStringRef key, JSStringRef value
         propertyName = "enable-hyperlink-auditing";
     else if (g_str_equal(originalName.get(), "WebKitWebGLEnabled"))
         propertyName = "enable-webgl";
+    else if (g_str_equal(originalName.get(), "WebKitWebAudioEnabled"))
+        propertyName = "enable-webaudio";
     else if (g_str_equal(originalName.get(), "WebKitTabToLinksPreferenceKey")) {
         DumpRenderTreeSupportGtk::setLinksIncludedInFocusChain(!g_ascii_strcasecmp(valueAsString.get(), "true") || !g_ascii_strcasecmp(valueAsString.get(), "1"));
+        return;
+    } else if (g_str_equal(originalName.get(), "WebKitHixie76WebSocketProtocolEnabled")) {
+        DumpRenderTreeSupportGtk::setHixie76WebSocketProtocolEnabled(webkit_web_frame_get_web_view(mainFrame), !g_ascii_strcasecmp(valueAsString.get(), "true") || !g_ascii_strcasecmp(valueAsString.get(), "1"));
         return;
     } else {
         fprintf(stderr, "LayoutTestController::overridePreference tried to override "
@@ -1019,5 +1020,9 @@ void LayoutTestController::focusWebView()
 }
 
 void LayoutTestController::setBackingScaleFactor(double)
+{
+}
+
+void LayoutTestController::simulateDesktopNotificationClick(JSStringRef title)
 {
 }

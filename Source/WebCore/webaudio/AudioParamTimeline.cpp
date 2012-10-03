@@ -157,13 +157,6 @@ float AudioParamTimeline::valuesForTimeRange(float startTime,
     return value;
 }
 
-// Returns the rounded down integer sample-frame for the time and sample-rate.
-static unsigned timeToSampleFrame(double time, float sampleRate)
-{
-    double k = 0.5 / sampleRate;
-    return static_cast<unsigned>((time + k) * sampleRate);
-}
-
 float AudioParamTimeline::valuesForTimeRangeImpl(float startTime,
                                                  float endTime,
                                                  float defaultValue,
@@ -193,7 +186,7 @@ float AudioParamTimeline::valuesForTimeRangeImpl(float startTime,
     float firstEventTime = m_events[0].time();
     if (firstEventTime > startTime) {
         float fillToTime = min(endTime, firstEventTime);
-        unsigned fillToFrame = timeToSampleFrame(fillToTime - startTime, sampleRate);
+        unsigned fillToFrame = AudioUtilities::timeToSampleFrame(fillToTime - startTime, sampleRate);
         fillToFrame = min(fillToFrame, numberOfValues);
         for (; writeIndex < fillToFrame; ++writeIndex)
             values[writeIndex] = defaultValue;
@@ -226,7 +219,7 @@ float AudioParamTimeline::valuesForTimeRangeImpl(float startTime,
         float sampleFrameTimeIncr = 1 / sampleRate;
 
         float fillToTime = min(endTime, time2);
-        unsigned fillToFrame = timeToSampleFrame(fillToTime - startTime, sampleRate);
+        unsigned fillToFrame = AudioUtilities::timeToSampleFrame(fillToTime - startTime, sampleRate);
         fillToFrame = min(fillToFrame, numberOfValues);
 
         ParamEvent::Type nextEventType = nextEvent ? static_cast<ParamEvent::Type>(nextEvent->type()) : ParamEvent::LastType /* unknown */;
@@ -245,16 +238,20 @@ float AudioParamTimeline::valuesForTimeRangeImpl(float startTime,
                 for (; writeIndex < fillToFrame; ++writeIndex)
                     values[writeIndex] = value;
             } else {
-                // Interpolate in log space.
-                value1 = log2f(value1);
-                value2 = log2f(value2);
+                float numSampleFrames = deltaTime * sampleRate;
+                // The value goes exponentially from value1 to value2 in a duration of deltaTime seconds (corresponding to numSampleFrames).
+                // Compute the per-sample multiplier.
+                float multiplier = powf(value2 / value1, 1 / numSampleFrames);
 
-                // FIXME: optimize to not use pow() in inner loop, this is just a simple exponential ramp.
+                // Set the starting value of the exponential ramp. This is the same as multiplier ^
+                // AudioUtilities::timeToSampleFrame(currentTime - time1, sampleRate), but is more
+                // accurate, especially if multiplier is close to 1.
+                value = value1 * powf(value2 / value1,
+                                      AudioUtilities::timeToSampleFrame(currentTime - time1, sampleRate) / numSampleFrames);
+
                 for (; writeIndex < fillToFrame; ++writeIndex) {
-                    float x = (currentTime - time1) * k;
-                    value = (1 - x) * value1 + x * value2;
-                    value = powf(2.0f, value);
                     values[writeIndex] = value;
+                    value *= multiplier;
                     currentTime += sampleFrameTimeIncr;
                 }
             }
@@ -316,7 +313,7 @@ float AudioParamTimeline::valuesForTimeRangeImpl(float startTime,
                     unsigned nextEventFillToFrame = fillToFrame;
                     float nextEventFillToTime = fillToTime;
                     fillToTime = min(endTime, time1 + duration);
-                    fillToFrame = timeToSampleFrame(fillToTime - startTime, sampleRate);
+                    fillToFrame = AudioUtilities::timeToSampleFrame(fillToTime - startTime, sampleRate);
                     fillToFrame = min(fillToFrame, numberOfValues);
 
                     // Index into the curve data using a floating-point value.

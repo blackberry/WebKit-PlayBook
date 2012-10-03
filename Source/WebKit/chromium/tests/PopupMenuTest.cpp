@@ -51,10 +51,10 @@
 #include "WebPopupMenuImpl.h"
 #include "WebScreenInfo.h"
 #include "WebSettings.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLRequest.h"
-#include "WebURLResponse.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebURLResponse.h"
 #include "WebView.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
@@ -100,8 +100,8 @@ public:
     virtual PopupMenuStyle menuStyle() const { return itemStyle(0); }
     virtual int clientInsetLeft() const { return 0; }
     virtual int clientInsetRight() const { return 0; }
-    virtual int clientPaddingLeft() const { return 0; }
-    virtual int clientPaddingRight() const { return 0; }
+    virtual LayoutUnit clientPaddingLeft() const { return 0; }
+    virtual LayoutUnit clientPaddingRight() const { return 0; }
     virtual int listSize() const { return 10; }
     virtual int selectedIndex() const { return m_selectIndex; }
     virtual void popupDidHide() { }
@@ -235,13 +235,13 @@ protected:
     // Simulates a mouse event on the select popup.
     void simulateLeftMouseDownEvent(const IntPoint& point)
     {
-        PlatformMouseEvent mouseEvent(point, point, LeftButton, MouseEventPressed,
+        PlatformMouseEvent mouseEvent(point, point, LeftButton, PlatformEvent::MousePressed,
                                       1, false, false, false, false, 0);
         m_webView->selectPopup()->handleMouseDownEvent(mouseEvent);
     }
     void simulateLeftMouseUpEvent(const IntPoint& point)
     {
-        PlatformMouseEvent mouseEvent(point, point, LeftButton, MouseEventReleased,
+        PlatformMouseEvent mouseEvent(point, point, LeftButton, PlatformEvent::MouseReleased,
                                       1, false, false, false, false, 0);
         m_webView->selectPopup()->handleMouseReleaseEvent(mouseEvent);
     }
@@ -373,7 +373,7 @@ TEST_F(SelectPopupMenuTest, MouseOverItemClickOutside)
     // Y of 18 to be on the item at index 1 (12 font plus border and more to be safe).
     IntPoint row1Point(2, 18);
     // Simulate the mouse moving over the first item.
-    PlatformMouseEvent mouseEvent(row1Point, row1Point, NoButton, MouseEventMoved,
+    PlatformMouseEvent mouseEvent(row1Point, row1Point, NoButton, PlatformEvent::MouseMoved,
                                   1, false, false, false, false, 0);
     m_webView->selectPopup()->handleMouseMoveEvent(mouseEvent);
 

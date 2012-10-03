@@ -51,8 +51,7 @@ static Element* highestVisuallyEquivalentDivBelowRoot(Element* startBlock)
     // We don't want to return a root node (if it happens to be a div, e.g., in a document fragment) because there are no
     // siblings for us to append to.
     while (!curBlock->nextSibling() && curBlock->parentElement()->hasTagName(divTag) && curBlock->parentElement()->parentElement()) {
-        NamedNodeMap* attributes = curBlock->parentElement()->attributes(true);
-        if (attributes && !attributes->isEmpty())
+        if (curBlock->parentElement()->hasAttributes())
             break;
         curBlock = curBlock->parentElement();
     }
@@ -137,9 +136,7 @@ PassRefPtr<Element> InsertParagraphSeparatorCommand::cloneHierarchyUnderNewBlock
     for (size_t i = ancestors.size(); i != 0; --i) {
         RefPtr<Element> child = ancestors[i - 1]->cloneElementWithoutChildren();
         // It should always be okay to remove id from the cloned elements, since the originals are not deleted.
-        ExceptionCode ec = 0;
-        child->removeAttribute(idAttr, ec);
-        ASSERT(!ec);
+        child->removeAttribute(idAttr);
         appendNode(child, parent);
         parent = child.release();
     }
@@ -325,14 +322,14 @@ void InsertParagraphSeparatorCommand::doApply()
     // FIXME: leadingWhitespacePosition is returning the position before preserved newlines for positions
     // after the preserved newline, causing the newline to be turned into a nbsp.
     if (leadingWhitespace.isNotNull() && leadingWhitespace.deprecatedNode()->isTextNode()) {
-        Text* textNode = static_cast<Text*>(leadingWhitespace.deprecatedNode());
+        Text* textNode = toText(leadingWhitespace.deprecatedNode());
         ASSERT(!textNode->renderer() || textNode->renderer()->style()->collapseWhiteSpace());
         replaceTextInNodePreservingMarkers(textNode, leadingWhitespace.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
     }
     
     // Split at pos if in the middle of a text node.
     if (insertionPosition.deprecatedNode()->isTextNode()) {
-        Text* textNode = static_cast<Text*>(insertionPosition.deprecatedNode());
+        Text* textNode = toText(insertionPosition.deprecatedNode());
         bool atEnd = (unsigned)insertionPosition.deprecatedEditingOffset() >= textNode->length();
         if (insertionPosition.deprecatedEditingOffset() > 0 && !atEnd) {
             splitTextNode(textNode, insertionPosition.deprecatedEditingOffset());
@@ -348,7 +345,7 @@ void InsertParagraphSeparatorCommand::doApply()
     else
         insertNodeAfter(blockToInsert.get(), startBlock);
 
-    updateLayout();
+    document()->updateLayoutIgnorePendingStylesheets();
 
     // If the paragraph separator was inserted at the end of a paragraph, an empty line must be
     // created.  All of the nodes, starting at visiblePos, are about to be added to the new paragraph 
@@ -384,7 +381,7 @@ void InsertParagraphSeparatorCommand::doApply()
 
     // Handle whitespace that occurs after the split
     if (splitText) {
-        updateLayout();
+        document()->updateLayoutIgnorePendingStylesheets();
         if (insertionPosition.anchorType() == Position::PositionIsOffsetInAnchor)
             insertionPosition.moveToOffset(0);
         if (!insertionPosition.isRenderedCharacter()) {
@@ -392,7 +389,7 @@ void InsertParagraphSeparatorCommand::doApply()
             ASSERT(!insertionPosition.deprecatedNode()->renderer() || insertionPosition.deprecatedNode()->renderer()->style()->collapseWhiteSpace());
             deleteInsignificantTextDownstream(insertionPosition);
             if (insertionPosition.deprecatedNode()->isTextNode())
-                insertTextIntoNode(static_cast<Text*>(insertionPosition.deprecatedNode()), 0, nonBreakingSpaceString());
+                insertTextIntoNode(toText(insertionPosition.deprecatedNode()), 0, nonBreakingSpaceString());
         }
     }
 

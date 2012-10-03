@@ -24,15 +24,15 @@
  */
 
 #include "config.h"
-#include "WebLayer.h"
+#include "platform/WebLayer.h"
 
+#include "platform/WebFloatPoint.h"
 #include "Color.h"
 #include "LayerChromium.h"
 #include "SkMatrix44.h"
 #include "TransformationMatrix.h"
-#include "WebFloatPoint.h"
 #include "WebLayerImpl.h"
-#include "WebSize.h"
+#include "platform/WebSize.h"
 
 using namespace WebCore;
 
@@ -74,9 +74,9 @@ SkMatrix44 skMatrix44FromTransformationMatrix(const TransformationMatrix& matrix
 
 namespace WebKit {
 
-WebLayer WebLayer::create(WebLayerClient* client)
+WebLayer WebLayer::create()
 {
-    return WebLayer(WebLayerImpl::create(client));
+    return WebLayer(WebLayerImpl::create());
 }
 
 void WebLayer::reset()

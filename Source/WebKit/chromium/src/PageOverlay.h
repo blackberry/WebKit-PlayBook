@@ -39,33 +39,35 @@ class GraphicsLayerClient;
 }
 
 namespace WebKit {
+class WebPageOverlay;
 class WebViewImpl;
+struct WebRect;
 
 class PageOverlay {
 public:
-    class PageOverlayClient {
-    public:
-        virtual void paintPageOverlay(WebCore::GraphicsContext&) = 0;
-    };
-
-    static PassOwnPtr<PageOverlay> create(WebViewImpl*, PageOverlayClient*);
+    static PassOwnPtr<PageOverlay> create(WebViewImpl*, WebPageOverlay*);
 
     ~PageOverlay() { }
 
-    void setClient(PageOverlayClient* client) { m_client = client; }
+    WebPageOverlay* overlay() const { return m_overlay; }
+    void setOverlay(WebPageOverlay* overlay) { m_overlay = overlay; }
+
+    int zOrder() const { return m_zOrder; }
+    void setZOrder(int zOrder) { m_zOrder = zOrder; }
 
     void clear();
     void update();
     void paintWebFrame(WebCore::GraphicsContext&);
 
 private:
-    PageOverlay(WebViewImpl*, PageOverlayClient*);
+    PageOverlay(WebViewImpl*, WebPageOverlay*);
     void invalidateWebFrame();
 
     WebViewImpl* m_viewImpl;
-    PageOverlayClient* m_client;
+    WebPageOverlay* m_overlay;
     OwnPtr<WebCore::GraphicsLayer> m_layer;
     OwnPtr<WebCore::GraphicsLayerClient> m_layerClient;
+    int m_zOrder;
 };
 
 } // namespace WebKit

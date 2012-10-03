@@ -33,6 +33,11 @@
 #include <wtf/Vector.h>
 #include <wtf/text/AtomicString.h>
 
+#if ENABLE(MICRODATA)
+#include "HTMLPropertiesCollection.h"
+#include "JSHTMLPropertiesCollection.h"
+#endif
+
 using namespace JSC;
 
 namespace WebCore {
@@ -55,9 +60,7 @@ static JSValue getNamedItems(ExecState* exec, JSHTMLCollection* collection, cons
 
 bool JSHTMLCollection::canGetItemsForName(ExecState*, HTMLCollection* collection, const Identifier& propertyName)
 {
-    Vector<RefPtr<Node> > namedItems;
-    collection->namedItems(identifierToAtomicString(propertyName), namedItems);
-    return !namedItems.isEmpty();
+    return collection->hasNamedItem(identifierToAtomicString(propertyName));
 }
 
 JSValue JSHTMLCollection::nameGetter(ExecState* exec, JSValue slotBase, const Identifier& propertyName)
@@ -66,18 +69,9 @@ JSValue JSHTMLCollection::nameGetter(ExecState* exec, JSValue slotBase, const Id
     return getNamedItems(exec, thisObj, propertyName);
 }
 
-JSValue JSHTMLCollection::item(ExecState* exec)
-{
-    bool ok;
-    uint32_t index = Identifier::toUInt32(exec->argument(0).toString(exec), ok);
-    if (ok)
-        return toJS(exec, globalObject(), impl()->item(index));
-    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)));
-}
-
 JSValue JSHTMLCollection::namedItem(ExecState* exec)
 {
-    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)));
+    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)->value(exec)));
 }
 
 JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, HTMLCollection* collection)
@@ -97,6 +91,11 @@ JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, HTMLCollection* c
         case DocAll:
             wrapper = CREATE_DOM_WRAPPER(exec, globalObject, HTMLAllCollection, collection);
             break;
+#if ENABLE(MICRODATA)
+        case ItemProperties:
+            wrapper = CREATE_DOM_WRAPPER(exec, globalObject, HTMLPropertiesCollection, collection);
+            break;
+#endif
         default:
             wrapper = CREATE_DOM_WRAPPER(exec, globalObject, HTMLCollection, collection);
             break;

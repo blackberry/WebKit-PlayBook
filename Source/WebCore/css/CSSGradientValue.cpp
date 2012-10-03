@@ -26,9 +26,9 @@
 #include "config.h"
 #include "CSSGradientValue.h"
 
-#include "CSSValueKeywords.h"
 #include "CSSStyleSelector.h"
-#include "GeneratedImage.h"
+#include "CSSValueKeywords.h"
+#include "GeneratorGeneratedImage.h"
 #include "Gradient.h"
 #include "Image.h"
 #include "IntSize.h"
@@ -67,7 +67,7 @@ PassRefPtr<Image> CSSGradientValue::image(RenderObject* renderer, const IntSize&
         gradient = static_cast<CSSRadialGradientValue*>(this)->createGradient(renderer, size);
     }
 
-    RefPtr<Image> newImage = GeneratedImage::create(gradient, size);
+    RefPtr<Image> newImage = GeneratorGeneratedImage::create(gradient, size);
     if (cacheable)
         putImage(size, newImage);
 
@@ -93,20 +93,6 @@ void CSSGradientValue::sortStopsIfNeeded()
     }
 }
 
-static inline int blend(int from, int to, float progress)
-{
-    return int(from + (to - from) * progress);
-}
-
-static inline Color blend(const Color& from, const Color& to, float progress)
-{
-    // FIXME: when we interpolate gradients using premultiplied colors, this should also do premultiplication.
-    return Color(blend(from.red(), to.red(), progress),
-        blend(from.green(), to.green(), progress),
-        blend(from.blue(), to.blue(), progress),
-        blend(from.alpha(), to.alpha(), progress));
-}
-
 struct GradientStop {
     Color color;
     float offset;
@@ -128,10 +114,10 @@ void CSSGradientValue::addStops(Gradient* gradient, RenderObject* renderer, Rend
         // We have to resolve colors.
         for (unsigned i = 0; i < m_stops.size(); i++) {
             const CSSGradientColorStop& stop = m_stops[i];
-            Color color = renderer->document()->styleSelector()->getColorFromPrimitiveValue(stop.m_color.get());
+            Color color = renderer->document()->styleSelector()->colorFromPrimitiveValue(stop.m_color.get());
 
             float offset;
-            if (stop.m_position->primitiveType() == CSSPrimitiveValue::CSS_PERCENTAGE)
+            if (stop.m_position->isPercentage())
                 offset = stop.m_position->getFloatValue(CSSPrimitiveValue::CSS_PERCENTAGE) / 100;
             else
                 offset = stop.m_position->getFloatValue(CSSPrimitiveValue::CSS_NUMBER);
@@ -161,13 +147,12 @@ void CSSGradientValue::addStops(Gradient* gradient, RenderObject* renderer, Rend
     for (size_t i = 0; i < numStops; ++i) {
         const CSSGradientColorStop& stop = m_stops[i];
 
-        stops[i].color = renderer->document()->styleSelector()->getColorFromPrimitiveValue(stop.m_color.get());
+        stops[i].color = renderer->document()->styleSelector()->colorFromPrimitiveValue(stop.m_color.get());
 
         if (stop.m_position) {
-            int type = stop.m_position->primitiveType();
-            if (type == CSSPrimitiveValue::CSS_PERCENTAGE)
+            if (stop.m_position->isPercentage())
                 stops[i].offset = stop.m_position->getFloatValue(CSSPrimitiveValue::CSS_PERCENTAGE) / 100;
-            else if (CSSPrimitiveValue::isUnitTypeLength(type)) {
+            else if (stop.m_position->isLength()) {
                 float length = stop.m_position->computeLength<float>(style, rootStyle, style->effectiveZoom());
                 if (!computedGradientLength) {
                     FloatSize gradientSize(gradientStart - gradientEnd);
@@ -344,6 +329,7 @@ void CSSGradientValue::addStops(Gradient* gradient, RenderObject* renderer, Rend
                     float nextOffset = stops[firstZeroOrGreaterIndex].offset;
 
                     float interStopProportion = -prevOffset / (nextOffset - prevOffset);
+                    // FIXME: when we interpolate gradients using premultiplied colors, this should do premultiplication.
                     Color blendedColor = blend(stops[firstZeroOrGreaterIndex - 1].color, stops[firstZeroOrGreaterIndex].color, interStopProportion);
 
                     // Clamp the positions to 0 and set the color.
@@ -376,32 +362,28 @@ static float positionFromValue(CSSPrimitiveValue* value, RenderStyle* style, Ren
 {
     float zoomFactor = style->effectiveZoom();
 
-    switch (value->primitiveType()) {
-    case CSSPrimitiveValue::CSS_NUMBER:
+    if (value->isNumber())
         return value->getFloatValue() * zoomFactor;
 
-    case CSSPrimitiveValue::CSS_PERCENTAGE:
+    if (value->isPercentage())
         return value->getFloatValue() / 100.f * (isHorizontal ? size.width() : size.height());
 
-    case CSSPrimitiveValue::CSS_IDENT:
-        switch (value->getIdent()) {
-            case CSSValueTop:
-                ASSERT(!isHorizontal);
-                return 0;
-            case CSSValueLeft:
-                ASSERT(isHorizontal);
-                return 0;
-            case CSSValueBottom:
-                ASSERT(!isHorizontal);
-                return size.height();
-            case CSSValueRight:
-                ASSERT(isHorizontal);
-                return size.width();
-        }
-
-    default:
-        return value->computeLength<float>(style, rootStyle, zoomFactor);
+    switch (value->getIdent()) {
+    case CSSValueTop:
+        ASSERT(!isHorizontal);
+        return 0;
+    case CSSValueLeft:
+        ASSERT(isHorizontal);
+        return 0;
+    case CSSValueBottom:
+        ASSERT(!isHorizontal);
+        return size.height();
+    case CSSValueRight:
+        ASSERT(isHorizontal);
+        return size.width();
     }
+
+    return value->computeLength<float>(style, rootStyle, zoomFactor);
 }
 
 FloatPoint CSSGradientValue::computeEndPoint(CSSPrimitiveValue* first, CSSPrimitiveValue* second, RenderStyle* style, RenderStyle* rootStyle, const IntSize& size)
@@ -429,8 +411,7 @@ bool CSSGradientValue::isCacheable() const
         if (!stop.m_position)
             continue;
 
-        unsigned short unitType = stop.m_position->primitiveType();
-        if (unitType == CSSPrimitiveValue::CSS_EMS || unitType == CSSPrimitiveValue::CSS_EXS || unitType == CSSPrimitiveValue::CSS_REMS)
+        if (stop.m_position->isFontRelativeLength())
             return false;
     }
 
@@ -653,9 +634,9 @@ float CSSRadialGradientValue::resolveRadius(CSSPrimitiveValue* radius, RenderSty
     float zoomFactor = style->effectiveZoom();
 
     float result = 0;
-    if (radius->primitiveType() == CSSPrimitiveValue::CSS_NUMBER)  // Can the radius be a percentage?
+    if (radius->isNumber()) // Can the radius be a percentage?
         result = radius->getFloatValue() * zoomFactor;
-    else if (widthOrHeight && radius->primitiveType() == CSSPrimitiveValue::CSS_PERCENTAGE)
+    else if (widthOrHeight && radius->isPercentage())
         result = *widthOrHeight * radius->getFloatValue() / 100;
     else
         result = radius->computeLength<float>(style, rootStyle, zoomFactor);
@@ -774,29 +755,27 @@ PassRefPtr<Gradient> CSSRadialGradientValue::createGradient(RenderObject* render
     } else {
         enum GradientShape { Circle, Ellipse };
         GradientShape shape = Ellipse;
-        if (m_shape && m_shape->primitiveType() == CSSPrimitiveValue::CSS_IDENT && m_shape->getIdent() == CSSValueCircle)
+        if (m_shape && m_shape->getIdent() == CSSValueCircle)
             shape = Circle;
 
         enum GradientFill { ClosestSide, ClosestCorner, FarthestSide, FarthestCorner };
         GradientFill fill = FarthestCorner;
 
-        if (m_sizingBehavior && m_sizingBehavior->primitiveType() == CSSPrimitiveValue::CSS_IDENT) {
-            switch (m_sizingBehavior->getIdent()) {
-            case CSSValueContain:
-            case CSSValueClosestSide:
-                fill = ClosestSide;
-                break;
-            case CSSValueClosestCorner:
-                fill = ClosestCorner;
-                break;
-            case CSSValueFarthestSide:
-                fill = FarthestSide;
-                break;
-            case CSSValueCover:
-            case CSSValueFarthestCorner:
-                fill = FarthestCorner;
-                break;
-            }
+        switch (m_sizingBehavior ? m_sizingBehavior->getIdent() : 0) {
+        case CSSValueContain:
+        case CSSValueClosestSide:
+            fill = ClosestSide;
+            break;
+        case CSSValueClosestCorner:
+            fill = ClosestCorner;
+            break;
+        case CSSValueFarthestSide:
+            fill = FarthestSide;
+            break;
+        case CSSValueCover:
+        case CSSValueFarthestCorner:
+            fill = FarthestCorner;
+            break;
         }
 
         // Now compute the end radii based on the second point, shape and fill.

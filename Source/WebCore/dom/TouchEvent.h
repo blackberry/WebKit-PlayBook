@@ -1,5 +1,6 @@
 /*
  * Copyright 2008, The Android Open Source Project
+ * Copyright (C) 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -46,27 +47,23 @@ public:
             TouchList* targetTouches, TouchList* changedTouches, 
             const AtomicString& type, PassRefPtr<AbstractView> view,
             int screenX, int screenY, int pageX, int pageY,
-            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
-            float scale = 1.0, float rotation = 0.0)
+            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey)
     {
         return adoptRef(new TouchEvent(touches, targetTouches, changedTouches,
                 type, view, screenX, screenY, pageX, pageY,
-                ctrlKey, altKey, shiftKey, metaKey, scale, rotation));
+                ctrlKey, altKey, shiftKey, metaKey));
     }
 
     void initTouchEvent(TouchList* touches, TouchList* targetTouches,
             TouchList* changedTouches, const AtomicString& type, 
             PassRefPtr<AbstractView> view, int screenX, int screenY, 
             int clientX, int clientY,
-            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
-            float scale = 1.0, float rotation = 0.0);
+            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey);
 
     TouchList* touches() const { return m_touches.get(); }
     TouchList* targetTouches() const { return m_targetTouches.get(); }
     TouchList* changedTouches() const { return m_changedTouches.get(); }
-    float rotation() const { return m_rotation; }
-    float scale() const { return m_scale; }
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     void setDoubleTap(bool doubleTap) { m_doubleTap = doubleTap; }
     bool isDoubleTap() const { return m_doubleTap; }
     void setTouchHold(bool touchHold) { m_touchHold = touchHold; }
@@ -81,15 +78,12 @@ private:
             TouchList* changedTouches, const AtomicString& type,
             PassRefPtr<AbstractView>, int screenX, int screenY, int pageX,
             int pageY,
-            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
-            float scale, float rotation);
+            bool ctrlKey, bool altKey, bool shiftKey, bool metaKey);
 
     RefPtr<TouchList> m_touches;
     RefPtr<TouchList> m_targetTouches;
     RefPtr<TouchList> m_changedTouches;
-    float m_scale;
-    float m_rotation;
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     bool m_touchHold;
     bool m_doubleTap;
 #endif

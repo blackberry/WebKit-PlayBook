@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -35,8 +35,7 @@ namespace WebKit {
 
 class WebPagePrivate;
 
-// This class may only be used on the WebKit thread,
-// FIXME: with the exception of the rootLayerWebKitThread() method
+// This class may only be used on the WebKit thread.
 class FrameLayers {
 public:
     FrameLayers(WebPagePrivate*);
@@ -52,18 +51,17 @@ public:
 
     void calculateRootLayer();
 
-    bool isRootLayerMainFrameLayer() const
-    {
-        return m_rootLayer && !m_rootGraphicsLayer;
-    }
+    bool isRootLayerMainFrameLayer() const { return m_rootLayer && !m_rootGraphicsLayer; }
 
+    // FIXME: This function should only be called on the WebKit thread.
+    // But it's now also being called on the Compositing thread.
     WebCore::LayerWebKitThread* rootLayer() const { return m_rootLayer; }
 
 private:
-    typedef HashMap<WebCore::Frame*, WebCore::LayerWebKitThread*> FrameLayerMap;
     WebPagePrivate* m_pagePrivate;
     OwnPtr<WebCore::GraphicsLayer> m_rootGraphicsLayer;
     WebCore::LayerWebKitThread* m_rootLayer;
+    typedef HashMap<WebCore::Frame*, WebCore::LayerWebKitThread*> FrameLayerMap;
     FrameLayerMap m_frameLayers;
 };
 

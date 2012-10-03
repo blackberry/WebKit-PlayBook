@@ -38,6 +38,7 @@
 #include "MediaPlayerPrivate.h"
 #include "Settings.h"
 #include "TimeRanges.h"
+#include <wtf/text/CString.h>
 
 #if PLATFORM(QT)
 #include <QtGlobal>
@@ -45,6 +46,7 @@
 
 #if USE(GSTREAMER)
 #include "MediaPlayerPrivateGStreamer.h"
+#define PlatformMediaEngineClassName MediaPlayerPrivateGStreamer
 #endif
 
 #if PLATFORM(MAC) || (PLATFORM(QT) && USE(QTKIT))
@@ -72,7 +74,7 @@
 #define PlatformMediaEngineClassName MediaPlayerPrivate
 #elif PLATFORM(BLACKBERRY)
 #include "MediaPlayerPrivateBlackBerry.h"
-#define PlatformMediaEngineClassName MediaPlayerPrivate 
+#define PlatformMediaEngineClassName MediaPlayerPrivate
 #endif
 
 namespace WebCore {
@@ -195,10 +197,6 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
     if (!enginesQueried) {
         enginesQueried = true;
 
-#if USE(GSTREAMER)
-        MediaPlayerPrivateGStreamer::registerMediaEngine(addMediaEngine);
-#endif
-
 #if USE(AVFOUNDATION)
         if (Settings::isAVFoundationEnabled()) {
 #if PLATFORM(MAC)
@@ -209,7 +207,7 @@ static Vector<MediaPlayerFactory*>& installedMediaEngines()
         }
 #endif
 
-#if !PLATFORM(GTK) && !PLATFORM(EFL) && !(PLATFORM(QT) && USE(GSTREAMER))
+#if defined(PlatformMediaEngineClassName)
         PlatformMediaEngineClassName::registerMediaEngine(addMediaEngine);
 #endif
     }
@@ -333,19 +331,21 @@ MediaPlayer::~MediaPlayer()
     m_mediaPlayerClient = 0;
 }
 
-bool MediaPlayer::load(const String& url, const ContentType& contentType)
+bool MediaPlayer::load(const KURL& url, const ContentType& contentType)
 {
     String type = contentType.type().lower();
     String typeCodecs = contentType.parameter(codecs());
+    String urlString = url.string();
 
     // If the MIME type is missing or is not meaningful, try to figure it out from the URL.
     if (type.isEmpty() || type == applicationOctetStream() || type == textPlain()) {
-        if (protocolIs(url, "data"))
-            type = mimeTypeFromDataURL(url);
+        if (protocolIs(urlString, "data"))
+            type = mimeTypeFromDataURL(urlString);
         else {
-            size_t pos = url.reverseFind('.');
+            String lastPathComponent = url.lastPathComponent();
+            size_t pos = lastPathComponent.reverseFind('.');
             if (pos != notFound) {
-                String extension = url.substring(pos + 1);
+                String extension = lastPathComponent.substring(pos + 1);
                 String mediaType = MIMETypeRegistry::getMediaMIMETypeForExtension(extension);
                 if (!mediaType.isEmpty())
                     type = mediaType;
@@ -353,7 +353,7 @@ bool MediaPlayer::load(const String& url, const ContentType& contentType)
         }
     }
 
-    m_url = url;
+    m_url = urlString;
     m_contentMIMEType = type;
     m_contentTypeCodecs = typeCodecs;
     loadWithNextMediaEngine(0);
@@ -395,8 +395,8 @@ void MediaPlayer::loadWithNextMediaEngine(MediaPlayerFactory* current)
     else {
         m_private = createNullMediaPlayer(this);
         if (m_mediaPlayerClient) {
-            m_mediaPlayerClient->mediaPlayerNoneSupportedType(this);
             m_mediaPlayerClient->mediaPlayerEngineUpdated(this);
+            m_mediaPlayerClient->mediaPlayerResourceNotSupported(this);
         }
     }
 }    
@@ -931,6 +931,14 @@ AudioSourceProvider* MediaPlayer::audioSourceProvider()
     return m_private->audioSourceProvider();
 }
 #endif // WEB_AUDIO
+    
+String MediaPlayer::referrer() const
+{
+    if (!m_mediaPlayerClient)
+        return String();
+
+    return m_mediaPlayerClient->mediaPlayerReferrer();
+}
 
 }
 

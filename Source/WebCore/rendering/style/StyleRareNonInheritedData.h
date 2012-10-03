@@ -46,6 +46,10 @@ class StyleDeprecatedFlexibleBoxData;
 class StyleFilterData;
 #endif
 class StyleFlexibleBoxData;
+#if ENABLE(CSS_GRID_LAYOUT)
+class StyleGridData;
+class StyleGridItemData;
+#endif
 class StyleMarqueeData;
 class StyleMultiColData;
 class StyleReflection;
@@ -89,6 +93,9 @@ public:
 
     float opacity; // Whether or not we're transparent.
 
+    float m_aspectRatioDenominator;
+    float m_aspectRatioNumerator;
+
     short m_counterIncrement;
     short m_counterReset;
 
@@ -111,6 +118,11 @@ public:
     DataRef<StyleFilterData> m_filter; // Filter operations (url, sepia, blur, etc.)
 #endif
 
+#if ENABLE(CSS_GRID_LAYOUT)
+    DataRef<StyleGridData> m_grid;
+    DataRef<StyleGridItemData> m_gridItem;
+#endif
+
     OwnPtr<ContentData> m_content;
     OwnPtr<CounterDirectiveMap> m_counterDirectives;
 
@@ -126,7 +138,10 @@ public:
 
     LengthSize m_pageSize;
 
-    RefPtr<CSSWrapShape> m_wrapShape;
+    RefPtr<CSSWrapShape> m_wrapShapeInside;
+    RefPtr<CSSWrapShape> m_wrapShapeOutside;
+    Length m_wrapMargin;
+    Length m_wrapPadding;
     
     Color m_visitedLinkBackgroundColor;
     Color m_visitedLinkOutlineColor;
@@ -156,6 +171,10 @@ public:
     unsigned m_borderFit : 1; // EBorderFit
     unsigned m_textCombine : 1; // CSS3 text-combine properties
 
+    unsigned m_wrapFlow: 3; // WrapFlow
+    unsigned m_wrapThrough: 1; // WrapThrough
+
+    bool m_hasAspectRatio : 1; // Whether or not an aspect ratio has been specified.
 #if USE(ACCELERATED_COMPOSITING)
     bool m_runningAcceleratedAnimation : 1;
 #endif

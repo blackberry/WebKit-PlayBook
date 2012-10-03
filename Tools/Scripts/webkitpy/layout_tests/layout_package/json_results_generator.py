@@ -26,21 +26,15 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import json
 import logging
-import os
 import subprocess
 import sys
 import time
 import urllib2
 import xml.dom.minidom
 
-from webkitpy.layout_tests.layout_package import test_results_uploader
-
-try:
-    import json
-except ImportError:
-    # python 2.5 compatibility
-    import webkitpy.thirdparty.simplejson as json
+from webkitpy.common.net.file_uploader import FileUploader
 
 # A JSON results generator for generic tests.
 # FIXME: move this code out of the layout_package directory.
@@ -56,7 +50,10 @@ def has_json_wrapper(string):
 
 
 def strip_json_wrapper(json_content):
-    return json_content[len(_JSON_PREFIX):len(json_content) - len(_JSON_SUFFIX)]
+    # FIXME: Kill this code once the server returns json instead of jsonp.
+    if has_json_wrapper(json_content):
+        return json_content[len(_JSON_PREFIX):len(json_content) - len(_JSON_SUFFIX)]
+    return json_content
 
 
 def load_json(filesystem, file_path):
@@ -65,10 +62,11 @@ def load_json(filesystem, file_path):
     return json.loads(content)
 
 
-def write_json(filesystem, json_object, file_path):
+def write_json(filesystem, json_object, file_path, callback=None):
     # Specify separators in order to get compact encoding.
-    json_data = json.dumps(json_object, separators=(',', ':'))
-    json_string = _JSON_PREFIX + json_data + _JSON_SUFFIX
+    json_string = json.dumps(json_object, separators=(',', ':'))
+    if callback:
+        json_string = callback + "(" + json_string + ");"
     filesystem.write_text_file(file_path, json_string)
 
 
@@ -187,8 +185,7 @@ class JSONResultsGeneratorBase(object):
     TIMES_MS_FILENAME = "times_ms.json"
     INCREMENTAL_RESULTS_FILENAME = "incremental_results.json"
 
-    URL_FOR_TEST_LIST_JSON = \
-        "http://%s/testfile?builder=%s&name=%s&testlistjson=1&testtype=%s"
+    URL_FOR_TEST_LIST_JSON = "http://%s/testfile?builder=%s&name=%s&testlistjson=1&testtype=%s&master=%s"
 
     # FIXME: Remove generate_incremental_results once the reference to it in
     # http://src.chromium.org/viewvc/chrome/trunk/tools/build/scripts/slave/gtest_slave_utils.py
@@ -221,7 +218,7 @@ class JSONResultsGeneratorBase(object):
           master_name: the name of the buildbot master.
         """
         self._port = port
-        self._fs = port._filesystem
+        self._filesystem = port._filesystem
         self._builder_name = builder_name
         self._build_name = build_name
         self._build_number = build_number
@@ -244,15 +241,15 @@ class JSONResultsGeneratorBase(object):
     def generate_json_output(self):
         json_object = self.get_json()
         if json_object:
-            file_path = self._fs.join(self._results_directory, self.INCREMENTAL_RESULTS_FILENAME)
-            write_json(self._fs, json_object, file_path)
+            file_path = self._filesystem.join(self._results_directory, self.INCREMENTAL_RESULTS_FILENAME)
+            write_json(self._filesystem, json_object, file_path)
 
     def generate_times_ms_file(self):
         # FIXME: rename to generate_times_ms_file. This needs to be coordinated with
         # changing the calls to this on the chromium build slaves.
         times = test_timings_trie(self._port, self._test_results_map.values())
-        file_path = self._fs.join(self._results_directory, self.TIMES_MS_FILENAME)
-        write_json(self._fs, times, file_path)
+        file_path = self._filesystem.join(self._results_directory, self.TIMES_MS_FILENAME)
+        write_json(self._filesystem, times, file_path)
 
     def get_json(self):
         """Gets the results for the results.json file."""
@@ -314,15 +311,15 @@ class JSONResultsGeneratorBase(object):
                  ("testtype", self._test_type),
                  ("master", self._master_name)]
 
-        files = [(file, self._fs.join(self._results_directory, file))
+        files = [(file, self._filesystem.join(self._results_directory, file))
             for file in json_files]
 
-        uploader = test_results_uploader.TestResultsUploader(
-            self._test_results_server)
+        url = "http://%s/testfile/upload" % self._test_results_server
+        # Set uploading timeout in case appengine server is having problems.
+        # 120 seconds are more than enough to upload test results.
+        uploader = FileUploader(url, 120)
         try:
-            # Set uploading timeout in case appengine server is having problem.
-            # 120 seconds are more than enough to upload test results.
-            uploader.upload(attrs, files, 120)
+            uploader.upload_as_multipart_form_data(self._filesystem, files, attrs)
         except Exception, err:
             _log.error("Upload failed: %s" % err)
             return
@@ -381,7 +378,7 @@ class JSONResultsGeneratorBase(object):
         Args:
           in_directory: The directory where svn is to be run.
         """
-        if self._fs.exists(self._fs.join(in_directory, '.svn')):
+        if self._filesystem.exists(self._filesystem.join(in_directory, '.svn')):
             # Note: Not thread safe: http://bugs.python.org/issue2320
             output = subprocess.Popen(["svn", "info", "--xml"],
                                       cwd=in_directory,
@@ -415,9 +412,11 @@ class JSONResultsGeneratorBase(object):
             (urllib2.quote(self._test_results_server),
              urllib2.quote(self._builder_name),
              self.RESULTS_FILENAME,
-             urllib2.quote(self._test_type)))
+             urllib2.quote(self._test_type),
+             urllib2.quote(self._master_name)))
 
         try:
+            # FIXME: We should talk to the network via a Host object.
             results_file = urllib2.urlopen(results_file_url)
             info = results_file.info()
             old_results = results_file.read()
@@ -523,6 +522,10 @@ class JSONResultsGeneratorBase(object):
 
         # Include SVN revisions for the given repositories.
         for (name, path) in self._svn_repositories:
+            # Note: for JSON file's backward-compatibility we use 'chrome' rather
+            # than 'chromium' here.
+            if name == 'chromium':
+                name = 'chrome'
             self._insert_item_into_raw_list(results_for_builder,
                 self._get_svn_revision(path),
                 name + 'Revision')

@@ -36,13 +36,6 @@ public:
         return adoptRef(new IdentityTransformOperation());
     }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s]", TransformOperation::toString().latin1().data());
-    }
-#endif
-
 private:
     virtual bool isIdentity() const { return true; }
     virtual OperationType getOperationType() const { return IDENTITY; }

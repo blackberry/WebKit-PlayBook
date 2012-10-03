@@ -26,7 +26,6 @@
 #include <limits.h>
 #include <wtf/ASCIICType.h>
 #include <wtf/Forward.h>
-#include <wtf/OwnFastMallocPtr.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/StringHasher.h>
 #include <wtf/Vector.h>
@@ -44,6 +43,8 @@ typedef const struct __CFString * CFStringRef;
 // Landing the file moves in one patch, will follow on with patches to change the namespaces.
 namespace JSC {
 struct IdentifierCStringTranslator;
+namespace LLInt { class Data; }
+class LLIntOffsetsExtractor;
 template <typename T> struct IdentifierCharBufferTranslator;
 struct IdentifierLCharFromUCharTranslator;
 }
@@ -53,6 +54,7 @@ namespace WTF {
 struct CStringTranslator;
 struct HashAndCharactersTranslator;
 struct HashAndUTF8CharactersTranslator;
+struct SubstringTranslator;
 struct UCharBufferTranslator;
 
 enum TextCaseSensitivity { TextCaseSensitive, TextCaseInsensitive };
@@ -69,9 +71,12 @@ class StringImpl {
     friend struct WTF::CStringTranslator;
     friend struct WTF::HashAndCharactersTranslator;
     friend struct WTF::HashAndUTF8CharactersTranslator;
+    friend struct WTF::SubstringTranslator;
     friend struct WTF::UCharBufferTranslator;
     friend class AtomicStringImpl;
-
+    friend class JSC::LLInt::Data;
+    friend class JSC::LLIntOffsetsExtractor;
+    
 private:
     enum BufferOwnership {
         BufferInternal,
@@ -139,12 +144,24 @@ private:
     }
 
     // Create a StringImpl adopting ownership of the provided buffer (BufferOwned)
-    StringImpl(const UChar* characters, unsigned length)
+    StringImpl(const LChar* characters, unsigned length)
         : m_refCount(s_refCountIncrement)
         , m_length(length)
-        , m_data16(characters)
+        , m_data8(characters)
         , m_buffer(0)
-        , m_hashAndFlags(BufferOwned)
+        , m_hashAndFlags(s_hashFlag8BitBuffer | BufferOwned)
+    {
+        ASSERT(m_data8);
+        ASSERT(m_length);
+    }
+
+    // Create a StringImpl adopting ownership of the provided buffer (BufferOwned)
+    StringImpl(const UChar* characters, unsigned length)
+    : m_refCount(s_refCountIncrement)
+    , m_length(length)
+    , m_data16(characters)
+    , m_buffer(0)
+    , m_hashAndFlags(BufferOwned)
     {
         ASSERT(m_data16);
         ASSERT(m_length);
@@ -179,12 +196,12 @@ private:
     }
 
 public:
-    ~StringImpl();
+    WTF_EXPORT_PRIVATE ~StringImpl();
 
-    static PassRefPtr<StringImpl> create(const UChar*, unsigned length);
+    WTF_EXPORT_PRIVATE static PassRefPtr<StringImpl> create(const UChar*, unsigned length);
     static PassRefPtr<StringImpl> create(const LChar*, unsigned length);
     ALWAYS_INLINE static PassRefPtr<StringImpl> create(const char* s, unsigned length) { return create(reinterpret_cast<const LChar*>(s), length); }
-    static PassRefPtr<StringImpl> create(const LChar*);
+    WTF_EXPORT_PRIVATE static PassRefPtr<StringImpl> create(const LChar*);
     ALWAYS_INLINE static PassRefPtr<StringImpl> create(const char* s) { return create(reinterpret_cast<const LChar*>(s)); }
 
     static ALWAYS_INLINE PassRefPtr<StringImpl> create8(PassRefPtr<StringImpl> rep, unsigned offset, unsigned length)
@@ -215,7 +232,7 @@ public:
     }
 
     static PassRefPtr<StringImpl> createUninitialized(unsigned length, LChar*& data);
-    static PassRefPtr<StringImpl> createUninitialized(unsigned length, UChar*& data);
+    WTF_EXPORT_PRIVATE static PassRefPtr<StringImpl> createUninitialized(unsigned length, UChar*& data);
     template <typename T> static ALWAYS_INLINE PassRefPtr<StringImpl> tryCreateUninitialized(unsigned length, T*& output)
     {
         if (!length) {
@@ -235,9 +252,9 @@ public:
         output = reinterpret_cast<T*>(resultImpl + 1);
 
         if (sizeof(T) == sizeof(char))
-            return adoptRef(new(resultImpl) StringImpl(length, Force8BitConstructor));
+            return adoptRef(new (NotNull, resultImpl) StringImpl(length, Force8BitConstructor));
 
-        return adoptRef(new(resultImpl) StringImpl(length));
+        return adoptRef(new (NotNull, resultImpl) StringImpl(length));
     }
 
     // Reallocate the StringImpl. The originalString must be only owned by the PassRefPtr,
@@ -251,8 +268,8 @@ public:
     static unsigned dataOffset() { return OBJECT_OFFSETOF(StringImpl, m_data8); }
     static PassRefPtr<StringImpl> createWithTerminatingNullCharacter(const StringImpl&);
 
-    template<size_t inlineCapacity>
-    static PassRefPtr<StringImpl> adopt(Vector<UChar, inlineCapacity>& vector)
+    template<typename CharType, size_t inlineCapacity>
+    static PassRefPtr<StringImpl> adopt(Vector<CharType, inlineCapacity>& vector)
     {
         if (size_t size = vector.size()) {
             ASSERT(vector.data());
@@ -262,13 +279,15 @@ public:
         }
         return empty();
     }
-    static PassRefPtr<StringImpl> adopt(StringBuffer&);
+
+    static PassRefPtr<StringImpl> adopt(StringBuffer<LChar>& buffer);
+    WTF_EXPORT_PRIVATE static PassRefPtr<StringImpl> adopt(StringBuffer<UChar>& buffer);
 
     unsigned length() const { return m_length; }
     bool is8Bit() const { return m_hashAndFlags & s_hashFlag8BitBuffer; }
 
     // FIXME: Remove all unnecessary usages of characters()
-    ALWAYS_INLINE const LChar* characters8() const { ASSERT(is8Bit()); ASSERT_NOT_REACHED(); return m_data8; }
+    ALWAYS_INLINE const LChar* characters8() const { ASSERT(is8Bit()); return m_data8; }
     ALWAYS_INLINE const UChar* characters16() const { ASSERT(!is8Bit()); return m_data16; }
     ALWAYS_INLINE const UChar* characters() const
     {
@@ -277,6 +296,9 @@ public:
 
         return getData16SlowCase();
     }
+
+    template <typename CharType>
+    ALWAYS_INLINE const CharType * getCharacters() const;
 
     size_t cost()
     {
@@ -292,6 +314,7 @@ public:
     }
 
     bool has16BitShadow() const { return m_hashAndFlags & s_hashFlagHas16BitShadow; }
+    WTF_EXPORT_PRIVATE void upconvertCharacters(unsigned, unsigned) const;
     bool isIdentifier() const { return m_hashAndFlags & s_hashFlagIsIdentifier; }
     void setIsIdentifier(bool isIdentifier)
     {
@@ -351,13 +374,9 @@ public:
 
     unsigned hash() const
     {
-        if (!hasHash()) {
-            if (is8Bit())
-                setHash(StringHasher::computeHash(m_data8, m_length));
-            else
-                setHash(StringHasher::computeHash(m_data16, m_length));
-        }
-        return existingHash();
+        if (hasHash())
+            return existingHash();
+        return hashSlowCase();
     }
 
     inline bool hasOneRef() const
@@ -380,7 +399,7 @@ public:
         m_refCount -= s_refCountIncrement;
     }
 
-    static StringImpl* empty();
+    WTF_EXPORT_PRIVATE static StringImpl* empty();
 
     // FIXME: Does this really belong in StringImpl?
     template <typename T> static void copyChars(T* destination, const T* source, unsigned numCharacters)
@@ -415,7 +434,7 @@ public:
     // its own copy of the string.
     PassRefPtr<StringImpl> isolatedCopy() const;
 
-    PassRefPtr<StringImpl> substring(unsigned pos, unsigned len = UINT_MAX);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> substring(unsigned pos, unsigned len = UINT_MAX);
 
     UChar operator[](unsigned i) const
     {
@@ -424,9 +443,9 @@ public:
             return m_data8[i];
         return m_data16[i];
     }
-    UChar32 characterStartingAt(unsigned);
+    WTF_EXPORT_PRIVATE UChar32 characterStartingAt(unsigned);
 
-    bool containsOnlyWhitespace();
+    WTF_EXPORT_PRIVATE bool containsOnlyWhitespace();
 
     int toIntStrict(bool* ok = 0, int base = 10);
     unsigned toUIntStrict(bool* ok = 0, int base = 10);
@@ -434,7 +453,7 @@ public:
     uint64_t toUInt64Strict(bool* ok = 0, int base = 10);
     intptr_t toIntPtrStrict(bool* ok = 0, int base = 10);
 
-    int toInt(bool* ok = 0); // ignores trailing garbage
+    WTF_EXPORT_PRIVATE int toInt(bool* ok = 0); // ignores trailing garbage
     unsigned toUInt(bool* ok = 0); // ignores trailing garbage
     int64_t toInt64(bool* ok = 0); // ignores trailing garbage
     uint64_t toUInt64(bool* ok = 0); // ignores trailing garbage
@@ -443,43 +462,44 @@ public:
     double toDouble(bool* ok = 0, bool* didReadNumber = 0);
     float toFloat(bool* ok = 0, bool* didReadNumber = 0);
 
-    PassRefPtr<StringImpl> lower();
-    PassRefPtr<StringImpl> upper();
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> lower();
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> upper();
 
-    PassRefPtr<StringImpl> fill(UChar);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> fill(UChar);
     // FIXME: Do we need fill(char) or can we just do the right thing if UChar is ASCII?
     PassRefPtr<StringImpl> foldCase();
 
     PassRefPtr<StringImpl> stripWhiteSpace();
     PassRefPtr<StringImpl> stripWhiteSpace(IsWhiteSpaceFunctionPtr);
-    PassRefPtr<StringImpl> simplifyWhiteSpace();
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> simplifyWhiteSpace();
     PassRefPtr<StringImpl> simplifyWhiteSpace(IsWhiteSpaceFunctionPtr);
 
     PassRefPtr<StringImpl> removeCharacters(CharacterMatchFunctionPtr);
+    template <typename CharType>
+    ALWAYS_INLINE PassRefPtr<StringImpl> removeCharacters(const CharType* characters, CharacterMatchFunctionPtr);
 
-    // FIXME: Do we need char version, or is it okay to just pass in an ASCII char for 8-bit? Same for reverseFind, replace
-    size_t find(UChar, unsigned index = 0);
-    size_t find(CharacterMatchFunctionPtr, unsigned index = 0);
+    WTF_EXPORT_PRIVATE size_t find(UChar, unsigned index = 0);
+    WTF_EXPORT_PRIVATE size_t find(CharacterMatchFunctionPtr, unsigned index = 0);
     size_t find(const LChar*, unsigned index = 0);
     ALWAYS_INLINE size_t find(const char* s, unsigned index = 0) { return find(reinterpret_cast<const LChar*>(s), index); };
-    size_t find(StringImpl*, unsigned index = 0);
+    WTF_EXPORT_PRIVATE size_t find(StringImpl*, unsigned index = 0);
     size_t findIgnoringCase(const LChar*, unsigned index = 0);
     ALWAYS_INLINE size_t findIgnoringCase(const char* s, unsigned index = 0) { return findIgnoringCase(reinterpret_cast<const LChar*>(s), index); };
-    size_t findIgnoringCase(StringImpl*, unsigned index = 0);
+    WTF_EXPORT_PRIVATE size_t findIgnoringCase(StringImpl*, unsigned index = 0);
 
-    size_t reverseFind(UChar, unsigned index = UINT_MAX);
-    size_t reverseFind(StringImpl*, unsigned index = UINT_MAX);
-    size_t reverseFindIgnoringCase(StringImpl*, unsigned index = UINT_MAX);
+    WTF_EXPORT_PRIVATE size_t reverseFind(UChar, unsigned index = UINT_MAX);
+    WTF_EXPORT_PRIVATE size_t reverseFind(StringImpl*, unsigned index = UINT_MAX);
+    WTF_EXPORT_PRIVATE size_t reverseFindIgnoringCase(StringImpl*, unsigned index = UINT_MAX);
 
     bool startsWith(StringImpl* str, bool caseSensitive = true) { return (caseSensitive ? reverseFind(str, 0) : reverseFindIgnoringCase(str, 0)) == 0; }
-    bool endsWith(StringImpl*, bool caseSensitive = true);
+    WTF_EXPORT_PRIVATE bool endsWith(StringImpl*, bool caseSensitive = true);
 
-    PassRefPtr<StringImpl> replace(UChar, UChar);
-    PassRefPtr<StringImpl> replace(UChar, StringImpl*);
-    PassRefPtr<StringImpl> replace(StringImpl*, StringImpl*);
-    PassRefPtr<StringImpl> replace(unsigned index, unsigned len, StringImpl*);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> replace(UChar, UChar);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> replace(UChar, StringImpl*);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> replace(StringImpl*, StringImpl*);
+    WTF_EXPORT_PRIVATE PassRefPtr<StringImpl> replace(unsigned index, unsigned len, StringImpl*);
 
-    WTF::Unicode::Direction defaultWritingDirection(bool* hasStrongDirectionality = 0);
+    WTF_EXPORT_PRIVATE WTF::Unicode::Direction defaultWritingDirection(bool* hasStrongDirectionality = 0);
 
 #if USE(CF)
     CFStringRef createCFString();
@@ -495,8 +515,9 @@ private:
     BufferOwnership bufferOwnership() const { return static_cast<BufferOwnership>(m_hashAndFlags & s_hashMaskBufferOwnership); }
     bool isStatic() const { return m_refCount & s_refCountFlagIsStaticString; }
     template <class UCharPredicate> PassRefPtr<StringImpl> stripMatchedCharacters(UCharPredicate);
-    template <class UCharPredicate> PassRefPtr<StringImpl> simplifyMatchedCharactersToSpace(UCharPredicate);
-    NEVER_INLINE const UChar* getData16SlowCase() const;
+    template <typename CharType, class UCharPredicate> PassRefPtr<StringImpl> simplifyMatchedCharactersToSpace(UCharPredicate);
+    WTF_EXPORT_PRIVATE NEVER_INLINE const UChar* getData16SlowCase() const;
+    WTF_EXPORT_PRIVATE NEVER_INLINE unsigned hashSlowCase() const;
 
     // The bottom bit in the ref count indicates a static (immortal) string.
     static const unsigned s_refCountFlagIsStaticString = 0x1;
@@ -529,23 +550,187 @@ private:
     mutable unsigned m_hashAndFlags;
 };
 
-bool equal(const StringImpl*, const StringImpl*);
-bool equal(const StringImpl*, const LChar*);
+template <>
+ALWAYS_INLINE const LChar* StringImpl::getCharacters<LChar>() const { return characters8(); }
+
+template <>
+ALWAYS_INLINE const UChar* StringImpl::getCharacters<UChar>() const { return characters(); }
+
+WTF_EXPORT_PRIVATE bool equal(const StringImpl*, const StringImpl*);
+WTF_EXPORT_PRIVATE bool equal(const StringImpl*, const LChar*);
 inline bool equal(const StringImpl* a, const char* b) { return equal(a, reinterpret_cast<const LChar*>(b)); }
-bool equal(const StringImpl*, const LChar*, unsigned);
+WTF_EXPORT_PRIVATE bool equal(const StringImpl*, const LChar*, unsigned);
+inline bool equal(const StringImpl* a, const char* b, unsigned length) { return equal(a, reinterpret_cast<const LChar*>(b), length); }
 inline bool equal(const LChar* a, StringImpl* b) { return equal(b, a); }
 inline bool equal(const char* a, StringImpl* b) { return equal(b, reinterpret_cast<const LChar*>(a)); }
-bool equal(const StringImpl*, const UChar*, unsigned);
+WTF_EXPORT_PRIVATE bool equal(const StringImpl*, const UChar*, unsigned);
 
-bool equalIgnoringCase(StringImpl*, StringImpl*);
-bool equalIgnoringCase(StringImpl*, const LChar*);
+// Do comparisons 8 or 4 bytes-at-a-time on architectures where it's safe.
+#if CPU(X86_64)
+ALWAYS_INLINE bool equal(const LChar* a, const LChar* b, unsigned length)
+{
+    unsigned dwordLength = length >> 3;
+
+    if (dwordLength) {
+        const uint64_t* aDWordCharacters = reinterpret_cast<const uint64_t*>(a);
+        const uint64_t* bDWordCharacters = reinterpret_cast<const uint64_t*>(b);
+
+        for (unsigned i = 0; i != dwordLength; ++i) {
+            if (*aDWordCharacters++ != *bDWordCharacters++)
+                return false;
+        }
+
+        a = reinterpret_cast<const LChar*>(aDWordCharacters);
+        b = reinterpret_cast<const LChar*>(bDWordCharacters);
+    }
+
+    if (length & 4) {
+        if (*reinterpret_cast<const uint32_t*>(a) != *reinterpret_cast<const uint32_t*>(b))
+            return false;
+
+        a += 4;
+        b += 4;
+    }
+
+    if (length & 2) {
+        if (*reinterpret_cast<const uint16_t*>(a) != *reinterpret_cast<const uint16_t*>(b))
+            return false;
+
+        a += 2;
+        b += 2;
+    }
+
+    if (length & 1 && (*a != *b))
+        return false;
+
+    return true;
+}
+
+ALWAYS_INLINE bool equal(const UChar* a, const UChar* b, unsigned length)
+{
+    unsigned dwordLength = length >> 2;
+    
+    if (dwordLength) {
+        const uint64_t* aDWordCharacters = reinterpret_cast<const uint64_t*>(a);
+        const uint64_t* bDWordCharacters = reinterpret_cast<const uint64_t*>(b);
+
+        for (unsigned i = 0; i != dwordLength; ++i) {
+            if (*aDWordCharacters++ != *bDWordCharacters++)
+                return false;
+        }
+
+        a = reinterpret_cast<const UChar*>(aDWordCharacters);
+        b = reinterpret_cast<const UChar*>(bDWordCharacters);
+    }
+
+    if (length & 2) {
+        if (*reinterpret_cast<const uint32_t*>(a) != *reinterpret_cast<const uint32_t*>(b))
+            return false;
+
+        a += 2;
+        b += 2;
+    }
+
+    if (length & 1 && (*a != *b))
+        return false;
+
+    return true;
+}
+#elif CPU(X86)
+ALWAYS_INLINE bool equal(const LChar* a, const LChar* b, unsigned length)
+{
+    const uint32_t* aCharacters = reinterpret_cast<const uint32_t*>(a);
+    const uint32_t* bCharacters = reinterpret_cast<const uint32_t*>(b);
+
+    unsigned wordLength = length >> 2;
+    for (unsigned i = 0; i != wordLength; ++i) {
+        if (*aCharacters++ != *bCharacters++)
+            return false;
+    }
+
+    length &= 3;
+
+    if (length) {
+        const LChar* aRemainder = reinterpret_cast<const LChar*>(aCharacters);
+        const LChar* bRemainder = reinterpret_cast<const LChar*>(bCharacters);
+        
+        for (unsigned i = 0; i <  length; ++i) {
+            if (aRemainder[i] != bRemainder[i])
+                return false;
+        }
+    }
+
+    return true;
+}
+
+ALWAYS_INLINE bool equal(const UChar* a, const UChar* b, unsigned length)
+{
+    const uint32_t* aCharacters = reinterpret_cast<const uint32_t*>(a);
+    const uint32_t* bCharacters = reinterpret_cast<const uint32_t*>(b);
+    
+    unsigned wordLength = length >> 1;
+    for (unsigned i = 0; i != wordLength; ++i) {
+        if (*aCharacters++ != *bCharacters++)
+            return false;
+    }
+    
+    if (length & 1 && *reinterpret_cast<const UChar*>(aCharacters) != *reinterpret_cast<const UChar*>(bCharacters))
+        return false;
+    
+    return true;
+}
+#else
+ALWAYS_INLINE bool equal(const LChar* a, const LChar* b, unsigned length)
+{
+    for (unsigned i = 0; i != length; ++i) {
+        if (a[i] != b[i])
+            return false;
+    }
+
+    return true;
+}
+
+ALWAYS_INLINE bool equal(const UChar* a, const UChar* b, unsigned length)
+{
+    for (unsigned i = 0; i != length; ++i) {
+        if (a[i] != b[i])
+            return false;
+    }
+
+    return true;
+}
+#endif
+
+ALWAYS_INLINE bool equal(const LChar* a, const UChar* b, unsigned length)
+{
+    for (unsigned i = 0; i != length; ++i) {
+        if (a[i] != b[i])
+            return false;
+    }
+
+    return true;
+}
+
+ALWAYS_INLINE bool equal(const UChar* a, const LChar* b, unsigned length)
+{
+    for (unsigned i = 0; i != length; ++i) {
+        if (a[i] != b[i])
+            return false;
+    }
+
+    return true;
+}
+
+WTF_EXPORT_PRIVATE bool equalIgnoringCase(StringImpl*, StringImpl*);
+WTF_EXPORT_PRIVATE bool equalIgnoringCase(StringImpl*, const LChar*);
 inline bool equalIgnoringCase(const LChar* a, StringImpl* b) { return equalIgnoringCase(b, a); }
-bool equalIgnoringCase(const UChar*, const LChar*, unsigned);
+WTF_EXPORT_PRIVATE bool equalIgnoringCase(const LChar*, const LChar*, unsigned);
+WTF_EXPORT_PRIVATE bool equalIgnoringCase(const UChar*, const LChar*, unsigned);
 inline bool equalIgnoringCase(const UChar* a, const char* b, unsigned length) { return equalIgnoringCase(a, reinterpret_cast<const LChar*>(b), length); }
 inline bool equalIgnoringCase(const LChar* a, const UChar* b, unsigned length) { return equalIgnoringCase(b, a, length); }
 inline bool equalIgnoringCase(const char* a, const UChar* b, unsigned length) { return equalIgnoringCase(b, reinterpret_cast<const LChar*>(a), length); }
 
-bool equalIgnoringNullity(StringImpl*, StringImpl*);
+WTF_EXPORT_PRIVATE bool equalIgnoringNullity(StringImpl*, StringImpl*);
 
 template<size_t inlineCapacity>
 bool equalIgnoringNullity(const Vector<UChar, inlineCapacity>& a, StringImpl* b)
@@ -554,10 +739,10 @@ bool equalIgnoringNullity(const Vector<UChar, inlineCapacity>& a, StringImpl* b)
         return !a.size();
     if (a.size() != b->length())
         return false;
-    return !memcmp(a.data(), b->characters(), b->length());
+    return !memcmp(a.data(), b->characters(), b->length() * sizeof(UChar));
 }
 
-int codePointCompare(const StringImpl*, const StringImpl*);
+WTF_EXPORT_PRIVATE int codePointCompare(const StringImpl*, const StringImpl*);
 
 static inline bool isSpaceOrNewline(UChar c)
 {

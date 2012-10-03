@@ -33,6 +33,7 @@
 #include "CodeBlock.h"
 #include "CodeOrigin.h"
 #include "DFGCommon.h"
+#include "DFGNodeReferenceBlob.h"
 #include "DFGOperands.h"
 #include "DFGVariableAccessData.h"
 #include "JSValue.h"
@@ -80,6 +81,11 @@ static inline bool nodeCanIgnoreNegativeZero(ArithNodeFlags flags)
     return !(flags & NodeNeedsNegZero);
 }
 
+static inline bool nodeMayOverflow(ArithNodeFlags flags)
+{
+    return !!(flags & NodeMayOverflow);
+}
+
 static inline bool nodeCanSpeculateInteger(ArithNodeFlags flags)
 {
     if (flags & NodeMayOverflow)
@@ -91,7 +97,6 @@ static inline bool nodeCanSpeculateInteger(ArithNodeFlags flags)
     return true;
 }
 
-#ifndef NDEBUG
 static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
 {
     if (!flags)
@@ -133,7 +138,6 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     
     return description;
 }
-#endif
 
 // Entries in the NodeType enum (below) are composed of an id, a result type (possibly none)
 // and some additional informative flags (must generate, is constant, etc).
@@ -157,8 +161,12 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
 
 // This macro defines a set of information about all known node types, used to populate NodeId, NodeType below.
 #define FOR_EACH_DFG_OP(macro) \
-    /* Nodes for constants. */\
+    /* A constant in the CodeBlock's constant pool. */\
     macro(JSConstant, NodeResultJS) \
+    \
+    /* A constant not in the CodeBlock's constant pool. Uses get patched to jumps that exit the */\
+    /* code block. */\
+    macro(WeakJSConstant, NodeResultJS) \
     \
     /* Nodes for handling functions (both as call and as construct). */\
     macro(ConvertThis, NodeResultJS) \
@@ -169,6 +177,7 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     macro(GetLocal, NodeResultJS) \
     macro(SetLocal, 0) \
     macro(Phantom, NodeMustGenerate) \
+    macro(Nop, 0) \
     macro(Phi, 0) \
     macro(Flush, NodeMustGenerate) \
     \
@@ -195,6 +204,7 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     /* Nodes for arithmetic operations. */\
     macro(ArithAdd, NodeResultNumber) \
     macro(ArithSub, NodeResultNumber) \
+    macro(ArithNegate, NodeResultNumber) \
     macro(ArithMul, NodeResultNumber) \
     macro(ArithDiv, NodeResultNumber) \
     macro(ArithMod, NodeResultNumber) \
@@ -202,11 +212,6 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     macro(ArithMin, NodeResultNumber) \
     macro(ArithMax, NodeResultNumber) \
     macro(ArithSqrt, NodeResultNumber) \
-    /* Arithmetic operators call ToNumber on their operands. */\
-    macro(ValueToNumber, NodeResultNumber | NodeMustGenerate) \
-    \
-    /* A variant of ValueToNumber, which a hint that the parents will always use this as a double. */\
-    macro(ValueToDouble, NodeResultNumber | NodeMustGenerate) \
     \
     /* Add of values may either be arithmetic, or result in string concatenation. */\
     macro(ValueAdd, NodeResultJS | NodeMustGenerate | NodeMightClobber) \
@@ -219,18 +224,27 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     macro(PutByVal, NodeMustGenerate | NodeClobbersWorld) \
     macro(PutByValAlias, NodeMustGenerate | NodeClobbersWorld) \
     macro(GetById, NodeResultJS | NodeMustGenerate | NodeClobbersWorld) \
+    macro(GetByIdFlush, NodeResultJS | NodeMustGenerate | NodeClobbersWorld) \
     macro(PutById, NodeMustGenerate | NodeClobbersWorld) \
     macro(PutByIdDirect, NodeMustGenerate | NodeClobbersWorld) \
     macro(CheckStructure, NodeMustGenerate) \
     macro(PutStructure, NodeMustGenerate | NodeClobbersWorld) \
     macro(GetPropertyStorage, NodeResultStorage) \
+    macro(GetIndexedPropertyStorage, NodeMustGenerate | NodeResultStorage) \
     macro(GetByOffset, NodeResultJS) \
     macro(PutByOffset, NodeMustGenerate | NodeClobbersWorld) \
     macro(GetArrayLength, NodeResultInt32) \
     macro(GetStringLength, NodeResultInt32) \
     macro(GetByteArrayLength, NodeResultInt32) \
-    macro(GetMethod, NodeResultJS | NodeMustGenerate) \
-    macro(CheckMethod, NodeResultJS | NodeMustGenerate) \
+    macro(GetInt8ArrayLength, NodeResultInt32) \
+    macro(GetInt16ArrayLength, NodeResultInt32) \
+    macro(GetInt32ArrayLength, NodeResultInt32) \
+    macro(GetUint8ArrayLength, NodeResultInt32) \
+    macro(GetUint8ClampedArrayLength, NodeResultInt32) \
+    macro(GetUint16ArrayLength, NodeResultInt32) \
+    macro(GetUint32ArrayLength, NodeResultInt32) \
+    macro(GetFloat32ArrayLength, NodeResultInt32) \
+    macro(GetFloat64ArrayLength, NodeResultInt32) \
     macro(GetScopeChain, NodeResultJS) \
     macro(GetScopedVar, NodeResultJS | NodeMustGenerate) \
     macro(PutScopedVar, NodeMustGenerate | NodeClobbersWorld) \
@@ -277,6 +291,17 @@ static inline const char* arithNodeFlagsAsString(ArithNodeFlags flags)
     macro(LogicalNot, NodeResultBoolean | NodeMightClobber) \
     macro(ToPrimitive, NodeResultJS | NodeMustGenerate | NodeClobbersWorld) \
     macro(StrCat, NodeResultJS | NodeMustGenerate | NodeHasVarArgs | NodeClobbersWorld) \
+    \
+    /* Nodes used for activations. Activation support works by having it anchored at */\
+    /* epilgoues via TearOffActivation, and all CreateActivation nodes kept alive by */\
+    /* being threaded with each other. */\
+    macro(CreateActivation, NodeResultJS) \
+    macro(TearOffActivation, NodeMustGenerate) \
+    \
+    /* Nodes for creating functions. */\
+    macro(NewFunctionNoCheck, NodeResultJS) \
+    macro(NewFunction, NodeResultJS) \
+    macro(NewFunctionExpression, NodeResultJS) \
     \
     /* Block terminals. */\
     macro(Jump, NodeMustGenerate | NodeIsTerminal | NodeIsJump) \
@@ -330,36 +355,33 @@ struct Node {
     Node(NodeType op, CodeOrigin codeOrigin, NodeIndex child1 = NoNode, NodeIndex child2 = NoNode, NodeIndex child3 = NoNode)
         : op(op)
         , codeOrigin(codeOrigin)
+        , children(NodeReferenceBlob::Fixed, child1, child2, child3)
         , m_virtualRegister(InvalidVirtualRegister)
         , m_refCount(0)
         , m_prediction(PredictNone)
     {
         ASSERT(!(op & NodeHasVarArgs));
         ASSERT(!hasArithNodeFlags());
-        children.fixed.child1 = child1;
-        children.fixed.child2 = child2;
-        children.fixed.child3 = child3;
     }
 
     // Construct a node with up to 3 children and an immediate value.
     Node(NodeType op, CodeOrigin codeOrigin, OpInfo imm, NodeIndex child1 = NoNode, NodeIndex child2 = NoNode, NodeIndex child3 = NoNode)
         : op(op)
         , codeOrigin(codeOrigin)
+        , children(NodeReferenceBlob::Fixed, child1, child2, child3)
         , m_virtualRegister(InvalidVirtualRegister)
         , m_refCount(0)
         , m_opInfo(imm.m_value)
         , m_prediction(PredictNone)
     {
         ASSERT(!(op & NodeHasVarArgs));
-        children.fixed.child1 = child1;
-        children.fixed.child2 = child2;
-        children.fixed.child3 = child3;
     }
 
     // Construct a node with up to 3 children and two immediate values.
     Node(NodeType op, CodeOrigin codeOrigin, OpInfo imm1, OpInfo imm2, NodeIndex child1 = NoNode, NodeIndex child2 = NoNode, NodeIndex child3 = NoNode)
         : op(op)
         , codeOrigin(codeOrigin)
+        , children(NodeReferenceBlob::Fixed, child1, child2, child3)
         , m_virtualRegister(InvalidVirtualRegister)
         , m_refCount(0)
         , m_opInfo(imm1.m_value)
@@ -367,15 +389,13 @@ struct Node {
         , m_prediction(PredictNone)
     {
         ASSERT(!(op & NodeHasVarArgs));
-        children.fixed.child1 = child1;
-        children.fixed.child2 = child2;
-        children.fixed.child3 = child3;
     }
     
     // Construct a node with a variable number of children and two immediate values.
     Node(VarArgTag, NodeType op, CodeOrigin codeOrigin, OpInfo imm1, OpInfo imm2, unsigned firstChild, unsigned numChildren)
         : op(op)
         , codeOrigin(codeOrigin)
+        , children(NodeReferenceBlob::Variable, firstChild, numChildren)
         , m_virtualRegister(InvalidVirtualRegister)
         , m_refCount(0)
         , m_opInfo(imm1.m_value)
@@ -383,8 +403,6 @@ struct Node {
         , m_prediction(PredictNone)
     {
         ASSERT(op & NodeHasVarArgs);
-        children.variable.firstChild = firstChild;
-        children.variable.numChildren = numChildren;
     }
 
     bool mustGenerate()
@@ -397,9 +415,14 @@ struct Node {
         return op == JSConstant;
     }
     
+    bool isWeakConstant()
+    {
+        return op == WeakJSConstant;
+    }
+    
     bool hasConstant()
     {
-        return isConstant() || hasMethodCheckData();
+        return isConstant() || isWeakConstant();
     }
 
     unsigned constantNumber()
@@ -408,20 +431,26 @@ struct Node {
         return m_opInfo;
     }
     
-    // NOTE: this only works for JSConstant nodes.
-    JSValue valueOfJSConstantNode(CodeBlock* codeBlock)
+    JSCell* weakConstant()
     {
+        return bitwise_cast<JSCell*>(m_opInfo);
+    }
+    
+    JSValue valueOfJSConstant(CodeBlock* codeBlock)
+    {
+        if (op == WeakJSConstant)
+            return JSValue(weakConstant());
         return codeBlock->constantRegister(FirstConstantRegisterIndex + constantNumber()).get();
     }
 
     bool isInt32Constant(CodeBlock* codeBlock)
     {
-        return isConstant() && valueOfJSConstantNode(codeBlock).isInt32();
+        return isConstant() && valueOfJSConstant(codeBlock).isInt32();
     }
     
     bool isDoubleConstant(CodeBlock* codeBlock)
     {
-        bool result = isConstant() && valueOfJSConstantNode(codeBlock).isDouble();
+        bool result = isConstant() && valueOfJSConstant(codeBlock).isDouble();
         if (result)
             ASSERT(!isInt32Constant(codeBlock));
         return result;
@@ -429,14 +458,14 @@ struct Node {
     
     bool isNumberConstant(CodeBlock* codeBlock)
     {
-        bool result = isConstant() && valueOfJSConstantNode(codeBlock).isNumber();
+        bool result = isConstant() && valueOfJSConstant(codeBlock).isNumber();
         ASSERT(result == (isInt32Constant(codeBlock) || isDoubleConstant(codeBlock)));
         return result;
     }
     
     bool isBooleanConstant(CodeBlock* codeBlock)
     {
-        return isConstant() && valueOfJSConstantNode(codeBlock).isBoolean();
+        return isConstant() && valueOfJSConstant(codeBlock).isBoolean();
     }
     
     bool hasVariableAccessData()
@@ -468,16 +497,14 @@ struct Node {
     {
         return variableAccessData()->local();
     }
-
-#ifndef NDEBUG
+    
     bool hasIdentifier()
     {
         switch (op) {
         case GetById:
+        case GetByIdFlush:
         case PutById:
         case PutByIdDirect:
-        case GetMethod:
-        case CheckMethod:
         case Resolve:
         case ResolveBase:
         case ResolveBaseStrictPut:
@@ -486,7 +513,6 @@ struct Node {
             return false;
         }
     }
-#endif
 
     unsigned identifierNumber()
     {
@@ -503,11 +529,10 @@ struct Node {
     bool hasArithNodeFlags()
     {
         switch (op) {
-        case ValueToNumber:
-        case ValueToDouble:
         case UInt32ToNumber:
         case ArithAdd:
         case ArithSub:
+        case ArithNegate:
         case ArithMul:
         case ArithAbs:
         case ArithMin:
@@ -692,7 +717,7 @@ struct Node {
     {
         switch (op) {
         case GetById:
-        case GetMethod:
+        case GetByIdFlush:
         case GetByVal:
         case Call:
         case Construct:
@@ -723,17 +748,6 @@ struct Node {
         return mergePrediction(m_opInfo2, prediction);
     }
     
-    bool hasMethodCheckData()
-    {
-        return op == CheckMethod;
-    }
-    
-    unsigned methodCheckDataIndex()
-    {
-        ASSERT(hasMethodCheckData());
-        return m_opInfo2;
-    }
-
     bool hasFunctionCheckData()
     {
         return op == CheckFunction;
@@ -774,6 +788,30 @@ struct Node {
     
     unsigned storageAccessDataIndex()
     {
+        ASSERT(hasStorageAccessData());
+        return m_opInfo;
+    }
+    
+    bool hasFunctionDeclIndex()
+    {
+        return op == NewFunction
+            || op == NewFunctionNoCheck;
+    }
+    
+    unsigned functionDeclIndex()
+    {
+        ASSERT(hasFunctionDeclIndex());
+        return m_opInfo;
+    }
+    
+    bool hasFunctionExprIndex()
+    {
+        return op == NewFunctionExpression;
+    }
+    
+    unsigned functionExprIndex()
+    {
+        ASSERT(hasFunctionExprIndex());
         return m_opInfo;
     }
     
@@ -798,7 +836,7 @@ struct Node {
 
     bool shouldGenerate()
     {
-        return m_refCount && op != Phi && op != Flush;
+        return m_refCount;
     }
 
     unsigned refCount()
@@ -822,42 +860,51 @@ struct Node {
         m_refCount = refCount;
     }
     
-    NodeIndex child1()
+    // Derefs the node and returns true if the ref count reached zero.
+    // In general you don't want to use this directly; use Graph::deref
+    // instead.
+    bool deref()
+    {
+        ASSERT(m_refCount);
+        return !--m_refCount;
+    }
+    
+    NodeUse child1()
     {
         ASSERT(!(op & NodeHasVarArgs));
-        return children.fixed.child1;
+        return children.child1();
     }
     
     // This is useful if you want to do a fast check on the first child
     // before also doing a check on the opcode. Use this with care and
     // avoid it if possible.
-    NodeIndex child1Unchecked()
+    NodeUse child1Unchecked()
     {
-        return children.fixed.child1;
+        return children.child1Unchecked();
     }
 
-    NodeIndex child2()
+    NodeUse child2()
     {
         ASSERT(!(op & NodeHasVarArgs));
-        return children.fixed.child2;
+        return children.child2();
     }
 
-    NodeIndex child3()
+    NodeUse child3()
     {
         ASSERT(!(op & NodeHasVarArgs));
-        return children.fixed.child3;
+        return children.child3();
     }
     
     unsigned firstChild()
     {
         ASSERT(op & NodeHasVarArgs);
-        return children.variable.firstChild;
+        return children.firstChild();
     }
     
     unsigned numChildren()
     {
         ASSERT(op & NodeHasVarArgs);
-        return children.variable.numChildren;
+        return children.numChildren();
     }
     
     PredictedType prediction()
@@ -910,6 +957,63 @@ struct Node {
         return !!(prediction() & PredictByteArray);
     }
     
+    bool shouldSpeculateInt8Array()
+    {
+#if CPU(X86) || CPU(X86_64)
+        return isInt8ArrayPrediction(prediction());
+#else
+        return false;
+#endif
+    }
+    
+    bool shouldSpeculateInt16Array()
+    {
+#if CPU(X86) || CPU(X86_64)
+        return isInt16ArrayPrediction(prediction());
+#else
+        return false;
+#endif
+    }
+    
+    bool shouldSpeculateInt32Array()
+    {
+        return isInt32ArrayPrediction(prediction());
+    }
+    
+    bool shouldSpeculateUint8Array()
+    {
+        return isUint8ArrayPrediction(prediction());
+    }
+
+    bool shouldSpeculateUint8ClampedArray()
+    {
+        return isUint8ClampedArrayPrediction(prediction());
+    }
+    
+    bool shouldSpeculateUint16Array()
+    {
+        return isUint16ArrayPrediction(prediction());
+    }
+    
+    bool shouldSpeculateUint32Array()
+    {
+        return isUint32ArrayPrediction(prediction());
+    }
+    
+    bool shouldSpeculateFloat32Array()
+    {
+#if CPU(X86) || CPU(X86_64)
+        return isFloat32ArrayPrediction(prediction());
+#else
+        return false;
+#endif
+    }
+    
+    bool shouldSpeculateFloat64Array()
+    {
+        return isFloat64ArrayPrediction(prediction());
+    }
+    
     bool shouldSpeculateArrayOrOther()
     {
         return isArrayOrOtherPrediction(prediction());
@@ -952,20 +1056,25 @@ struct Node {
         return nodeCanSpeculateInteger(arithNodeFlags());
     }
     
+    void dumpChildren(FILE* out)
+    {
+        if (!child1())
+            return;
+        fprintf(out, "@%u", child1().index());
+        if (!child2())
+            return;
+        fprintf(out, ", @%u", child2().index());
+        if (!child3())
+            return;
+        fprintf(out, ", @%u", child3().index());
+    }
+    
     // This enum value describes the type of the node.
     NodeType op;
     // Used to look up exception handling information (currently implemented as a bytecode index).
     CodeOrigin codeOrigin;
-    // References to up to 3 children (0 for no child).
-    union {
-        struct {
-            NodeIndex child1, child2, child3;
-        } fixed;
-        struct {
-            unsigned firstChild;
-            unsigned numChildren;
-        } variable;
-    } children;
+    // References to up to 3 children, or links to a variable length set of children.
+    NodeReferenceBlob children;
 
 private:
     // The virtual register number (spill location) associated with this .

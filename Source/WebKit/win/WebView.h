@@ -826,6 +826,8 @@ public:
 
     virtual HRESULT STDMETHODCALLTYPE setDomainRelaxationForbiddenForURLScheme(BOOL forbidden, BSTR scheme);
     virtual HRESULT STDMETHODCALLTYPE registerURLSchemeAsSecure(BSTR);
+    virtual HRESULT STDMETHODCALLTYPE registerURLSchemeAsAllowingLocalStorageAccessInPrivateBrowsing(BSTR);
+    virtual HRESULT STDMETHODCALLTYPE registerURLSchemeAsAllowingDatabaseAccessInPrivateBrowsing(BSTR);
 
     virtual HRESULT STDMETHODCALLTYPE nextDisplayIsSynchronous();
 
@@ -992,12 +994,15 @@ private:
     virtual void notifyAnimationStarted(const WebCore::GraphicsLayer*, double time);
     virtual void notifySyncRequired(const WebCore::GraphicsLayer*);
     virtual void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::IntRect& inClip);
-    virtual bool showDebugBorders() const;
-    virtual bool showRepaintCounter() const;
+    virtual bool showDebugBorders(const WebCore::GraphicsLayer*) const;
+    virtual bool showRepaintCounter(const WebCore::GraphicsLayer*) const;
 
     // CACFLayerTreeHostClient
     virtual void flushPendingGraphicsLayerChanges();
 #endif
+
+    bool m_shouldInvertColors;
+    void setShouldInvertColors(bool);
 
 protected:
     static bool registerWebViewWindowClass();
@@ -1042,6 +1047,7 @@ protected:
     HWND m_viewWindow;
     WebFrame* m_mainFrame;
     WebCore::Page* m_page;
+    WebInspectorClient* m_inspectorClient;
     
     RefPtr<RefCountedHBITMAP> m_backingStoreBitmap;
     SIZE m_backingStoreSize;

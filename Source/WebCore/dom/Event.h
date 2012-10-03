@@ -137,11 +137,6 @@ namespace WebCore {
         bool defaultHandled() const { return m_defaultHandled; }
         void setDefaultHandled() { m_defaultHandled = true; }
 
-#if PLATFORM(BLACKBERRY)
-        void setPluginHandled() { m_pluginHandled = true; }
-        bool pluginHandled() const { return m_pluginHandled; }
-#endif
-
         bool cancelBubble() const { return m_cancelBubble; }
         void setCancelBubble(bool cancel) { m_cancelBubble = cancel; }
 
@@ -173,9 +168,6 @@ namespace WebCore {
         bool m_defaultPrevented;
         bool m_defaultHandled;
         bool m_cancelBubble;
-#if PLATFORM(BLACKBERRY)
-        bool m_pluginHandled;
-#endif
 
         unsigned short m_eventPhase;
         EventTarget* m_currentTarget;

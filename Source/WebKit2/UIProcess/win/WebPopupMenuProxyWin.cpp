@@ -34,6 +34,7 @@
 #include <WebCore/WebCoreInstanceHandle.h>
 #include <WebCore/ScrollbarTheme.h>
 #include <WebCore/BitmapInfo.h>
+#include <WebCore/HWndDC.h>
 #include <WebCore/PlatformMouseEvent.h>
 #include <windowsx.h>
 
@@ -325,10 +326,10 @@ void WebPopupMenuProxyWin::showPopupMenu(const IntRect& rect, TextDirection, dou
     m_showPopup = false;
     ::ShowWindow(m_popup, SW_HIDE);
 
-    if (!m_client)
+    if (!WebPopupMenuProxy::m_client)
         return;
 
-    m_client->valueChangedForPopupMenu(this, m_newSelectedIndex);
+    WebPopupMenuProxy::m_client->valueChangedForPopupMenu(this, m_newSelectedIndex);
 
     // <https://bugs.webkit.org/show_bug.cgi?id=57904> In order to properly call the onClick()
     // handler on a <select> element, we need to fake a mouse up event in the main window.
@@ -338,10 +339,10 @@ void WebPopupMenuProxyWin::showPopupMenu(const IntRect& rect, TextDirection, dou
     // Thus, we are virtually clicking at the
     // same location where the mouse down event occurred. This allows the hit test to select
     // the correct element, and thereby call the onClick() JS handler.
-    if (!m_client->currentlyProcessedMouseDownEvent())
+    if (!WebPopupMenuProxy::m_client->currentlyProcessedMouseDownEvent())
         return;
         
-    const MSG* initiatingWinEvent = m_client->currentlyProcessedMouseDownEvent()->nativeEvent();
+    const MSG* initiatingWinEvent = WebPopupMenuProxy::m_client->currentlyProcessedMouseDownEvent()->nativeEvent();
     MSG fakeEvent = *initiatingWinEvent;
     fakeEvent.message = WM_LBUTTONUP;
     ::PostMessage(fakeEvent.hwnd, fakeEvent.message, fakeEvent.wParam, fakeEvent.lParam);
@@ -808,7 +809,7 @@ void WebPopupMenuProxyWin::paint(const IntRect& damageRect, HDC hdc)
         return;
 
     if (!m_DC) {
-        m_DC = ::CreateCompatibleDC(::GetDC(m_popup));
+        m_DC = ::CreateCompatibleDC(HWndDC(m_popup));
         if (!m_DC)
             return;
     }
@@ -848,12 +849,11 @@ void WebPopupMenuProxyWin::paint(const IntRect& damageRect, HDC hdc)
     if (m_scrollbar)
         m_scrollbar->paint(&context, damageRect);
 
-    HDC localDC = hdc ? hdc : ::GetDC(m_popup);
+
+    HWndDC hWndDC;
+    HDC localDC = hdc ? hdc : hWndDC.setHWnd(m_popup);
 
     ::BitBlt(localDC, damageRect.x(), damageRect.y(), damageRect.width(), damageRect.height(), m_DC, damageRect.x(), damageRect.y(), SRCCOPY);
-
-    if (!hdc)
-        ::ReleaseDC(m_popup, localDC);
 }
 
 bool WebPopupMenuProxyWin::setFocusedIndex(int i, bool hotTracking)
@@ -870,8 +870,8 @@ bool WebPopupMenuProxyWin::setFocusedIndex(int i, bool hotTracking)
     m_focusedIndex = i;
 
     if (!hotTracking) {
-        if (m_client)
-            m_client->setTextFromItemForPopupMenu(this, i);
+        if (WebPopupMenuProxy::m_client)
+            WebPopupMenuProxy::m_client->setTextFromItemForPopupMenu(this, i);
     }
 
     if (!scrollToRevealSelection())
@@ -946,12 +946,12 @@ bool WebPopupMenuProxyWin::scrollToRevealSelection()
     int index = focusedIndex();
 
     if (index < m_scrollOffset) {
-        ScrollableArea::scrollToYOffsetWithoutAnimation(index);
+        ScrollableArea::scrollToOffsetWithoutAnimation(VerticalScrollbar, index);
         return true;
     }
 
     if (index >= m_scrollOffset + visibleItems()) {
-        ScrollableArea::scrollToYOffsetWithoutAnimation(index - visibleItems() + 1);
+        ScrollableArea::scrollToOffsetWithoutAnimation(VerticalScrollbar, index - visibleItems() + 1);
         return true;
     }
 

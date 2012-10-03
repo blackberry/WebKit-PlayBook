@@ -22,6 +22,7 @@
 
 #include "Event.h"
 #include "Frame.h"
+#include "InspectorCounters.h"
 #include "JSEvent.h"
 #include "JSEventTarget.h"
 #include "JSMainThreadExecState.h"
@@ -44,11 +45,12 @@ JSEventListener::JSEventListener(JSObject* function, JSObject* wrapper, bool isA
         m_jsFunction.setMayBeNull(*m_isolatedWorld->globalData(), wrapper, function);
     else
         ASSERT(!function);
-
+    InspectorCounters::incrementCounter(InspectorCounters::JSEventListenerCounter);
 }
 
 JSEventListener::~JSEventListener()
 {
+    InspectorCounters::decrementCounter(InspectorCounters::JSEventListenerCounter);
 }
 
 JSObject* JSEventListener::initializeJSFunction(ScriptExecutionContext*) const
@@ -96,13 +98,14 @@ void JSEventListener::handleEvent(ScriptExecutionContext* scriptExecutionContext
     }
 
     ExecState* exec = globalObject->globalExec();
-    JSValue handleEventFunction = jsFunction->get(exec, Identifier(exec, "handleEvent"));
+    JSValue handleEventFunction = jsFunction;
 
     CallData callData;
     CallType callType = getCallData(handleEventFunction, callData);
+    // If jsFunction is not actually a function, see if it implements the EventListener interface and use that
     if (callType == CallTypeNone) {
-        handleEventFunction = JSValue();
-        callType = jsFunction->methodTable()->getCallData(jsFunction, callData);
+        handleEventFunction = jsFunction->get(exec, Identifier(exec, "handleEvent"));
+        callType = getCallData(handleEventFunction, callData);
     }
 
     if (callType != CallTypeNone) {
@@ -118,17 +121,10 @@ void JSEventListener::handleEvent(ScriptExecutionContext* scriptExecutionContext
         DynamicGlobalObjectScope globalObjectScope(globalData, globalData.dynamicGlobalObject ? globalData.dynamicGlobalObject : globalObject);
 
         globalData.timeoutChecker.start();
-        JSValue retval;
-        if (handleEventFunction) {
-            retval = scriptExecutionContext->isDocument()
-                ? JSMainThreadExecState::instrumentedCall(frame ? frame->page() : 0, exec, handleEventFunction, callType, callData, jsFunction, args)
-                : JSC::call(exec, handleEventFunction, callType, callData, jsFunction, args);
-        } else {
-            JSValue currentTarget = toJS(exec, globalObject, event->currentTarget());
-            retval = scriptExecutionContext->isDocument()
-                ? JSMainThreadExecState::instrumentedCall(frame ? frame->page() : 0, exec, jsFunction, callType, callData, currentTarget, args)
-                : JSC::call(exec, jsFunction, callType, callData, currentTarget, args);
-        }
+        JSValue thisValue = handleEventFunction == jsFunction ? toJS(exec, globalObject, event->currentTarget()) : jsFunction;
+        JSValue retval = scriptExecutionContext->isDocument()
+            ? JSMainThreadExecState::instrumentedCall(frame ? frame->page() : 0, exec, handleEventFunction, callType, callData, thisValue, args)
+            : JSC::call(exec, handleEventFunction, callType, callData, thisValue, args);
         globalData.timeoutChecker.stop();
 
         globalObject->setCurrentEvent(savedEvent);
@@ -146,7 +142,7 @@ void JSEventListener::handleEvent(ScriptExecutionContext* scriptExecutionContext
             reportCurrentException(exec);
         } else {
             if (!retval.isUndefinedOrNull() && event->storesResultAsString())
-                event->storeResult(ustringToString(retval.toString(exec)));
+                event->storeResult(ustringToString(retval.toString(exec)->value(exec)));
             if (m_isAttribute) {
                 if (retval.isFalse())
                     event->preventDefault();

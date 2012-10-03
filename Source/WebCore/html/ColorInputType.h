@@ -31,7 +31,9 @@
 #ifndef ColorInputType_h
 #define ColorInputType_h
 
-#include "ColorChooser.h"
+#include "BaseClickableWithKeyInputType.h"
+#include "ColorChooserClient.h"
+
 #if PLATFORM(BLACKBERRY)
 #include "TextFieldInputType.h"
 #else
@@ -45,38 +47,40 @@ namespace WebCore {
 #if PLATFORM(BLACKBERRY)
 class ColorInputType : public TextFieldInputType, public ColorChooserClient {
 #else
-class ColorInputType : public InputType, public ColorChooserClient {
+class ColorInputType : public BaseClickableWithKeyInputType, public ColorChooserClient {
 #endif
 public:
     static PassOwnPtr<InputType> create(HTMLInputElement*);
     virtual ~ColorInputType();
 
+    // ColorChooserClient implementation.
+    virtual void didChooseColor(const Color&) OVERRIDE;
+    virtual void didEndChooser() OVERRIDE;
+
 private:
 #if PLATFORM(BLACKBERRY)
     ColorInputType(HTMLInputElement* element) : TextFieldInputType(element) { }
 #else
-    ColorInputType(HTMLInputElement* element) : InputType(element) { }
+    ColorInputType(HTMLInputElement* element) : BaseClickableWithKeyInputType(element) { }
 #endif
-    virtual bool isColorControl() const;
-    virtual const AtomicString& formControlType() const;
-    virtual bool supportsRequired() const;
+    virtual bool isColorControl() const OVERRIDE;
+    virtual const AtomicString& formControlType() const OVERRIDE;
+    virtual bool supportsRequired() const OVERRIDE;
     virtual String fallbackValue() const OVERRIDE;
-    virtual String sanitizeValue(const String&) const;
-    virtual Color valueAsColor() const;
+    virtual String sanitizeValue(const String&) const OVERRIDE;
 #if !PLATFORM(BLACKBERRY)
-    virtual void createShadowSubtree();
+    virtual void createShadowSubtree() OVERRIDE;
 #endif
-    virtual void setValue(const String&, bool valueChanged, bool sendChangeEvent);
-    virtual void handleDOMActivateEvent(Event*);
-    virtual void detach();
+    virtual void setValue(const String&, bool valueChanged, TextFieldEventBehavior) OVERRIDE;
+    virtual void handleDOMActivateEvent(Event*) OVERRIDE;
+    virtual void detach() OVERRIDE;
 
-    // ColorChooserClient implementation.
-    virtual void didChooseColor(const Color&) OVERRIDE;
-    virtual void didCleanup() OVERRIDE;
-
-    void cleanupColorChooser();
+    Color valueAsColor() const;
+    void endColorChooser();
     void updateColorSwatch();
     HTMLElement* shadowColorSwatch() const;
+
+    OwnPtr<ColorChooser> m_chooser;
 };
 
 } // namespace WebCore

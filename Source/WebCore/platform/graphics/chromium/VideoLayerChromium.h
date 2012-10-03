@@ -35,56 +35,26 @@
 #if USE(ACCELERATED_COMPOSITING)
 
 #include "LayerChromium.h"
-#include "ManagedTexture.h"
-#include "VideoFrameProvider.h"
 
 namespace WebCore {
+
+class CCVideoLayerImpl;
+class VideoFrameProvider;
 
 // A Layer that contains a Video element.
 class VideoLayerChromium : public LayerChromium {
 public:
 
-    static PassRefPtr<VideoLayerChromium> create(CCLayerDelegate* = 0,
-                                                 VideoFrameProvider* = 0);
+    static PassRefPtr<VideoLayerChromium> create(VideoFrameProvider* = 0);
     virtual ~VideoLayerChromium();
 
-    virtual PassRefPtr<CCLayerImpl> createCCLayerImpl();
-
-    virtual void updateCompositorResources(GraphicsContext3D*, CCTextureUpdater&);
-    virtual bool drawsContent() const { return true; }
-
-    void releaseProvider();
-
-    virtual void pushPropertiesTo(CCLayerImpl*);
-
-    virtual void setLayerTreeHost(CCLayerTreeHost*);
-
-protected:
-    virtual void cleanupResources();
+    virtual PassOwnPtr<CCLayerImpl> createCCLayerImpl();
 
 private:
-    struct Texture {
-        IntSize m_visibleSize;
-        OwnPtr<ManagedTexture> m_texture;
-    };
+    explicit VideoLayerChromium(VideoFrameProvider*);
 
-    VideoLayerChromium(CCLayerDelegate*, VideoFrameProvider*);
-
-    static GC3Denum determineTextureFormat(const VideoFrameChromium*);
-    static IntSize computeVisibleSize(const VideoFrameChromium*, unsigned plane);
-    bool texturesValid();
-    bool reserveTextures(const VideoFrameChromium*, GC3Denum textureFormat);
-    void updateTexture(GraphicsContext3D*, TextureAllocator*, Texture&, const void*) const;
-
-    void resetFrameParameters();
-
-    bool m_skipsDraw;
-    VideoFrameChromium::Format m_frameFormat;
+    // This pointer is only for passing to CCVideoLayerImpl's constructor. It should never be dereferenced by this class.
     VideoFrameProvider* m_provider;
-
-    enum { MaxPlanes = 3 };
-    Texture m_textures[MaxPlanes];
-    unsigned m_planes;
 };
 
 }

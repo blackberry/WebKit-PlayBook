@@ -82,41 +82,6 @@ public:
                opType == MATRIX_3D ||
                opType == PERSPECTIVE;
     }
-
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        switch (getOperationType()) {
-        case SCALE_X: return "SCALE_X";
-        case SCALE_Y: return "SCALE_Y";
-        case SCALE: return "SCALE";
-        case TRANSLATE_X: return "TRANSLATE_X";
-        case TRANSLATE_Y: return "TRANSLATE_Y";
-        case TRANSLATE: return "TRANSLATE";
-        //case ROTATE_Z:
-        case ROTATE: return "ROTATE";
-        case SKEW_X: return "SKEW_X";
-        case SKEW_Y: return "SKEW_Y";
-        case SKEW: return "SKEW";
-        case MATRIX: return "MATRIX";
-        case SCALE_Z: return "SCALE_Z";
-        case SCALE_3D: return "SCALE_3D";
-        case TRANSLATE_Z: return "TRANSLATE_Z";
-        case TRANSLATE_3D: return "TRANSLATE_3D";
-        case ROTATE_X: return "ROTATE_X";
-        case ROTATE_Y: return "ROTATE_Y";
-        case ROTATE_3D: return "ROTATE_3D";
-        case MATRIX_3D: return "MATRIX_3D";
-        case PERSPECTIVE: return "PERSPECTIVE";
-        case IDENTITY: return "IDENTITY";
-        case NONE: return "NONE";
-        }
-
-        ASSERT_NOT_REACHED();
-        return String();
-    }
-#endif
-
 };
 
 } // namespace WebCore

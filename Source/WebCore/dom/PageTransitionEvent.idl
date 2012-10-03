@@ -26,10 +26,9 @@
 module events {
 
     interface [
-        V8ConstructorTemplate=Event,
-        JSCustomConstructor
+        ConstructorTemplate=Event
     ] PageTransitionEvent : Event {
-        readonly attribute [InitializedByConstructor] boolean persisted;
+        readonly attribute [InitializedByEventConstructor] boolean persisted;
     };
 
 }

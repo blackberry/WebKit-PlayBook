@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2011 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -30,7 +30,12 @@
 #include "ShareableBitmap.h"
 #include "WebEvent.h"
 #include "WebEventConversion.h"
+#include <JavaScriptCore/JSContextRef.h>
+#include <JavaScriptCore/JSObjectRef.h>
+#include <JavaScriptCore/JSStringRef.h>
+#include <JavaScriptCore/JSStringRefCF.h>
 #include <WebCore/ArchiveResource.h>
+#include <WebCore/Chrome.h>
 #include <WebCore/DocumentLoader.h>
 #include <WebCore/FocusController.h>
 #include <WebCore/Frame.h>
@@ -47,6 +52,99 @@
 using namespace WebCore;
 using namespace std;
 
+static void appendValuesInPDFNameSubtreeToVector(CGPDFDictionaryRef subtree, Vector<CGPDFObjectRef>& values)
+{
+    CGPDFArrayRef names;
+    if (CGPDFDictionaryGetArray(subtree, "Names", &names)) {
+        size_t nameCount = CGPDFArrayGetCount(names) / 2;
+        for (size_t i = 0; i < nameCount; ++i) {
+            CGPDFObjectRef object;
+            CGPDFArrayGetObject(names, 2 * i + 1, &object);
+            values.append(object);
+        }
+        return;
+    }
+
+    CGPDFArrayRef kids;
+    if (!CGPDFDictionaryGetArray(subtree, "Kids", &kids))
+        return;
+
+    size_t kidCount = CGPDFArrayGetCount(kids);
+    for (size_t i = 0; i < kidCount; ++i) {
+        CGPDFDictionaryRef kid;
+        if (!CGPDFArrayGetDictionary(kids, i, &kid))
+            continue;
+        appendValuesInPDFNameSubtreeToVector(kid, values);
+    }
+}
+
+static void getAllValuesInPDFNameTree(CGPDFDictionaryRef tree, Vector<CGPDFObjectRef>& allValues)
+{
+    appendValuesInPDFNameSubtreeToVector(tree, allValues);
+}
+
+static void getAllScriptsInPDFDocument(CGPDFDocumentRef pdfDocument, Vector<RetainPtr<CFStringRef> >& scripts)
+{
+    if (!pdfDocument)
+        return;
+
+    CGPDFDictionaryRef pdfCatalog = CGPDFDocumentGetCatalog(pdfDocument);
+    if (!pdfCatalog)
+        return;
+
+    // Get the dictionary of all document-level name trees.
+    CGPDFDictionaryRef namesDictionary;
+    if (!CGPDFDictionaryGetDictionary(pdfCatalog, "Names", &namesDictionary))
+        return;
+
+    // Get the document-level "JavaScript" name tree.
+    CGPDFDictionaryRef javaScriptNameTree;
+    if (!CGPDFDictionaryGetDictionary(namesDictionary, "JavaScript", &javaScriptNameTree))
+        return;
+
+    // The names are arbitrary. We are only interested in the values.
+    Vector<CGPDFObjectRef> objects;
+    getAllValuesInPDFNameTree(javaScriptNameTree, objects);
+    size_t objectCount = objects.size();
+
+    for (size_t i = 0; i < objectCount; ++i) {
+        CGPDFDictionaryRef javaScriptAction;
+        if (!CGPDFObjectGetValue(reinterpret_cast<CGPDFObjectRef>(objects[i]), kCGPDFObjectTypeDictionary, &javaScriptAction))
+            continue;
+
+        // A JavaScript action must have an action type of "JavaScript".
+        const char* actionType;
+        if (!CGPDFDictionaryGetName(javaScriptAction, "S", &actionType) || strcmp(actionType, "JavaScript"))
+            continue;
+
+        const UInt8* bytes = 0;
+        CFIndex length;
+        CGPDFStreamRef stream;
+        CGPDFStringRef string;
+        RetainPtr<CFDataRef> data;
+        if (CGPDFDictionaryGetStream(javaScriptAction, "JS", &stream)) {
+            CGPDFDataFormat format;
+            data.adoptCF(CGPDFStreamCopyData(stream, &format));
+            if (!data)
+                continue;
+            bytes = CFDataGetBytePtr(data.get());
+            length = CFDataGetLength(data.get());
+        } else if (CGPDFDictionaryGetString(javaScriptAction, "JS", &string)) {
+            bytes = CGPDFStringGetBytePtr(string);
+            length = CGPDFStringGetLength(string);
+        }
+        if (!bytes)
+            continue;
+
+        CFStringEncoding encoding = (length > 1 && bytes[0] == 0xFE && bytes[1] == 0xFF) ? kCFStringEncodingUnicode : kCFStringEncodingUTF8;
+        RetainPtr<CFStringRef> script(AdoptCF, CFStringCreateWithBytes(kCFAllocatorDefault, bytes, length, encoding, true));
+        if (!script)
+            continue;
+
+        scripts.append(script);
+    }
+}
+
 namespace WebKit {
 
 const uint64_t pdfDocumentRequestID = 1; // PluginController supports loading multiple streams, but we only need one for PDF.
@@ -56,13 +154,13 @@ const int shadowOffsetX = 0;
 const int shadowOffsetY = -2;
 const int shadowSize = 7;
 
-PassRefPtr<BuiltInPDFView> BuiltInPDFView::create(Page* page)
+PassRefPtr<BuiltInPDFView> BuiltInPDFView::create(WebFrame* frame)
 {
-    return adoptRef(new BuiltInPDFView(page));
+    return adoptRef(new BuiltInPDFView(frame));
 }
 
-BuiltInPDFView::BuiltInPDFView(Page* page)
-    : m_page(page)
+BuiltInPDFView::BuiltInPDFView(WebFrame* frame)
+    : m_frame(frame)
 {
 }
 
@@ -129,34 +227,15 @@ void BuiltInPDFView::updateScrollbars()
             scrollbarRect.contract(0, m_horizontalScrollbar->height());
         m_verticalScrollbar->setFrameRect(scrollbarRect);
     }
-}
+    
+    FrameView* frameView = m_frame->coreFrame()->view();
+    if (!frameView)
+        return;
 
-void BuiltInPDFView::didAddHorizontalScrollbar(Scrollbar* scrollbar)
-{
-    pluginView()->frame()->document()->didAddWheelEventHandler();
-    ScrollableArea::didAddHorizontalScrollbar(scrollbar);
-}
-
-void BuiltInPDFView::willRemoveHorizontalScrollbar(Scrollbar* scrollbar)
-{
-    ScrollableArea::willRemoveHorizontalScrollbar(scrollbar);
-    // FIXME: Maybe need a separate ScrollableArea::didRemoveHorizontalScrollbar callback?
-    if (PluginView* pluginView = this->pluginView())
-        pluginView->frame()->document()->didRemoveWheelEventHandler();
-}
-
-void BuiltInPDFView::didAddVerticalScrollbar(Scrollbar* scrollbar)
-{
-    pluginView()->frame()->document()->didAddWheelEventHandler();
-    ScrollableArea::didAddVerticalScrollbar(scrollbar);
-}
-
-void BuiltInPDFView::willRemoveVerticalScrollbar(Scrollbar* scrollbar)
-{
-    ScrollableArea::willRemoveVerticalScrollbar(scrollbar);
-    // FIXME: Maybe need a separate ScrollableArea::didRemoveHorizontalScrollbar callback?
-    if (PluginView* pluginView = this->pluginView())
-        pluginView->frame()->document()->didRemoveWheelEventHandler();
+    if (m_verticalScrollbar || m_horizontalScrollbar)
+        frameView->addScrollableArea(this);
+    else
+        frameView->removeScrollableArea(this);
 }
 
 PassRefPtr<Scrollbar> BuiltInPDFView::createScrollbar(ScrollbarOrientation orientation)
@@ -211,6 +290,24 @@ void BuiltInPDFView::pdfDocumentDidLoad()
     updateScrollbars();
 
     controller()->invalidate(IntRect(0, 0, m_pluginSize.width(), m_pluginSize.height()));
+
+    Vector<RetainPtr<CFStringRef> > scripts;
+    getAllScriptsInPDFDocument(m_pdfDocument.get(), scripts);
+
+    size_t scriptCount = scripts.size();
+    if (!scriptCount)
+        return;
+
+    JSGlobalContextRef ctx = JSGlobalContextCreate(0);
+    JSObjectRef jsPDFDoc = makeJSPDFDoc(ctx);
+
+    for (size_t i = 0; i < scriptCount; ++i) {
+        JSStringRef script = JSStringCreateWithCFString(scripts[i].get());
+        JSEvaluateScript(ctx, script, jsPDFDoc, 0, 0, 0);
+        JSStringRelease(script);
+    }
+
+    JSGlobalContextRelease(ctx);
 }
 
 void BuiltInPDFView::calculateSizes()
@@ -232,8 +329,6 @@ void BuiltInPDFView::calculateSizes()
 
 bool BuiltInPDFView::initialize(const Parameters& parameters)
 {
-    m_page->addScrollableArea(this);
-
     // Load the src URL if needed.
     m_sourceURL = parameters.url;
     if (!parameters.loadManually && !parameters.url.isEmpty())
@@ -244,8 +339,10 @@ bool BuiltInPDFView::initialize(const Parameters& parameters)
 
 void BuiltInPDFView::destroy()
 {
-    if (m_page)
-        m_page->removeScrollableArea(this);
+    if (m_frame) {
+        if (FrameView* frameView = m_frame->coreFrame()->view())
+            frameView->removeScrollableArea(this);
+    }
 
     destroyScrollbar(HorizontalScrollbar);
     destroyScrollbar(VerticalScrollbar);
@@ -253,7 +350,7 @@ void BuiltInPDFView::destroy()
 
 void BuiltInPDFView::paint(GraphicsContext* graphicsContext, const IntRect& dirtyRect)
 {
-    scrollAnimator()->contentAreaWillPaint();
+    contentAreaWillPaint();
 
     paintBackground(graphicsContext, dirtyRect);
 
@@ -454,7 +551,7 @@ bool BuiltInPDFView::handleMouseEvent(const WebMouseEvent& event)
 {
     switch (event.type()) {
     case WebEvent::MouseMove:
-        scrollAnimator()->mouseMovedInContentArea();
+        mouseMovedInContentArea();
         // FIXME: Should also notify scrollbar to show hover effect. Should also send mouseExited to hide it.
         break;
     case WebEvent::MouseDown: {
@@ -486,13 +583,13 @@ bool BuiltInPDFView::handleWheelEvent(const WebWheelEvent& event)
 
 bool BuiltInPDFView::handleMouseEnterEvent(const WebMouseEvent&)
 {
-    scrollAnimator()->mouseEnteredContentArea();
+    mouseEnteredContentArea();
     return false;
 }
 
 bool BuiltInPDFView::handleMouseLeaveEvent(const WebMouseEvent&)
 {
-    scrollAnimator()->mouseExitedContentArea();
+    mouseExitedContentArea();
     return false;
 }
 
@@ -601,7 +698,12 @@ int BuiltInPDFView::scrollSize(ScrollbarOrientation orientation) const
 
 bool BuiltInPDFView::isActive() const
 {
-    return m_page->focusController()->isActive();
+    if (Frame* coreFrame = m_frame->coreFrame()) {
+        if (Page* page = coreFrame->page())
+            return page->focusController()->isActive();
+    }
+
+    return false;
 }
 
 void BuiltInPDFView::invalidateScrollbarRect(Scrollbar* scrollbar, const LayoutRect& rect)
@@ -672,8 +774,11 @@ bool BuiltInPDFView::isOnActivePage() const
     return !pluginView()->frame()->document()->inPageCache();
 }
 
-void BuiltInPDFView::scrollbarStyleChanged()
+void BuiltInPDFView::scrollbarStyleChanged(int, bool forceUpdate)
 {
+    if (!forceUpdate)
+        return;
+
     // If the PDF was scrolled all the way to bottom right and scrollbars change to overlay style, we don't want to display white rectangles where scrollbars were.
     IntPoint newScrollOffset = IntPoint(m_scrollOffset).shrunkTo(maximumScrollPosition());
     setScrollOffset(newScrollOffset);
@@ -681,7 +786,7 @@ void BuiltInPDFView::scrollbarStyleChanged()
     // As size of the content area changes, scrollbars may need to appear or to disappear.
     updateScrollbars();
 
-    scrollAnimator()->contentsResized();
+    ScrollableArea::contentsResized();
 }
 
 IntPoint BuiltInPDFView::convertFromContainingViewToScrollbar(const Scrollbar* scrollbar, const IntPoint& parentPoint) const
@@ -690,6 +795,61 @@ IntPoint BuiltInPDFView::convertFromContainingViewToScrollbar(const Scrollbar* s
     point.move(pluginView()->location() - scrollbar->location());
 
     return point;
+}
+
+static void jsPDFDocInitialize(JSContextRef ctx, JSObjectRef object)
+{
+    BuiltInPDFView* pdfView = static_cast<BuiltInPDFView*>(JSObjectGetPrivate(object));
+    pdfView->ref();
+}
+
+static void jsPDFDocFinalize(JSObjectRef object)
+{
+    BuiltInPDFView* pdfView = static_cast<BuiltInPDFView*>(JSObjectGetPrivate(object));
+    pdfView->deref();
+}
+
+JSValueRef BuiltInPDFView::jsPDFDocPrint(JSContextRef ctx, JSObjectRef function, JSObjectRef thisObject, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+{
+    BuiltInPDFView* pdfView = static_cast<BuiltInPDFView*>(JSObjectGetPrivate(thisObject));
+
+    WebFrame* frame = pdfView->m_frame;
+    if (!frame)
+        return JSValueMakeUndefined(ctx);
+
+    Frame* coreFrame = frame->coreFrame();
+    if (!coreFrame)
+        return JSValueMakeUndefined(ctx);
+
+    Page* page = coreFrame->page();
+    if (!page)
+        return JSValueMakeUndefined(ctx);
+
+    page->chrome()->print(coreFrame);
+
+    return JSValueMakeUndefined(ctx);
+}
+
+JSObjectRef BuiltInPDFView::makeJSPDFDoc(JSContextRef ctx)
+{
+    static JSStaticFunction jsPDFDocStaticFunctions[] = {
+        { "print", jsPDFDocPrint, kJSPropertyAttributeReadOnly | kJSPropertyAttributeDontDelete },
+        { 0, 0, 0 },
+    };
+
+    static JSClassDefinition jsPDFDocClassDefinition = {
+        0,
+        kJSClassAttributeNone,
+        "Doc",
+        0,
+        0,
+        jsPDFDocStaticFunctions,
+        jsPDFDocInitialize, jsPDFDocFinalize, 0, 0, 0, 0, 0, 0, 0, 0, 0
+    };
+
+    static JSClassRef jsPDFDocClass = JSClassCreate(&jsPDFDocClassDefinition);
+
+    return JSObjectMake(ctx, jsPDFDocClass, this);
 }
 
 } // namespace WebKit

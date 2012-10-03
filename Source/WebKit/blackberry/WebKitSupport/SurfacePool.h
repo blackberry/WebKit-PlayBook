@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,14 +20,8 @@
 #define SurfacePool_h
 
 #include "BackingStoreTile.h"
-#include "GraphicsContext.h"
-#include "IntSize.h"
 
-#if USE(OPENVG)
-#include "SurfaceOpenVG.h"
-#elif USE(SKIA)
 #include "PlatformContextSkia.h"
-#endif
 
 #include <BlackBerryPlatformGraphics.h>
 #include <BlackBerryPlatformPrimitives.h>
@@ -65,7 +59,7 @@ public:
     // the whole tile every time we render by copying from the front
     // buffer those portions that we don't render. This allows us to
     // have N+1 tilebuffers rather than N*2 for our double buffered
-    // backingstore
+    // backingstore.
     TileBuffer* backBuffer() const;
 
     BackingStoreCompositingSurface* compositingSurface() const;
@@ -78,7 +72,7 @@ public:
     void createBuffers();
 
 private:
-    // This is necessary so BackingStoreTile can atomically swap buffers with m_backBuffer
+    // This is necessary so BackingStoreTile can atomically swap buffers with m_backBuffer.
     friend class BackingStoreTile;
 
     SurfacePool();
@@ -88,14 +82,10 @@ private:
 #if USE(ACCELERATED_COMPOSITING)
     RefPtr<BackingStoreCompositingSurface> m_compositingSurface;
 #endif
-#if USE(OPENVG)
-    PlatformGraphicsContext* m_tileRenderingSurface;
-#elif USE(SKIA)
     BlackBerry::Platform::Graphics::Buffer* m_tileRenderingSurface;
-#endif
     unsigned m_backBuffer;
-    bool m_initialized; // SurfacePool has been set up, with or without buffers
-    bool m_buffersSuspended; // buffer objects exist, but pixel memory has been freed
+    bool m_initialized; // SurfacePool has been set up, with or without buffers.
+    bool m_buffersSuspended; // Buffer objects exist, but pixel memory has been freed.
 };
 }
 }

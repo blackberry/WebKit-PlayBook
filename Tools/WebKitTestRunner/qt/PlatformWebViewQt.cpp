@@ -24,13 +24,16 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include "PlatformWebView.h"
-#include "qquickwebview.h"
-#include "qquickwebpage.h"
+#include "config.h"
 
-#include <QApplication>
+#include "PlatformWebView.h"
+#include "qquickwebpage_p.h"
+#include "qquickwebview_p.h"
+
+#include <QCoreApplication>
 #include <QDeclarativeProperty>
-#include <QQuickView>
+#include <QEventLoop>
+#include <QtQuick/QQuickView>
 #include <qwindowsysteminterface_qpa.h>
 
 namespace WTR {
@@ -52,8 +55,8 @@ private slots:
             return;
 
         setGeometry(0, 0, 800, 600);
-        setResizeMode(QQuickView::SizeRootObjectToView);
 
+        setResizeMode(QQuickView::SizeRootObjectToView);
         m_view->setParentItem(rootObject());
         QDeclarativeProperty::write(m_view, "anchors.fill", qVariantFromValue(rootObject()));
 
@@ -69,22 +72,35 @@ PlatformWebView::PlatformWebView(WKContextRef contextRef, WKPageGroupRef pageGro
     : m_view(new QQuickWebView(contextRef, pageGroupRef))
     , m_window(new WrapperWindow(m_view))
     , m_windowIsKey(true)
+    , m_modalEventLoop(0)
 {
+    QQuickWebViewExperimental experimental(m_view);
+    experimental.setRenderToOffscreenBuffer(true);
 }
 
 PlatformWebView::~PlatformWebView()
 {
     delete m_window;
+    if (m_modalEventLoop)
+        m_modalEventLoop->exit();
 }
 
 void PlatformWebView::resizeTo(unsigned width, unsigned height)
 {
+    // If we do not have a platform window we will never get the necessary
+    // resize event, so simulate it in that case to make sure the quickview is
+    // resized to what the layout test expects.
+    if (!m_window->handle()) {
+        QRect newGeometry(m_window->x(), m_window->y(), width, height);
+        QWindowSystemInterface::handleSynchronousGeometryChange(m_window, newGeometry);
+    }
+
     m_window->resize(width, height);
 }
 
 WKPageRef PlatformWebView::page()
 {
-    return m_view->wkView()->page()->pageRef();
+    return m_view->pageRef();
 }
 
 void PlatformWebView::focus()
@@ -94,29 +110,28 @@ void PlatformWebView::focus()
 
 WKRect PlatformWebView::windowFrame()
 {
-    // Implement.
-
+    QRect windowRect = m_window->geometry();
     WKRect wkFrame;
-    wkFrame.origin.x = 0;
-    wkFrame.origin.y = 0;
-    wkFrame.size.width = 0;
-    wkFrame.size.height = 0;
+    wkFrame.origin.x = windowRect.x();
+    wkFrame.origin.y = windowRect.y();
+    wkFrame.size.width = windowRect.size().width();
+    wkFrame.size.height = windowRect.size().height();
     return wkFrame;
 }
 
-void PlatformWebView::setWindowFrame(WKRect)
+void PlatformWebView::setWindowFrame(WKRect wkRect)
 {
-    // Implement.
+    m_window->setGeometry(wkRect.origin.x, wkRect.origin.y, wkRect.size.width, wkRect.size.height);
 }
 
 bool PlatformWebView::sendEvent(QEvent* event)
 {
-    return QCoreApplication::sendEvent(m_view->page(), event);
+    return QCoreApplication::sendEvent(m_window, event);
 }
 
 void PlatformWebView::postEvent(QEvent* event)
 {
-    QCoreApplication::postEvent(m_view->page(), event);
+    QCoreApplication::postEvent(m_window, event);
 }
 
 void PlatformWebView::addChromeInputField()

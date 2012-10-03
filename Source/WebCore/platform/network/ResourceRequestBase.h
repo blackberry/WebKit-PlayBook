@@ -103,11 +103,7 @@ namespace WebCore {
         String httpAccept() const { return httpHeaderField("Accept"); }
         void setHTTPAccept(const String& httpAccept) { setHTTPHeaderField("Accept", httpAccept); }
 
-#if PLATFORM(MAC) || PLATFORM(WIN)
-        // FIXME: This state should either be moved to a CFNetwork-specific
-        // ResourceRequest or should be removed.
         void setResponseContentDispositionEncodingFallbackArray(const String& encoding1, const String& encoding2 = String(), const String& encoding3 = String());
-#endif
 
         FormData* httpBody() const;
         void setHTTPBody(PassRefPtr<FormData> httpBody);
@@ -178,18 +174,14 @@ namespace WebCore {
         KURL m_firstPartyForCookies;
         String m_httpMethod;
         HTTPHeaderMap m_httpHeaderFields;
-#if PLATFORM(MAC) || PLATFORM(WIN)
-        // FIXME: This state should either be moved to a CFNetwork-specific
-        // ResourceRequest or should be removed.
         Vector<String> m_responseContentDispositionEncodingFallbackArray;
-#endif
         RefPtr<FormData> m_httpBody;
-        bool m_allowCookies;
-        mutable bool m_resourceRequestUpdated;
-        mutable bool m_platformRequestUpdated;
-        bool m_reportUploadProgress;
-        bool m_reportLoadTiming;
-        bool m_reportRawHeaders;
+        bool m_allowCookies : 1;
+        mutable bool m_resourceRequestUpdated : 1;
+        mutable bool m_platformRequestUpdated : 1;
+        bool m_reportUploadProgress : 1;
+        bool m_reportLoadTiming : 1;
+        bool m_reportRawHeaders : 1;
         ResourceLoadPriority m_priority;
 
     private:
@@ -215,9 +207,7 @@ namespace WebCore {
 
         String m_httpMethod;
         OwnPtr<CrossThreadHTTPHeaderMapData> m_httpHeaders;
-#if PLATFORM(MAC) || PLATFORM(WIN)
         Vector<String> m_responseContentDispositionEncodingFallbackArray;
-#endif
         RefPtr<FormData> m_httpBody;
         bool m_allowCookies;
         ResourceLoadPriority m_priority;

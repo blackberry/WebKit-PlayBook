@@ -32,10 +32,13 @@
 #define WebViewImpl_h
 
 #include "WebNavigationPolicy.h"
-#include "WebPoint.h"
-#include "WebRect.h"
-#include "WebSize.h"
-#include "WebString.h"
+#include "platform/WebLayer.h"
+#include "platform/WebLayerTreeView.h"
+#include "platform/WebLayerTreeViewClient.h"
+#include "platform/WebPoint.h"
+#include "platform/WebRect.h"
+#include "platform/WebSize.h"
+#include "platform/WebString.h"
 #include "WebView.h"
 
 #include "ChromeClientImpl.h"
@@ -45,10 +48,11 @@
 #include "GraphicsContext3D.h"
 #include "GraphicsLayer.h"
 #include "InspectorClientImpl.h"
+#include "IntPoint.h"
 #include "IntRect.h"
 #include "NotificationPresenterImpl.h"
-#include "PageOverlay.h"
-#include "cc/CCLayerTreeHost.h"
+#include "PageOverlayList.h"
+#include "UserMediaClientImpl.h"
 #include <wtf/OwnPtr.h>
 #include <wtf/RefCounted.h>
 
@@ -60,7 +64,6 @@ class GraphicsContext3D;
 class HistoryItem;
 class HitTestResult;
 class KeyboardEvent;
-class NonCompositedContentHost;
 class Page;
 class PlatformKeyboardEvent;
 class PopupContainer;
@@ -68,9 +71,6 @@ class PopupMenuClient;
 class Range;
 class RenderTheme;
 class Widget;
-#if ENABLE(GESTURE_RECOGNIZER)
-class PlatformGestureRecognizer;
-#endif
 }
 
 namespace WebKit {
@@ -80,7 +80,9 @@ class ContextMenuClientImpl;
 class DeviceOrientationClientProxy;
 class DragScrollTimer;
 class GeolocationClientProxy;
+class NonCompositedContentHost;
 class SpeechInputClientImpl;
+class UserMediaClientImpl;
 class WebAccessibilityObject;
 class WebCompositorImpl;
 class WebDevToolsAgentClient;
@@ -94,19 +96,29 @@ class WebMouseWheelEvent;
 class WebSettingsImpl;
 class WebTouchEvent;
 
-class WebViewImpl : public WebView, public WebCore::CCLayerTreeHostClient, public RefCounted<WebViewImpl> {
+class WebViewImpl : public WebView, public WebLayerTreeViewClient, public RefCounted<WebViewImpl> {
 public:
+    enum AutoZoomType {
+        DoubleTap,
+        FindInPage,
+    };
+
     // WebWidget methods:
     virtual void close();
     virtual WebSize size() { return m_size; }
     virtual void willStartLiveResize();
     virtual void resize(const WebSize&);
     virtual void willEndLiveResize();
+    virtual void willEnterFullScreen();
+    virtual void didEnterFullScreen();
+    virtual void willExitFullScreen();
+    virtual void didExitFullScreen();
     virtual void animate(double frameBeginTime);
-    virtual void layout();
+    virtual void layout(); // Also implements CCLayerTreeHostClient::layout()
     virtual void paint(WebCanvas*, const WebRect&);
     virtual void themeChanged();
     virtual void composite(bool finish);
+    virtual void setNeedsRedraw();
     virtual bool handleInputEvent(const WebInputEvent&);
     virtual void mouseCaptureLost();
     virtual void setFocus(bool enable);
@@ -123,6 +135,10 @@ public:
     virtual bool caretOrSelectionRange(size_t* location, size_t* length);
     virtual void setTextDirection(WebTextDirection direction);
     virtual bool isAcceleratedCompositingActive() const;
+    virtual void didAcquirePointerLock();
+    virtual void didNotAcquirePointerLock();
+    virtual void didLosePointerLock();
+    virtual void didChangeWindowResizerRect();
 
     // WebView methods:
     virtual void initializeMainFrame(WebFrameClient*);
@@ -158,18 +174,33 @@ public:
     virtual void zoomLimitsChanged(double minimumZoomLevel,
                                    double maximumZoomLevel);
     virtual float pageScaleFactor() const;
+    virtual bool isPageScaleFactorSet() const;
     virtual void setPageScaleFactorPreservingScrollOffset(float);
     virtual void setPageScaleFactor(float scaleFactor, const WebPoint& origin);
     virtual void setPageScaleFactorLimits(float minPageScale, float maxPageScale);
+    virtual float minimumPageScaleFactor() const;
+    virtual float maximumPageScaleFactor() const;
+
     virtual float deviceScaleFactor() const;
     virtual void setDeviceScaleFactor(float);
     virtual bool isFixedLayoutModeEnabled() const;
     virtual void enableFixedLayoutMode(bool enable);
     virtual WebSize fixedLayoutSize() const;
     virtual void setFixedLayoutSize(const WebSize&);
+    virtual void enableAutoResizeMode(
+        const WebSize& minSize,
+        const WebSize& maxSize);
+    virtual void disableAutoResizeMode();
+    virtual void enableAutoResizeMode(
+        bool enable,
+        const WebSize& minSize,
+        const WebSize& maxSize);
     virtual void performMediaPlayerAction(
         const WebMediaPlayerAction& action,
         const WebPoint& location);
+    virtual void performPluginAction(
+        const WebPluginAction&,
+        const WebPoint&);
     virtual void copyImageAt(const WebPoint& point);
     virtual void dragSourceEndedAt(
         const WebPoint& clientPoint,
@@ -218,15 +249,16 @@ public:
                                     unsigned inactiveBackgroundColor,
                                     unsigned inactiveForegroundColor);
     virtual void performCustomContextMenuAction(unsigned action);
-    virtual void exitFullscreen();
+    virtual void addPageOverlay(WebPageOverlay*, int /* zOrder */);
+    virtual void removePageOverlay(WebPageOverlay*);
 
-    // CCLayerTreeHostClient
-    virtual void animateAndLayout(double frameBeginTime);
-    virtual void applyScrollAndScale(const WebCore::IntSize&, float);
-    virtual PassRefPtr<WebCore::GraphicsContext3D> createLayerTreeHostContext3D();
+    // WebLayerTreeViewClient
+    virtual void updateAnimations(double frameBeginTime);
+    virtual void applyScrollAndScale(const WebSize&, float);
+    virtual WebGraphicsContext3D* createContext3D();
+    virtual void didRebindGraphicsContext(bool);
     virtual void didCommitAndDrawFrame();
     virtual void didCompleteSwapBuffers();
-    virtual void didRecreateGraphicsContext(bool success);
     virtual void scheduleComposite();
 
     // WebViewImpl
@@ -234,8 +266,7 @@ public:
     void setIgnoreInputEvents(bool newValue);
     WebDevToolsAgentPrivate* devToolsAgentPrivate() { return m_devToolsAgent.get(); }
 
-    PageOverlay* pageOverlay() const { return m_pageOverlay.get(); }
-    void setPageOverlayClient(PageOverlay::PageOverlayClient*);
+    PageOverlayList* pageOverlays() const { return m_pageOverlays.get(); }
 
     void setOverlayLayer(WebCore::GraphicsLayer*);
 
@@ -296,11 +327,13 @@ public:
     void mouseDoubleClick(const WebMouseEvent&);
     bool mouseWheel(const WebMouseWheelEvent&);
     bool gestureEvent(const WebGestureEvent&);
+    void startPageScaleAnimation(const WebCore::IntPoint& targetPosition, bool useAnchor, float newScale, double durationSec);
     bool keyEvent(const WebKeyboardEvent&);
     bool charEvent(const WebKeyboardEvent&);
     bool touchEvent(const WebTouchEvent&);
 
     void numberOfWheelEventHandlersChanged(unsigned);
+    void numberOfTouchEventHandlersChanged(unsigned);
 
     // Handles context menu events orignated via the the keyboard. These
     // include the VK_APPS virtual key and the Shift+F10 combine. Code is
@@ -312,8 +345,18 @@ public:
 
     // Notifies the WebView that a load has been committed. isNewNavigation
     // will be true if a new session history item should be created for that
-    // load.
-    void didCommitLoad(bool* isNewNavigation);
+    // load. isNavigationWithinPage will be true if the navigation does
+    // not take the user away from the current page.
+    void didCommitLoad(bool* isNewNavigation, bool isNavigationWithinPage);
+
+    // Indicates two things:
+    //   1) This view may have a new layout now.
+    //   2) Calling layout() is a no-op.
+    // After calling WebWidget::layout(), expect to get this notification
+    // unless the view did not need a layout.
+    void layoutUpdated(WebFrameImpl*);
+
+    void didChangeContentsSize();
 
     // Returns true if popup menus should be rendered by the browser, false if
     // they should be rendered by WebKit (which is the default).
@@ -322,6 +365,21 @@ public:
     bool contextMenuAllowed() const
     {
         return m_contextMenuAllowed;
+    }
+
+    bool shouldAutoResize() const
+    {
+        return m_shouldAutoResize;
+    }
+
+    WebCore::IntSize minAutoSize() const
+    {
+        return m_minAutoSize;
+    }
+
+    WebCore::IntSize maxAutoSize() const
+    {
+        return m_maxAutoSize;
     }
 
     // Set the disposition for how this webview is to be initially shown.
@@ -382,10 +440,10 @@ public:
     bool allowsAcceleratedCompositing();
     bool pageHasRTLStyle() const;
     void setRootGraphicsLayer(WebCore::GraphicsLayer*);
-    void setRootLayerNeedsDisplay();
+    void scheduleCompositingLayerSync();
     void scrollRootLayerRect(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& clipRect);
     void invalidateRootLayerRect(const WebCore::IntRect&);
-    WebCore::NonCompositedContentHost* nonCompositedContentHost();
+    NonCompositedContentHost* nonCompositedContentHost();
 #endif
 #if ENABLE(REQUEST_ANIMATION_FRAME)
     void scheduleAnimation();
@@ -394,8 +452,11 @@ public:
     // Returns the onscreen 3D context used by the compositor. This is
     // used by the renderer's code to set up resource sharing between
     // the compositor's context and subordinate contexts for APIs like
-    // WebGL. Returns 0 if compositing support is not compiled in.
+    // WebGL. Returns 0 if compositing support is not compiled in or
+    // we could not successfully instantiate a context.
     virtual WebGraphicsContext3D* graphicsContext3D();
+
+    PassOwnPtr<WebGraphicsContext3D> createCompositorGraphicsContext3D();
 
     virtual void setVisibilityState(WebPageVisibilityState, bool);
 
@@ -412,14 +473,30 @@ public:
     // a plugin can update its own zoom, say because of its own UI.
     void fullFramePluginZoomLevelChanged(double zoomLevel);
 
-#if ENABLE(GESTURE_RECOGNIZER)
-    void resetGestureRecognizer();
+#if ENABLE(GESTURE_EVENTS)
+    void computeScaleAndScrollForHitRect(const WebRect& hitRect, AutoZoomType, float& scale, WebPoint& scroll);
 #endif
 
     void loseCompositorContext(int numTimes);
 
+    void enterFullScreenForElement(WebCore::Element*);
+    void exitFullScreenForElement(WebCore::Element*);
+
+    // Exposed for testing purposes.
+    bool hasHorizontalScrollbar();
+    bool hasVerticalScrollbar();
+
+    // Pointer Lock calls allow a page to capture all mouse events and
+    // disable the system cursor.
+#if ENABLE(POINTER_LOCK)
+    virtual bool requestPointerLock();
+    virtual void requestPointerUnlock();
+    virtual bool isPointerLocked();
+#endif
+
 private:
-    float computePageScaleFactorWithinLimits(float scale);
+    bool computePageScaleFactorLimits();
+    float clampPageScaleFactorToLimits(float scale);
     WebPoint clampOffsetAtScale(const WebPoint& offset, float scale);
 
     friend class WebView;  // So WebView::Create can call our constructor
@@ -460,12 +537,28 @@ private:
                                                const WebPoint& screenPoint,
                                                DragAction);
 
+    void sendResizeEventAndRepaint();
+    void configureAutoResizeMode();
+
 #if USE(ACCELERATED_COMPOSITING)
     void setIsAcceleratedCompositingActive(bool);
     void doComposite();
     void doPixelReadbackToCanvas(WebCanvas*, const WebCore::IntRect&);
     void reallocateRenderer();
     void updateLayerTreeViewport();
+#endif
+
+#if ENABLE(GESTURE_EVENTS)
+    // Returns the bounding box of the block type node touched by the WebRect.
+    WebRect computeBlockBounds(const WebRect&, AutoZoomType);
+
+    // Helper function: Widens the width of |source| by the specified margins
+    // while keeping it smaller than page width.
+    WebRect widenRectWithinPageBounds(const WebRect& source, int targetMargin, int minimumMargin);
+#endif
+
+#if ENABLE(POINTER_LOCK)
+    void pointerLockMouseEvent(const WebInputEvent&);
 #endif
 
     WebViewClient* m_client;
@@ -480,6 +573,12 @@ private:
     InspectorClientImpl m_inspectorClientImpl;
 
     WebSize m_size;
+    // If true, automatically resize the render view around its content.
+    bool m_shouldAutoResize;
+    // The lower bound on the size when auto-resizing.
+    WebCore::IntSize m_minAutoSize;
+    // The upper bound on the size when auto-resizing.
+    WebCore::IntSize m_maxAutoSize;
 
     WebPoint m_lastMousePosition;
     OwnPtr<WebCore::Page> m_page;
@@ -518,9 +617,12 @@ private:
 
     double m_maximumZoomLevel;
 
+    float m_pageDefinedMinimumPageScaleFactor;
+    float m_pageDefinedMaximumPageScaleFactor;
     float m_minimumPageScaleFactor;
-
     float m_maximumPageScaleFactor;
+
+    bool m_pageScaleFactorIsSet;
 
     bool m_contextMenuAllowed;
 
@@ -561,7 +663,7 @@ private:
     RefPtr<WebCore::PopupContainer> m_selectPopup;
 
     OwnPtr<WebDevToolsAgentPrivate> m_devToolsAgent;
-    OwnPtr<PageOverlay> m_pageOverlay;
+    OwnPtr<PageOverlayList> m_pageOverlays;
 
     // Whether the webview is rendering transparently.
     bool m_isTransparent;
@@ -584,17 +686,23 @@ private:
     // If set, the (plugin) node which has mouse capture.
     RefPtr<WebCore::Node> m_mouseCaptureNode;
 
+    // If set, the WebView is transitioning to fullscreen for this element.
+    RefPtr<WebCore::Element> m_provisionalFullScreenElement;
+
+    // If set, the WebView is in fullscreen mode for an element in this frame.
+    RefPtr<WebCore::Frame> m_fullScreenFrame;
+
 #if USE(ACCELERATED_COMPOSITING)
     WebCore::IntRect m_rootLayerScrollDamage;
-    OwnPtr<WebCore::NonCompositedContentHost> m_nonCompositedContentHost;
-    RefPtr<WebCore::CCLayerTreeHost> m_layerTreeHost;
+    OwnPtr<NonCompositedContentHost> m_nonCompositedContentHost;
+    WebLayerTreeView m_layerTreeView;
+    WebLayer m_rootLayer;
     WebCore::GraphicsLayer* m_rootGraphicsLayer;
     bool m_isAcceleratedCompositingActive;
     bool m_compositorCreationFailed;
     // If true, the graphics context is being restored.
     bool m_recreatingGraphicsContext;
 #endif
-    bool m_haveWheelEventHandlers;
     static const WebInputEvent* m_currentInputEvent;
 
 #if ENABLE(INPUT_SPEECH)
@@ -603,12 +711,12 @@ private:
     // If we attempt to fetch the on-screen GraphicsContext3D before
     // the compositor has been turned on, we need to instantiate it
     // early. This member holds on to the GC3D in this case.
-    RefPtr<WebCore::GraphicsContext3D> m_temporaryOnscreenGraphicsContext3D;
+    OwnPtr<WebGraphicsContext3D> m_temporaryOnscreenGraphicsContext3D;
     OwnPtr<DeviceOrientationClientProxy> m_deviceOrientationClientProxy;
     OwnPtr<GeolocationClientProxy> m_geolocationClientProxy;
 
-#if ENABLE(GESTURE_RECOGNIZER)
-    OwnPtr<WebCore::PlatformGestureRecognizer> m_gestureRecognizer;
+#if ENABLE(MEDIA_STREAM)
+    UserMediaClientImpl m_userMediaClientImpl;
 #endif
 };
 

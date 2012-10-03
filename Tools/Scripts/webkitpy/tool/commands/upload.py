@@ -34,17 +34,17 @@ import sys
 
 from optparse import make_option
 
-import webkitpy.tool.steps as steps
+from webkitpy.tool import steps
 
+from webkitpy.common.checkout.changelog import parse_bug_id_from_changelog
 from webkitpy.common.config.committers import CommitterList
-from webkitpy.common.net.bugzilla import parse_bug_id
+from webkitpy.common.system.deprecated_logging import error, log
 from webkitpy.common.system.user import User
 from webkitpy.thirdparty.mock import Mock
 from webkitpy.tool.commands.abstractsequencedcommand import AbstractSequencedCommand
-from webkitpy.tool.grammar import pluralize, join_with_separators
 from webkitpy.tool.comments import bug_comment_from_svn_revision
+from webkitpy.tool.grammar import pluralize, join_with_separators
 from webkitpy.tool.multicommandtool import AbstractDeclarativeCommand
-from webkitpy.common.system.deprecated_logging import error, log
 
 
 class CommitMessageForCurrentDiff(AbstractDeclarativeCommand):
@@ -173,12 +173,29 @@ class ObsoleteAttachments(AbstractSequencedCommand):
         return { "bug_id" : args[0] }
 
 
+class AttachToBug(AbstractSequencedCommand):
+    name = "attach-to-bug"
+    help_text = "Attach the the file to the bug"
+    argument_names = "BUGID FILEPATH"
+    steps = [
+        steps.AttachToBug,
+    ]
+
+    def _prepare_state(self, options, args, tool):
+        state = {}
+        state["bug_id"] = args[0]
+        state["filepath"] = args[1]
+        return state
+
+
 class AbstractPatchUploadingCommand(AbstractSequencedCommand):
     def _bug_id(self, options, args, tool, state):
         # Perfer a bug id passed as an argument over a bug url in the diff (i.e. ChangeLogs).
         bug_id = args and args[0]
         if not bug_id:
-            bug_id = tool.checkout().bug_id_for_this_commit(options.git_commit)
+            changed_files = self._tool.scm().changed_files(options.git_commit)
+            state["changed_files"] = changed_files
+            bug_id = tool.checkout().bug_id_for_this_commit(options.git_commit, changed_files)
         return bug_id
 
     def _prepare_state(self, options, args, tool):
@@ -194,9 +211,12 @@ class Post(AbstractPatchUploadingCommand):
     help_text = "Attach the current working directory diff to a bug as a patch file"
     argument_names = "[BUGID]"
     steps = [
+        steps.ValidateChangeLogs,
         steps.CheckStyle,
         steps.ConfirmDiff,
         steps.ObsoletePatches,
+        steps.SuggestReviewers,
+        steps.EnsureBugIsOpenAndAssigned,
         steps.PostDiff,
     ]
 
@@ -212,7 +232,9 @@ class LandSafely(AbstractPatchUploadingCommand):
     show_in_main_help = True
     steps = [
         steps.UpdateChangeLogsWithReviewer,
+        steps.ValidateChangeLogs,
         steps.ObsoletePatches,
+        steps.EnsureBugIsOpenAndAssigned,
         steps.PostDiffForCommit,
     ]
 
@@ -238,6 +260,7 @@ class Upload(AbstractPatchUploadingCommand):
     argument_names = "[BUGID]"
     show_in_main_help = True
     steps = [
+        steps.ValidateChangeLogs,
         steps.CheckStyle,
         steps.PromptForBugOrTitle,
         steps.CreateBug,
@@ -245,6 +268,8 @@ class Upload(AbstractPatchUploadingCommand):
         steps.EditChangeLog,
         steps.ConfirmDiff,
         steps.ObsoletePatches,
+        steps.SuggestReviewers,
+        steps.EnsureBugIsOpenAndAssigned,
         steps.PostDiff,
     ]
     long_help = """upload uploads the current diff to bugs.webkit.org.
@@ -304,7 +329,7 @@ class PostCommits(AbstractDeclarativeCommand):
             commit_message = tool.scm().commit_message_for_local_commit(commit_id)
 
             # Prefer --bug-id=, then a bug url in the commit message, then a bug url in the entire commit diff (i.e. ChangeLogs).
-            bug_id = options.bug_id or parse_bug_id(commit_message.message()) or parse_bug_id(tool.scm().create_patch(git_commit=commit_id))
+            bug_id = options.bug_id or parse_bug_id_from_changelog(commit_message.message()) or parse_bug_id_from_changelog(tool.scm().create_patch(git_commit=commit_id))
             if not bug_id:
                 log("Skipping %s: No bug id found in commit or specified with --bug-id." % commit_id)
                 continue
@@ -344,7 +369,7 @@ class MarkBugFixed(AbstractDeclarativeCommand):
         commit_log = self._fetch_commit_log(tool, svn_revision)
 
         if not bug_id:
-            bug_id = parse_bug_id(commit_log)
+            bug_id = parse_bug_id_from_changelog(commit_log)
 
         if not svn_revision:
             match = re.search("^r(?P<svn_revision>\d+) \|", commit_log, re.MULTILINE)
@@ -385,7 +410,7 @@ class MarkBugFixed(AbstractDeclarativeCommand):
 
         if needs_prompt:
             if not tool.user.confirm("Is this correct?"):
-                exit(1)
+                self._exit(1)
 
         bug_comment = bug_comment_from_svn_revision(svn_revision)
         if options.comment:
@@ -457,6 +482,7 @@ class CreateBug(AbstractDeclarativeCommand):
 
     def prompt_for_bug_title_and_comment(self):
         bug_title = User.prompt("Bug title: ")
+        # FIXME: User should provide a function for doing this multi-line prompt.
         print "Bug comment (hit ^D on blank line to end):"
         lines = sys.stdin.readlines()
         try:

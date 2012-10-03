@@ -28,6 +28,7 @@
 
 #include "InjectedBundle.h"
 #include "QtBuiltinBundle.h"
+#include "QtNetworkAccessManager.h"
 #include "WKBundleAPICast.h"
 #include "WebProcessCreationParameters.h"
 
@@ -35,17 +36,23 @@
 #include <QNetworkAccessManager>
 #include <QNetworkCookieJar>
 #include <WebCore/CookieJarQt.h>
+#include <WebCore/PageCache.h>
 #include <WebCore/RuntimeEnabledFeatures.h>
 
 #if defined(Q_OS_MACX)
 #include <dispatch/dispatch.h>
 #endif
 
+using namespace WebCore;
+
 namespace WebKit {
+
+static const int DefaultPageCacheCapacity = 20;
 
 void WebProcess::platformSetCacheModel(CacheModel)
 {
-    // FIXME: Implement.
+    // FIXME: see bug 73918
+    pageCache()->setCapacity(DefaultPageCacheCapacity);
 }
 
 void WebProcess::platformClearResourceCaches(ResourceCachesToClear)
@@ -61,7 +68,7 @@ static void parentProcessDiedCallback(void*)
 
 void WebProcess::platformInitializeWebProcess(const WebProcessCreationParameters& parameters, CoreIPC::ArgumentDecoder* arguments)
 {
-    m_networkAccessManager = new QNetworkAccessManager;
+    m_networkAccessManager = new QtNetworkAccessManager(this);
     ASSERT(!parameters.cookieStorageDirectory.isEmpty() && !parameters.cookieStorageDirectory.isNull());
     WebCore::SharedCookieJarQt* jar = WebCore::SharedCookieJarQt::create(parameters.cookieStorageDirectory);
     m_networkAccessManager->setCookieJar(jar);

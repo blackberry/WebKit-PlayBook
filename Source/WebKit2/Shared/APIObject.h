@@ -39,6 +39,7 @@ public:
         TypeAuthenticationChallenge,
         TypeAuthenticationDecisionListener,
         TypeCertificateInfo,
+        TypeConnection,
         TypeContextMenuItem,
         TypeCredential,
         TypeData,
@@ -88,6 +89,9 @@ public:
         TypeKeyValueStorageManager,
         TypeMediaCacheManager,
         TypeNavigationData,
+        TypeNotification,
+        TypeNotificationManager,
+        TypeNotificationPermissionRequest,
         TypeOpenPanelParameters,
         TypeOpenPanelResultListener,
         TypePage,
@@ -123,9 +127,7 @@ public:
     virtual Type type() const = 0;
 
 protected:
-    APIObject()
-    {
-    }
+    APIObject();
 };
 
 } // namespace WebKit

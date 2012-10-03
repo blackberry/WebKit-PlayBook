@@ -33,12 +33,15 @@
 #include "config.h"
 #include "Assertions.h"
 
+#include "OwnArrayPtr.h"
+
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 
 #if PLATFORM(MAC)
 #include <CoreFoundation/CFString.h>
+#include <asl.h>
 #endif
 
 #if COMPILER(MSVC) && !OS(WINCE)
@@ -57,7 +60,6 @@
 
 #if PLATFORM(BLACKBERRY)
 #include <BlackBerryPlatformLog.h>
-#include <BlackBerryPlatformMisc.h>
 #endif
 
 extern "C" {
@@ -68,13 +70,23 @@ static void vprintf_stderr_common(const char* format, va_list args)
 #if PLATFORM(MAC)
     if (strstr(format, "%@")) {
         CFStringRef cfFormat = CFStringCreateWithCString(NULL, format, kCFStringEncodingUTF8);
-        CFStringRef str = CFStringCreateWithFormatAndArguments(NULL, NULL, cfFormat, args);
 
+#if COMPILER(CLANG)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+#endif
+        CFStringRef str = CFStringCreateWithFormatAndArguments(NULL, NULL, cfFormat, args);
+#if COMPILER(CLANG)
+#pragma clang diagnostic pop
+#endif
         int length = CFStringGetMaximumSizeForEncoding(CFStringGetLength(str), kCFStringEncodingUTF8);
         char* buffer = (char*)malloc(length + 1);
 
         CFStringGetCString(str, buffer, length, kCFStringEncodingUTF8);
 
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+        asl_log(0, 0, ASL_LEVEL_NOTICE, "%s", buffer);
+#endif
         fputs(buffer, stderr);
 
         free(buffer);
@@ -82,6 +94,16 @@ static void vprintf_stderr_common(const char* format, va_list args)
         CFRelease(cfFormat);
         return;
     }
+
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+    va_list copyOfArgs;
+    va_copy(copyOfArgs, args);
+    asl_vlog(0, 0, ASL_LEVEL_NOTICE, format, copyOfArgs);
+    va_end(copyOfArgs);
+#endif
+
+    // Fall through to write to stderr in the same manner as other platforms.
+
 #elif PLATFORM(BLACKBERRY)
     BlackBerry::Platform::logStreamV(format, args);
 #elif HAVE(ISDEBUGGERPRESENT)
@@ -118,11 +140,47 @@ static void vprintf_stderr_common(const char* format, va_list args)
         } while (size > 1024);
     }
 #endif
-
 #if !PLATFORM(BLACKBERRY)
     vfprintf(stderr, format, args);
 #endif
 }
+
+#if COMPILER(CLANG) || (COMPILER(GCC) && GCC_VERSION_AT_LEAST(4, 6, 0))
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wformat-nonliteral"
+#endif
+
+static void vprintf_stderr_with_prefix(const char* prefix, const char* format, va_list args)
+{
+    size_t prefixLength = strlen(prefix);
+    size_t formatLength = strlen(format);
+    OwnArrayPtr<char> formatWithPrefix = adoptArrayPtr(new char[prefixLength + formatLength + 1]);
+    memcpy(formatWithPrefix.get(), prefix, prefixLength);
+    memcpy(formatWithPrefix.get() + prefixLength, format, formatLength);
+    formatWithPrefix[prefixLength + formatLength] = 0;
+
+    vprintf_stderr_common(formatWithPrefix.get(), args);
+}
+
+static void vprintf_stderr_with_trailing_newline(const char* format, va_list args)
+{
+    size_t formatLength = strlen(format);
+    if (formatLength && format[formatLength - 1] == '\n') {
+        vprintf_stderr_common(format, args);
+        return;
+    }
+
+    OwnArrayPtr<char> formatWithNewline = adoptArrayPtr(new char[formatLength + 2]);
+    memcpy(formatWithNewline.get(), format, formatLength);
+    formatWithNewline[formatLength] = '\n';
+    formatWithNewline[formatLength + 1] = 0;
+
+    vprintf_stderr_common(formatWithNewline.get(), args);
+}
+
+#if COMPILER(CLANG) || (COMPILER(GCC) && GCC_VERSION_AT_LEAST(4, 6, 0))
+#pragma GCC diagnostic pop
+#endif
 
 WTF_ATTRIBUTE_PRINTF(1, 2)
 static void printf_stderr_common(const char* format, ...)
@@ -178,10 +236,9 @@ void WTFReportAssertionFailureWithMessage(const char* file, int line, const char
     WTFLogLocker locker(BlackBerry::Platform::LogLevelCritical);
 #endif
 
-    printf_stderr_common("ASSERTION FAILED: ");
     va_list args;
     va_start(args, format);
-    vprintf_stderr_common(format, args);
+    vprintf_stderr_with_prefix("ASSERTION FAILED: ", format, args);
     va_end(args);
     printf_stderr_common("\n%s\n", assertion);
     printCallSite(file, line, function);
@@ -222,6 +279,16 @@ void WTFGetBacktrace(void** stack, int* size)
 #endif
 }
 
+#if OS(DARWIN) || OS(LINUX)
+#  if PLATFORM(QT) || PLATFORM(GTK)
+#    if defined(__GLIBC__) && !defined(__UCLIBC__)
+#      define WTF_USE_BACKTRACE_SYMBOLS 1
+#    endif
+#  else
+#    define WTF_USE_DLADDR 1
+#  endif
+#endif
+
 void WTFReportBacktrace()
 {
     static const int framesToShow = 31;
@@ -231,11 +298,18 @@ void WTFReportBacktrace()
 
     WTFGetBacktrace(samples, &frames);
 
+#if USE(BACKTRACE_SYMBOLS)
+    char** symbols = backtrace_symbols(samples, frames);
+    if (!symbols)
+        return;
+#endif
+
     for (int i = framesToSkip; i < frames; ++i) {
         const char* mangledName = 0;
         char* cxaDemangled = 0;
-
-#if !PLATFORM(GTK) && !PLATFORM(QT) && (OS(DARWIN) || OS(LINUX))
+#if USE(BACKTRACE_SYMBOLS)
+        mangledName = symbols[i];
+#elif USE(DLADDR)
         Dl_info info;
         if (dladdr(samples[i], &info) && info.dli_sname)
             mangledName = info.dli_sname;
@@ -244,11 +318,31 @@ void WTFReportBacktrace()
 #endif
         const int frameNumber = i - framesToSkip + 1;
         if (mangledName || cxaDemangled)
-            fprintf(stderr, "%-3d %p %s\n", frameNumber, samples[i], cxaDemangled ? cxaDemangled : mangledName);
+            printf_stderr_common("%-3d %p %s\n", frameNumber, samples[i], cxaDemangled ? cxaDemangled : mangledName);
         else
-            fprintf(stderr, "%-3d %p\n", frameNumber, samples[i]);
+            printf_stderr_common("%-3d %p\n", frameNumber, samples[i]);
         free(cxaDemangled);
     }
+
+#if USE(BACKTRACE_SYMBOLS)
+    free(symbols);
+#endif
+}
+
+#undef WTF_USE_BACKTRACE_SYMBOLS
+#undef WTF_USE_DLADDR
+
+static WTFCrashHookFunction globalHook = 0;
+
+void WTFSetCrashHook(WTFCrashHookFunction function)
+{
+    globalHook = function;
+}
+
+void WTFInvokeCrashHook()
+{
+    if (globalHook)
+        globalHook();
 }
 
 void WTFReportFatalError(const char* file, int line, const char* function, const char* format, ...)
@@ -257,10 +351,9 @@ void WTFReportFatalError(const char* file, int line, const char* function, const
     WTFLogLocker locker(BlackBerry::Platform::LogLevelCritical);
 #endif
 
-    printf_stderr_common("FATAL ERROR: ");
     va_list args;
     va_start(args, format);
-    vprintf_stderr_common(format, args);
+    vprintf_stderr_with_prefix("FATAL ERROR: ", format, args);
     va_end(args);
     printf_stderr_common("\n");
     printCallSite(file, line, function);
@@ -272,10 +365,9 @@ void WTFReportError(const char* file, int line, const char* function, const char
     WTFLogLocker locker(BlackBerry::Platform::LogLevelWarn);
 #endif
 
-    printf_stderr_common("ERROR: ");
     va_list args;
     va_start(args, format);
-    vprintf_stderr_common(format, args);
+    vprintf_stderr_with_prefix("ERROR: ", format, args);
     va_end(args);
     printf_stderr_common("\n");
     printCallSite(file, line, function);
@@ -292,12 +384,8 @@ void WTFLog(WTFLogChannel* channel, const char* format, ...)
 
     va_list args;
     va_start(args, format);
-    vprintf_stderr_common(format, args);
+    vprintf_stderr_with_trailing_newline(format, args);
     va_end(args);
-    
-    size_t formatLength = strlen(format);
-    if (formatLength && format[formatLength - 1] != '\n')
-        printf_stderr_common("\n");
 }
 
 void WTFLogVerbose(const char* file, int line, const char* function, WTFLogChannel* channel, const char* format, ...)
@@ -311,12 +399,8 @@ void WTFLogVerbose(const char* file, int line, const char* function, WTFLogChann
 
     va_list args;
     va_start(args, format);
-    vprintf_stderr_common(format, args);
+    vprintf_stderr_with_trailing_newline(format, args);
     va_end(args);
-
-    size_t formatLength = strlen(format);
-    if (formatLength && format[formatLength - 1] != '\n')
-        printf_stderr_common("\n");
 
     printCallSite(file, line, function);
 }

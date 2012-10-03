@@ -50,8 +50,10 @@ namespace JSC {
 void JIT::emit_op_call_put_result(Instruction* instruction)
 {
     int dst = instruction[1].u.operand;
-    emitValueProfilingSite(FirstProfilingSite);
+    emitValueProfilingSite();
     emitPutVirtualRegister(dst);
+    if (canBeOptimized())
+        killLastResultRegister(); // Make lastResultRegister tracking simpler in the DFG.
 }
 
 void JIT::compileLoadVarargs(Instruction* instruction)
@@ -64,9 +66,7 @@ void JIT::compileLoadVarargs(Instruction* instruction)
 
     JumpList slowCase;
     JumpList end;
-    if (m_codeBlock->usesArguments()
-        && arguments == m_codeBlock->argumentsRegister()
-        && m_codeBlock->m_numParameters == 1) {
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister()) {
         emitGetVirtualRegister(arguments, regT0);
         slowCase.append(branchPtr(NotEqual, regT0, TrustedImmPtr(JSValue::encode(JSValue()))));
 
@@ -86,22 +86,25 @@ void JIT::compileLoadVarargs(Instruction* instruction)
         emitFastArithReTagImmediate(regT0, regT2);
         storePtr(regT2, Address(regT1, RegisterFile::ArgumentCount * static_cast<int>(sizeof(Register))));
 
-        // Initialize 'this' and copy arguments.
+        // Initialize 'this'.
+        emitGetVirtualRegister(thisValue, regT2);
+        storePtr(regT2, Address(regT1, CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register))));
+
+        // Copy arguments.
         neg32(regT0);
         signExtend32ToPtr(regT0, regT0);
-        emitGetVirtualRegister(thisValue, regT2);
-        storePtr(regT2, BaseIndex(regT1, regT0, TimesEight, -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
         end.append(branchAddPtr(Zero, Imm32(1), regT0));
+        // regT0: -argumentCount
 
         Label copyLoop = label();
-        loadPtr(BaseIndex(callFrameRegister, regT0, TimesEight, -((RegisterFile::CallFrameHeaderSize + 1) * static_cast<int>(sizeof(Register)))), regT2);
-        storePtr(regT2, BaseIndex(regT1, regT0, TimesEight, -(RegisterFile::CallFrameHeaderSize * static_cast<int>(sizeof(Register)))));
+        loadPtr(BaseIndex(callFrameRegister, regT0, TimesEight, CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register))), regT2);
+        storePtr(regT2, BaseIndex(regT1, regT0, TimesEight, CallFrame::thisArgumentOffset() * static_cast<int>(sizeof(Register))));
         branchAddPtr(NonZero, Imm32(1), regT0).linkTo(copyLoop, this);
 
         end.append(jump());
     }
 
-    if (m_codeBlock->m_numParameters == 1)
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister())
         slowCase.link(this);
 
     JITStubCall stubCall(this, cti_op_load_varargs);
@@ -110,7 +113,7 @@ void JIT::compileLoadVarargs(Instruction* instruction)
     stubCall.addArgument(Imm32(firstFreeRegister));
     stubCall.call(regT1);
 
-    if (m_codeBlock->m_numParameters == 1)
+    if (m_codeBlock->usesArguments() && arguments == m_codeBlock->argumentsRegister())
         end.link(this);
 }
 
@@ -159,7 +162,7 @@ void JIT::compileOpCall(OpcodeID opcodeID, Instruction* instruction, unsigned ca
         int registerOffset = instruction[3].u.operand;
 
         addPtr(TrustedImm32(registerOffset * sizeof(Register)), callFrameRegister, regT1);
-        storePtr(TrustedImmPtr(JSValue::encode(jsNumber(argCount))), Address(regT1, RegisterFile::ArgumentCount * static_cast<int>(sizeof(Register))));
+        store32(TrustedImm32(argCount), Address(regT1, RegisterFile::ArgumentCount * static_cast<int>(sizeof(Register))));
     } // regT1 holds newCallFrame with ArgumentCount initialized.
     emitGetVirtualRegister(callee, regT0); // regT0 holds callee.
 

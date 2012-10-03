@@ -53,6 +53,7 @@ def generate_webcore_derived_sources(conf):
     os.system('make -f %s/DerivedSources.make WebCore=%s SOURCE_ROOT=%s all FEATURE_DEFINES="%s"' % (wc_dir, wc_dir, wc_dir, conf.env["FEATURE_DEFINES"]))
     if building_on_win32:
         os.environ["PATH"] = oldpath
+    os.system('perl %s/Source/WebKit/scripts/generate-webkitversion.pl --outputDir=%s --config %s/Source/WebKit/mac/Configurations/Version.xcconfig' % (wk_root, derived_sources_dir, wk_root))
     os.chdir(olddir)
 
 def generate_jscore_derived_sources(conf):
@@ -147,7 +148,8 @@ def build(bld):
             'Source/WebCore/bindings/cpp/WebDOMEventTarget.cpp',
             'Source/WebCore/platform/KillRingNone.cpp',
             'Source/WebCore/platform/text/LocalizedDateNone.cpp',
-            'Source/WebCore/platform/text/LocalizedNumberNone.cpp'
+            'Source/WebCore/platform/text/LocalizedNumberNone.cpp',
+            'Source/WebCore/page/scrolling/ScrollingCoordinatorNone.cpp',
         ]  
     
         if building_on_win32:
@@ -162,6 +164,7 @@ def build(bld):
                    # so we need to use the Win port's implementation until the wx bug fix is
                    # widely available (it was fixed in 2.8.10).
                    'Source/WebCore/platform/win/SharedTimerWin.cpp',
+                   'Source/WebCore/platform/win/SystemInfo.cpp',
                    'Source/WebCore/platform/win/WebCoreInstanceHandle.cpp',
                    # Use the Windows plugin architecture
                    #'Source/WebCore/plugins/win/PluginDataWin.cpp',
@@ -177,7 +180,6 @@ def build(bld):
         elif sys.platform.startswith('darwin'):
             webcore_dirs.append('Source/WebCore/plugins/mac')
             webcore_dirs.append('Source/WebCore/platform/wx/wxcode/mac/carbon')
-            webcore_dirs.append('Source/WebCore/platform/mac')
             webcore_dirs.append('Source/WebCore/platform/text/mac')
             webcore_sources['wx-mac'] = [
                    'Source/WebCore/platform/mac/PurgeableBufferMac.cpp',
@@ -277,7 +279,6 @@ def build(bld):
         # intermediate sources
         excludes.append('DocTypeStrings.cpp')
         excludes.append('HTMLEntityNames.cpp')
-        excludes.append('tokenizer.cpp')
 
         # Qt specific file in common sources
         excludes.append('ContextShadow.cpp')
@@ -318,6 +319,20 @@ def build(bld):
         excludes.append('WebDOMScriptProfileNode.cpp')
         excludes.append('WebNativeEventListener.cpp')
         
+        # FIXME: It appears these are no longer needed by any port, once this is confirmed,
+        # we should remove these sources from the tree.
+        excludes.append('WebDOMDOMWindowCustom.cpp')
+        excludes.append('WebDOMHTMLOptionsCollectionCustom.cpp')
+        excludes.append('WebDOMNodeCustom.cpp')
+        excludes.append('WebDOMHTMLDocumentCustom.cpp')
+        excludes.append('WebDOMHTMLCollectionCustom.cpp')
+        excludes.append('WebNativeNodeFilterCondition.cpp')
+        excludes.append('WebDOMNodeFilterCustom.cpp')
+        
+        # this file is unused by any port, not sure why it was
+        # left in the tree
+        excludes.append('GeneratedImage.cpp')
+        
         # features we don't build / use
         excludes.append('JSNavigatorCustom.cpp')
         excludes.append('WebGLContextEvent.cpp')
@@ -350,7 +365,7 @@ def build(bld):
         excludes.append('HyphenationCF.cpp')
         
         if sys.platform.startswith('darwin'):
-            webcore.includes += ' Source/WebKit/mac/WebCoreSupport WebCore/platform/mac'
+            webcore.includes += ' Source/WebKit/mac/WebCoreSupport Source/WebCore/platform/mac'
             webcore.source += ' Source/WebKit/mac/WebCoreSupport/WebSystemInterface.mm'
             
         if building_on_win32:

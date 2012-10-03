@@ -42,16 +42,16 @@ PassRefPtr<HTMLMetaElement> HTMLMetaElement::create(const QualifiedName& tagName
     return adoptRef(new HTMLMetaElement(tagName, document));
 }
 
-void HTMLMetaElement::parseMappedAttribute(Attribute* attr)
+void HTMLMetaElement::parseAttribute(Attribute* attr)
 {
     if (attr->name() == http_equivAttr)
         process();
     else if (attr->name() == contentAttr)
         process();
     else if (attr->name() == nameAttr) {
-        // Do nothing.
+        // Do nothing
     } else
-        HTMLElement::parseMappedAttribute(attr);
+        HTMLElement::parseAttribute(attr);
 }
 
 void HTMLMetaElement::insertedIntoDocument()
@@ -71,6 +71,9 @@ void HTMLMetaElement::process()
 
     if (equalIgnoringCase(name(), "viewport"))
         document()->processViewport(contentValue);
+
+    if (equalIgnoringCase(name(), "referrer"))
+        document()->processReferrerPolicy(contentValue);
 
 #if PLATFORM(BLACKBERRY)
     if (equalIgnoringCase(name(), "HandheldFriendly"))
@@ -103,7 +106,7 @@ String HTMLMetaElement::httpEquiv() const
 
 String HTMLMetaElement::name() const
 {
-    return getAttribute(nameAttr);
+    return getNameAttribute();
 }
 
 #if ENABLE(MICRODATA)
@@ -112,9 +115,9 @@ String HTMLMetaElement::itemValueText() const
     return getAttribute(contentAttr);
 }
 
-void HTMLMetaElement::setItemValueText(const String& value, ExceptionCode& ec)
+void HTMLMetaElement::setItemValueText(const String& value, ExceptionCode&)
 {
-    setAttribute(contentAttr, value, ec);
+    setAttribute(contentAttr, value);
 }
 #endif
 

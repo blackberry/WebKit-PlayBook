@@ -193,10 +193,13 @@ bool NetscapePlugin::platformPostInitialize()
 
 void NetscapePlugin::platformDestroy()
 {
-    delete static_cast<NPSetWindowCallbackStruct*>(m_npWindow.ws_info);
+    NPSetWindowCallbackStruct* callbackStruct = static_cast<NPSetWindowCallbackStruct*>(m_npWindow.ws_info);
+    Display* hostDisplay = x11HostDisplay();
+    XFreeColormap(hostDisplay, callbackStruct->colormap);
+    delete callbackStruct;
 
     if (m_drawable) {
-        XFreePixmap(x11HostDisplay(), m_drawable);
+        XFreePixmap(hostDisplay, m_drawable);
         m_drawable = 0;
     }
 }
@@ -404,6 +407,11 @@ static inline void setXCrossingEventFields(XEvent& xEvent, const WebMouseEvent& 
 bool NetscapePlugin::platformHandleMouseEvent(const WebMouseEvent& event)
 {
     if (m_isWindowed)
+        return false;
+
+    if ((event.type() == WebEvent::MouseDown || event.type() == WebEvent::MouseUp)
+         && event.button() == WebMouseEvent::RightButton
+         && quirks().contains(PluginQuirks::IgnoreRightClickInWindowlessMode))
         return false;
 
     XEvent xEvent;

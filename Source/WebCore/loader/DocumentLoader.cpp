@@ -233,7 +233,17 @@ void DocumentLoader::stopLoading()
     // Appcache uses ResourceHandle directly, DocumentLoader doesn't count these loads.
     m_applicationCacheHost->stopLoadingInFrame(m_frame);
 
-    if (!loading)
+    if (!loading) {
+        // If something above restarted loading we might run into mysterious crashes like 
+        // https://bugs.webkit.org/show_bug.cgi?id=62764 and <rdar://problem/9328684>
+        ASSERT(!m_loading);
+        return;
+    }
+
+    // We might run in to infinite recursion if we're stopping loading as the result of 
+    // detaching from the frame, so break out of that recursion here.
+    // See <rdar://problem/9673866> for more details.
+    if (m_isStopping)
         return;
     
     RefPtr<Frame> protectFrame(m_frame);
@@ -395,6 +405,12 @@ void DocumentLoader::attachToFrame()
 void DocumentLoader::detachFromFrame()
 {
     ASSERT(m_frame);
+    RefPtr<Frame> protectFrame(m_frame);
+    RefPtr<DocumentLoader> protectLoader(this);
+
+    // It never makes sense to have a document loader that is detached from its
+    // frame have any loads active, so go ahead and kill all the loads.
+    stopLoading();
 
     m_applicationCacheHost->setDOMApplicationCache(0);
     InspectorInstrumentation::loaderDetachedFromFrame(m_frame, this);
@@ -432,6 +448,9 @@ bool DocumentLoader::isLoadingInAPISense() const
     // Once a frame has loaded, we no longer need to consider subresources,
     // but we still need to consider subframes.
     if (frameLoader()->state() != FrameStateComplete) {
+        if (m_frame->settings()->needsIsLoadingInAPISenseQuirk() && !m_subresourceLoaders.isEmpty())
+            return true;
+    
         Document* doc = m_frame->document();
         if ((!m_primaryLoadComplete || !m_frame->document()->loadEventFinished()) && isLoading())
             return true;
@@ -640,7 +659,7 @@ bool DocumentLoader::scheduleArchiveLoad(ResourceLoader* loader, const ResourceR
 #if ENABLE(WEB_ARCHIVE)
     case Archive::WebArchive:
         // WebArchiveDebugMode means we fail loads instead of trying to fetch them from the network if they're not in the archive.
-        return m_frame->settings()->webArchiveDebugModeEnabled() && ArchiveFactory::isArchiveMimeType(responseMIMEType());
+        return m_frame->settings() && m_frame->settings()->webArchiveDebugModeEnabled() && ArchiveFactory::isArchiveMimeType(responseMIMEType());
 #endif
 #if ENABLE(MHTML)
     case Archive::MHTML:
@@ -803,8 +822,10 @@ bool DocumentLoader::startLoadingMainResource(unsigned long identifier)
     // FIXME: Is there any way the extra fields could have not been added by now?
     // If not, it would be great to remove this line of code.
     frameLoader()->addExtraFieldsToMainResourceRequest(m_request);
-
-    if (!m_mainResourceLoader->load(m_request, m_substituteData)) {
+    
+    // Protect MainResourceLoader::load() method chain from setPrimaryLoadComplete() stomping m_mainResourceLoader.
+    RefPtr<MainResourceLoader> protectedMainResourceLoader(m_mainResourceLoader);
+    if (!protectedMainResourceLoader->load(m_request, m_substituteData)) {
         // FIXME: If this should really be caught, we should just ASSERT this doesn't happen;
         // should it be caught by other parts of WebKit or other parts of the app?
         LOG_ERROR("could not create WebResourceHandle for URL %s -- should be caught by policy handler level", m_request.url().string().ascii().data());

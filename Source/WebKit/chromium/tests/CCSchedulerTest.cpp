@@ -44,13 +44,16 @@ public:
     {
         m_actions.clear();
         m_hasMoreResourceUpdates = false;
+        m_canDraw = true;
     }
 
     void setHasMoreResourceUpdates(bool b) { m_hasMoreResourceUpdates = b; }
+    void setCanDraw(bool b) { m_canDraw = b; }
 
     int numActions() const { return static_cast<int>(m_actions.size()); }
     const char* action(int i) const { return m_actions[i]; }
 
+    virtual bool canDraw() { return m_canDraw; }
     virtual bool hasMoreResourceUpdates() const { return m_hasMoreResourceUpdates; }
     virtual void scheduledActionBeginFrame() { m_actions.push_back("scheduledActionBeginFrame"); }
     virtual void scheduledActionDrawAndSwap() { m_actions.push_back("scheduledActionDrawAndSwap"); }
@@ -59,6 +62,7 @@ public:
 
 protected:
     bool m_hasMoreResourceUpdates;
+    bool m_canDraw;
     std::vector<const char*> m_actions;
 };
 
@@ -73,6 +77,7 @@ TEST(CCSchedulerTest, RequestCommit)
     scheduler->setNeedsCommit();
     EXPECT_EQ(1, client.numActions());
     EXPECT_STREQ("scheduledActionBeginFrame", client.action(0));
+    EXPECT_FALSE(timeSource->active());
     client.reset();
 
     // Since, hasMoreResourceUpdates is set to false,
@@ -82,17 +87,18 @@ TEST(CCSchedulerTest, RequestCommit)
     EXPECT_EQ(2, client.numActions());
     EXPECT_STREQ("scheduledActionUpdateMoreResources", client.action(0));
     EXPECT_STREQ("scheduledActionCommit", client.action(1));
+    EXPECT_TRUE(timeSource->active());
     client.reset();
 
     // Tick should draw.
     timeSource->tick();
     EXPECT_EQ(1, client.numActions());
     EXPECT_STREQ("scheduledActionDrawAndSwap", client.action(0));
+    EXPECT_FALSE(timeSource->active());
     client.reset();
 
-    // Tick should do nothing.
-    timeSource->tick();
-    EXPECT_EQ(0, client.numActions());
+    // Timer should be off.
+    EXPECT_FALSE(timeSource->active());
 }
 
 TEST(CCSchedulerTest, RequestCommitAfterBeginFrame)
@@ -122,18 +128,124 @@ TEST(CCSchedulerTest, RequestCommitAfterBeginFrame)
 
     // Tick should draw but then begin another frame.
     timeSource->tick();
+    EXPECT_FALSE(timeSource->active());
     EXPECT_EQ(2, client.numActions());
     EXPECT_STREQ("scheduledActionDrawAndSwap", client.action(0));
     EXPECT_STREQ("scheduledActionBeginFrame", client.action(1));
     client.reset();
 }
 
-TEST(CCSchedulerTest, RequestRedraw)
+class SchedulerClientThatSetNeedsDrawInsideDraw : public CCSchedulerClient {
+public:
+    SchedulerClientThatSetNeedsDrawInsideDraw()
+        : m_numDraws(0)
+        , m_scheduler(0) { }
+
+    void setScheduler(CCScheduler* scheduler) { m_scheduler = scheduler; }
+
+    int numDraws() const { return m_numDraws; }
+
+    virtual bool hasMoreResourceUpdates() const { return false; }
+    virtual bool canDraw() { return true; }
+    virtual void scheduledActionBeginFrame() { }
+    virtual void scheduledActionDrawAndSwap()
+    {
+        // Only setNeedsRedraw the first time this is called
+        if (!m_numDraws)
+            m_scheduler->setNeedsRedraw();
+        m_numDraws++;
+    }
+
+    virtual void scheduledActionUpdateMoreResources() { }
+    virtual void scheduledActionCommit() { }
+
+protected:
+    int m_numDraws;
+    CCScheduler* m_scheduler;
+};
+
+// Tests for two different situations:
+// 1. the scheduler dropping setNeedsRedraw requests that happen inside
+//    a scheduledActionDrawAndSwap
+// 2. the scheduler drawing twice inside a single tick
+TEST(CCSchedulerTest, RequestRedrawInsideDraw)
 {
+    SchedulerClientThatSetNeedsDrawInsideDraw client;
+    RefPtr<FakeCCTimeSource> timeSource = adoptRef(new FakeCCTimeSource());
+    OwnPtr<CCScheduler> scheduler = CCScheduler::create(&client, adoptPtr(new CCFrameRateController(timeSource)));
+    client.setScheduler(scheduler.get());
+    scheduler->setVisible(true);
+
+    scheduler->setNeedsRedraw();
+    EXPECT_TRUE(scheduler->redrawPending());
+    EXPECT_TRUE(timeSource->active());
+    EXPECT_EQ(0, client.numDraws());
+
+    timeSource->tick();
+    EXPECT_EQ(1, client.numDraws());
+    EXPECT_TRUE(scheduler->redrawPending());
+    EXPECT_TRUE(timeSource->active());
+
+    timeSource->tick();
+    EXPECT_EQ(2, client.numDraws());
+    EXPECT_FALSE(scheduler->redrawPending());
+    EXPECT_FALSE(timeSource->active());
 }
 
-TEST(CCSchedulerTest, RequestRedrawWithTwoFramesPending)
+class SchedulerClientThatSetNeedsCommitInsideDraw : public CCSchedulerClient {
+public:
+    SchedulerClientThatSetNeedsCommitInsideDraw()
+        : m_numDraws(0)
+        , m_scheduler(0) { }
+
+    void setScheduler(CCScheduler* scheduler) { m_scheduler = scheduler; }
+
+    int numDraws() const { return m_numDraws; }
+
+    virtual bool hasMoreResourceUpdates() const { return false; }
+    virtual bool canDraw() { return true; }
+    virtual void scheduledActionBeginFrame() { }
+    virtual void scheduledActionDrawAndSwap()
+    {
+        // Only setNeedsCommit the first time this is called
+        if (!m_numDraws)
+            m_scheduler->setNeedsCommit();
+        m_numDraws++;
+    }
+
+    virtual void scheduledActionUpdateMoreResources() { }
+    virtual void scheduledActionCommit() { }
+
+protected:
+    int m_numDraws;
+    CCScheduler* m_scheduler;
+};
+
+// Tests for the scheduler infinite-looping on setNeedsCommit requests that
+// happen inside a scheduledActionDrawAndSwap
+TEST(CCSchedulerTest, RequestCommitInsideDraw)
 {
+    SchedulerClientThatSetNeedsCommitInsideDraw client;
+    RefPtr<FakeCCTimeSource> timeSource = adoptRef(new FakeCCTimeSource());
+    OwnPtr<CCScheduler> scheduler = CCScheduler::create(&client, adoptPtr(new CCFrameRateController(timeSource)));
+    client.setScheduler(scheduler.get());
+    scheduler->setVisible(true);
+
+    scheduler->setNeedsRedraw();
+    EXPECT_TRUE(scheduler->redrawPending());
+    EXPECT_EQ(0, client.numDraws());
+    EXPECT_TRUE(timeSource->active());
+
+    timeSource->tick();
+    EXPECT_FALSE(timeSource->active());
+    EXPECT_EQ(1, client.numDraws());
+    EXPECT_TRUE(scheduler->commitPending());
+    scheduler->beginFrameComplete();
+
+    timeSource->tick();
+    EXPECT_EQ(2, client.numDraws());
+    EXPECT_FALSE(timeSource->active());
+    EXPECT_FALSE(scheduler->redrawPending());
 }
 
 }

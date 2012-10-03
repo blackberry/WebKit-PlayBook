@@ -51,6 +51,20 @@ PassRefPtr<SVGStyleElement> SVGStyleElement::create(const QualifiedName& tagName
     return adoptRef(new SVGStyleElement(tagName, document, createdByParser));
 }
 
+bool SVGStyleElement::disabled() const
+{
+    if (!m_sheet)
+        return false;
+    
+    return m_sheet->disabled();
+}
+
+void SVGStyleElement::setDisabled(bool setDisabled)
+{
+    if (CSSStyleSheet* styleSheet = sheet())
+        styleSheet->setDisabled(setDisabled);
+}
+
 const AtomicString& SVGStyleElement::type() const
 {
     DEFINE_STATIC_LOCAL(const AtomicString, defaultValue, ("text/css"));
@@ -58,9 +72,9 @@ const AtomicString& SVGStyleElement::type() const
     return n.isNull() ? defaultValue : n;
 }
 
-void SVGStyleElement::setType(const AtomicString& type, ExceptionCode& ec)
+void SVGStyleElement::setType(const AtomicString& type, ExceptionCode&)
 {
-    setAttribute(SVGNames::typeAttr, type, ec);
+    setAttribute(SVGNames::typeAttr, type);
 }
 
 const AtomicString& SVGStyleElement::media() const
@@ -70,9 +84,9 @@ const AtomicString& SVGStyleElement::media() const
     return n.isNull() ? defaultValue : n;
 }
 
-void SVGStyleElement::setMedia(const AtomicString& media, ExceptionCode& ec)
+void SVGStyleElement::setMedia(const AtomicString& media, ExceptionCode&)
 {
-    setAttribute(SVGNames::mediaAttr, media, ec);
+    setAttribute(SVGNames::mediaAttr, media);
 }
 
 String SVGStyleElement::title() const
@@ -80,9 +94,9 @@ String SVGStyleElement::title() const
     return fastGetAttribute(SVGNames::titleAttr);
 }
 
-void SVGStyleElement::setTitle(const AtomicString& title, ExceptionCode& ec)
+void SVGStyleElement::setTitle(const AtomicString& title, ExceptionCode&)
 {
-    setAttribute(SVGNames::titleAttr, title, ec);
+    setAttribute(SVGNames::titleAttr, title);
 }
 
 bool SVGStyleElement::isSupportedAttribute(const QualifiedName& attrName)
@@ -95,10 +109,10 @@ bool SVGStyleElement::isSupportedAttribute(const QualifiedName& attrName)
     return supportedAttributes.contains<QualifiedName, SVGAttributeHashTranslator>(attrName);
 }
 
-void SVGStyleElement::parseMappedAttribute(Attribute* attr)
+void SVGStyleElement::parseAttribute(Attribute* attr)
 {
     if (!isSupportedAttribute(attr->name())) {
-        SVGElement::parseMappedAttribute(attr);
+        SVGElement::parseAttribute(attr);
         return;
     }
 
@@ -108,7 +122,7 @@ void SVGStyleElement::parseMappedAttribute(Attribute* attr)
         return;
     }
 
-    if (SVGLangSpace::parseMappedAttribute(attr))
+    if (SVGLangSpace::parseAttribute(attr))
         return;
 
     ASSERT_NOT_REACHED();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,14 +21,13 @@
 
 #include "DeviceMotionController.h"
 #include "DeviceMotionData.h"
-#include "Page.h"
-#include "WebPage.h"
 #include "WebPage_p.h"
+#include <BlackBerryPlatformDeviceMotionTracker.h>
 
 using namespace WebCore;
 
-DeviceMotionClientBlackBerry::DeviceMotionClientBlackBerry(BlackBerry::WebKit::WebPage* webPage)
-    : m_webPage(webPage)
+DeviceMotionClientBlackBerry::DeviceMotionClientBlackBerry(BlackBerry::WebKit::WebPagePrivate* webPagePrivate)
+    : m_webPagePrivate(webPagePrivate)
     , m_tracker(0)
     , m_controller(0)
     , m_lastEventTime(0)

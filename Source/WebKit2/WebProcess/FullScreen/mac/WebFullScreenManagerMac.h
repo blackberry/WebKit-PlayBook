@@ -30,15 +30,15 @@
 
 #import "LayerTreeContext.h"
 #import "WebFullScreenManager.h"
-
 #import <WebCore/GraphicsLayer.h>
 #import <WebCore/IntRect.h>
 #import <wtf/RetainPtr.h>
 
-typedef struct __WKCARemoteLayerClientRef* WKCARemoteLayerClientRef;
 OBJC_CLASS WebFullScreenManagerAnimationListener;
 
 namespace WebKit {
+
+class RemoteLayerClient;
 
 class WebFullScreenManagerMac : public WebFullScreenManager {
 public:
@@ -59,7 +59,7 @@ private:
 
     OwnPtr<WebCore::GraphicsLayer> m_rootLayer;
     LayerTreeContext m_layerTreeContext;
-    RetainPtr<WKCARemoteLayerClientRef> m_remoteLayerClient;
+    OwnPtr<RemoteLayerClient> m_remoteLayerClient;
     RetainPtr<id> m_enterFullScreenListener;
     RetainPtr<id> m_exitFullScreenListener;
 };

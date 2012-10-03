@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,9 +33,9 @@
 
 #include "WebDragOperation.h"
 #include "WebPageVisibilityState.h"
-#include "WebString.h"
-#include "WebVector.h"
 #include "WebWidget.h"
+#include "platform/WebString.h"
+#include "platform/WebVector.h"
 
 namespace WebKit {
 
@@ -48,12 +48,14 @@ class WebFrame;
 class WebFrameClient;
 class WebGraphicsContext3D;
 class WebNode;
+class WebPageOverlay;
 class WebPermissionClient;
 class WebSettings;
 class WebSpellCheckClient;
 class WebString;
 class WebViewClient;
 struct WebMediaPlayerAction;
+struct WebPluginAction;
 struct WebPoint;
 
 class WebView : public WebWidget {
@@ -213,6 +215,10 @@ public:
     // is scaled up, < 1.0 is scaled down.
     virtual float pageScaleFactor() const = 0;
 
+    // Indicates whether the page scale factor has been set since navigating
+    // to a new page.
+    virtual bool isPageScaleFactorSet() const = 0;
+
     // Scales the page and the scroll offset by a given factor, while ensuring
     // that the new scroll position does not go beyond the edge of the page.
     virtual void setPageScaleFactorPreservingScrollOffset(float) = 0;
@@ -226,6 +232,9 @@ public:
     // (and these values will persist until setPageScaleFactorLimits is called
     // again).
     virtual void setPageScaleFactorLimits(float minPageScale, float maxPageScale) = 0;
+
+    virtual float minimumPageScaleFactor() const = 0;
+    virtual float maximumPageScaleFactor() const = 0;
 
     // The ratio of the current device's screen DPI to the target device's screen DPI.
     virtual float deviceScaleFactor() const = 0;
@@ -246,11 +255,32 @@ public:
     virtual void setFixedLayoutSize(const WebSize&) = 0;
 
 
+    // Auto-Resize -----------------------------------------------------------
+
+    // In auto-resize mode, the view is automatically adjusted to fit the html
+    // content within the given bounds.
+    virtual void enableAutoResizeMode(
+        const WebSize& minSize,
+        const WebSize& maxSize) = 0;
+
+    // Turn off auto-resize.
+    virtual void disableAutoResizeMode() = 0;
+
+    // DEPRECATED
+    virtual void enableAutoResizeMode(
+        bool enable,
+        const WebSize& minSize,
+        const WebSize& maxSize) = 0;
+
     // Media ---------------------------------------------------------------
 
-    // Performs the specified action on the node at the given location.
+    // Performs the specified media player action on the node at the given location.
     virtual void performMediaPlayerAction(
         const WebMediaPlayerAction&, const WebPoint& location) = 0;
+
+    // Performs the specified plugin action on the node at the given location.
+    virtual void performPluginAction(
+        const WebPluginAction&, const WebPoint& location) = 0;
 
 
     // Data exchange -------------------------------------------------------
@@ -406,10 +436,18 @@ public:
     virtual void setVisibilityState(WebPageVisibilityState visibilityState,
                                     bool isInitialState) { }
 
+    // PageOverlay ----------------------------------------------------------
 
-    // Fullscreen -----------------------------------------------------------
-
-    virtual void exitFullscreen() = 0;
+    // Adds/removes page overlay to this WebView. These functions change the
+    // graphical appearance of the WebView. WebPageOverlay paints the
+    // contents of the page overlay. It also provides an z-order number for
+    // the page overlay. The z-order number defines the paint order the page
+    // overlays. Page overlays with larger z-order number will be painted after
+    // page overlays with smaller z-order number. That is, they appear above
+    // the page overlays with smaller z-order number. If two page overlays have
+    // the same z-order number, the later added one will be on top.
+    virtual void addPageOverlay(WebPageOverlay*, int /*z-order*/) = 0;
+    virtual void removePageOverlay(WebPageOverlay*) = 0;
 
     // Testing functionality for LayoutTestController -----------------------
 

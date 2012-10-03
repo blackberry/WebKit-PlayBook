@@ -1,5 +1,6 @@
 # Copyright (C) 2007, 2008, 2009 Apple Inc.  All rights reserved.
 # Copyright (C) 2009, 2010 Chris Jerdonek (chris.jerdonek@gmail.com)
+# Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -44,19 +45,24 @@ BEGIN {
     $VERSION     = 1.00;
     @ISA         = qw(Exporter);
     @EXPORT      = qw(
+        &applyGitBinaryPatchDelta
         &callSilently
         &canonicalizePath
         &changeLogEmailAddress
+        &changeLogFileName
         &changeLogName
         &chdirReturningRelativePath
+        &decodeGitBinaryChunk
         &decodeGitBinaryPatch
         &determineSVNRoot
         &determineVCSRoot
+        &escapeSubversionPath
         &exitStatus
         &fixChangeLogPatch
         &gitBranch
         &gitdiff2svndiff
         &isGit
+        &isGitSVN
         &isGitBranchBuild
         &isGitDirectory
         &isSVN
@@ -65,11 +71,15 @@ BEGIN {
         &makeFilePathRelative
         &mergeChangeLogs
         &normalizePath
+        &parseChunkRange
+        &parseFirstEOL
         &parsePatch
         &pathRelativeToSVNRepositoryRootForPath
         &possiblyColored
         &prepareParsedPatch
+        &removeEOL
         &runPatchCommand
+        &scmMoveOrRenameFile
         &scmToggleExecutableBit
         &setChangeLogDateAndReviewer
         &svnRevisionForDirectory
@@ -85,6 +95,7 @@ our @EXPORT_OK;
 my $gitBranch;
 my $gitRoot;
 my $isGit;
+my $isGitSVN;
 my $isGitBranchBuild;
 my $isSVN;
 my $svnVersion;
@@ -138,6 +149,20 @@ sub toWindowsLineEndings
     return $text;
 }
 
+# Note, this method will not error if the file corresponding to the $source path does not exist.
+sub scmMoveOrRenameFile
+{
+    my ($source, $destination) = @_;
+    return if ! -e $source;
+    if (isSVN()) {
+        my $escapedDestination = escapeSubversionPath($destination);
+        my $escapedSource = escapeSubversionPath($source);
+        system("svn", "move", $escapedSource, $escapedDestination);
+    } elsif (isGit()) {
+        system("git", "mv", $source, $destination);
+    }
+}
+
 # Note, this method will not error if the file corresponding to the path does not exist.
 sub scmToggleExecutableBit
 {
@@ -155,7 +180,8 @@ sub scmAddExecutableBit($)
     my ($path) = @_;
 
     if (isSVN()) {
-        system("svn", "propset", "svn:executable", "on", $path) == 0 or die "Failed to run 'svn propset svn:executable on $path'.";
+        my $escapedPath = escapeSubversionPath($path);
+        system("svn", "propset", "svn:executable", "on", $escapedPath) == 0 or die "Failed to run 'svn propset svn:executable on $escapedPath'.";
     } elsif (isGit()) {
         chmod(0755, $path);
     }
@@ -166,7 +192,8 @@ sub scmRemoveExecutableBit($)
     my ($path) = @_;
 
     if (isSVN()) {
-        system("svn", "propdel", "svn:executable", $path) == 0 or die "Failed to run 'svn propdel svn:executable $path'.";
+        my $escapedPath = escapeSubversionPath($path);
+        system("svn", "propdel", "svn:executable", $escapedPath) == 0 or die "Failed to run 'svn propdel svn:executable $escapedPath'.";
     } elsif (isGit()) {
         chmod(0664, $path);
     }
@@ -184,6 +211,18 @@ sub isGit()
 
     $isGit = isGitDirectory(".");
     return $isGit;
+}
+
+sub isGitSVN()
+{
+    return $isGitSVN if defined $isGitSVN;
+
+    # There doesn't seem to be an officially documented way to determine
+    # if you're in a git-svn checkout. The best suggestions seen so far
+    # all use something like the following:
+    my $output = `git config --get svn-remote.svn.fetch 2>& 1`;
+    $isGitSVN = $output ne '';
+    return $isGitSVN;
 }
 
 sub gitBranch()
@@ -216,8 +255,7 @@ sub isGitBranchBuild()
 sub isSVNDirectory($)
 {
     my ($dir) = @_;
-
-    return -d File::Spec->catdir($dir, ".svn");
+    return system("cd $dir && svn info > " . File::Spec->devnull() . " 2>&1") == 0;
 }
 
 sub isSVN()
@@ -272,8 +310,9 @@ sub determineSVNRoot()
     while (1) {
         my $thisRoot;
         my $thisUUID;
+        my $escapedPath = escapeSubversionPath($path);
         # Ignore error messages in case we've run past the root of the checkout.
-        open INFO, "svn info '$path' 2> " . File::Spec->devnull() . " |" or die;
+        open INFO, "svn info '$escapedPath' 2> " . File::Spec->devnull() . " |" or die;
         while (<INFO>) {
             if (/^Repository Root: (.+)/) {
                 $thisRoot = $1;
@@ -316,7 +355,7 @@ sub determineVCSRoot()
         # Some users have a workflow where svn-create-patch, svn-apply and
         # svn-unapply are used outside of multiple svn working directores,
         # so warn the user and assume Subversion is being used in this case.
-        warn "Unable to determine VCS root; assuming Subversion";
+        warn "Unable to determine VCS root for '" . Cwd::getcwd() . "'; assuming Subversion";
         $isSVN = 1;
     }
 
@@ -329,13 +368,17 @@ sub svnRevisionForDirectory($)
     my $revision;
 
     if (isSVNDirectory($dir)) {
-        my $svnInfo = `LC_ALL=C svn info $dir | grep Revision:`;
+        my $escapedDir = escapeSubversionPath($dir);
+        my $svnInfo = `LC_ALL=C svn info $escapedDir | grep Revision:`;
         ($revision) = ($svnInfo =~ m/Revision: (\d+).*/g);
     } elsif (isGitDirectory($dir)) {
         my $gitLog = `cd $dir && LC_ALL=C git log --grep='git-svn-id: ' -n 1 | grep git-svn-id:`;
         ($revision) = ($gitLog =~ m/ +git-svn-id: .+@(\d+) /g);
     }
-    die "Unable to determine current SVN revision in $dir" unless (defined $revision);
+    if (!defined($revision)) {
+        $revision = "unknown";
+        warn "Unable to determine current SVN revision in $dir";
+    }
     return $revision;
 }
 
@@ -346,7 +389,8 @@ sub pathRelativeToSVNRepositoryRootForPath($)
 
     my $svnInfo;
     if (isSVN()) {
-        $svnInfo = `LC_ALL=C svn info $relativePath`;
+        my $escapedRelativePath = escapeSubversionPath($relativePath);
+        $svnInfo = `LC_ALL=C svn info $escapedRelativePath`;
     } elsif (isGit()) {
         $svnInfo = `LC_ALL=C git svn info $relativePath`;
     }
@@ -390,19 +434,6 @@ sub possiblyColored($$)
     }
 }
 
-sub adjustPathForRecentRenamings($)
-{
-    my ($fullPath) = @_;
-
-    if ($fullPath =~ m|^WebCore/|
-        || $fullPath =~ m|^JavaScriptCore/|
-        || $fullPath =~ m|^WebKit/|
-        || $fullPath =~ m|^WebKit2/|) {
-        return "Source/$fullPath";
-    }
-    return $fullPath;
-}
-
 sub canonicalizePath($)
 {
     my ($file) = @_;
@@ -425,16 +456,88 @@ sub canonicalizePath($)
 sub removeEOL($)
 {
     my ($line) = @_;
+    return "" unless $line;
 
     $line =~ s/[\r\n]+$//g;
     return $line;
 }
 
+sub parseFirstEOL($)
+{
+    my ($fileHandle) = @_;
+
+    # Make input record separator the new-line character to simplify regex matching below.
+    my $savedInputRecordSeparator = $INPUT_RECORD_SEPARATOR;
+    $INPUT_RECORD_SEPARATOR = "\n";
+    my $firstLine  = <$fileHandle>;
+    $INPUT_RECORD_SEPARATOR = $savedInputRecordSeparator;
+
+    return unless defined($firstLine);
+
+    my $eol;
+    if ($firstLine =~ /\r\n/) {
+        $eol = "\r\n";
+    } elsif ($firstLine =~ /\r/) {
+        $eol = "\r";
+    } elsif ($firstLine =~ /\n/) {
+        $eol = "\n";
+    }
+    return $eol;
+}
+
+sub firstEOLInFile($)
+{
+    my ($file) = @_;
+    my $eol;
+    if (open(FILE, $file)) {
+        $eol = parseFirstEOL(*FILE);
+        close(FILE);
+    }
+    return $eol;
+}
+
+# Parses a chunk range line into its components.
+#
+# A chunk range line has the form: @@ -L_1,N_1 +L_2,N_2 @@, where the pairs (L_1, N_1),
+# (L_2, N_2) are ranges that represent the starting line number and line count in the
+# original file and new file, respectively.
+#
+# Note, some versions of GNU diff may omit the comma and trailing line count (e.g. N_1),
+# in which case the omitted line count defaults to 1. For example, GNU diff may output
+# @@ -1 +1 @@, which is equivalent to @@ -1,1 +1,1 @@.
+#
+# This subroutine returns undef if given an invalid or malformed chunk range.
+#
+# Args:
+#   $line: the line to parse.
+#
+# Returns $chunkRangeHashRef
+#   $chunkRangeHashRef: a hash reference representing the parts of a chunk range, as follows--
+#     startingLine: the starting line in the original file.
+#     lineCount: the line count in the original file.
+#     newStartingLine: the new starting line in the new file.
+#     newLineCount: the new line count in the new file.
+sub parseChunkRange($)
+{
+    my ($line) = @_;
+    my $chunkRangeRegEx = qr#^\@\@ -(\d+)(,(\d+))? \+(\d+)(,(\d+))? \@\@#;
+    if ($line !~ /$chunkRangeRegEx/) {
+        return;
+    }
+    my %chunkRange;
+    $chunkRange{startingLine} = $1;
+    $chunkRange{lineCount} = defined($2) ? $3 : 1;
+    $chunkRange{newStartingLine} = $4;
+    $chunkRange{newLineCount} = defined($5) ? $6 : 1;
+    return \%chunkRange;
+}
+
 sub svnStatus($)
 {
     my ($fullPath) = @_;
+    my $escapedFullPath = escapeSubversionPath($fullPath);
     my $svnStatus;
-    open SVN, "svn status --non-interactive --non-recursive '$fullPath' |" or die;
+    open SVN, "svn status --non-interactive --non-recursive '$escapedFullPath' |" or die;
     if (-d $fullPath) {
         # When running "svn stat" on a directory, we can't assume that only one
         # status will be returned (since any files with a status below the
@@ -803,23 +906,31 @@ sub parseDiffHeader($$)
 #   $fileHandle: a file handle advanced to the first line of the next
 #                header block. Leading junk is okay.
 #   $line: the line last read from $fileHandle.
+#   $optionsHashRef: a hash reference representing optional options to use
+#                    when processing a diff.
+#     shouldNotUseIndexPathEOL: whether to use the line endings in the diff instead
+#                               instead of the line endings in the target file; the
+#                               value of 1 if svnConvertedText should use the line
+#                               endings in the diff.
 #
 # Returns ($diffHashRefs, $lastReadLine):
 #   $diffHashRefs: A reference to an array of references to %diffHash hashes.
 #                  See the %diffHash documentation above.
 #   $lastReadLine: the line last read from $fileHandle
-sub parseDiff($$)
+sub parseDiff($$;$)
 {
     # FIXME: Adjust this method so that it dies if the first line does not
     #        match the start of a diff.  This will require a change to
     #        parsePatch() so that parsePatch() skips over leading junk.
-    my ($fileHandle, $line) = @_;
+    my ($fileHandle, $line, $optionsHashRef) = @_;
 
     my $headerStartRegEx = $svnDiffStartRegEx; # SVN-style header for the default
 
     my $headerHashRef; # Last header found, as returned by parseDiffHeader().
     my $svnPropertiesHashRef; # Last SVN properties diff found, as returned by parseSvnDiffProperties().
     my $svnText;
+    my $indexPathEOL;
+    my $numTextChunks = 0;
     while (defined($line)) {
         if (!$headerHashRef && ($line =~ $gitDiffStartRegEx)) {
             # Then assume all diffs in the patch are Git-formatted. This
@@ -842,6 +953,13 @@ sub parseDiff($$)
         }
         if ($line !~ $headerStartRegEx) {
             # Then we are in the body of the diff.
+            my $isChunkRange = defined(parseChunkRange($line));
+            $numTextChunks += 1 if $isChunkRange;
+            if ($indexPathEOL && !$isChunkRange) {
+                # The chunk range is part of the body of the diff, but its line endings should't be
+                # modified or patch(1) will complain. So, we only modify non-chunk range lines.
+                $line =~ s/\r\n|\r|\n/$indexPathEOL/g;
+            }
             $svnText .= $line;
             $line = <$fileHandle>;
             next;
@@ -854,6 +972,9 @@ sub parseDiff($$)
         }
 
         ($headerHashRef, $line) = parseDiffHeader($fileHandle, $line);
+        if (!$optionsHashRef || !$optionsHashRef->{shouldNotUseIndexPathEOL}) {
+            $indexPathEOL = firstEOLInFile($headerHashRef->{indexPath}) if !$headerHashRef->{isNew} && !$headerHashRef->{isBinary};
+        }
 
         $svnText .= $headerHashRef->{svnConvertedText};
     }
@@ -913,6 +1034,7 @@ sub parseDiff($$)
         # diff for a file that only has property changes will not return
         # any SVN converted text.
         $diffHash{svnConvertedText} = $svnText if $svnText;
+        $diffHash{numTextChunks} = $numTextChunks if $svnText && !$headerHashRef->{isBinary};
         push @diffHashRefs, \%diffHash;
     }
 
@@ -1148,13 +1270,19 @@ sub parseSvnPropertyValue($$)
 # Args:
 #   $fileHandle: A file handle to the patch file that has not yet been
 #                read from.
+#   $optionsHashRef: a hash reference representing optional options to use
+#                    when processing a diff.
+#     shouldNotUseIndexPathEOL: whether to use the line endings in the diff instead
+#                               instead of the line endings in the target file; the
+#                               value of 1 if svnConvertedText should use the line
+#                               endings in the diff.
 #
 # Returns:
 #   @diffHashRefs: an array of diff hash references.
 #                  See the %diffHash documentation above.
-sub parsePatch($)
+sub parsePatch($;$)
 {
-    my ($fileHandle) = @_;
+    my ($fileHandle, $optionsHashRef) = @_;
 
     my $newDiffHashRefs;
     my @diffHashRefs; # return value
@@ -1163,7 +1291,7 @@ sub parsePatch($)
 
     while (defined($line)) { # Otherwise, at EOF.
 
-        ($newDiffHashRefs, $line) = parseDiff($fileHandle, $line);
+        ($newDiffHashRefs, $line) = parseDiff($fileHandle, $line, $optionsHashRef);
 
         push @diffHashRefs, @$newDiffHashRefs;
     }
@@ -1314,12 +1442,7 @@ sub setChangeLogDateAndReviewer($$$)
 # Returns $changeLogHashRef:
 #   $changeLogHashRef: a hash reference representing a change log patch.
 #     patch: a ChangeLog patch equivalent to the given one, but with the
-#            newest ChangeLog entry inserted at the top of the file, if possible.
-#     hasOverlappingLines: the value 1 if the change log entry overlaps
-#                          some lines of another change log entry. This can
-#                          happen when deliberately inserting a new ChangeLog
-#                          entry earlier in the file above an entry with
-#                          the same date and author.                     
+#            newest ChangeLog entry inserted at the top of the file, if possible.              
 sub fixChangeLogPatch($)
 {
     my $patch = shift; # $patch will only contain patch fragments for ChangeLog.
@@ -1413,30 +1536,29 @@ sub fixChangeLogPatch($)
         $lines[$i] = "+$text";
     }
 
-    # Finish moving whatever overlapping lines remain, and update
-    # the initial chunk range.
-    my $chunkRangeRegEx = '^\@\@ -(\d+),(\d+) \+\d+,(\d+) \@\@$'; # e.g. @@ -2,6 +2,18 @@
-    if ($lines[$chunkStartIndex - 1] !~ /$chunkRangeRegEx/) {
+    # If @overlappingLines > 0, this is where we make use of the
+    # assumption that the beginning of the source file was not modified.
+    splice(@lines, $chunkStartIndex, 0, @overlappingLines);
+
+    # Update the date start index as it may have changed after shifting
+    # the overlapping lines towards the front.
+    for ($i = $chunkStartIndex; $i < $dateStartIndex; ++$i) {
+        $dateStartIndex = $i if $lines[$i] =~ /$dateStartRegEx/;
+    }
+    splice(@lines, $chunkStartIndex, $dateStartIndex - $chunkStartIndex); # Remove context of later entry.
+    $deletedLineCount += $dateStartIndex - $chunkStartIndex;
+
+    # Update the initial chunk range.
+    my $chunkRangeHashRef = parseChunkRange($lines[$chunkStartIndex - 1]);
+    if (!$chunkRangeHashRef) {
         # FIXME: Handle errors differently from ChangeLog files that
         # are okay but should not be altered. That way we can find out
         # if improvements to the script ever become necessary.
         $changeLogHashRef{patch} = $patch; # Error: unexpected patch string format.
         return \%changeLogHashRef;
     }
-    my $skippedFirstLineCount = $1 - 1;
-    my $oldSourceLineCount = $2;
-    my $oldTargetLineCount = $3;
-
-    if (@overlappingLines != $skippedFirstLineCount) {
-        # This can happen, for example, when deliberately inserting
-        # a new ChangeLog entry earlier in the file.
-        $changeLogHashRef{hasOverlappingLines} = 1;
-        $changeLogHashRef{patch} = $patch;
-        return \%changeLogHashRef;
-    }
-    # If @overlappingLines > 0, this is where we make use of the
-    # assumption that the beginning of the source file was not modified.
-    splice(@lines, $chunkStartIndex, 0, @overlappingLines);
+    my $oldSourceLineCount = $chunkRangeHashRef->{lineCount};
+    my $oldTargetLineCount = $chunkRangeHashRef->{newLineCount};
 
     my $sourceLineCount = $oldSourceLineCount + @overlappingLines - $deletedLineCount;
     my $targetLineCount = $oldTargetLineCount + @overlappingLines - $deletedLineCount;
@@ -1638,6 +1760,23 @@ sub gitConfig($)
     return $result;
 }
 
+sub changeLogSuffix()
+{
+    my $rootPath = determineVCSRoot();
+    my $changeLogSuffixFile = File::Spec->catfile($rootPath, ".changeLogSuffix");
+    return "" if ! -e $changeLogSuffixFile;
+    open FILE, $changeLogSuffixFile or die "Could not open $changeLogSuffixFile: $!";
+    my $changeLogSuffix = <FILE>;
+    chomp $changeLogSuffix;
+    close FILE;
+    return $changeLogSuffix;
+}
+
+sub changeLogFileName()
+{
+    return "ChangeLog" . changeLogSuffix()
+}
+
 sub changeLogNameError($)
 {
     my ($message) = @_;
@@ -1655,7 +1794,7 @@ sub changeLogName()
 
     changeLogNameError("Failed to determine ChangeLog name.") unless $name;
     # getpwuid seems to always succeed on windows, returning the username instead of the full name.  This check will catch that case.
-    changeLogNameError("'$name' does not contain a space!  ChangeLogs should contain your full name.") unless ($name =~ /\w \w/);
+    changeLogNameError("'$name' does not contain a space!  ChangeLogs should contain your full name.") unless ($name =~ /\S\s\S/);
 
     return $name;
 }
@@ -1748,7 +1887,6 @@ sub decodeGitBinaryPatch($$)
     #
     # Each chunk a line which starts from either "literal" or "delta",
     # followed by a number which specifies decoded size of the chunk.
-    # The "delta" type chunks aren't supported by this function yet.
     #
     # Then, content of the chunk comes. To decode the content, we
     # need decode it with base85 first, and then zlib.
@@ -1769,10 +1907,101 @@ sub decodeGitBinaryPatch($$)
     my $reverseBinaryChunk = decodeGitBinaryChunk($encodedReverseChunk, $fullPath);
     my $reverseBinaryChunkActualSize = length($reverseBinaryChunk);
 
-    die "$fullPath: unexpected size of the first chunk (expected $binaryChunkExpectedSize but was $binaryChunkActualSize" if ($binaryChunkExpectedSize != $binaryChunkActualSize);
-    die "$fullPath: unexpected size of the second chunk (expected $reverseBinaryChunkExpectedSize but was $reverseBinaryChunkActualSize" if ($reverseBinaryChunkExpectedSize != $reverseBinaryChunkActualSize);
+    die "$fullPath: unexpected size of the first chunk (expected $binaryChunkExpectedSize but was $binaryChunkActualSize" if ($binaryChunkType eq "literal" and $binaryChunkExpectedSize != $binaryChunkActualSize);
+    die "$fullPath: unexpected size of the second chunk (expected $reverseBinaryChunkExpectedSize but was $reverseBinaryChunkActualSize" if ($reverseBinaryChunkType eq "literal" and $reverseBinaryChunkExpectedSize != $reverseBinaryChunkActualSize);
 
     return ($binaryChunkType, $binaryChunk, $reverseBinaryChunkType, $reverseBinaryChunk);
+}
+
+sub readByte($$)
+{
+    my ($data, $location) = @_;
+    
+    # Return the byte at $location in $data as a numeric value. 
+    return ord(substr($data, $location, 1));
+}
+
+# The git binary delta format is undocumented, except in code:
+# - https://github.com/git/git/blob/master/delta.h:get_delta_hdr_size is the source
+#   of the algorithm in decodeGitBinaryPatchDeltaSize.
+# - https://github.com/git/git/blob/master/patch-delta.c:patch_delta is the source
+#   of the algorithm in applyGitBinaryPatchDelta.
+sub decodeGitBinaryPatchDeltaSize($)
+{
+    my ($binaryChunk) = @_;
+    
+    # Source and destination buffer sizes are stored in 7-bit chunks at the
+    # start of the binary delta patch data.  The highest bit in each byte
+    # except the last is set; the remaining 7 bits provide the next
+    # chunk of the size.  The chunks are stored in ascending significance
+    # order.
+    my $cmd;
+    my $size = 0;
+    my $shift = 0;
+    for (my $i = 0; $i < length($binaryChunk);) {
+        $cmd = readByte($binaryChunk, $i++);
+        $size |= ($cmd & 0x7f) << $shift;
+        $shift += 7;
+        if (!($cmd & 0x80)) {
+            return ($size, $i);
+        }
+    }
+}
+
+sub applyGitBinaryPatchDelta($$)
+{
+    my ($binaryChunk, $originalContents) = @_;
+    
+    # Git delta format consists of two headers indicating source buffer size
+    # and result size, then a series of commands.  Each command is either
+    # a copy-from-old-version (the 0x80 bit is set) or a copy-from-delta
+    # command.  Commands are applied sequentially to generate the result.
+    #
+    # A copy-from-old-version command encodes an offset and size to copy
+    # from in subsequent bits, while a copy-from-delta command consists only
+    # of the number of bytes to copy from the delta.
+
+    # We don't use these values, but we need to know how big they are so that
+    # we can skip to the diff data.
+    my ($size, $bytesUsed) = decodeGitBinaryPatchDeltaSize($binaryChunk);
+    $binaryChunk = substr($binaryChunk, $bytesUsed);
+    ($size, $bytesUsed) = decodeGitBinaryPatchDeltaSize($binaryChunk);
+    $binaryChunk = substr($binaryChunk, $bytesUsed);
+
+    my $out = "";
+    for (my $i = 0; $i < length($binaryChunk); ) {
+        my $cmd = ord(substr($binaryChunk, $i++, 1));
+        if ($cmd & 0x80) {
+            # Extract an offset and size from the delta data, then copy
+            # $size bytes from $offset in the original data into the output.
+            my $offset = 0;
+            my $size = 0;
+            if ($cmd & 0x01) { $offset = readByte($binaryChunk, $i++); }
+            if ($cmd & 0x02) { $offset |= readByte($binaryChunk, $i++) << 8; }
+            if ($cmd & 0x04) { $offset |= readByte($binaryChunk, $i++) << 16; }
+            if ($cmd & 0x08) { $offset |= readByte($binaryChunk, $i++) << 24; }
+            if ($cmd & 0x10) { $size = readByte($binaryChunk, $i++); }
+            if ($cmd & 0x20) { $size |= readByte($binaryChunk, $i++) << 8; }
+            if ($cmd & 0x40) { $size |= readByte($binaryChunk, $i++) << 16; }
+            if ($size == 0) { $size = 0x10000; }
+            $out .= substr($originalContents, $offset, $size);
+        } elsif ($cmd) {
+            # Copy $cmd bytes from the delta data into the output.
+            $out .= substr($binaryChunk, $i, $cmd);
+            $i += $cmd;
+        } else {
+            die "unexpected delta opcode 0";
+        }
+    }
+
+    return $out;
+}
+
+sub escapeSubversionPath($)
+{
+    my ($path) = @_;
+    $path .= "@" if $path =~ /@/;
+    return $path;
 }
 
 1;

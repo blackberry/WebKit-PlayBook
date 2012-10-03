@@ -26,6 +26,7 @@
 #include "config.h"
 #include "htmlediting.h"
 
+#include "AXObjectCache.h"
 #include "Document.h"
 #include "EditingText.h"
 #include "HTMLBRElement.h"
@@ -46,6 +47,7 @@
 #include "TextIterator.h"
 #include "VisiblePosition.h"
 #include "visible_units.h"
+#include <wtf/Assertions.h>
 #include <wtf/StdLibExtras.h>
 #include <wtf/unicode/CharacterNames.h>
 
@@ -72,6 +74,12 @@ int comparePositions(const Position& a, const Position& b)
     ASSERT(nodeB);
     int offsetA = a.deprecatedEditingOffset();
     int offsetB = b.deprecatedEditingOffset();
+
+    // This is a HACK!!! Please remove when rebasing.
+    // This code has been re-organized to avoid this upstream but cherry-picking requires
+    // pulling in a re-factor of the code.
+    if (!nodeA || !nodeB)
+        return 0;
 
     Node* shadowAncestorA = nodeA->shadowAncestorNode();
     if (shadowAncestorA == nodeA)
@@ -104,19 +112,19 @@ int comparePositions(const VisiblePosition& a, const VisiblePosition& b)
     return comparePositions(a.deepEquivalent(), b.deepEquivalent());
 }
 
-Node* highestEditableRoot(const Position& position)
+Node* highestEditableRoot(const Position& position, EditableType editableType)
 {
     Node* node = position.deprecatedNode();
     if (!node)
         return 0;
         
-    Node* highestRoot = editableRootForPosition(position);
+    Node* highestRoot = editableRootForPosition(position, editableType);
     if (!highestRoot)
         return 0;
     
     node = highestRoot;
     while (node) {
-        if (node->rendererIsEditable())
+        if (node->rendererIsEditable(editableType))
             highestRoot = node;
         if (node->hasTagName(bodyTag))
             break;
@@ -143,7 +151,7 @@ Node* lowestEditableAncestor(Node* node)
     return lowestRoot;
 }
 
-bool isEditablePosition(const Position& p)
+bool isEditablePosition(const Position& p, EditableType editableType)
 {
     Node* node = p.deprecatedNode();
     if (!node)
@@ -152,7 +160,7 @@ bool isEditablePosition(const Position& p)
     if (node->renderer() && node->renderer()->isTable())
         node = node->parentNode();
     
-    return node->rendererIsEditable();
+    return node->rendererIsEditable(editableType);
 }
 
 bool isAtUnsplittableElement(const Position& pos)
@@ -162,7 +170,7 @@ bool isAtUnsplittableElement(const Position& pos)
 }
     
     
-bool isRichlyEditablePosition(const Position& p)
+bool isRichlyEditablePosition(const Position& p, EditableType editableType)
 {
     Node* node = p.deprecatedNode();
     if (!node)
@@ -171,10 +179,10 @@ bool isRichlyEditablePosition(const Position& p)
     if (node->renderer() && node->renderer()->isTable())
         node = node->parentNode();
     
-    return node->rendererIsRichlyEditable();
+    return node->rendererIsRichlyEditable(editableType);
 }
 
-Element* editableRootForPosition(const Position& p)
+Element* editableRootForPosition(const Position& p, EditableType editableType)
 {
     Node* node = p.containerNode();
     if (!node)
@@ -183,7 +191,7 @@ Element* editableRootForPosition(const Position& p)
     if (node->renderer() && node->renderer()->isTable())
         node = node->parentNode();
     
-    return node->rootEditableElement();
+    return node->rootEditableElement(editableType);
 }
 
 // Finds the enclosing element until which the tree can be split.
@@ -1031,7 +1039,7 @@ bool lineBreakExistsAtPosition(const Position& position)
     if (!position.anchorNode()->isTextNode() || !position.anchorNode()->renderer()->style()->preserveNewline())
         return false;
     
-    Text* textNode = static_cast<Text*>(position.anchorNode());
+    Text* textNode = toText(position.anchorNode());
     unsigned offset = position.offsetInContainerNode();
     return offset < textNode->length() && textNode->data()[offset] == '\n';
 }
@@ -1070,31 +1078,24 @@ VisibleSelection selectionForParagraphIteration(const VisibleSelection& original
 // opertion is unreliable. TextIterator's TextIteratorEmitsCharactersBetweenAllVisiblePositions mode needs to be fixed, 
 // or these functions need to be changed to iterate using actual VisiblePositions.
 // FIXME: Deploy these functions everywhere that TextIterators are used to convert between VisiblePositions and indices.
-int indexForVisiblePosition(const VisiblePosition& visiblePosition, Element **scope)
+int indexForVisiblePosition(const VisiblePosition& visiblePosition, RefPtr<Element>& scope)
 {
     if (visiblePosition.isNull())
         return 0;
-        
+
     Position p(visiblePosition.deepEquivalent());
     Document* document = p.anchorNode()->document();
-    
-    Element* root;
     Node* shadowRoot = p.anchorNode()->shadowTreeRootNode();
-    
+
     if (shadowRoot) {
         // Use the shadow root for form elements, since TextIterators will not enter shadow content.
         ASSERT(shadowRoot->isElementNode());
-        root = static_cast<Element*>(shadowRoot);
+        scope = static_cast<Element*>(shadowRoot);
     } else
-        root = document->documentElement();
-    
-    if (scope) {
-        ASSERT(!*scope);
-        *scope = root;
-    }
-    
-    RefPtr<Range> range = Range::create(document, firstPositionInNode(root), p.parentAnchoredEquivalent());
-    
+        scope = document->documentElement();
+
+    RefPtr<Range> range = Range::create(document, firstPositionInNode(scope.get()), p.parentAnchoredEquivalent());
+
     return TextIterator::rangeLength(range.get(), true);
 }
 
@@ -1155,20 +1156,13 @@ bool areIdenticalElements(const Node* first, const Node* second)
     if (!toElement(first)->tagQName().matches(toElement(second)->tagQName()))
         return false;
 
-    NamedNodeMap* firstMap = toElement(first)->attributes();
-    NamedNodeMap* secondMap = toElement(second)->attributes();
-    unsigned firstLength = firstMap->length();
+    NamedNodeMap* firstMap = toElement(first)->updatedAttributes();
+    NamedNodeMap* secondMap = toElement(second)->updatedAttributes();
 
-    if (firstLength != secondMap->length())
-        return false;
-
-    for (unsigned i = 0; i < firstLength; i++) {
-        Attribute* attribute = firstMap->attributeItem(i);
-        Attribute* secondAttribute = secondMap->getAttributeItem(attribute->name());
-        if (!secondAttribute || attribute->value() != secondAttribute->value())
-            return false;
-    }
-
+    if (firstMap)
+        return firstMap->mapsEquivalent(secondMap);
+    if (secondMap)
+        return secondMap->mapsEquivalent(firstMap);
     return true;
 }
 

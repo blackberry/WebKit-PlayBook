@@ -35,7 +35,6 @@
 #include <qhash.h>
 #include <qmetaobject.h>
 #include <qmetatype.h>
-#include <qwebelement.h>
 
 namespace JSC {
 namespace Bindings {
@@ -98,8 +97,6 @@ QtInstance::QtInstance(QObject* o, PassRefPtr<RootObject> rootObject, QScriptEng
     , m_hashkey(o)
     , m_ownership(ownership)
 {
-    // This is a good place to register Qt metatypes that are in the QtWebKit module, as this is class will initialize if we have a QObject bridge.
-    qRegisterMetaType<QWebElement>();
 }
 
 QtInstance::~QtInstance()

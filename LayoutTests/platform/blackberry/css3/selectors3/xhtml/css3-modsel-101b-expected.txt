@@ -1,29 +1,17 @@
 layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
-layer at (0,0) size 800x600
-  RenderBlock {HTML} at (0,0) size 800x600
-    RenderBody {BODY} at (8,8) size 784x584
-      RenderBlock {P} at (0,0) size 784x20 [bgcolor=#00FF00]
+layer at (0,0) size 800x160
+  RenderBlock {html} at (0,0) size 800x160
+    RenderBody {body} at (8,16) size 784x128
+      RenderBlock {p} at (0,0) size 784x20 [bgcolor=#00FF00]
         RenderText {#text} at (0,0) size 308x19
           text run at (0,0) width 308: "This paragraph should have a green background."
-      RenderBlock (anonymous) at (0,36) size 784x20
-        RenderInline {Q} at (0,0) size 235x19
-          RenderInline (generated) at (0,0) size 7x19
-            RenderQuote at (0,0) size 7x19
-              text run at (0,0) width 7: "\""
-          RenderText {#text} at (7,0) size 221x19
-            text run at (7,0) width 221: "This paragraph should be unstyled."
-          RenderInline (generated) at (0,0) size 7x19
-            RenderQuote at (228,0) size 7x19
-              text run at (228,0) width 7: "\""
-        RenderText {#text} at (235,0) size 4x19
-          text run at (235,0) width 4: " "
-        RenderInline {R} at (0,0) size 308x19 [bgcolor=#00FF00]
-          RenderText {#text} at (239,0) size 308x19
-            text run at (239,0) width 308: "This paragraph should have a green background."
-        RenderText {#text} at (547,0) size 4x19
-          text run at (547,0) width 4: " "
-        RenderInline {S} at (0,0) size 221x19
-          RenderText {#text} at (551,0) size 221x19
-            text run at (551,0) width 221: "This paragraph should be unstyled."
-        RenderText {#text} at (0,0) size 0x0
+      RenderBlock {q} at (0,36) size 784x20
+        RenderText {#text} at (0,0) size 221x19
+          text run at (0,0) width 221: "This paragraph should be unstyled."
+      RenderBlock {r} at (0,72) size 784x20 [bgcolor=#00FF00]
+        RenderText {#text} at (0,0) size 308x19
+          text run at (0,0) width 308: "This paragraph should have a green background."
+      RenderBlock {s} at (0,108) size 784x20
+        RenderText {#text} at (0,0) size 221x19
+          text run at (0,0) width 221: "This paragraph should be unstyled."

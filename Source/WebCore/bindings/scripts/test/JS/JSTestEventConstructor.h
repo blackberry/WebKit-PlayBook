@@ -29,12 +29,14 @@
 
 namespace WebCore {
 
+class JSDictionary;
+
 class JSTestEventConstructor : public JSDOMWrapper {
 public:
     typedef JSDOMWrapper Base;
     static JSTestEventConstructor* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestEventConstructor> impl)
     {
-        JSTestEventConstructor* ptr = new (JSC::allocateCell<JSTestEventConstructor>(globalObject->globalData().heap)) JSTestEventConstructor(structure, globalObject, impl);
+        JSTestEventConstructor* ptr = new (NotNull, JSC::allocateCell<JSTestEventConstructor>(globalObject->globalData().heap)) JSTestEventConstructor(structure, globalObject, impl);
         ptr->finishCreation(globalObject->globalData());
         return ptr;
     }
@@ -42,6 +44,8 @@ public:
     static JSC::JSObject* createPrototype(JSC::ExecState*, JSC::JSGlobalObject*);
     static bool getOwnPropertySlot(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertySlot&);
     static bool getOwnPropertyDescriptor(JSC::JSObject*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertyDescriptor&);
+    static void destroy(JSC::JSCell*);
+    ~JSTestEventConstructor();
     static const JSC::ClassInfo s_info;
 
     static JSC::Structure* createStructure(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::JSValue prototype)
@@ -50,15 +54,34 @@ public:
     }
 
     static JSC::JSValue getConstructor(JSC::ExecState*, JSC::JSGlobalObject*);
-    TestEventConstructor* impl() const { return m_impl.get(); }
+    TestEventConstructor* impl() const { return m_impl; }
+    void releaseImpl() { m_impl->deref(); m_impl = 0; }
+
+    void releaseImplIfNotNull() { if (m_impl) { m_impl->deref(); m_impl = 0; } }
 
 private:
-    RefPtr<TestEventConstructor> m_impl;
+    TestEventConstructor* m_impl;
 protected:
     JSTestEventConstructor(JSC::Structure*, JSDOMGlobalObject*, PassRefPtr<TestEventConstructor>);
     void finishCreation(JSC::JSGlobalData&);
     static const unsigned StructureFlags = JSC::OverridesGetOwnPropertySlot | Base::StructureFlags;
 };
+
+class JSTestEventConstructorOwner : public JSC::WeakHandleOwner {
+    virtual bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::SlotVisitor&);
+    virtual void finalize(JSC::Handle<JSC::Unknown>, void* context);
+};
+
+inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld*, TestEventConstructor*)
+{
+    DEFINE_STATIC_LOCAL(JSTestEventConstructorOwner, jsTestEventConstructorOwner, ());
+    return &jsTestEventConstructorOwner;
+}
+
+inline void* wrapperContext(DOMWrapperWorld* world, TestEventConstructor*)
+{
+    return world;
+}
 
 JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject*, TestEventConstructor*);
 TestEventConstructor* toTestEventConstructor(JSC::JSValue);
@@ -69,7 +92,7 @@ public:
     static JSC::JSObject* self(JSC::ExecState*, JSC::JSGlobalObject*);
     static JSTestEventConstructorPrototype* create(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::Structure* structure)
     {
-        JSTestEventConstructorPrototype* ptr = new (JSC::allocateCell<JSTestEventConstructorPrototype>(globalData.heap)) JSTestEventConstructorPrototype(globalData, globalObject, structure);
+        JSTestEventConstructorPrototype* ptr = new (NotNull, JSC::allocateCell<JSTestEventConstructorPrototype>(globalData.heap)) JSTestEventConstructorPrototype(globalData, globalObject, structure);
         ptr->finishCreation(globalData);
         return ptr;
     }
@@ -95,7 +118,7 @@ public:
     typedef DOMConstructorObject Base;
     static JSTestEventConstructorConstructor* create(JSC::ExecState* exec, JSC::Structure* structure, JSDOMGlobalObject* globalObject)
     {
-        JSTestEventConstructorConstructor* ptr = new (JSC::allocateCell<JSTestEventConstructorConstructor>(*exec->heap())) JSTestEventConstructorConstructor(structure, globalObject);
+        JSTestEventConstructorConstructor* ptr = new (NotNull, JSC::allocateCell<JSTestEventConstructorConstructor>(*exec->heap())) JSTestEventConstructorConstructor(structure, globalObject);
         ptr->finishCreation(exec, globalObject);
         return ptr;
     }
@@ -112,6 +135,8 @@ protected:
     static JSC::EncodedJSValue JSC_HOST_CALL constructJSTestEventConstructor(JSC::ExecState*);
     static JSC::ConstructType getConstructData(JSC::JSCell*, JSC::ConstructData&);
 };
+
+bool fillTestEventConstructorInit(TestEventConstructorInit&, JSDictionary&);
 
 // Attributes
 

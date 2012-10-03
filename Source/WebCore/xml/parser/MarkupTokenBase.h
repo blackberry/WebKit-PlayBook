@@ -27,7 +27,7 @@
 #ifndef MarkupTokenBase_h
 #define MarkupTokenBase_h
 
-#include "NamedNodeMap.h"
+#include "ElementAttributeData.h"
 #include <wtf/PassOwnPtr.h>
 #include <wtf/Vector.h>
 
@@ -153,7 +153,7 @@ public:
     {
         ASSERT(m_type == TypeSet::Uninitialized);
         m_type = TypeSet::DOCTYPE;
-        m_doctypeData = adoptPtr(new DoctypeData());
+        m_doctypeData = adoptPtr(new DoctypeData);
     }
 
     void beginDOCTYPE(UChar character)
@@ -410,7 +410,7 @@ public:
         }
     }
 
-    AtomicMarkupTokenBase(typename Token::Type::Type type, AtomicString name, PassRefPtr<NamedNodeMap> attributes = 0)
+    AtomicMarkupTokenBase(typename Token::Type::Type type, AtomicString name, PassOwnPtr<AttributeVector> attributes = nullptr)
         : m_type(type)
         , m_name(name)
         , m_attributes(attributes)
@@ -446,13 +446,13 @@ public:
         return m_attributes->getAttributeItem(attributeName);
     }
 
-    NamedNodeMap* attributes() const
+    AttributeVector* attributes() const
     {
         ASSERT(usesAttributes());
         return m_attributes.get();
     }
 
-    PassRefPtr<NamedNodeMap> takeAtributes()
+    PassOwnPtr<AttributeVector> takeAttributes()
     {
         ASSERT(usesAttributes());
         return m_attributes.release();
@@ -516,7 +516,7 @@ protected:
     // For StartTag and EndTag
     bool m_selfClosing;
 
-    RefPtr<NamedNodeMap> m_attributes;
+    OwnPtr<AttributeVector> m_attributes;
 };
 
 template<typename Token>
@@ -526,7 +526,7 @@ inline void AtomicMarkupTokenBase<Token>::initializeAttributes(const typename To
     if (!size)
         return;
 
-    m_attributes = NamedNodeMap::create();
+    m_attributes = AttributeVector::create();
     m_attributes->reserveInitialCapacity(size);
     for (size_t i = 0; i < size; ++i) {
         const typename Token::Attribute& attribute = attributes[i];
@@ -540,8 +540,8 @@ inline void AtomicMarkupTokenBase<Token>::initializeAttributes(const typename To
         ASSERT(attribute.m_valueRange.m_start);
         ASSERT(attribute.m_valueRange.m_end);
 
-        String value(attribute.m_value.data(), attribute.m_value.size());
-        m_attributes->insertAttribute(Attribute::createMapped(nameForAttribute(attribute), value), false);
+        AtomicString value(attribute.m_value.data(), attribute.m_value.size());
+        m_attributes->insertAttribute(Attribute::create(nameForAttribute(attribute), value));
     }
 }
 

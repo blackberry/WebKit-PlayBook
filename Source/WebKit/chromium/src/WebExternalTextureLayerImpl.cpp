@@ -27,43 +27,31 @@
 #include "WebExternalTextureLayerImpl.h"
 
 #include "GraphicsContext.h"
-#include "WebCanvas.h"
-#include "WebLayerClient.h"
+#include "platform/WebCanvas.h"
 
 using namespace WebCore;
 
 namespace WebKit {
 
-PassRefPtr<WebExternalTextureLayerImpl> WebExternalTextureLayerImpl::create(WebLayerClient* client)
+PassRefPtr<WebExternalTextureLayerImpl> WebExternalTextureLayerImpl::create()
 {
-    return adoptRef(new WebExternalTextureLayerImpl(client));
+    return adoptRef(new WebExternalTextureLayerImpl());
 }
 
-WebExternalTextureLayerImpl::WebExternalTextureLayerImpl(WebLayerClient* client)
-    : PluginLayerChromium(this)
-    , m_client(client)
+WebExternalTextureLayerImpl::WebExternalTextureLayerImpl()
+    : PluginLayerChromium()
 {
     setFlipped(false);
+    setIsDrawable(true);
 }
 
 WebExternalTextureLayerImpl::~WebExternalTextureLayerImpl()
 {
-    setDelegate(0);
 }
 
 bool WebExternalTextureLayerImpl::drawsContent() const
 {
-    return !!textureId();
-}
-
-void WebExternalTextureLayerImpl::paintContents(GraphicsContext&, const IntRect&)
-{
-}
-
-void WebExternalTextureLayerImpl::notifySyncRequired()
-{
-    if (m_client)
-        m_client->notifyNeedsComposite();
+    return !!textureId() && LayerChromium::drawsContent();
 }
 
 } // namespace WebKit

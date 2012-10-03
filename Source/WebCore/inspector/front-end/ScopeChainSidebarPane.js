@@ -83,7 +83,8 @@ WebInspector.ScopeChainSidebarPane.prototype = {
                         var exception = details.reason === WebInspector.DebuggerModel.BreakReason.Exception ? details.auxData : 0;
                         if (exception) {
                             extraProperties = extraProperties || [];
-                            extraProperties.push(new WebInspector.RemoteObjectProperty("<exception>", WebInspector.RemoteObject.fromPayload(exception)));
+                            var exceptionObject = /** @type {RuntimeAgent.RemoteObject} */ exception;
+                            extraProperties.push(new WebInspector.RemoteObjectProperty("<exception>", WebInspector.RemoteObject.fromPayload(exceptionObject)));
                         }
                     }
                     break;
@@ -166,10 +167,12 @@ WebInspector.ScopeVariableTreeElement.prototype = {
         var result;
 
         do {
-            if (result)
-                result = current.property.name + "." + result;
-            else
-                result = current.property.name;
+            if (current.property) {
+                if (result)
+                    result = current.property.name + "." + result;
+                else
+                    result = current.property.name;
+            }
             current = current.parent;
         } while (current && !current.root);
 

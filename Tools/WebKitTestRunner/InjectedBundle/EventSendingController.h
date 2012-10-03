@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010, 2011 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +27,8 @@
 #define EventSendingController_h
 
 #include "JSWrappable.h"
+#include <WebKit2/WKEvent.h>
+#include <WebKit2/WKGeometry.h>
 #include <wtf/PassRefPtr.h>
 
 #if !PLATFORM(MAC) && !PLATFORM(QT) && !PLATFORM(GTK)
@@ -58,6 +60,7 @@ public:
     void textZoomOut();
     void zoomPageIn();
     void zoomPageOut();
+    void scalePageBy(double scale, double x, double y);
 
 #if ENABLE(TOUCH_EVENTS)
     // Touch events.
@@ -67,8 +70,10 @@ public:
     void touchStart();
     void touchMove();
     void touchEnd();
+    void touchCancel();
     void clearTouchPoints();
     void releaseTouchPoint(int index);
+    void cancelTouchPoint(int index);
 #endif
 
 private:

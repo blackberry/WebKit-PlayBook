@@ -31,14 +31,16 @@
 #ifndef WebFrameClient_h
 #define WebFrameClient_h
 
-#include "WebCommon.h"
-#include "WebFileSystem.h"
+#include "WebDOMMessageEvent.h"
 #include "WebIconURL.h"
 #include "WebNavigationPolicy.h"
 #include "WebNavigationType.h"
+#include "WebSecurityOrigin.h"
 #include "WebStorageQuotaType.h"
 #include "WebTextDirection.h"
-#include "WebURLError.h"
+#include "platform/WebCommon.h"
+#include "platform/WebFileSystem.h"
+#include "platform/WebURLError.h"
 
 #if WEBKIT_USING_V8
 #include <v8.h>
@@ -50,13 +52,16 @@ class WebApplicationCacheHost;
 class WebApplicationCacheHostClient;
 class WebCookieJar;
 class WebDataSource;
+class WebDOMEvent;
 class WebFormElement;
 class WebFrame;
+class WebIntent;
+class WebIntentRequest;
+class WebIntentServiceInfo;
 class WebMediaPlayer;
 class WebMediaPlayerClient;
 class WebNode;
 class WebPlugin;
-class WebSecurityOrigin;
 class WebSharedWorker;
 class WebStorageQuotaCallbacks;
 class WebString;
@@ -65,7 +70,7 @@ class WebURLLoader;
 class WebURLRequest;
 class WebURLResponse;
 class WebWorker;
-class WebWorkerClient;
+class WebSharedWorkerClient;
 struct WebPluginParams;
 struct WebRect;
 struct WebSize;
@@ -77,9 +82,6 @@ public:
 
     // May return null.
     virtual WebPlugin* createPlugin(WebFrame*, const WebPluginParams&) { return 0; }
-
-    // May return null.
-    virtual WebWorker* createWorker(WebFrame*, WebWorkerClient*) { return 0; }
 
     // May return null.
     virtual WebSharedWorker* createSharedWorker(WebFrame*, const WebURL&, const WebString&, unsigned long long) { return 0; }
@@ -108,13 +110,6 @@ public:
 
     // This frame is about to be closed.
     virtual void willClose(WebFrame*) { }
-
-    // Indicates two things:
-    //   1) This frame may have a new layout now.
-    //   2) Calling layout() is a no-op.
-    // After calling WebWidget::layout(), expect to get this notification
-    // for each frame unless the frame did not need a layout.
-    virtual void didUpdateLayout(WebFrame*) { }
 
     // Load commands -------------------------------------------------------
 
@@ -302,7 +297,7 @@ public:
     // Notifies that a new script context has been created for this frame.
     // This is similar to didClearWindowObject but only called once per
     // frame context.
-    virtual void didCreateScriptContext(WebFrame*, v8::Handle<v8::Context>, int worldId) { }
+    virtual void didCreateScriptContext(WebFrame*, v8::Handle<v8::Context>, int extensionGroup, int worldId) { }
 
     // WebKit is about to release its reference to a v8 context for a frame.
     virtual void willReleaseScriptContext(WebFrame*, v8::Handle<v8::Context>, int worldId) { }
@@ -380,6 +375,25 @@ public:
         WebFrame*, WebStorageQuotaType,
         unsigned long long newQuotaInBytes,
         WebStorageQuotaCallbacks*) { }
+
+    // Web Intents ---------------------------------------------------
+
+    // Register a service to handle Web Intents.
+    virtual void registerIntentService(WebFrame*, const WebIntentServiceInfo&) { }
+
+    // Start a Web Intents activity. The callee uses the |WebIntentRequest|
+    // object to coordinate replies to the intent invocation.
+    virtual void dispatchIntent(WebFrame*, const WebIntentRequest&) { }
+
+    // Messages ------------------------------------------------------
+
+    // Notifies the embedder that a postMessage was issued on this frame, and
+    // gives the embedder a chance to handle it instead of WebKit. Returns true
+    // if the embedder handled it.
+    virtual bool willCheckAndDispatchMessageEvent(
+        WebFrame* source,
+        WebSecurityOrigin target,
+        WebDOMMessageEvent) { return false; }
 
 protected:
     ~WebFrameClient() { }

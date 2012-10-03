@@ -67,7 +67,9 @@ void GtkPopupMenu::appendItem(GtkAction* action)
     gtk_widget_set_tooltip_text(menuItem, gtk_action_get_tooltip(action));
     g_signal_connect(menuItem, "select", G_CALLBACK(GtkPopupMenu::selectItemCallback), this);
     gtk_menu_shell_append(GTK_MENU_SHELL(m_popup.get()), menuItem);
-    gtk_widget_show(menuItem);
+
+    if (gtk_action_is_visible(action))
+        gtk_widget_show(menuItem);
 }
 
 void GtkPopupMenu::popUp(const IntSize& menuSize, const IntPoint& menuPosition, int itemCount, int selectedItem, const GdkEvent* event)
@@ -176,9 +178,9 @@ bool GtkPopupMenu::typeAheadFind(GdkEventKey* event)
     // menulists.
     bool repeatingCharacter = unicodeCharacter != m_previousKeyEventCharacter;
     if (event->time - m_previousKeyEventTimestamp > gSearchTimeoutMs)
-        m_currentSearchString = String(static_cast<UChar*>(utf16String.get()), charactersWritten);
+        m_currentSearchString = String(reinterpret_cast<UChar*>(utf16String.get()), charactersWritten);
     else if (repeatingCharacter)
-        m_currentSearchString.append(String(static_cast<UChar*>(utf16String.get()), charactersWritten));
+        m_currentSearchString.append(String(reinterpret_cast<UChar*>(utf16String.get()), charactersWritten));
 
     m_previousKeyEventTimestamp = event->time;
     m_previousKeyEventCharacter = unicodeCharacter;

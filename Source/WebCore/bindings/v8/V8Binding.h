@@ -38,6 +38,7 @@
 #include "V8DOMWrapper.h"
 #include "V8GCController.h"
 #include "V8HiddenPropertyName.h"
+#include <wtf/Noncopyable.h>
 #include <wtf/text/AtomicString.h>
 
 #include <v8.h>
@@ -45,6 +46,7 @@
 namespace WebCore {
 
     class DOMStringList;
+    class DOMWrapperVisitor;
     class EventListener;
     class EventTarget;
 
@@ -122,6 +124,7 @@ namespace WebCore {
         }
 
         StringCache* stringCache() { return &m_stringCache; }
+        void visitJSExternalStrings(DOMWrapperVisitor*);
 
         DOMDataList& allStores() { return m_domDataList; }
 
@@ -142,6 +145,10 @@ namespace WebCore {
         DOMDataStore* domDataStore() { return m_domDataStore; }
         // DOMDataStore is owned outside V8BindingPerIsolateData.
         void setDOMDataStore(DOMDataStore* store) { m_domDataStore = store; }
+
+        int recursionLevel() const { return m_recursionLevel; }
+        int incrementRecursionLevel() { return ++m_recursionLevel; }
+        int decrementRecursionLevel() { return --m_recursionLevel; }
 
 #ifndef NDEBUG
         GlobalHandleMap& globalHandleMap() { return m_globalHandleMap; }
@@ -165,6 +172,8 @@ namespace WebCore {
 
         bool m_constructorMode;
         friend class ConstructorMode;
+
+        int m_recursionLevel;
 
 #ifndef NDEBUG
         GlobalHandleMap m_globalHandleMap;
@@ -502,9 +511,9 @@ namespace WebCore {
         return V8ParameterBase::prepareBase();
     }
 
-    enum ParameterMissingPolicy {
-        MissingIsUndefined,
-        MissingIsEmpty
+    enum ParameterDefaultPolicy {
+        DefaultIsUndefined,
+        DefaultIsNullString
     };
 
 } // namespace WebCore

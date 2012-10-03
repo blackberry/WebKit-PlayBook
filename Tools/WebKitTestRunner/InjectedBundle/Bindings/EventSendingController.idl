@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010, 2011 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -50,8 +50,10 @@ module WTR {
         void touchStart();
         void touchMove();
         void touchEnd();
+        void touchCancel();
         void clearTouchPoints();
         void releaseTouchPoint(in long index);
+        void cancelTouchPoint(in long index);
 #endif
     };
 

@@ -42,6 +42,10 @@
 #include "RenderLayerCompositor.h"
 #endif
 
+#if ENABLE(VIEWPORT_REFLOW)
+#include "Settings.h"
+#endif
+
 namespace WebCore {
 
 RenderView::RenderView(Node* node, FrameView* view)
@@ -144,7 +148,8 @@ void RenderView::layout()
     }
 
 #if ENABLE(VIEWPORT_REFLOW)
-    calcReflowWidth();
+    if (shouldReflow())
+        calcReflowWidth();
 #endif
 
     ASSERT(layoutDelta() == LayoutSize());
@@ -192,6 +197,31 @@ bool RenderView::requiresColumns(int desiredColumnCount) const
         }
     }
     return RenderBlock::requiresColumns(desiredColumnCount);
+}
+
+void RenderView::calcColumnWidth()
+{
+    int columnWidth = contentLogicalWidth();
+    if (m_frameView && style()->hasInlineColumnAxis()) {
+        if (Frame* frame = m_frameView->frame()) {
+            if (Page* page = frame->page()) {
+                if (int pageLength = page->pagination().pageLength)
+                    columnWidth = pageLength;
+            }
+        }
+    }
+    setDesiredColumnCountAndWidth(1, columnWidth);
+}
+
+ColumnInfo::PaginationUnit RenderView::paginationUnit() const
+{
+    if (m_frameView) {
+        if (Frame* frame = m_frameView->frame()) {
+            if (Page* page = frame->page())
+                return (frame == page->mainFrame() && page->pagination().behavesLikeColumns) ? ColumnInfo::Column : ColumnInfo::Page;
+        }
+    }
+    return ColumnInfo::Page;
 }
 
 void RenderView::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
@@ -783,6 +813,24 @@ int RenderView::viewWidth() const
     return width;
 }
 
+int RenderView::viewLogicalHeight() const
+{
+    int height = style()->isHorizontalWritingMode() ? viewHeight() : viewWidth();
+
+    if (hasColumns() && !style()->hasInlineColumnAxis()) {
+        if (Frame* frame = m_frameView->frame()) {
+            if (Page* page = frame->page()) {
+                if (frame == page->mainFrame()) {
+                    if (int pageLength = page->pagination().pageLength)
+                        height = pageLength;
+                }
+            }
+        }
+    }
+
+    return height;
+}
+
 float RenderView::zoomFactor() const
 {
     Frame* frame = m_frameView->frame();
@@ -879,7 +927,7 @@ bool RenderView::shouldReflow() const
     if (!m_frameView)
         return false;
 
-    return m_reflowWidth != m_frameView->reflowWidth();
+    return document()->settings() && document()->settings()->isTextReflowEnabled() && (m_reflowWidth != m_frameView->reflowWidth());
 }
 #endif
 
@@ -912,7 +960,7 @@ void RenderView::styleDidChange(StyleDifference diff, const RenderStyle* oldStyl
     }
 }
 
-RenderFlowThread* RenderView::renderFlowThreadWithName(const AtomicString& flowThread)
+RenderFlowThread* RenderView::ensureRenderFlowThreadWithName(const AtomicString& flowThread)
 {
     if (!m_renderFlowThreadList)
         m_renderFlowThreadList = adoptPtr(new RenderFlowThreadList());
@@ -927,7 +975,7 @@ RenderFlowThread* RenderView::renderFlowThreadWithName(const AtomicString& flowT
     RenderFlowThread* flowRenderer = new (renderArena()) RenderFlowThread(document(), flowThread);
     flowRenderer->setStyle(RenderFlowThread::createFlowThreadStyle(style()));
     addChild(flowRenderer);
-    
+
     m_renderFlowThreadList->add(flowRenderer);
     setIsRenderFlowThreadOrderDirty(true);
 
@@ -956,6 +1004,13 @@ void RenderView::layoutRenderFlowThreads()
         RenderFlowThread* flowRenderer = *iter;
         flowRenderer->layoutIfNeeded();
     }
+}
+
+RenderBlock::IntervalArena* RenderView::intervalArena()
+{
+    if (!m_intervalArena)
+        m_intervalArena = IntervalArena::create();
+    return m_intervalArena.get();
 }
 
 } // namespace WebCore

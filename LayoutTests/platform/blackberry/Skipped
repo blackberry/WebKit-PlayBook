@@ -22,10 +22,6 @@ fast/loader/empty-embed-src-attribute.html
 fast/loader/frames-with-unload-handlers-in-page-cache.html
 fast/loader/location-port.html
 fast/loader/null-request-after-willSendRequest.html
-fast/text/international/thai-cursor-position.html
-
-# Bug #147 DRT parsing script doesn't like the results from this test
-fast/text/large-text-composed-char-dos.html
 
 # Bug #600 fast/workers tests that crash or fail
 # Crash
@@ -556,6 +552,8 @@ http/tests/xmlhttprequest/origin-whitelisting-ip-addresses.html
 http/tests/xmlhttprequest/re-login-async.html
 http/tests/xmlhttprequest/re-login.html
 http/tests/xmlhttprequest/remember-bad-password.html
+http/tests/xmlhttprequest/basic-auth-nopassword.html
+http/tests/xmlhttprequest/basic-auth-nouser.html
 
 # Bug #3542  HTTP tests that have incorrect layout
 http/tests/appcache/crash-when-navigating-away-then-back.html
@@ -806,7 +804,7 @@ http/tests/xmlhttprequest/simple-cross-origin-denied-events-post.html
 http/tests/xmlhttprequest/simple-cross-origin-denied-events-sync.html
 http/tests/xmlhttprequest/simple-cross-origin-denied-events.html
 http/tests/xmlhttprequest/simple-cross-origin-progress-events.html
-http/tests/xmlhttprequest/svg-created-by-xhr-disallowed-in-dashboard.html
+http/tests/xmlhttprequest/svg-created-by-xhr-allowed-in-dashboard.html
 http/tests/xmlhttprequest/upload-onload-event.html
 http/tests/xmlhttprequest/upload-onprogress-event.html
 http/tests/xmlhttprequest/upload-progress-events.html
@@ -820,51 +818,6 @@ http/tests/xmlhttprequest/workers/shared-worker-methods.html
 http/tests/xmlhttprequest/xmlhttprequest-missing-file-exception.html
 http/tests/xmlhttprequest/xmlhttprequest-setrequestheader-no-value.html
 http/tests/xmlhttprequest/xmlhttprequest-sync-no-progress-events.html
-
-# Bug #3534 Back Forward List Support
-http/tests/history/redirect-200-refresh-0-seconds.pl
-http/tests/history/redirect-200-refresh-2-seconds.pl
-http/tests/history/redirect-js-document-location-0-seconds.html
-http/tests/history/redirect-js-document-location-2-seconds.html
-http/tests/history/redirect-js-document-location-before-load.html
-http/tests/history/redirect-js-form-submit-0-seconds.html
-http/tests/history/redirect-js-form-submit-2-seconds.html
-http/tests/history/redirect-js-form-submit-before-load.html
-http/tests/history/redirect-js-location-0-seconds.html
-http/tests/history/redirect-js-location-2-seconds.html
-http/tests/history/redirect-js-location-assign-0-seconds.html
-http/tests/history/redirect-js-location-assign-2-seconds.html
-http/tests/history/redirect-js-location-assign-before-load.html
-http/tests/history/redirect-js-location-before-load.html
-http/tests/history/redirect-js-location-href-0-seconds.html
-http/tests/history/redirect-js-location-href-2-seconds.html
-http/tests/history/redirect-js-location-href-before-load.html
-http/tests/history/redirect-js-location-replace-0-seconds.html
-http/tests/history/redirect-js-location-replace-2-seconds.html
-http/tests/history/redirect-js-location-replace-before-load.html
-http/tests/history/redirect-meta-refresh-0-seconds.html
-http/tests/history/redirect-meta-refresh-2-seconds.html
-http/tests/navigation/post-goback2.html
-http/tests/navigation/post-goback-same-url.html
-http/tests/navigation/postredirect-goback2.html
-http/tests/navigation/postredirect-reload.html
-http/tests/navigation/redirect302-basic.html
-http/tests/navigation/redirect302-goback.html
-http/tests/navigation/redirect302-metaredirect.html
-http/tests/navigation/redirect-load-no-form-restoration.html
-http/tests/navigation/relativeanchor-basic.html
-http/tests/navigation/relativeanchor-goback.html
-http/tests/navigation/restore-form-state-https.html
-http/tests/navigation/slowmetaredirect-basic.html
-http/tests/navigation/slowtimerredirect-basic.html
-http/tests/navigation/success200-basic.html
-http/tests/navigation/success200-goback.html
-http/tests/navigation/success200-loadsame.html
-http/tests/navigation/success200-reload.html
-http/tests/navigation/timerredirect-basic.html
-http/tests/navigation/timerredirect-goback.html
-http/tests/navigation/window-open-adds-history-item2.html
-http/tests/navigation/window-open-adds-history-item.html
 
 # Hanging or unpredictable /fast testcases on PB simulator
 fast/css/appearance-caps-lock-indicator.html
@@ -960,6 +913,7 @@ fast/events/dblclick-addEventListener.html
 fast/events/mouse-click-events.html
 fast/events/scrollbar-double-click.html
 fast/events/zoom-dblclick.html
+fast/text/offsetForPosition-complex-fallback.html
 
 # option key not supported
 fast/events/option-tab.html
@@ -981,6 +935,9 @@ fast/events/drag-in-frames.html
 fast/events/ondragenter.html
 fast/events/ondrop-text-html.html
 editing/pasteboard/file-input-files-access.html
+editing/pasteboard/data-transfer-items-drag-drop-file.html
+editing/pasteboard/data-transfer-items-drag-drop-string.html
+editing/pasteboard/drag-files-to-editable-element.html
 
 # no modifier key + touch event support
 fast/events/touch/basic-single-touch-events.html
@@ -1023,6 +980,7 @@ fast/forms/textarea-node-removed-from-document-crash.html
 # Causes an AIR pop-up dialog
 fast/forms/select-listbox-multiple-no-focusring.html
 fast/dom/HTMLSelectElement/click-size-zero-no-crash.html
+fast/forms/select/menulist-onchange-fired-with-key-up-down.html
 fast/forms/select-multiple-elements-with-mouse-drag-with-options-less-than-size.html
 fast/forms/select-multiple-elements-with-mouse-drag.html
 fast/forms/color/input-color-onchange-event.html
@@ -1036,7 +994,7 @@ editing/selection/empty-cell-right-click.html
 # skipped by most platforms
 accessibility/legend.html
 
-# no support for textInputController
+# no support for textInputController (PR134497)
 editing/input/setting-input-value-cancel-ime-composition.html
 editing/input/ime-composition-clearpreedit.html
 editing/input/password-echo-passnode2.html
@@ -1050,6 +1008,7 @@ editing/selection/5825350-2.html
 editing/selection/context-menu-on-text.html
 fast/forms/input-maxlength-ime-completed.html
 fast/forms/input-maxlength-ime-preedit.html
+fast/text/international/thai-cursor-position.html
 
 # no support scalePageBy
 fast/frames/frame-set-rotation-hit.html
@@ -1068,9 +1027,31 @@ editing/spelling/grammar.html
 editing/spelling/spellcheck-paste.html
 
 # we do not paint/support spin boxes for input=number
-fast/forms/input-number-large-padding.html
-fast/forms/input-number-change-type-on-focus.html
-fast/forms/spin-button-gets-disabled-or-readonly.html
+fast/forms/number/input-appearance-number-rtl.html
+fast/forms/number/input-appearance-spinbutton-layer.html
+fast/forms/number/input-appearance-spinbutton-visibility.html
+fast/forms/number/input-number-blur-twice.html
+fast/forms/number/input-number-change-type-on-focus.html
+fast/forms/number/input-number-commit-valid-only.html
+fast/forms/number/input-number-crash.html
+fast/forms/number/input-number-events.html
+fast/forms/number/input-number-keyoperation.html
+fast/forms/number/input-number-large-padding.html
+fast/forms/number/input-number-outofrange.html
+fast/forms/number/input-number-size.html
+fast/forms/number/input-number-spinbutton-crash.html
+fast/forms/number/input-number-unacceptable-style.html
+fast/forms/number/input-number-wheel.html
+fast/forms/number/input-spinbutton-capturing.html
+fast/forms/number/input-valueasnumber-number.html
+fast/forms/number/number-input-changeevent.html
+fast/forms/number/number-placeholder-with-unacceptable-value.html
+fast/forms/number/number-stepup-stepdown-from-renderer.html
+fast/forms/number/number-stepup-stepdown.html
+fast/forms/number/spin-button-events.html
+fast/forms/number/spin-button-gets-disabled-or-readonly.html
+fast/forms/number/spin-button-state.html
+fast/forms/number/spin-in-multi-column.html
 
 # PR 118481
 tables/mozilla/core/col_widths_fix_autoFixPer.html
@@ -1086,6 +1067,9 @@ fast/events/drag-file-crash.html
 fast/forms/file/file-input-change-event.html
 fast/forms/file/get-file-upload.html
 fast/forms/file/input-file-re-render.html
+fast/files/file-reader-directory-crash.html
+fast/files/file-reader-event-listener.html
+fast/files/null-origin-string.html
 http/tests/local/blob/send-hybrid-blob.html
 http/tests/local/blob/send-sliced-data-blob.html
 http/tests/local/formdata
@@ -1203,7 +1187,7 @@ fast/forms/implicit-submission.html
 fast/forms/menulist-disabled-selected-option.html
 fast/forms/menulist-submit-without-selection.html
 fast/forms/password-doubleclick-selection.html
-fast/forms/radio-nested-labels.html
+fast/forms/radio/radio-nested-labels.html
 fast/forms/range/range-drag.html
 fast/forms/search-disabled-readonly.html
 fast/forms/search-hide-cancel-on-cancel.html
@@ -1295,35 +1279,301 @@ canvas/philip/tests/context.unrecognised.nullsuffix.html
 canvas/philip/tests/context.unrecognised.unicode.html
 fast/canvas/canvas-getContext-invalid.html
 fast/canvas/change-context.html
-
+fast/forms/select/listbox-in-multi-column.html
 # Skip PR124342 by davli
 fast/frames/iframe-reparenting-new-page.html
 fast/frames/sandboxed-iframe-close-top.html
 
-# Skip because patch it still not landed upstream PR128692
-fast/forms/date/ValidityState-rangeOverflow-date.html
-fast/forms/date/ValidityState-rangeUnderflow-date.html
-fast/forms/date/ValidityState-typeMismatch-date.html
-fast/forms/datetime/ValidityState-rangeOverflow-datetime.html
-fast/forms/datetime/ValidityState-rangeUnderflow-datetime.html
-fast/forms/datetime/ValidityState-typeMismatch-datetime.html
-fast/forms/datetimelocal/ValidityState-rangeOverflow-datetimelocal.html
-fast/forms/datetimelocal/ValidityState-rangeUnderflow-datetimelocal.html
-fast/forms/datetimelocal/ValidityState-typeMismatch-datetimelocal.html
-fast/forms/month/ValidityState-rangeOverflow-month.html
-fast/forms/month/ValidityState-rangeUnderflow-month.html
-fast/forms/month/ValidityState-typeMismatch-month.html
-fast/forms/time/ValidityState-rangeOverflow-time.html
-fast/forms/time/ValidityState-rangeUnderflow-time.html
-fast/forms/time/ValidityState-typeMismatch-time.html
-fast/forms/week/ValidityState-rangeOverflow-week.html
-fast/forms/week/ValidityState-rangeUnderflow-week.html
-fast/forms/week/ValidityState-typeMismatch-week.html
-
 # PR 128735
 fast/frames/iframe-reparenting-adopt-node.html
 fast/files/domurl-script-execution-context-crash.html
+fast/text/textIteratorNilRenderer.html
 
 # PR 129097
 editing/selection/caret-at-bidi-boundary.html
 editing/selection/caret-ltr-right.html
+
+# broken on BB
+fast/text/atsui-partial-selection.html
+fast/text/atsui-spacing-features.html
+fast/text/drawBidiText.html
+fast/text/emphasis-combined-text.html
+fast/text/emphasis-vertical.html
+fast/text/fake-italic.html
+fast/text/justified-selection-at-edge.html
+fast/text/justified-selection.html
+fast/text/justify-ideograph-vertical.html
+fast/text/line-initial-and-final-swashes.html
+fast/text/midword-break-before-surrogate-pair.html
+fast/text/midword-break-before-surrogate-pair-2.html
+fast/text/selection-hard-linebreak.html
+fast/text/selection-painted-separately.html
+fast/text/wide-zero-width-space.html
+fast/text/international/bidi-layout-across-linebreak.html
+fast/text/international/khmer-selection.html
+fast/text/international/locale-sensitive-fonts.html
+fast/text/international/vertical-text-glyph-test.html
+fast/text/international/vertical-text-metrics-test.html
+
+# looks like an invalid test for BB
+fast/text/atsui-pointtooffset-calls-cg.html
+fast/text/atsui-rtl-override-selection.html
+
+# we don't yet support hyphenation
+fast/text/hyphenate-character.html
+fast/text/hyphenate-first-word.html
+fast/text/hyphenate-limit-before-after.html
+fast/text/hyphenate-limit-lines.html
+fast/text/hyphenate-locale.html
+
+# CSS Grid Layout is not yet enabled. http://webkit.org/b/60731
+fast/css-grid-layout
+
+# <style scoped> is not yet enabled. http://webkit.org/b/49142
+fast/css/style-scoped
+
+# CSS Regions support not yet enabled. http://webkit.org/b/57312
+fast/regions
+
+# CSS Exclusions support not yet enabled. http://webkit.org/b/57311
+fast/exclusions
+
+# Microdata DOM API is not yet enabled.
+# https://bugs.webkit.org/show_bug.cgi?id=68610
+fast/dom/MicroData
+# failed PR145244
+accessibility/aria-hidden-updates-alldescendants.html
+accessibility/aria-readonly.html
+accessibility/loading-iframe-updates-axtree.html
+accessibility/placeholder.html
+accessibility/textbox-role-reports-selection.html
+canvas/philip/tests/2d.drawImage.outsidesource.html
+css1/text_properties/vertical_align.html
+css2.1/20110323/abspos-containing-block-initial-007.htm
+css2.1/20110323/abspos-containing-block-initial-007-ref.htm
+css2.1/20110323/abspos-non-replaced-width-margin-000.htm
+css2.1/20110323/abspos-replaced-width-margin-000.htm
+css2.1/t0602-c13-inheritance-00-e.html
+css2.1/t0905-c5525-fltwrap-00-b.html
+css3/flexbox/flex-align-vertical-writing-mode.html
+css3/flexbox/writing-modes.html
+css3/selectors3/html/css3-modsel-161.html
+css3/selectors3/html/css3-modsel-17.html
+css3/selectors3/html/css3-modsel-61.html
+css3/selectors3/xhtml/css3-modsel-161.xml
+dom/xhtml/level2/html/HTMLBaseElement02.xhtml
+editing/deleting/delete-ligature-001.html
+editing/deleting/delete-ligature-002.html
+editing/deleting/delete-ligature-003.html
+editing/deleting/regional-indicators.html
+editing/deleting/smart-delete-across-editable-boundaries-2.html
+editing/inserting/5994480-2.html
+editing/inserting/insert-3907422-fix.html
+editing/pasteboard/4641033.html
+editing/pasteboard/4944770-1.html
+editing/pasteboard/4944770-2.html
+editing/pasteboard/copy-standalone-image.html
+editing/pasteboard/drag-and-drop-image-contenteditable.html
+editing/pasteboard/drag-and-drop-inputimage-contenteditable.html
+editing/pasteboard/drag-and-drop-objectimage-contenteditable.html
+editing/pasteboard/paste-text-008.html
+editing/selection/caret-before-select.html
+editing/selection/collapse-selection-in-bidi.html
+editing/selection/end-of-document.html
+editing/selection/replaced-boundaries-3.html
+editing/selection/select-bidi-run.html
+editing/selection/select-box.html
+editing/selection/select-element-paragraph-boundary.html
+editing/selection/vertical-lr-ltr-extend-line-backward-br.html
+editing/selection/vertical-lr-ltr-extend-line-forward-br.html
+editing/selection/vertical-rl-ltr-extend-line-backward-br.html
+editing/selection/vertical-rl-ltr-extend-line-backward-p.html
+editing/selection/vertical-rl-ltr-extend-line-backward-wrap.html
+editing/selection/vertical-rl-ltr-extend-line-forward-br.html
+editing/selection/vertical-rl-ltr-extend-line-forward-p.html
+editing/spelling/spelling-unified-emulation.html
+editing/style/iframe-onload-crash-mac.html
+editing/style/iframe-onload-crash-unix.html
+editing/style/iframe-onload-crash-win.html
+fast/backgrounds/background-leakage-transforms.html
+fast/block/float/015.html
+fast/block/float/float-avoidance.html
+fast/block/float/float-in-float-hit-testing.html
+fast/block/margin-collapse/103.html
+fast/borders/inline-mask-overlay-image-outset.html
+fast/borders/inline-mask-overlay-image-outset-vertical-rl.html
+fast/canvas/canvas-bg-multiple-removal.html
+fast/canvas/canvas-large-dimensions.html
+fast/canvas/canvas-toDataURL-webp.html
+fast/css/absolute-child-with-percent-height-inside-relative-parent.html
+fast/css/bug4860-absolute-inline-child-inherits-alignment.html
+fast/css/counters/destroy-counter-crash.html
+fast/css/font-face-implicit-local-font.html
+fast/css/font-face-opentype.html
+fast/css/square-button-appearance.html
+fast/css-generated-content/table-parts-before-and-after.html
+fast/forms/001.html
+fast/forms/003.html
+fast/forms/004.html
+fast/forms/basic-selects.html
+fast/forms/control-clip-overflow.html
+fast/forms/control-restrict-line-height.html
+fast/forms/disabled-mousedown-event.html
+fast/forms/disabled-select-change-index.html
+fast/forms/focus-control-to-page.html
+fast/forms/form-element-geometry.html
+fast/forms/HTMLOptionElement_label01.html
+fast/forms/HTMLOptionElement_label02.html
+fast/forms/HTMLOptionElement_label03.html
+fast/forms/HTMLOptionElement_label04.html
+fast/forms/HTMLOptionElement_label06.html
+fast/forms/HTMLOptionElement_label07.html
+fast/forms/input-disabled-color.html
+fast/forms/input-live-pseudo-selectors.html
+fast/forms/input-step-as-double.html
+fast/forms/listbox-clip.html
+fast/forms/menulist-deselect-update.html
+fast/forms/menulist-narrow-width.html
+fast/forms/menulist-no-overflow.html
+fast/forms/menulist-restrict-line-height.html
+fast/forms/menulist-separator-painting.html
+fast/forms/menulist-style-color.html
+fast/forms/menulist-width-change.html
+fast/forms/option-script.html
+fast/forms/option-strip-whitespace.html
+fast/forms/option-text-clip.html
+fast/forms/range/slider-delete-while-dragging-thumb.html
+fast/forms/range/slider-onchange-event.html
+fast/forms/select-align.html
+fast/forms/select-background-none.html
+fast/forms/select-baseline.html
+fast/forms/select-change-listbox-to-popup.html
+fast/forms/select-clientheight-large-size.html
+fast/forms/select-dirty-parent-pref-widths.html
+fast/forms/select-disabled-appearance.html
+fast/forms/select-initial-position.html
+fast/forms/selectlist-minsize.html
+fast/forms/select-selected.html
+fast/forms/select-size.html
+fast/forms/select-style.html
+fast/forms/select-visual-hebrew.html
+fast/forms/select-writing-direction-natural.html
+fast/forms/stuff-on-my-optgroup.html
+fast/forms/submit-to-blank-multiple-times.html
+fast/forms/textarea-and-mutation-events.html
+fast/frames/crash-removed-iframe.html
+fast/frames/detached-frame-property.html
+fast/frames/document-write-in-iframe-onload.html
+fast/frames/document-write-in-iframe-onload-2.html
+fast/frames/document-write-in-iframe-onload-3.html
+fast/frames/flattening/iframe-flattening-fixed-width-and-height-zero-size.html
+fast/frames/frame-set-scaling-hit.html
+fast/frames/iframe-scaling-with-scroll.html
+fast/js/kde/math.html
+fast/multicol/span/anonymous-split-block-crash.html
+fast/multicol/span/clone-anonymous-block-non-inline-child-crash.html
+fast/multicol/span/span-as-immediate-child-complex-splitting.html
+fast/multicol/span/span-as-immediate-child-generated-content.html
+fast/multicol/span/span-as-immediate-child-property-removal.html
+fast/multicol/span/span-as-immediate-columns-child.html
+fast/multicol/span/span-as-immediate-columns-child-dynamic.html
+fast/multicol/span/span-as-immediate-columns-child-removal.html
+fast/multicol/table-vertical-align.html
+fast/multicol/vertical-lr/float-avoidance.html
+fast/multicol/vertical-rl/float-avoidance.html
+fast/multicol/vertical-rl/rule-style.html
+fast/text/international/bidi-menulist.html
+fast/text/international/pop-up-button-text-alignment-and-direction.html
+fast/text/justification-padding-mid-word.html
+fast/text/reset-drag-on-mouse-down.html
+fast/text/reset-emptyRun.html
+fast/viewport/viewport-121.html
+fast/viewport/viewport-122.html
+fast/viewport/viewport-125.html
+fast/viewport/viewport-129.html
+fast/viewport/viewport-18.html
+fast/viewport/viewport-36.html
+fast/viewport/viewport-37.html
+fast/viewport/viewport-43.html
+fast/viewport/viewport-46.html
+fast/viewport/viewport-52.html
+fast/viewport/viewport-53.html
+fast/viewport/viewport-54.html
+fast/viewport/viewport-55.html
+fast/viewport/viewport-60.html
+fast/viewport/viewport-75.html
+fast/viewport/viewport-76.html
+fast/viewport/viewport-83.html
+fast/viewport/viewport-86.html
+fast/viewport/viewport-warnings-3.html
+fast/viewport/viewport-warnings-4.html
+fast/viewport/viewport-warnings-6.html
+tables/mozilla/bugs/bug101674.html
+tables/mozilla/bugs/bug1188.html
+tables/mozilla/bugs/bug1302.html
+tables/mozilla/bugs/bug18359.html
+tables/mozilla/bugs/bug2479-3.html
+tables/mozilla/bugs/bug2479-4.html
+tables/mozilla/bugs/bug27038-2.html
+tables/mozilla/bugs/bug29326.html
+tables/mozilla/bugs/bug2947.html
+tables/mozilla/bugs/bug33855.html
+tables/mozilla/bugs/bug4382.html
+tables/mozilla/bugs/bug96334.html
+tables/mozilla/core/captions.html
+tables/mozilla/core/margins.html
+tables/mozilla/dom/tableDom.html
+tables/mozilla/marvin/backgr_layers-opacity.html
+tables/mozilla/marvin/backgr_position-table.html
+tables/mozilla/marvin/backgr_simple-table.html
+tables/mozilla/marvin/backgr_simple-table-cell.html
+tables/mozilla/marvin/backgr_simple-table-column.html
+tables/mozilla/marvin/backgr_simple-table-column-group.html
+tables/mozilla/marvin/backgr_simple-table-row.html
+tables/mozilla/marvin/backgr_simple-table-row-group.html
+tables/mozilla/other/wa_table_thtd_rowspan.html
+tables/mozilla/other/wa_table_tr_align.html
+tables/mozilla_expected_failures/bugs/bug10140.html
+tables/mozilla_expected_failures/bugs/bug10216.html
+tables/mozilla_expected_failures/bugs/bug106966.html
+tables/mozilla_expected_failures/bugs/bug14007-2.html
+tables/mozilla_expected_failures/bugs/bug220653.html
+tables/mozilla_expected_failures/bugs/bug2479-5.html
+tables/mozilla_expected_failures/bugs/bug3517.html
+tables/mozilla_expected_failures/bugs/bug7121-2.html
+tables/mozilla_expected_failures/bugs/bug85016.html
+tables/mozilla_expected_failures/bugs/bug91057.html
+tables/mozilla_expected_failures/core/captions1.html
+tables/mozilla_expected_failures/core/captions2.html
+tables/mozilla_expected_failures/core/captions3.html
+tables/mozilla_expected_failures/core/conflicts.html
+tables/mozilla_expected_failures/marvin/backgr_border-table.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-cell.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-column.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-column-group.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-quirks.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-row.html
+tables/mozilla_expected_failures/marvin/backgr_border-table-row-group.html
+tables/mozilla_expected_failures/marvin/backgr_fixed-bg.html
+tables/mozilla_expected_failures/marvin/backgr_layers-hide.html
+tables/mozilla_expected_failures/marvin/backgr_layers-show.html
+tables/mozilla_expected_failures/marvin/backgr_position-table-cell.html
+tables/mozilla_expected_failures/marvin/backgr_position-table-column.html
+tables/mozilla_expected_failures/marvin/backgr_position-table-column-group.html
+tables/mozilla_expected_failures/marvin/backgr_position-table-row.html
+tables/mozilla_expected_failures/marvin/backgr_position-table-row-group.html
+tables/mozilla_expected_failures/marvin/table_overflow_dirty_reflow_row.html
+tables/mozilla_expected_failures/marvin/table_overflow_dirty_reflow_tbody.html
+tables/mozilla_expected_failures/marvin/table_overflow_style_reflow_row_sibling.html
+tables/mozilla_expected_failures/marvin/table_overflow_style_reflow_tbody_sibling.html
+tables/mozilla_expected_failures/other/empty_cells.html
+tables/mozilla_expected_failures/other/test4.html
+transforms/2d/zoom-menulist.html
+# PR145221 not supported - onmousedown, eventSender.mouseMoveTo
+accessibility/press-works-on-control-types.html
+fast/forms/range/slider-in-multi-column.html
+# PR145221 not supported: paste empty string, to noeditable element
+editing/pasteboard/clipboard-customData.html
+editing/pasteboard/pasting-empty-html-falls-back-to-text.html
+# accessibilityController.focusedElement not supported
+accessibility/aria-invalid.html

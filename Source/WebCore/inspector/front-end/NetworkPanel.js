@@ -61,11 +61,22 @@ WebInspector.NetworkLogView = function()
     WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceUpdated, this._onResourceUpdated, this);
     WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceFinished, this._onResourceUpdated, this);
 
-    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.MainFrameNavigated, this._mainFrameNavigated, this);
     WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoadEventFired, this);
     WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, this._domContentLoadedEventFired, this);
 
     this._initializeView();
+    function onCanClearBrowserCache(error, result)
+    {
+        this._canClearBrowserCache = result;
+    }
+    NetworkAgent.canClearBrowserCache(onCanClearBrowserCache.bind(this));
+
+    function onCanClearBrowserCookies(error, result)
+    {
+        this._canClearBrowserCookies = result;
+    }
+    NetworkAgent.canClearBrowserCookies(onCanClearBrowserCookies.bind(this));
 }
 
 WebInspector.NetworkLogView.prototype = {
@@ -139,7 +150,7 @@ WebInspector.NetworkLogView.prototype = {
     _createTable: function()
     {
         var columns;
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             columns = {name: {}, method: {}, status: {}, type: {}, initiator: {}, size: {}, time: {}, timeline: {}};
         else
             columns = {name: {}, method: {}, status: {}, type: {}, size: {}, time: {}, timeline: {}};
@@ -160,7 +171,7 @@ WebInspector.NetworkLogView.prototype = {
         columns.type.sortable = true;
         columns.type.width = "6%";
 
-        if (Preferences.showNetworkPanelInitiatorColumn) {
+        if (Capabilities.nativeInstrumentationEnabled) {
             columns.initiator.title = WebInspector.UIString("Initiator");
             columns.initiator.sortable = true;
             columns.initiator.width = "10%";
@@ -178,7 +189,7 @@ WebInspector.NetworkLogView.prototype = {
 
         columns.timeline.title = "";
         columns.timeline.sortable = false;
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             columns.timeline.width = "40%";
         else
             columns.timeline.width = "50%";
@@ -392,7 +403,7 @@ WebInspector.NetworkLogView.prototype = {
                 selectedRequestsNumber++;
                 selectedTransferSize += resourceTransferSize;
             }
-            if (resource === WebInspector.mainResource)
+            if (resource.url === WebInspector.inspectedPageURL)
                 baseTime = resource.startTime;
             if (resource.endTime > maxTime)
                 maxTime = resource.endTime;
@@ -794,15 +805,13 @@ WebInspector.NetworkLogView.prototype = {
         this._reset();
     },
 
-    _frameNavigated: function(event)
+    _mainFrameNavigated: function(event)
     {
-        if (!event.data.isMainFrame)
-            return;
-
-        var loaderId = event.data.loaderId;
-        // Main frame committed load.
         if (this._preserveLogToggle.toggled)
             return;
+
+        var frame = /** @type {WebInspector.ResourceTreeFrame} */ event.data;
+        var loaderId = frame.loaderId;
 
         // Preserve provisional load resources.
         var resourcesToPreserve = [];
@@ -831,7 +840,7 @@ WebInspector.NetworkLogView.prototype = {
         this._dataGrid.showColumn("method");
         this._dataGrid.showColumn("status");
         this._dataGrid.showColumn("type");
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             this._dataGrid.showColumn("initiator");
         this._dataGrid.showColumn("size");
         this._dataGrid.showColumn("time");
@@ -842,11 +851,11 @@ WebInspector.NetworkLogView.prototype = {
         widths.method = 6;
         widths.status = 6;
         widths.type = 6;
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             widths.initiator = 10;
         widths.size = 6;
         widths.time = 6;
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             widths.timeline = 40;
         else
             widths.timeline = 50;
@@ -862,7 +871,7 @@ WebInspector.NetworkLogView.prototype = {
         this._dataGrid.hideColumn("method");
         this._dataGrid.hideColumn("status");
         this._dataGrid.hideColumn("type");
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             this._dataGrid.hideColumn("initiator");
         this._dataGrid.hideColumn("size");
         this._dataGrid.hideColumn("time");
@@ -933,18 +942,19 @@ WebInspector.NetworkLogView.prototype = {
         }
         contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Copy all as HAR" : "Copy All as HAR"), this._copyAll.bind(this));
 
-        if (Preferences.saveAsAvailable) {
+        if (InspectorFrontendHost.canSaveAs()) {
             contextMenu.appendSeparator();
             if (resource)
                 contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save entry as HAR" : "Save Entry as HAR"), this._exportResource.bind(this, resource));
             contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Save all as HAR" : "Save All as HAR"), this._exportAll.bind(this));
         }
 
-        if (Preferences.canClearCacheAndCookies) {
+        if (this._canClearBrowserCache || this._canClearBrowserCookies)
             contextMenu.appendSeparator();
+        if (this._canClearBrowserCache)
             contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear browser cache" : "Clear Browser Cache"), this._clearBrowserCache.bind(this));
+        if (this._canClearBrowserCookies)
             contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Clear browser cookies" : "Clear Browser Cookies"), this._clearBrowserCookies.bind(this));
-        }
 
         contextMenu.show(event);
     },
@@ -954,13 +964,13 @@ WebInspector.NetworkLogView.prototype = {
         var harArchive = {
             log: (new WebInspector.HARLog(this._resources)).build()
         };
-        InspectorFrontendHost.copyText(JSON.stringify(harArchive));
+        InspectorFrontendHost.copyText(JSON.stringify(harArchive, null, 2));
     },
 
     _copyResource: function(resource)
     {
         var har = (new WebInspector.HAREntry(resource)).build();
-        InspectorFrontendHost.copyText(JSON.stringify(har));
+        InspectorFrontendHost.copyText(JSON.stringify(har, null, 2));
     },
 
     _copyLocation: function(resource)
@@ -983,13 +993,14 @@ WebInspector.NetworkLogView.prototype = {
         var harArchive = {
             log: (new WebInspector.HARLog(this._resources)).build()
         };
-        InspectorFrontendHost.saveAs(WebInspector.mainResource.domain + ".har", JSON.stringify(harArchive));
+        
+        InspectorFrontendHost.saveAs(WebInspector.inspectedPageDomain + ".har", JSON.stringify(harArchive, null, 2));
     },
 
     _exportResource: function(resource)
     {
         var har = (new WebInspector.HAREntry(resource)).build();
-        InspectorFrontendHost.saveAs(resource.displayName + ".har", JSON.stringify(har));
+        InspectorFrontendHost.saveAs(resource.displayName + ".har", JSON.stringify(har, null, 2));
     },
 
     _clearBrowserCache: function(event)
@@ -1217,16 +1228,17 @@ WebInspector.NetworkPanel = function()
     WebInspector.Panel.call(this, "network");
     this.registerRequiredCSS("networkPanel.css");
 
-    this.createSidebar();
-    this._networkLogView = new WebInspector.NetworkLogView();
+    this.createSplitView();
+    this.splitView.hideMainElement();
 
-    this._viewsContainerElement = document.createElement("div");
+    this._networkLogView = new WebInspector.NetworkLogView();
+    this._networkLogView.show(this.sidebarElement);
+
+    this._viewsContainerElement = this.splitView.mainElement;
     this._viewsContainerElement.id = "network-views";
-    this._viewsContainerElement.className = "hidden";
+    this._viewsContainerElement.addStyleClass("hidden");
     if (!this._networkLogView.useLargeRows)
         this._viewsContainerElement.addStyleClass("small");
-
-    this.element.appendChild(this._viewsContainerElement);
 
     this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.ViewCleared, this._onViewCleared, this);
     this._networkLogView.addEventListener(WebInspector.NetworkLogView.EventTypes.RowSizeChanged, this._onRowSizeChanged, this);
@@ -1268,22 +1280,6 @@ WebInspector.NetworkPanel.prototype = {
         this._networkLogView._reset();
     },
 
-    restoreSidebarWidth: function()
-    {
-        if (!this._viewingResourceMode)
-            return;
-
-        var preferredWidth = WebInspector.Panel.prototype.preferredSidebarWidth.call(this);
-        if (typeof(preferredWidth) === "undefined")
-            preferredWidth = 200;
-        WebInspector.Panel.prototype.updateSidebarWidth.call(this, preferredWidth);
-    },
-
-    updateMainViewWidth: function(width)
-    {
-        this._viewsContainerElement.style.left = width + "px";
-    },
-
     handleShortcut: function(event)
     {
         if (this._viewingResourceMode && event.keyCode === WebInspector.KeyboardShortcut.Keys.Esc.code) {
@@ -1298,7 +1294,6 @@ WebInspector.NetworkPanel.prototype = {
     wasShown: function()
     {
         WebInspector.Panel.prototype.wasShown.call(this);
-        this._networkLogView.show(this.sidebarElement);
     },
 
     get resources()
@@ -1313,13 +1308,7 @@ WebInspector.NetworkPanel.prototype = {
 
     _resourceByAnchor: function(anchor)
     {
-        var resource;
-        if (anchor.getAttribute("request_id"))
-            resource = this.resourceById(anchor.getAttribute("request_id"));
-        if (!resource)
-            resource = this._networkLogView._resourcesByURL[anchor.href];
-
-        return resource;
+        return anchor.requestId ? this.resourceById(anchor.requestId) : this._networkLogView._resourcesByURL[anchor.href];
     },
 
     canShowAnchorLocation: function(anchor)
@@ -1386,8 +1375,6 @@ WebInspector.NetworkPanel.prototype = {
         var view = new WebInspector.NetworkItemView(resource);
         view.show(this._viewsContainerElement);
         this.visibleView = view;
-
-        this.restoreSidebarWidth();
     },
 
     _closeVisibleResource: function()
@@ -1398,8 +1385,6 @@ WebInspector.NetworkPanel.prototype = {
             this.visibleView.detach();
             delete this.visibleView;
         }
-
-        this.restoreSidebarWidth();
     },
 
     _toggleGridMode: function()
@@ -1407,9 +1392,7 @@ WebInspector.NetworkPanel.prototype = {
         if (this._viewingResourceMode) {
             this._viewingResourceMode = false;
             this.element.removeStyleClass("viewing-resource");
-            this._viewsContainerElement.addStyleClass("hidden");
-            this.sidebarElement.style.right = 0;
-            this.sidebarElement.style.removeProperty("width");
+            this.splitView.hideMainElement();
         }
 
         this._networkLogView.switchToDetailedView();
@@ -1424,8 +1407,7 @@ WebInspector.NetworkPanel.prototype = {
         this._viewingResourceMode = true;
 
         this.element.addStyleClass("viewing-resource");
-        this._viewsContainerElement.removeStyleClass("hidden");
-        this.restoreSidebarWidth();
+        this.splitView.showMainElement();
         this._networkLogView.allowPopover = false;
         this._networkLogView.allowResourceSelection = true;
         this._networkLogView.switchToBriefView();
@@ -1469,7 +1451,7 @@ WebInspector.NetworkBaseCalculator.prototype = {
 
     computeBarGraphLabels: function(item)
     {
-        const label = this.formatValue(this._value(item));
+        const label = this.formatTime(this._value(item));
         return {left: label, right: label, tooltip: label};
     },
 
@@ -1501,7 +1483,7 @@ WebInspector.NetworkBaseCalculator.prototype = {
         return 0;
     },
 
-    formatValue: function(value)
+    formatTime: function(value)
     {
         return value.toString();
     }
@@ -1571,11 +1553,11 @@ WebInspector.NetworkTimeCalculator.prototype = {
     {
         var rightLabel = "";
         if (resource.responseReceivedTime !== -1 && resource.endTime !== -1)
-            rightLabel = this.formatValue(resource.endTime - resource.responseReceivedTime);
+            rightLabel = this.formatTime(resource.endTime - resource.responseReceivedTime);
 
         var hasLatency = resource.latency > 0;
         if (hasLatency)
-            var leftLabel = this.formatValue(resource.latency);
+            var leftLabel = this.formatTime(resource.latency);
         else
             var leftLabel = rightLabel;
 
@@ -1583,7 +1565,7 @@ WebInspector.NetworkTimeCalculator.prototype = {
             return {left: leftLabel, right: rightLabel};
 
         if (hasLatency && rightLabel) {
-            var total = this.formatValue(resource.duration);
+            var total = this.formatTime(resource.duration);
             var tooltip = WebInspector.UIString("%s latency, %s download (%s total)", leftLabel, rightLabel, total);
         } else if (hasLatency)
             var tooltip = WebInspector.UIString("%s latency", leftLabel);
@@ -1619,7 +1601,7 @@ WebInspector.NetworkTimeCalculator.prototype = {
         return didChange;
     },
 
-    formatValue: function(value)
+    formatTime: function(value)
     {
         return Number.secondsToString(value);
     },
@@ -1647,7 +1629,7 @@ WebInspector.NetworkTransferTimeCalculator = function()
 }
 
 WebInspector.NetworkTransferTimeCalculator.prototype = {
-    formatValue: function(value)
+    formatTime: function(value)
     {
         return Number.secondsToString(value);
     },
@@ -1675,7 +1657,7 @@ WebInspector.NetworkTransferDurationCalculator = function()
 }
 
 WebInspector.NetworkTransferDurationCalculator.prototype = {
-    formatValue: function(value)
+    formatTime: function(value)
     {
         return Number.secondsToString(value);
     },
@@ -1708,7 +1690,7 @@ WebInspector.NetworkDataGridNode.prototype = {
         this._methodCell = this._createDivInTD("method");
         this._statusCell = this._createDivInTD("status");
         this._typeCell = this._createDivInTD("type");
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             this._initiatorCell = this._createDivInTD("initiator");
         this._sizeCell = this._createDivInTD("size");
         this._timeCell = this._createDivInTD("time");
@@ -1740,7 +1722,7 @@ WebInspector.NetworkDataGridNode.prototype = {
 
     _openInNewTab: function()
     {
-        PageAgent.open(this._resource.url, true);
+        InspectorFrontendHost.openInNewTab(this._resource.url);
     },
 
     get selectable()
@@ -1802,7 +1784,7 @@ WebInspector.NetworkDataGridNode.prototype = {
 
         this._refreshStatusCell();
         this._refreshTypeCell();
-        if (Preferences.showNetworkPanelInitiatorColumn)
+        if (Capabilities.nativeInstrumentationEnabled)
             this._refreshInitiatorCell();
         this._refreshSizeCell();
         this._refreshTimeCell();
@@ -1912,11 +1894,8 @@ WebInspector.NetworkDataGridNode.prototype = {
             this._initiatorCell.removeChildren();
             if (this._resource.redirectSource) {
                 var redirectSource = this._resource.redirectSource;
-                var anchor = WebInspector.linkifyURLAsNode(redirectSource.url, redirectSource.url, undefined, false);
-                anchor.setAttribute("request_id", redirectSource.requestId);
-                anchor.setAttribute("preferred_panel", "network");
                 this._initiatorCell.title = redirectSource.url;
-                this._initiatorCell.appendChild(anchor);
+                this._initiatorCell.appendChild(WebInspector.linkifyRequestAsNode(redirectSource));
                 this._appendSubtitle(this._initiatorCell, WebInspector.UIString("Redirect"));
             } else if (initiator.type === "script") {
                 var topFrame = initiator.stackTrace[0];

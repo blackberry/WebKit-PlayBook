@@ -5,6 +5,7 @@
  * Copyright (C) 2008 Alp Toker <alp@atoker.com>
  * Copyright (C) 2008 Gustavo Noronha Silva <gns@gnome.org>
  * Copyright (C) 2010 Nokia Corporation and/or its subsidiary(-ies).
+ * Copyright (C) 2012 Igalia S. L.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -50,6 +51,8 @@
 #include "RefPtrCairo.h"
 #include "SearchPopupMenuGtk.h"
 #include "SecurityOrigin.h"
+#include "WebKitDOMBinding.h"
+#include "WebKitDOMHTMLElementPrivate.h"
 #include "WindowFeatures.h"
 #include "webkitgeolocationpolicydecision.h"
 #include "webkitgeolocationpolicydecisionprivate.h"
@@ -60,6 +63,8 @@
 #include "webkitwebview.h"
 #include "webkitwebviewprivate.h"
 #include "webkitwebwindowfeaturesprivate.h"
+#include <gdk/gdk.h>
+#include <gdk/gdkkeysyms.h>
 #include <glib.h>
 #include <glib/gi18n-lib.h>
 #include <gtk/gtk.h>
@@ -99,7 +104,7 @@ void ChromeClient::chromeDestroyed()
 FloatRect ChromeClient::windowRect()
 {
     GtkWidget* window = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
-    if (gtk_widget_is_toplevel(window)) {
+    if (widgetIsOnscreenToplevelWindow(window)) {
         gint left, top, width, height;
         gtk_window_get_position(GTK_WINDOW(window), &left, &top);
         gtk_window_get_size(GTK_WINDOW(window), &width, &height);
@@ -128,7 +133,7 @@ void ChromeClient::setWindowRect(const FloatRect& rect)
         return;
 
     GtkWidget* window = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
-    if (gtk_widget_is_toplevel(window)) {
+    if (widgetIsOnscreenToplevelWindow(window)) {
         gtk_window_move(GTK_WINDOW(window), intrect.x(), intrect.y());
         gtk_window_resize(GTK_WINDOW(window), intrect.width(), intrect.height());
     }
@@ -153,7 +158,7 @@ void ChromeClient::focus()
 void ChromeClient::unfocus()
 {
     GtkWidget* window = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
-    if (gtk_widget_is_toplevel(window))
+    if (widgetIsOnscreenToplevelWindow(window))
         gtk_window_set_focus(GTK_WINDOW(window), NULL);
 }
 
@@ -504,7 +509,6 @@ static void paintWebView(WebKitWebView* webView, Frame* frame, Region dirtyRegio
 
     Vector<IntRect> rects = dirtyRegion.rects();
     coalesceRectsIfPossible(dirtyRegion.bounds(), rects);
-    frame->view()->updateLayoutAndStyleIfNeededRecursive();
 
     RefPtr<cairo_t> backingStoreContext = adoptRef(cairo_create(webView->priv->backingStore->cairoSurface()));
     GraphicsContext gc(backingStoreContext.get());
@@ -525,6 +529,20 @@ static void paintWebView(WebKitWebView* webView, Frame* frame, Region dirtyRegio
     gc.restore();
 }
 
+void ChromeClient::invalidateWidgetRect(const IntRect& rect)
+{
+#if USE(ACCELERATED_COMPOSITING)
+    AcceleratedCompositingContext* acContext = m_webView->priv->acceleratedCompositingContext.get();
+    if (acContext->enabled()) {
+        acContext->scheduleRootLayerRepaint(rect);
+        return;
+    }
+#endif
+    gtk_widget_queue_draw_area(GTK_WIDGET(m_webView),
+                               rect.x(), rect.y(),
+                               rect.width(), rect.height());
+}
+
 void ChromeClient::performAllPendingScrolls()
 {
     if (!m_webView->priv->backingStore)
@@ -534,15 +552,12 @@ void ChromeClient::performAllPendingScrolls()
     for (size_t i = 0; i < m_rectsToScroll.size(); i++) {
         IntRect& scrollRect = m_rectsToScroll[i];
         m_webView->priv->backingStore->scroll(scrollRect, m_scrollOffsets[i]);
-        gtk_widget_queue_draw_area(GTK_WIDGET(m_webView),
-                                   scrollRect.x(), scrollRect.y(),
-                                   scrollRect.width(), scrollRect.height());
+        invalidateWidgetRect(scrollRect);
     }
 
     m_rectsToScroll.clear();
     m_scrollOffsets.clear();
 }
-
 
 void ChromeClient::paint(WebCore::Timer<ChromeClient>*)
 {
@@ -559,22 +574,37 @@ void ChromeClient::paint(WebCore::Timer<ChromeClient>*)
     if (!frame || !frame->contentRenderer() || !frame->view())
         return;
 
+    frame->view()->updateLayoutAndStyleIfNeededRecursive();
     performAllPendingScrolls();
     paintWebView(m_webView, frame, m_dirtyRegion);
 
+    HashSet<GtkWidget*> children = m_webView->priv->children;
+    HashSet<GtkWidget*>::const_iterator end = children.end();
+    for (HashSet<GtkWidget*>::const_iterator current = children.begin(); current != end; ++current) {
+        if (static_cast<GtkAllocation*>(g_object_get_data(G_OBJECT(*current), "delayed-allocation"))) {
+            gtk_widget_queue_resize_no_redraw(GTK_WIDGET(m_webView));
+            break;
+        }
+    }
+
     const IntRect& rect = m_dirtyRegion.bounds();
-    gtk_widget_queue_draw_area(GTK_WIDGET(m_webView), rect.x(), rect.y(), rect.width(), rect.height());
+    invalidateWidgetRect(rect);
+
+#if USE(ACCELERATED_COMPOSITING)
+    m_webView->priv->acceleratedCompositingContext->syncLayersNow();
+    m_webView->priv->acceleratedCompositingContext->renderLayersToWindow(rect);
+#endif
 
     m_dirtyRegion = Region();
     m_lastDisplayTime = currentTime();
     m_repaintSoonSourceId = 0;
 }
 
-void ChromeClient::invalidateWindow(const IntRect&, bool immediate)
+void ChromeClient::invalidateRootView(const IntRect&, bool immediate)
 {
 }
 
-void ChromeClient::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
+void ChromeClient::invalidateContentsAndRootView(const IntRect& updateRect, bool immediate)
 {
     if (updateRect.isEmpty())
         return;
@@ -584,7 +614,7 @@ void ChromeClient::invalidateContentsAndWindow(const IntRect& updateRect, bool i
 
 void ChromeClient::invalidateContentsForSlowScroll(const IntRect& updateRect, bool immediate)
 {
-    invalidateContentsAndWindow(updateRect, immediate);
+    invalidateContentsAndRootView(updateRect, immediate);
     m_adjustmentWatcher.updateAdjustmentsFromScrollbarsLater();
 }
 
@@ -616,12 +646,12 @@ void ChromeClient::scroll(const IntSize& delta, const IntRect& rectToScroll, con
     m_adjustmentWatcher.updateAdjustmentsFromScrollbarsLater();
 }
 
-IntRect ChromeClient::windowToScreen(const IntRect& rect) const
+IntRect ChromeClient::rootViewToScreen(const IntRect& rect) const
 {
     return IntRect(convertWidgetPointToScreenPoint(GTK_WIDGET(m_webView), rect.location()), rect.size());
 }
 
-IntPoint ChromeClient::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClient::screenToRootView(const IntPoint& point) const
 {
     IntPoint widgetPositionOnScreen = convertWidgetPointToScreenPoint(GTK_WIDGET(m_webView), IntPoint());
     IntPoint result(point);
@@ -636,6 +666,9 @@ PlatformPageClient ChromeClient::platformPageClient() const
 
 void ChromeClient::contentsSizeChanged(Frame* frame, const IntSize& size) const
 {
+    if (m_adjustmentWatcher.scrollbarsDisabled())
+        return;
+
     // We need to queue a resize request only if the size changed,
     // otherwise we get into an infinite loop!
     GtkWidget* widget = GTK_WIDGET(m_webView);
@@ -763,8 +796,12 @@ void ChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChooser)
 {
     RefPtr<FileChooser> chooser = prpFileChooser;
 
+    GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
+    if (!widgetIsOnscreenToplevelWindow(toplevel))
+        toplevel = 0;
+
     GtkWidget* dialog = gtk_file_chooser_dialog_new(_("Upload File"),
-                                                    GTK_WINDOW(gtk_widget_get_toplevel(GTK_WIDGET(m_webView))),
+                                                    toplevel ? GTK_WINDOW(toplevel) : 0,
                                                     GTK_FILE_CHOOSER_ACTION_OPEN,
                                                     GTK_STOCK_CANCEL, GTK_RESPONSE_CANCEL,
                                                     GTK_STOCK_OPEN, GTK_RESPONSE_ACCEPT,
@@ -774,15 +811,14 @@ void ChromeClient::runOpenPanel(Frame*, PassRefPtr<FileChooser> prpFileChooser)
 
     if (gtk_dialog_run(GTK_DIALOG(dialog)) == GTK_RESPONSE_ACCEPT) {
         if (gtk_file_chooser_get_select_multiple(GTK_FILE_CHOOSER(dialog))) {
-            GSList* filenames = gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog));
+            GOwnPtr<GSList> filenames(gtk_file_chooser_get_filenames(GTK_FILE_CHOOSER(dialog)));
             Vector<String> names;
-            for (GSList* item = filenames ; item ; item = item->next) {
+            for (GSList* item = filenames.get() ; item ; item = item->next) {
                 if (!item->data)
                     continue;
                 names.append(filenameToString(static_cast<char*>(item->data)));
                 g_free(item->data);
             }
-            g_slist_free(filenames);
             chooser->chooseFiles(names);
         } else {
             gchar* filename = gtk_file_chooser_get_filename(GTK_FILE_CHOOSER(dialog));
@@ -812,6 +848,9 @@ void ChromeClient::setCursor(const Cursor& cursor)
     // Setting the cursor may be an expensive operation in some backends,
     // so don't re-set the cursor if it's already set to the target value.
     GdkWindow* window = gtk_widget_get_window(platformPageClient());
+    if (!window)
+        return;
+
     GdkCursor* currentCursor = gdk_window_get_cursor(window);
     GdkCursor* newCursor = cursor.platformCursor().get();
     if (currentCursor != newCursor)
@@ -849,6 +888,12 @@ bool ChromeClient::selectItemAlignmentFollowsMenuWritingDirection()
     return true;
 }
 
+bool ChromeClient::hasOpenedPopup() const
+{
+    notImplemented();
+    return false;
+}
+
 PassRefPtr<WebCore::PopupMenu> ChromeClient::createPopupMenu(WebCore::PopupMenuClient* client) const
 {
     return adoptRef(new PopupMenuGtk(client));
@@ -880,44 +925,98 @@ void ChromeClient::exitFullscreenForNode(Node* node)
 #if ENABLE(FULLSCREEN_API)
 bool ChromeClient::supportsFullScreenForElement(const WebCore::Element* element, bool withKeyboard)
 {
-    if (withKeyboard)
-        return false;
+    return !withKeyboard;
+}
 
-    return true;
+static gboolean onFullscreenGtkKeyPressEvent(GtkWidget* widget, GdkEventKey* event, ChromeClient* chromeClient)
+{
+    switch (event->keyval) {
+    case GDK_KEY_Escape:
+    case GDK_KEY_f:
+    case GDK_KEY_F:
+        chromeClient->cancelFullScreen();
+        return TRUE;
+    default:
+        break;
+    }
+
+    return FALSE;
+}
+
+void ChromeClient::cancelFullScreen()
+{
+    ASSERT(m_fullScreenElement);
+    m_fullScreenElement->document()->webkitCancelFullScreen();
 }
 
 void ChromeClient::enterFullScreenForElement(WebCore::Element* element)
 {
+    gboolean returnValue;
+    GRefPtr<WebKitDOMHTMLElement> kitElement(adoptGRef(kit(reinterpret_cast<HTMLElement*>(element))));
+    g_signal_emit_by_name(m_webView, "entering-fullscreen", kitElement.get(), &returnValue);
+    if (returnValue)
+        return;
+
+    GtkWidget* window = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
+    if (!widgetIsOnscreenToplevelWindow(window))
+        return;
+
+    g_signal_connect(window, "key-press-event", G_CALLBACK(onFullscreenGtkKeyPressEvent), this);
+
+    m_fullScreenElement = element;
+
     element->document()->webkitWillEnterFullScreenForElement(element);
+    m_adjustmentWatcher.disableAllScrollbars();
+    gtk_window_fullscreen(GTK_WINDOW(window));
     element->document()->webkitDidEnterFullScreenForElement(element);
 }
 
 void ChromeClient::exitFullScreenForElement(WebCore::Element* element)
 {
+    gboolean returnValue;
+    GRefPtr<WebKitDOMHTMLElement> kitElement(adoptGRef(kit(reinterpret_cast<HTMLElement*>(element))));
+    g_signal_emit_by_name(m_webView, "leaving-fullscreen", kitElement.get(), &returnValue);
+    if (returnValue)
+        return;
+
+    GtkWidget* window = gtk_widget_get_toplevel(GTK_WIDGET(m_webView));
+    ASSERT(widgetIsOnscreenToplevelWindow(window));
+    g_signal_handlers_disconnect_by_func(window, reinterpret_cast<void*>(onFullscreenGtkKeyPressEvent), this);
+
     element->document()->webkitWillExitFullScreenForElement(element);
+    gtk_window_unfullscreen(GTK_WINDOW(window));
+    m_adjustmentWatcher.enableAllScrollbars();
     element->document()->webkitDidExitFullScreenForElement(element);
+    m_fullScreenElement.clear();
 }
 #endif
 
 #if USE(ACCELERATED_COMPOSITING)
 void ChromeClient::attachRootGraphicsLayer(Frame* frame, GraphicsLayer* rootLayer)
 {
-    notImplemented();
+    m_webView->priv->acceleratedCompositingContext->attachRootGraphicsLayer(rootLayer);
 }
 
 void ChromeClient::setNeedsOneShotDrawingSynchronization()
 {
-    notImplemented();
+    m_webView->priv->acceleratedCompositingContext->markForSync();
 }
 
 void ChromeClient::scheduleCompositingLayerSync()
 {
-    notImplemented();
+    m_webView->priv->acceleratedCompositingContext->markForSync();
 }
 
 ChromeClient::CompositingTriggerFlags ChromeClient::allowedCompositingTriggers() const
 {
-    return 0;
+     if (!platformPageClient())
+        return false;
+#if USE(CLUTTER)
+    // Currently, we only support CSS 3D Transforms.
+    return ThreeDTransformTrigger;
+#else
+    return AllTriggers;
+#endif
 }
 #endif
 

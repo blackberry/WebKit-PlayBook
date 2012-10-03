@@ -37,9 +37,13 @@ void InitWebCoreSystemInterface(void)
     
     dispatch_once(&initOnce, ^{
         INIT(AdvanceDefaultButtonPulseAnimation);
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+        INIT(CALayerEnumerateRectsBeingDrawnWithBlock);
+#endif
         INIT(CopyCFLocalizationPreferredName);
         INIT(CGContextGetShouldSmoothFonts);
         INIT(CGPatternCreateWithImageAndTransform);
+        INIT(CGContextResetClip);
         INIT(CopyCONNECTProxyResponse);
         INIT(CopyNSURLResponseStatusLine);
         INIT(CreateCTLineWithUniCharProvider);
@@ -65,6 +69,7 @@ void InitWebCoreSystemInterface(void)
         INIT(GetPreferredExtensionForMIMEType);
         INIT(GetUserToBaseCTM);
         INIT(GetWheelEventDeltas);
+        INIT(GetNSEventKeyChar);
         INIT(HitTestMediaUIPart);
         INIT(InitializeMaximumHTTPConnectionCountPerHost);
         INIT(MeasureMediaUIPart);
@@ -141,7 +146,7 @@ void InitWebCoreSystemInterface(void)
         INIT(CopyAXTextMarkerRangeEnd);
         INIT(AccessibilityHandleFocusChanged);
         INIT(CreateAXUIElementRef);
-        INIT(UnregisterUniqueIdForElement);        
+        INIT(UnregisterUniqueIdForElement);
 
         INIT(GetCFURLResponseMIMEType);
         INIT(GetCFURLResponseURL);
@@ -151,6 +156,11 @@ void InitWebCoreSystemInterface(void)
 
 #if !defined(BUILDING_ON_SNOW_LEOPARD)
         INIT(CreateVMPressureDispatchOnMainQueue);
+#endif
+
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+        INIT(GetMacOSXVersionString);
+        INIT(ExecutableWasLinkedOnOrBeforeLion);
 #endif
 
     });

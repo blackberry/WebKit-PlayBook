@@ -65,203 +65,286 @@ use POSIX qw(strftime);
 use VCSUtils;
 
 sub changeLogDate($);
-sub changeLogEmailAddressFromArgs($);
-sub changeLogNameFromArgs($);
-sub firstDirectoryOrCwd();
-sub diffFromToString();
-sub diffCommand(@);
-sub statusCommand(@);
-sub createPatchCommand($);
-sub diffHeaderFormat();
-sub findOriginalFileFromSvn($);
+sub changeLogEmailAddressFromArgs($$);
+sub changeLogNameFromArgs($$);
+sub createPatchCommand($$$$);
+sub decodeEntities($);
 sub determinePropertyChanges($$$);
-sub pluralizeAndList($$@);
-sub generateFileList(\@\@\%);
-sub isUnmodifiedStatus($);
-sub isModifiedStatus($);
-sub isAddedStatus($);
-sub isConflictStatus($);
-sub statusDescription($$$$);
-sub propertyChangeDescription($);
+sub diffCommand($$$$);
+sub diffFromToString($$$);
+sub diffHeaderFormat();
 sub extractLineRange($);
-sub testListForChangeLog(@);
+sub fetchBugDescriptionFromURL($$);
+sub findChangeLogs($);
+sub findOriginalFileFromSvn($);
+sub generateFileList(\%$$$);
+sub generateFunctionLists($$$$$);
+sub generateNewChangeLogs($$$$$$$$$$$);
+sub getLatestChangeLogs($);
 sub get_function_line_ranges($$);
-sub get_function_line_ranges_for_c($$);
+sub get_function_line_ranges_for_cpp($$);
 sub get_function_line_ranges_for_java($$);
 sub get_function_line_ranges_for_javascript($$);
 sub get_function_line_ranges_for_perl($$);
 sub get_selector_line_ranges_for_css($$);
+sub isAddedStatus($);
+sub isConflictStatus($$$);
+sub isModifiedStatus($);
+sub isUnmodifiedStatus($);
+sub main();
 sub method_decl_to_selector($);
-sub processPaths(\@);
-sub reviewerAndDescriptionForGitCommit($);
 sub normalizeLineEndings($$);
-sub decodeEntities($);
+sub openChangeLogs($);
+sub pluralizeAndList($$@);
+sub printDiff($$$$);
+sub processPaths(\@);
+sub propertyChangeDescription($);
+sub resolveConflictedChangeLogs($);
+sub reviewerAndDescriptionForGitCommit($$);
+sub statusCommand($$$$);
+sub statusDescription($$$$);
+sub testListForChangeLog(@);
 
+### Constant variables.
 # Project time zone for Cupertino, CA, US
-my $changeLogTimeZone = "PST8PDT";
+use constant ChangeLogTimeZone => "PST8PDT";
+use constant SVN => "svn";
+use constant GIT => "git";
+use constant SupportedTestExtensions => {map { $_ => 1 } qw(html shtml svg xml xhtml pl php)};
 
-my $bugDescription;
-my $bugNumber;
-my $name;
-my $emailAddress;
-my $mergeBase = 0;
-my $gitCommit = 0;
-my $gitIndex = "";
-my $gitReviewer = "";
-my $openChangeLogs = 0;
-my $writeChangeLogs = 1;
-my $showHelp = 0;
-my $spewDiff = $ENV{"PREPARE_CHANGELOG_DIFF"};
-my $updateChangeLogs = 1;
-my $parseOptionsResult =
-    GetOptions("diff|d!" => \$spewDiff,
-               "bug|b:i" => \$bugNumber,
-               "description:s" => \$bugDescription,
-               "name:s" => \$name,
-               "email:s" => \$emailAddress,
-               "merge-base:s" => \$mergeBase,
-               "git-commit|g:s" => \$gitCommit,
-               "git-index" => \$gitIndex,
-               "git-reviewer:s" => \$gitReviewer,
-               "help|h!" => \$showHelp,
-               "open|o!" => \$openChangeLogs,
-               "write!" => \$writeChangeLogs,
-               "update!" => \$updateChangeLogs);
-if (!$parseOptionsResult || $showHelp) {
-    print STDERR basename($0) . " [-b|--bug=<bugid>] [-d|--diff] [-h|--help] [-o|--open] [-g|--git-commit=<committish>] [--git-reviewer=<name>] [svndir1 [svndir2 ...]]\n";
-    print STDERR "  -b|--bug        Fill in the ChangeLog bug information from the given bug.\n";
-    print STDERR "  --description   One-line description that matches the bug title.\n";
-    print STDERR "  -d|--diff       Spew diff to stdout when running\n";
-    print STDERR "  --merge-base    Populate the ChangeLogs with the diff to this branch\n";
-    print STDERR "  -g|--git-commit Populate the ChangeLogs from the specified git commit\n";
-    print STDERR "  --git-index     Populate the ChangeLogs from the git index only\n";
-    print STDERR "  --git-reviewer  When populating the ChangeLogs from a git commit claim that the spcified name reviewed the change.\n";
-    print STDERR "                  This option is useful when the git commit lacks a Signed-Off-By: line\n";
-    print STDERR "  -h|--help       Show this help message\n";
-    print STDERR "  -o|--open       Open ChangeLogs in an editor when done\n";
-    print STDERR "  --[no-]update   Update ChangeLogs from svn before adding entry (default: update)\n";
-    print STDERR "  --[no-]write    Write ChangeLogs to disk (otherwise send new entries to stdout) (default: write)\n";
-    print STDERR "  --email=        Specify the email address to be used in the patch\n";
-    exit 1;
-}
+exit(main());
 
-die "--git-commit and --git-index are incompatible." if ($gitIndex && $gitCommit);
-
-my %paths = processPaths(@ARGV);
-
-my $isGit = isGitDirectory(firstDirectoryOrCwd());
-my $isSVN = isSVNDirectory(firstDirectoryOrCwd());
-
-$isSVN || $isGit || die "Couldn't determine your version control system.";
-
-my $SVN = "svn";
-my $GIT = "git";
-
-# Find the list of modified files
-my @changed_files;
-my $changed_files_string;
-my %changed_line_ranges;
-my %function_lists;
-my @conflict_files;
-
-
-my %supportedTestExtensions = map { $_ => 1 } qw(html shtml svg xml xhtml pl php);
-my @addedRegressionTests = ();
-my $didChangeRegressionTests = 0;
-
-generateFileList(@changed_files, @conflict_files, %function_lists);
-
-if (!@changed_files && !@conflict_files && !keys %function_lists) {
-    print STDERR "  No changes found.\n";
-    exit 1;
-}
-
-if (@conflict_files) {
-    print STDERR "  The following files have conflicts. Run prepare-ChangeLog again after fixing the conflicts:\n";
-    print STDERR join("\n", @conflict_files), "\n";
-    exit 1;
-}
-
-if (@changed_files) {
-    $changed_files_string = "'" . join ("' '", @changed_files) . "'";
-
-    # For each file, build a list of modified lines.
-    # Use line numbers from the "after" side of each diff.
-    print STDERR "  Reviewing diff to determine which lines changed.\n";
-    my $file;
-    open DIFF, "-|", diffCommand(@changed_files) or die "The diff failed: $!.\n";
-    while (<DIFF>) {
-        $file = makeFilePathRelative($1) if $_ =~ diffHeaderFormat();
-        if (defined $file) {
-            my ($start, $end) = extractLineRange($_);
-            if ($start >= 0 && $end >= 0) {
-                push @{$changed_line_ranges{$file}}, [ $start, $end ];
-            } elsif (/DO_NOT_COMMIT/) {
-                print STDERR "WARNING: file $file contains the string DO_NOT_COMMIT, line $.\n";
-            }
-        }
+sub main()
+{
+    my $bugDescription;
+    my $bugNumber;
+    my $name;
+    my $emailAddress;
+    my $mergeBase = 0;
+    my $gitCommit = 0;
+    my $gitIndex = "";
+    my $gitReviewer = "";
+    my $openChangeLogs = 0;
+    my $writeChangeLogs = 1;
+    my $showHelp = 0;
+    my $spewDiff = $ENV{"PREPARE_CHANGELOG_DIFF"};
+    my $updateChangeLogs = 1;
+    my $parseOptionsResult =
+        GetOptions("diff|d!" => \$spewDiff,
+                   "bug|b:i" => \$bugNumber,
+                   "description:s" => \$bugDescription,
+                   "name:s" => \$name,
+                   "email:s" => \$emailAddress,
+                   "merge-base:s" => \$mergeBase,
+                   "git-commit|g:s" => \$gitCommit,
+                   "git-index" => \$gitIndex,
+                   "git-reviewer:s" => \$gitReviewer,
+                   "help|h!" => \$showHelp,
+                   "open|o!" => \$openChangeLogs,
+                   "write!" => \$writeChangeLogs,
+                   "update!" => \$updateChangeLogs);
+    if (!$parseOptionsResult || $showHelp) {
+        print STDERR basename($0) . " [-b|--bug=<bugid>] [-d|--diff] [-h|--help] [-o|--open] [-g|--git-commit=<committish>] [--git-reviewer=<name>] [svndir1 [svndir2 ...]]\n";
+        print STDERR "  -b|--bug        Fill in the ChangeLog bug information from the given bug.\n";
+        print STDERR "  --description   One-line description that matches the bug title.\n";
+        print STDERR "  -d|--diff       Spew diff to stdout when running\n";
+        print STDERR "  --merge-base    Populate the ChangeLogs with the diff to this branch\n";
+        print STDERR "  -g|--git-commit Populate the ChangeLogs from the specified git commit\n";
+        print STDERR "  --git-index     Populate the ChangeLogs from the git index only\n";
+        print STDERR "  --git-reviewer  When populating the ChangeLogs from a git commit claim that the spcified name reviewed the change.\n";
+        print STDERR "                  This option is useful when the git commit lacks a Signed-Off-By: line\n";
+        print STDERR "  -h|--help       Show this help message\n";
+        print STDERR "  -o|--open       Open ChangeLogs in an editor when done\n";
+        print STDERR "  --[no-]update   Update ChangeLogs from svn before adding entry (default: update)\n";
+        print STDERR "  --[no-]write    Write ChangeLogs to disk (otherwise send new entries to stdout) (default: write)\n";
+        print STDERR "  --email=        Specify the email address to be used in the patch\n";
+        return 1;
     }
-    close DIFF;
+
+    die "--git-commit and --git-index are incompatible." if ($gitIndex && $gitCommit);
+
+    isSVN() || isGit() || die "Couldn't determine your version control system.";
+
+    my %paths = processPaths(@ARGV);
+
+    # Find the list of modified files
+    my ($changedFiles, $conflictFiles, $functionLists, $addedRegressionTests) = generateFileList(%paths, $gitCommit, $gitIndex, $mergeBase);
+
+    if (!@$changedFiles && !@$conflictFiles && !keys %$functionLists) {
+        print STDERR "  No changes found.\n";
+        return 1;
+    }
+
+    if (@$conflictFiles) {
+        print STDERR "  The following files have conflicts. Run prepare-ChangeLog again after fixing the conflicts:\n";
+        print STDERR join("\n", @$conflictFiles), "\n";
+        return 1;
+    }
+
+    generateFunctionLists($changedFiles, $functionLists, $gitCommit, $gitIndex, $mergeBase);
+
+    # Get some parameters for the ChangeLog we are about to write.
+    $name = changeLogNameFromArgs($name, $gitCommit);
+    $emailAddress = changeLogEmailAddressFromArgs($emailAddress, $gitCommit);
+
+    print STDERR "  Change author: $name <$emailAddress>.\n";
+
+    # Remove trailing parenthesized notes from user name (bit of hack).
+    $name =~ s/\(.*?\)\s*$//g;
+
+    my $bugURL;
+    if ($bugNumber) {
+        $bugURL = "https://bugs.webkit.org/show_bug.cgi?id=$bugNumber";
+    }
+
+    if ($bugNumber && !$bugDescription) {
+        $bugDescription = fetchBugDescriptionFromURL($bugURL, $bugNumber);
+    }
+
+    my ($filesInChangeLog, $prefixes) = findChangeLogs($functionLists);
+
+    # Get the latest ChangeLog files from svn.
+    my $changeLogs = getLatestChangeLogs($prefixes);
+
+    if (@$changeLogs && $updateChangeLogs && isSVN()) {
+        resolveConflictedChangeLogs($changeLogs);
+    }
+
+    generateNewChangeLogs($prefixes, $filesInChangeLog, $addedRegressionTests, $functionLists, $bugURL, $bugDescription, $name, $emailAddress, $gitReviewer, $gitCommit, $writeChangeLogs);
+
+    if ($writeChangeLogs) {
+        print STDERR "-- Please remember to include a detailed description in your ChangeLog entry. --\n-- See <http://webkit.org/coding/contributing.html> for more info --\n";
+    }
+
+    # Write out another diff.
+    if ($spewDiff && @$changedFiles) {
+        printDiff($changedFiles, $gitCommit, $gitIndex, $mergeBase);
+    }
+
+    # Open ChangeLogs.
+    if ($openChangeLogs && @$changeLogs) {
+        openChangeLogs($changeLogs);
+    }
+    return 0;
 }
 
-# For each source file, convert line range to function list.
-if (%changed_line_ranges) {
-    print STDERR "  Extracting affected function names from source files.\n";
-    foreach my $file (keys %changed_line_ranges) {
-        # Find all the functions in the file.
-        open SOURCE, $file or next;
-        my @function_ranges = get_function_line_ranges(\*SOURCE, $file);
-        close SOURCE;
-    
-        # Find all the modified functions.
-        my @functions;
-        my %saw_function;
-        my @change_ranges = (@{$changed_line_ranges{$file}}, []);
-        my @change_range = (0, 0);
-        FUNCTION: foreach my $function_range_ref (@function_ranges) {
-            my @function_range = @$function_range_ref;
-    
-            # Advance to successive change ranges.
-            for (;; @change_range = @{shift @change_ranges}) {
-                last FUNCTION unless @change_range;
-    
-                # If past this function, move on to the next one.
-                next FUNCTION if $change_range[0] > $function_range[1];
-    
-                # If an overlap with this function range, record the function name.
-                if ($change_range[1] >= $function_range[0]
-                    and $change_range[0] <= $function_range[1]) {
-                    if (!$saw_function{$function_range[2]}) {
-                        $saw_function{$function_range[2]} = 1;
-                        push @functions, $function_range[2];
-                    }
-                    next FUNCTION;
+sub generateFunctionLists($$$$$)
+{
+    my ($changedFiles, $functionLists, $gitCommit, $gitIndex, $mergeBase) = @_;
+
+    my %changed_line_ranges;
+    if (@$changedFiles) {
+        # For each file, build a list of modified lines.
+        # Use line numbers from the "after" side of each diff.
+        print STDERR "  Reviewing diff to determine which lines changed.\n";
+        my $file;
+        open DIFF, "-|", diffCommand($changedFiles, $gitCommit, $gitIndex, $mergeBase) or die "The diff failed: $!.\n";
+        while (<DIFF>) {
+            $file = makeFilePathRelative($1) if $_ =~ diffHeaderFormat();
+            if (defined $file) {
+                my ($start, $end) = extractLineRange($_);
+                if ($start >= 0 && $end >= 0) {
+                    push @{$changed_line_ranges{$file}}, [ $start, $end ];
+                } elsif (/DO_NOT_COMMIT/) {
+                    print STDERR "WARNING: file $file contains the string DO_NOT_COMMIT, line $.\n";
                 }
             }
         }
-    
-        # Format the list of functions now.
+        close DIFF;
+    }
 
-        if (@functions) {
-            $function_lists{$file} = "" if !defined $function_lists{$file};
-            $function_lists{$file} .= "\n        (" . join("):\n        (", @functions) . "):";
+    # For each source file, convert line range to function list.
+    if (%changed_line_ranges) {
+        print STDERR "  Extracting affected function names from source files.\n";
+        foreach my $file (keys %changed_line_ranges) {
+            # Find all the functions in the file.
+            open SOURCE, $file or next;
+            my @function_ranges = get_function_line_ranges(\*SOURCE, $file);
+            close SOURCE;
+
+            # Find all the modified functions.
+            my @functions;
+            my %saw_function;
+            my @change_ranges = (@{$changed_line_ranges{$file}}, []);
+            my @change_range = (0, 0);
+            FUNCTION: foreach my $function_range_ref (@function_ranges) {
+                my @function_range = @$function_range_ref;
+
+                # FIXME: This is a hack. If the function name is empty, skip it.
+                # The cpp, python, javascript, perl, css and java parsers
+                # are not perfectly implemented and sometimes function names cannot be retrieved
+                # correctly. As you can see in get_function_line_ranges_XXXX(), those parsers
+                # are not intended to implement real parsers but intended to just retrieve function names
+                # for most practical syntaxes.
+                next unless $function_range[2];
+
+                # Advance to successive change ranges.
+                for (;; @change_range = @{shift @change_ranges}) {
+                    last FUNCTION unless @change_range;
+
+                    # If past this function, move on to the next one.
+                    next FUNCTION if $change_range[0] > $function_range[1];
+
+                    # If an overlap with this function range, record the function name.
+                    if ($change_range[1] >= $function_range[0]
+                        and $change_range[0] <= $function_range[1]) {
+                        if (!$saw_function{$function_range[2]}) {
+                            $saw_function{$function_range[2]} = 1;
+                            push @functions, $function_range[2];
+                        }
+                        next FUNCTION;
+                    }
+                }
+            }
+
+            # Format the list of functions now.
+            if (@functions) {
+                $functionLists->{$file} = "" if !defined $functionLists->{$file};
+                $functionLists->{$file} .= "\n        (" . join("):\n        (", @functions) . "):";
+            }
         }
     }
 }
 
-# Get some parameters for the ChangeLog we are about to write.
-my $date = changeLogDate($changeLogTimeZone);
-$name = changeLogNameFromArgs($name);
-$emailAddress = changeLogEmailAddressFromArgs($emailAddress);
-
-print STDERR "  Change author: $name <$emailAddress>.\n";
-
-my $bugURL;
-if ($bugNumber) {
-    $bugURL = "https://bugs.webkit.org/show_bug.cgi?id=$bugNumber";
+sub changeLogDate($)
+{
+    my ($timeZone) = @_;
+    my $savedTimeZone = $ENV{'TZ'};
+    # Set TZ temporarily so that localtime() is in that time zone
+    $ENV{'TZ'} = $timeZone;
+    my $date = strftime("%Y-%m-%d", localtime());
+    if (defined $savedTimeZone) {
+         $ENV{'TZ'} = $savedTimeZone;
+    } else {
+         delete $ENV{'TZ'};
+    }
+    return $date;
 }
 
-if ($bugNumber && !$bugDescription) {
+sub changeLogNameFromArgs($$)
+{
+    my ($nameFromArgs, $gitCommit) = @_;
+    # Silently allow --git-commit to win, we could warn if $nameFromArgs is defined.
+    my $command = GIT . ' log --max-count=1 --pretty="format:%an" "' . $gitCommit . '"';
+    return `$command` if $gitCommit;
+
+    return $nameFromArgs || changeLogName();
+}
+
+sub changeLogEmailAddressFromArgs($$)
+{
+    my ($emailAddressFromArgs, $gitCommit) = @_;
+    # Silently allow --git-commit to win, we could warn if $emailAddressFromArgs is defined.
+    my $command = GIT . ' log --max-count=1 --pretty="format:%ae" "' . $gitCommit . '"';
+    return `$command` if $gitCommit;
+
+    return $emailAddressFromArgs || changeLogEmailAddress();
+}
+
+sub fetchBugDescriptionFromURL($$)
+{
+    my ($bugURL, $bugNumber) = @_;
+
     my $bugXMLURL = "$bugURL&ctype=xml";
     # Perl has no built in XML processing, so we'll fetch and parse with curl and grep
     # Pass --insecure because some cygwin installs have no certs we don't
@@ -280,70 +363,82 @@ if ($bugNumber && !$bugDescription) {
         }
         exit 1;
     }
-    $bugDescription = decodeEntities($1);
+    my $bugDescription = decodeEntities($1);
     print STDERR "  Description from bug $bugNumber:\n    \"$bugDescription\".\n";
+    return $bugDescription;
 }
 
-# Remove trailing parenthesized notes from user name (bit of hack).
-$name =~ s/\(.*?\)\s*$//g;
+sub findChangeLogs($)
+{
+    my ($functionLists) = @_;
 
-# Find the change logs.
-my %has_log;
-my %files;
-foreach my $file (sort keys %function_lists) {
-    my $prefix = $file;
-    my $has_log = 0;
-    while ($prefix) {
-        $prefix =~ s-/[^/]+/?$-/- or $prefix = "";
-        $has_log = $has_log{$prefix};
-        if (!defined $has_log) {
-            $has_log = -f "${prefix}ChangeLog";
-            $has_log{$prefix} = $has_log;
+    # Find the change logs.
+    my %has_log;
+    my %filesInChangeLog;
+    foreach my $file (sort keys %$functionLists) {
+        my $prefix = $file;
+        my $has_log = 0;
+        while ($prefix) {
+            $prefix =~ s-/[^/]+/?$-/- or $prefix = "";
+            $has_log = $has_log{$prefix};
+            if (!defined $has_log) {
+                $has_log = -f "${prefix}ChangeLog";
+                $has_log{$prefix} = $has_log;
+            }
+            last if $has_log;
         }
-        last if $has_log;
-    }
-    if (!$has_log) {
-        print STDERR "No ChangeLog found for $file.\n";
-    } else {
-        push @{$files{$prefix}}, $file;
-    }
-}
-
-# Build the list of ChangeLog prefixes in the correct project order
-my @prefixes;
-my %prefixesSort;
-foreach my $prefix (keys %files) {
-    my $prefixDir = substr($prefix, 0, length($prefix) - 1); # strip trailing /
-    my $sortKey = lc $prefix;
-    $sortKey = "top level" unless length $sortKey;
-
-    if ($prefixDir eq "top level") {
-        $sortKey = "";
-    } elsif ($prefixDir eq "Tools") {
-        $sortKey = "-, just after top level";
-    } elsif ($prefixDir eq "WebBrowser") {
-        $sortKey = lc "WebKit, WebBrowser after";
-    } elsif ($prefixDir eq "Source/WebCore") {
-        $sortKey = lc "WebFoundation, WebCore after";
-    } elsif ($prefixDir eq "LayoutTests") {
-        $sortKey = lc "~, LayoutTests last";
+        if (!$has_log) {
+            print STDERR "No ChangeLog found for $file.\n";
+        } else {
+            push @{$filesInChangeLog{$prefix}}, $file;
+        }
     }
 
-    $prefixesSort{$sortKey} = $prefix;
-}
-foreach my $prefixSort (sort keys %prefixesSort) {
-    push @prefixes, $prefixesSort{$prefixSort};
+    # Build the list of ChangeLog prefixes in the correct project order
+    my @prefixes;
+    my %prefixesSort;
+    foreach my $prefix (keys %filesInChangeLog) {
+        my $prefixDir = substr($prefix, 0, length($prefix) - 1); # strip trailing /
+        my $sortKey = lc $prefix;
+        $sortKey = "top level" unless length $sortKey;
+
+        if ($prefixDir eq "top level") {
+            $sortKey = "";
+        } elsif ($prefixDir eq "Tools") {
+            $sortKey = "-, just after top level";
+        } elsif ($prefixDir eq "WebBrowser") {
+            $sortKey = lc "WebKit, WebBrowser after";
+        } elsif ($prefixDir eq "Source/WebCore") {
+            $sortKey = lc "WebFoundation, WebCore after";
+        } elsif ($prefixDir eq "LayoutTests") {
+            $sortKey = lc "~, LayoutTests last";
+        }
+
+        $prefixesSort{$sortKey} = $prefix;
+    }
+    foreach my $prefixSort (sort keys %prefixesSort) {
+        push @prefixes, $prefixesSort{$prefixSort};
+    }
+    return (\%filesInChangeLog, \@prefixes);
 }
 
-# Get the latest ChangeLog files from svn.
-my @logs = ();
-foreach my $prefix (@prefixes) {
-    push @logs, File::Spec->catfile($prefix || ".", "ChangeLog");
+sub getLatestChangeLogs($)
+{
+    my ($prefixes) = @_;
+
+    my @changeLogs = ();
+    foreach my $prefix (@$prefixes) {
+        push @changeLogs, File::Spec->catfile($prefix || ".", changeLogFileName());
+    }
+    return \@changeLogs;
 }
 
-if (@logs && $updateChangeLogs && $isSVN) {
+sub resolveConflictedChangeLogs($)
+{
+    my ($changeLogs) = @_;
+
     print STDERR "  Running 'svn update' to update ChangeLog files.\n";
-    open ERRORS, "-|", $SVN, "update", @logs
+    open ERRORS, "-|", SVN, "update", @$changeLogs
         or die "The svn update of ChangeLog files failed: $!.\n";
     my @conflictedChangeLogs;
     while (my $line = <ERRORS>) {
@@ -352,140 +447,110 @@ if (@logs && $updateChangeLogs && $isSVN) {
     }
     close ERRORS;
 
-    if (@conflictedChangeLogs) {
-        print STDERR "  Attempting to merge conflicted ChangeLogs.\n";
-        my $resolveChangeLogsPath = File::Spec->catfile(dirname($0), "resolve-ChangeLogs");
-        open RESOLVE, "-|", $resolveChangeLogsPath, "--no-warnings", @conflictedChangeLogs
-            or die "Could not open resolve-ChangeLogs script: $!.\n";
-        print STDERR "    $_" while <RESOLVE>;
-        close RESOLVE;
-    }
+    return if !@conflictedChangeLogs;
+
+    print STDERR "  Attempting to merge conflicted ChangeLogs.\n";
+    my $resolveChangeLogsPath = File::Spec->catfile(dirname($0), "resolve-ChangeLogs");
+    open RESOLVE, "-|", $resolveChangeLogsPath, "--no-warnings", @conflictedChangeLogs
+        or die "Could not open resolve-ChangeLogs script: $!.\n";
+    print STDERR "    $_" while <RESOLVE>;
+    close RESOLVE;
 }
 
-# Generate new ChangeLog entries and (optionally) write out new ChangeLog files.
-foreach my $prefix (@prefixes) {
-    my $endl = "\n";
-    my @old_change_log;
+sub generateNewChangeLogs($$$$$$$$$$$)
+{
+    my ($prefixes, $filesInChangeLog, $addedRegressionTests, $functionLists, $bugURL, $bugDescription, $name, $emailAddress, $gitReviewer, $gitCommit, $writeChangeLogs) = @_;
 
-    if ($writeChangeLogs) {
-        my $changeLogPath = File::Spec->catfile($prefix || ".", "ChangeLog");
-        print STDERR "  Editing the ${changeLogPath} file.\n";
-        open OLD_CHANGE_LOG, ${changeLogPath} or die "Could not open ${changeLogPath} file: $!.\n";
-        # It's less efficient to read the whole thing into memory than it would be
-        # to read it while we prepend to it later, but I like doing this part first.
-        @old_change_log = <OLD_CHANGE_LOG>;
-        close OLD_CHANGE_LOG;
-        # We want to match the ChangeLog's line endings in case it doesn't match
-        # the native line endings for this version of perl.
-        if ($old_change_log[0] =~ /(\r?\n)$/g) {
-            $endl = "$1";
-        }
-        open CHANGE_LOG, "> ${changeLogPath}" or die "Could not write ${changeLogPath}\n.";
-    } else {
-        open CHANGE_LOG, ">-" or die "Could not write to STDOUT\n.";
-        print substr($prefix, 0, length($prefix) - 1) . ":\n\n" unless (scalar @prefixes) == 1;
-    }
+    # Generate new ChangeLog entries and (optionally) write out new ChangeLog files.
+    foreach my $prefix (@$prefixes) {
+        my $endl = "\n";
+        my @old_change_log;
 
-    print CHANGE_LOG normalizeLineEndings("$date  $name  <$emailAddress>\n\n", $endl);
-
-    my ($reviewer, $description) = reviewerAndDescriptionForGitCommit($gitCommit) if $gitCommit;
-    $reviewer = "NOBODY (OO" . "PS!)" if !$reviewer;
-
-    print CHANGE_LOG normalizeLineEndings($description . "\n", $endl) if $description;
-
-    $bugDescription = "Need a short description and bug URL (OOPS!)" unless $bugDescription;
-    print CHANGE_LOG normalizeLineEndings("        $bugDescription\n", $endl) if $bugDescription;
-    print CHANGE_LOG normalizeLineEndings("        $bugURL\n", $endl) if $bugURL;
-    print CHANGE_LOG normalizeLineEndings("\n", $endl);
-
-    print CHANGE_LOG normalizeLineEndings("        Reviewed by $reviewer.\n\n", $endl);
-
-    if ($prefix =~ m/WebCore/ || `pwd` =~ m/WebCore/) {
-        if ($didChangeRegressionTests) {
-            print CHANGE_LOG normalizeLineEndings(testListForChangeLog(sort @addedRegressionTests), $endl);
+        if ($writeChangeLogs) {
+            my $changeLogPath = File::Spec->catfile($prefix || ".", changeLogFileName());
+            print STDERR "  Editing the ${changeLogPath} file.\n";
+            open OLD_CHANGE_LOG, ${changeLogPath} or die "Could not open ${changeLogPath} file: $!.\n";
+            # It's less efficient to read the whole thing into memory than it would be
+            # to read it while we prepend to it later, but I like doing this part first.
+            @old_change_log = <OLD_CHANGE_LOG>;
+            close OLD_CHANGE_LOG;
+            # We want to match the ChangeLog's line endings in case it doesn't match
+            # the native line endings for this version of perl.
+            if ($old_change_log[0] =~ /(\r?\n)$/g) {
+                $endl = "$1";
+            }
+            open CHANGE_LOG, "> ${changeLogPath}" or die "Could not write ${changeLogPath}\n.";
         } else {
-            print CHANGE_LOG normalizeLineEndings("        No new tests. (OOPS!)\n\n", $endl);
+            open CHANGE_LOG, ">-" or die "Could not write to STDOUT\n.";
+            print substr($prefix, 0, length($prefix) - 1) . ":\n\n" unless (scalar @$prefixes) == 1;
         }
-    }
 
-    foreach my $file (sort @{$files{$prefix}}) {
-        my $file_stem = substr $file, length $prefix;
-        print CHANGE_LOG normalizeLineEndings("        * $file_stem:$function_lists{$file}\n", $endl);
-    }
+        my $date = changeLogDate(ChangeLogTimeZone);
+        print CHANGE_LOG normalizeLineEndings("$date  $name  <$emailAddress>\n\n", $endl);
 
-    if ($writeChangeLogs) {
-        print CHANGE_LOG normalizeLineEndings("\n", $endl), @old_change_log;
-    } else {
-        print CHANGE_LOG "\n";
-    }
+        my ($reviewer, $description) = reviewerAndDescriptionForGitCommit($gitCommit, $gitReviewer) if $gitCommit;
+        $reviewer = "NOBODY (OO" . "PS!)" if !$reviewer;
 
-    close CHANGE_LOG;
+        print CHANGE_LOG normalizeLineEndings($description . "\n", $endl) if $description;
+
+        $bugDescription = "Need a short description and bug URL (OOPS!)" unless $bugDescription;
+        print CHANGE_LOG normalizeLineEndings("        $bugDescription\n", $endl) if $bugDescription;
+        print CHANGE_LOG normalizeLineEndings("        $bugURL\n", $endl) if $bugURL;
+        print CHANGE_LOG normalizeLineEndings("\n", $endl);
+
+        print CHANGE_LOG normalizeLineEndings("        Reviewed by $reviewer.\n\n", $endl);
+
+        if ($prefix =~ m/WebCore/ || `pwd` =~ m/WebCore/) {
+            if (@$addedRegressionTests) {
+                print CHANGE_LOG normalizeLineEndings(testListForChangeLog(sort @$addedRegressionTests), $endl);
+            } else {
+                print CHANGE_LOG normalizeLineEndings("        No new tests. (OOPS!)\n\n", $endl);
+            }
+        }
+
+        foreach my $file (sort @{$filesInChangeLog->{$prefix}}) {
+            my $file_stem = substr $file, length $prefix;
+            print CHANGE_LOG normalizeLineEndings("        * $file_stem:$functionLists->{$file}\n", $endl);
+        }
+
+        if ($writeChangeLogs) {
+            print CHANGE_LOG normalizeLineEndings("\n", $endl), @old_change_log;
+        } else {
+            print CHANGE_LOG "\n";
+        }
+
+        close CHANGE_LOG;
+    }
 }
 
-if ($writeChangeLogs) {
-    print STDERR "-- Please remember to include a detailed description in your ChangeLog entry. --\n-- See <http://webkit.org/coding/contributing.html> for more info --\n";
-}
+sub printDiff($$$$)
+{
+    my ($changedFiles, $gitCommit, $gitIndex, $mergeBase) = @_;
 
-# Write out another diff.
-if ($spewDiff && @changed_files) {
     print STDERR "  Running diff to help you write the ChangeLog entries.\n";
     local $/ = undef; # local slurp mode
-    open DIFF, "-|", createPatchCommand($changed_files_string) or die "The diff failed: $!.\n";
+    my $changedFilesString = "'" . join("' '", @$changedFiles) . "'";
+    open DIFF, "-|", createPatchCommand($changedFilesString, $gitCommit, $gitIndex, $mergeBase) or die "The diff failed: $!.\n";
     print <DIFF>;
     close DIFF;
 }
 
-# Open ChangeLogs.
-if ($openChangeLogs && @logs) {
+sub openChangeLogs($)
+{
+    my ($changeLogs) = @_;
+
     print STDERR "  Opening the edited ChangeLog files.\n";
-    my $editor = $ENV{CHANGE_LOG_EDITOR};
+    my $editor = $ENV{CHANGE_LOG_EDITOR} || $ENV{VISUAL} || $ENV{EDITOR};
     if ($editor) {
-        system ((split ' ', $editor), @logs);
+        system ((split ' ', $editor), @$changeLogs);
     } else {
         $editor = $ENV{CHANGE_LOG_EDIT_APPLICATION};
         if ($editor) {
-            system "open", "-a", $editor, @logs;
+            system "open", "-a", $editor, @$changeLogs;
         } else {
-            system "open", "-e", @logs;
+            system "open", "-e", @$changeLogs;
         }
     }
-}
-
-# Done.
-exit;
-
-
-sub changeLogDate($)
-{
-    my ($timeZone) = @_;
-    my $savedTimeZone = $ENV{'TZ'};
-    # Set TZ temporarily so that localtime() is in that time zone
-    $ENV{'TZ'} = $timeZone;
-    my $date = strftime("%Y-%m-%d", localtime());
-    if (defined $savedTimeZone) {
-         $ENV{'TZ'} = $savedTimeZone;
-    } else {
-         delete $ENV{'TZ'};
-    }
-    return $date;
-}
-
-sub changeLogNameFromArgs($)
-{
-    my ($nameFromArgs) = @_;
-    # Silently allow --git-commit to win, we could warn if $nameFromArgs is defined.
-    return `$GIT log --max-count=1 --pretty=\"format:%an\" \"$gitCommit\"` if $gitCommit;
-
-    return $nameFromArgs || changeLogName();
-}
-
-sub changeLogEmailAddressFromArgs($)
-{
-    my ($emailAddressFromArgs) = @_;
-    # Silently allow --git-commit to win, we could warn if $emailAddressFromArgs is defined.
-    return `$GIT log --max-count=1 --pretty=\"format:%ae\" \"$gitCommit\"` if $gitCommit;
-
-    return $emailAddressFromArgs || changeLogEmailAddress();
 }
 
 sub get_function_line_ranges($$)
@@ -494,21 +559,23 @@ sub get_function_line_ranges($$)
 
     # Try to determine the source language based on the file extension.
 
-    return get_function_line_ranges_for_c($file_handle, $file_name) if $file_name =~ /\.(c|cpp|m|mm|h)$/;
+    return get_function_line_ranges_for_cpp($file_handle, $file_name) if $file_name =~ /\.(c|cpp|m|mm|h)$/;
     return get_function_line_ranges_for_java($file_handle, $file_name) if $file_name =~ /\.java$/;
     return get_function_line_ranges_for_javascript($file_handle, $file_name) if $file_name =~ /\.js$/;
     return get_selector_line_ranges_for_css($file_handle, $file_name) if $file_name =~ /\.css$/;
     return get_function_line_ranges_for_perl($file_handle, $file_name) if $file_name =~ /\.p[lm]$/;
+    return get_function_line_ranges_for_python($file_handle, $file_name) if $file_name =~ /\.py$/ or $file_name =~ /master\.cfg$/;
 
     # Try to determine the source language based on the script interpreter.
 
     my $first_line = <$file_handle>;
     seek($file_handle, 0, 0);
 
-    return () unless $first_line =~ /^#!(\S+)/;
+    return () unless $first_line =~ m|^#!(?:/usr/bin/env\s+)?(\S+)|;
     my $interpreter = $1;
 
     return get_function_line_ranges_for_perl($file_handle, $file_name) if $interpreter =~ /perl$/;
+    return get_function_line_ranges_for_python($file_handle, $file_name) if $interpreter =~ /python$/;
 
     return ();
 }
@@ -548,7 +615,7 @@ sub method_decl_to_selector($)
 #
 # Result is a list of triples: [ start_line, end_line, function_name ].
 
-sub get_function_line_ranges_for_c($$)
+sub get_function_line_ranges_for_cpp($$)
 {
     my ($file_handle, $file_name) = @_;
 
@@ -559,9 +626,12 @@ sub get_function_line_ranges_for_c($$)
     my $in_method_declaration = 0;
     my $in_parentheses = 0;
     my $in_braces = 0;
+    my $in_toplevel_array_brace = 0;
     my $brace_start = 0;
     my $brace_end = 0;
+    my $namespace_start = -1;
     my $skip_til_brace_or_semicolon = 0;
+    my $equal_observed = 0;
 
     my $word = "";
     my $interface_name = "";
@@ -636,11 +706,11 @@ sub get_function_line_ranges_for_c($$)
               } elsif (/{/) {
                   my $selector = method_decl_to_selector ($potential_method_spec);
                   $potential_name = "${potential_method_char}\[${interface_name} ${selector}\]";
-                  
+
                   $potential_method_spec = "";
                   $potential_method_char = "";
                   $in_method_declaration = 0;
-  
+
                   $_ = $original;
                   s/^[^;{]*//;
               } elsif (/\@end/) {
@@ -652,7 +722,7 @@ sub get_function_line_ranges_for_c($$)
               }
         }
 
-        
+
         # start of method declaration
         if ((my $method_char, my $method_spec) = m&^([-+])([^0-9;][^;]*);?$&) {
             my $original = $_;
@@ -672,7 +742,7 @@ sub get_function_line_ranges_for_c($$)
             if (/\{/) {
               my $selector = method_decl_to_selector ($potential_method_spec);
               $potential_name = "${potential_method_char}\[${interface_name} ${selector}\]";
-              
+
               $potential_method_spec = "";
               $potential_method_char = "";
               $in_method_declaration = 0;
@@ -689,7 +759,23 @@ sub get_function_line_ranges_for_c($$)
 
 
         # Find function, interface and method names.
-        while (m&((?:[[:word:]]+::)*operator(?:[ \t]*\(\)|[^()]*)|[[:word:]:~]+|[(){}:;])|\@(?:implementation|interface|protocol)\s+(\w+)[^{]*&g) {
+        while (m&((?:[[:word:]]+::)*operator(?:[ \t]*\(\)|[^()]*)|[[:word:]:~]+|[(){}:;=])|\@(?:implementation|interface|protocol)\s+(\w+)[^{]*&g) {
+            # Skip an array definition at the top level.
+            # e.g. static int arr[] = { 1, 2, 3 };
+            if ($1) {
+                if ($1 eq "=" and !$in_parentheses and !$in_braces) {
+                    $equal_observed = 1;
+                } elsif ($1 eq "{" and $equal_observed) {
+                    # This '{' is the beginning of an array definition, not the beginning of a method.
+                    $in_toplevel_array_brace = 1;
+                    $in_braces++;
+                    $equal_observed = 0;
+                    next;
+                } elsif ($1 !~ /[ \t]/) {
+                    $equal_observed = 0;
+                }
+            }
+
             # interface name
             if ($2) {
                 $interface_name = $2;
@@ -718,19 +804,27 @@ sub get_function_line_ranges_for_c($$)
             if ($1 eq "{") {
                 $skip_til_brace_or_semicolon = 0;
 
-                if ($potential_namespace) {
-                    push @namespaces, $potential_namespace;
-                    $potential_namespace = "";
-                    next;
-                }
+                if (!$in_braces) {
+                    if ($namespace_start >= 0 and $namespace_start < $potential_start) {
+                        push @ranges, [ $namespace_start . "", $potential_start - 1, $name ];
+                    }
 
-                # Promote potential name to real function name at the
-                # start of the outer level set of braces (function body?).
-                if (!$in_braces and $potential_start) {
-                    $start = $potential_start;
-                    $name = $potential_name;
-                    if (@namespaces && $name && (length($name) < 2 || substr($name,1,1) ne "[")) {
-                        $name = join ('::', @namespaces, $name);
+                    if ($potential_namespace) {
+                        push @namespaces, $potential_namespace;
+                        $potential_namespace = "";
+                        $name = $namespaces[-1];
+                        $namespace_start = $. + 1;
+                        next;
+                    }
+
+                    # Promote potential name to real function name at the
+                    # start of the outer level set of braces (function body?).
+                    if ($potential_start) {
+                        $start = $potential_start;
+                        $name = $potential_name;
+                        if (@namespaces && $name && (length($name) < 2 || substr($name,1,1) ne "[")) {
+                            $name = join ('::', @namespaces, $name);
+                        }
                     }
                 }
 
@@ -744,7 +838,18 @@ sub get_function_line_ranges_for_c($$)
             # Close brace.
             if ($1 eq "}") {
                 if (!$in_braces && @namespaces) {
+                    if ($namespace_start >= 0 and $namespace_start < $.) {
+                        push @ranges, [ $namespace_start . "", $. - 1, $name ];
+                    }
+
                     pop @namespaces;
+                    if (@namespaces) {
+                        $name = $namespaces[-1];
+                        $namespace_start = $. + 1;
+                    } else {
+                        $name = "";
+                        $namespace_start = -1;
+                    }
                     next;
                 }
 
@@ -754,8 +859,20 @@ sub get_function_line_ranges_for_c($$)
                 # End of an outer level set of braces.
                 # This could be a function body.
                 if (!$in_braces and $name) {
+                    # This is the end of an array definition at the top level, not the end of a method.
+                    if ($in_toplevel_array_brace) {
+                        $in_toplevel_array_brace = 0;
+                        next;
+                    }
+
                     push @ranges, [ $start, $., $name ];
-                    $name = "";
+                    if (@namespaces) {
+                        $name = $namespaces[-1];
+                        $namespace_start = $. + 1;
+                    } else {
+                        $name = "";
+                        $namespace_start = -1;
+                    }
                 }
 
                 $potential_start = 0;
@@ -850,6 +967,7 @@ sub get_function_line_ranges_for_java($$)
     my $in_braces = 0;
     my $in_non_block_braces = 0;
     my $class_or_interface_just_seen = 0;
+    my $in_class_declaration = 0;
 
     my $word = "";
 
@@ -918,6 +1036,8 @@ sub get_function_line_ranges_for_java($$)
 
             # Open brace.
             if ($1 eq "{") {
+                $in_class_declaration = 0;
+
                 # Promote potential name to real function name at the
                 # start of the outer level set of braces (function/class/interface body?).
                 if (!$in_non_block_braces
@@ -986,7 +1106,10 @@ sub get_function_line_ranges_for_java($$)
                 next;
             }
 
-            if ($1 eq "class" or $1 eq "interface") {
+            if ($1 eq "class") {
+                $in_class_declaration = 1;
+            }
+            if ($1 eq "class" or (!$in_class_declaration and $1 eq "interface")) {
                 $class_or_interface_just_seen = 1;
                 next;
             }
@@ -1085,7 +1208,7 @@ sub get_function_line_ranges_for_javascript($$)
             } elsif ($match eq '//') {
                 s-//.*--;
             } else { # ' or "
-                if (!s-$match([^\\]|\\.)*?$match--) {
+                if (!s-$match([^\\]|\\.)*?$match-string_appeared_here-) {
                     $inQuotedText = $match if /\\$/;
                     warn "mismatched quotes at line $. in $fileName\n" if $inQuotedText eq "";
                     s-$match.*--;
@@ -1221,25 +1344,101 @@ sub get_function_line_ranges_for_perl($$)
 
     my $currentFunction = "";
     my $start = 0;
+    my $hereDocumentIdentifier = "";
 
     while (<$fileHandle>) {
-        if (/^sub\s+([^(\s]+)/) {
-            # Skip over forward declarations, which don't contain a brace and end with a semicolon.
-            next if !/{/ && /;$/;
+        chomp;
+        if (!$hereDocumentIdentifier) {
+            if (/^sub\s+([\w_][\w\d_]*)/) {
+                # Skip over forward declarations, which don't contain a brace and end with a semicolon.
+                next if /;\s*$/;
 
-            if ($currentFunction) {
-                warn "nested functions found at top-level at $fileName:$.\n";
-                next;
+                if ($currentFunction) {
+                    warn "nested functions found at top-level at $fileName:$.\n";
+                    next;
+                }
+                $currentFunction = $1;
+                $start = $.;
             }
-            $currentFunction = $1;
-            $start = $.;
+            if (/<<\s*[\"\']?([\w_][\w_\d]*)/) {
+                # Enter here-document.
+                $hereDocumentIdentifier = $1;
+            }
+            if (index($_, "}") == 0) {
+                next unless $start;
+                push(@ranges, [$start, $., $currentFunction]);
+                $currentFunction = "";
+                $start = 0;
+            }
+        } elsif ($_ eq $hereDocumentIdentifier) {
+            # Escape from here-document.
+            $hereDocumentIdentifier = "";
         }
-        if (index($_, "}") == 0) {
-            next unless $start;
-            push(@ranges, [$start, $., $currentFunction]);
-            $currentFunction = "";
-            $start = 0;
-            next;
+    }
+
+    return @ranges;
+}
+
+# Read a file and get all the line ranges of the things that look like Python classes, methods, or functions.
+#
+# FIXME: Maybe we should use Python's ast module to do the parsing for us?
+#
+# Result is a list of triples: [ start_line, end_line, function ].
+
+sub get_function_line_ranges_for_python($$)
+{
+    my ($fileHandle, $fileName) = @_;
+
+    my @ranges;
+
+    my @scopeStack = ({ line => 0, indent => -1, name => undef });
+    my $lastLine = 0;
+    until ($lastLine) {
+        $_ = <$fileHandle>;
+        unless ($_) {
+            # To pop out all popped scopes, run the loop once more after
+            # we encountered the end of the file.
+            $_ = "pass\n";
+            $.++;
+            $lastLine = 1;
+        }
+        chomp;
+        next unless /^(\s*)([^#].*)$/;
+
+        my $indent = length $1;
+        my $rest = $2;
+        my $scope = $scopeStack[-1];
+
+        if ($indent <= $scope->{indent}) {
+            # Find all the scopes that we have just exited.
+            my $i = 0;
+            for (; $i < @scopeStack; ++$i) {
+                last if $indent <= $scopeStack[$i]->{indent};
+            }
+            my @poppedScopes = splice @scopeStack, $i;
+
+            # For each scope that was just exited, add a range that goes from the start of that
+            # scope to the start of the next nested scope, or to the line just before this one for
+            # the innermost scope.
+            for ($i = 0; $i < @poppedScopes; ++$i) {
+                my $lineAfterEnd = $i + 1 == @poppedScopes ? $. : $poppedScopes[$i + 1]->{line};
+                push @ranges, [$poppedScopes[$i]->{line}, $lineAfterEnd - 1, $poppedScopes[$i]->{name}];
+            }
+            @scopeStack or warn "Popped off last scope at $fileName:$.\n";
+
+            # Set the now-current scope to start at the current line. Any lines within this scope
+            # before this point should already have been added to @ranges.
+            $scope = $scopeStack[-1];
+            $scope->{line} = $.;
+        }
+
+        next unless $rest =~ /(?:class|def)\s+(\w+)/;
+        my $name = $1;
+        my $fullName = $scope->{name} ? join('.', $scope->{name}, $name) : $name;
+        push @scopeStack, { line => $., indent => $indent, name => $fullName };
+
+        if ($scope->{indent} >= 0) {
+            push @ranges, [$scope->{line}, $. - 1, $scope->{name}];
         }
     }
 
@@ -1249,7 +1448,6 @@ sub get_function_line_ranges_for_perl($$)
 # Read a file and get all the line ranges of the things that look like CSS selectors.  A selector is
 # anything before an opening brace on a line. A selector starts at the line containing the opening
 # brace and ends at the closing brace.
-# FIXME: Comments are parsed just like uncommented text.
 #
 # Result is a list of triples: [ start_line, end_line, selector ].
 
@@ -1261,21 +1459,36 @@ sub get_selector_line_ranges_for_css($$)
 
     my $currentSelector = "";
     my $start = 0;
+    my $inComment = 0;
+    my $inBrace = 0;
 
     while (<$fileHandle>) {
-        if (/^[ \t]*(.*[^ \t])[ \t]*{/) {
-            $currentSelector = $1;
-            $start = $.;
-        }
-        if (index($_, "}") >= 0) {
-            unless ($start) {
-                warn "mismatched braces in $fileName\n";
-                next;
+        foreach my $token (split m-(\{|\}|/\*|\*/)-, $_) {
+            if ($token eq "{") {
+                if (!$inComment) {
+                    warn "mismatched brace found in $fileName\n" if $inBrace;
+                    $inBrace = 1;
+                }
+            } elsif ($token eq "}") {
+                if (!$inComment) {
+                    warn "mismatched brace found in $fileName\n" if !$inBrace;
+                    $inBrace = 0;
+                    push(@ranges, [$start, $., $currentSelector]);
+                    $currentSelector = "";
+                    $start = 0;
+                }
+            } elsif ($token eq "/*") {
+                $inComment = 1;
+            } elsif ($token eq "*/") {
+                warn "mismatched comment found in $fileName\n" if !$inComment;
+                $inComment = 0;
+            } else {
+                if (!$inComment and !$inBrace and $token !~ /^[\s\t]*$/) {
+                    $token =~ s/^[\s\t]*|[\s\t]*$//g;
+                    $currentSelector = $token;
+                    $start = $.;
+                }
             }
-            push(@ranges, [$start, $., $currentSelector]);
-            $currentSelector = "";
-            $start = 0;
-            next;
         }
     }
 
@@ -1318,58 +1531,63 @@ sub processPaths(\@)
     return %result;
 }
 
-sub diffFromToString()
+sub diffFromToString($$$)
 {
-    return "" if $isSVN;
+    my ($gitCommit, $gitIndex, $mergeBase) = @_;
+
+    return "" if isSVN();
     return $gitCommit if $gitCommit =~ m/.+\.\..+/;
     return "\"$gitCommit^\" \"$gitCommit\"" if $gitCommit;
     return "--cached" if $gitIndex;
     return $mergeBase if $mergeBase;
-    return "HEAD" if $isGit;
+    return "HEAD" if isGit();
 }
 
-sub diffCommand(@)
+sub diffCommand($$$$)
 {
-    my @paths = @_;
-
-    my $pathsString = "'" . join("' '", @paths) . "'"; 
+    my ($paths, $gitCommit, $gitIndex, $mergeBase) = @_;
 
     my $command;
-    if ($isSVN) {
-        $command = "$SVN diff --diff-cmd diff -x -N $pathsString";
-    } elsif ($isGit) {
-        $command = "$GIT diff --no-ext-diff -U0 " . diffFromToString();
+    if (isSVN()) {
+        my @escapedPaths = map(escapeSubversionPath($_), @$paths);
+        my $escapedPathsString = "'" . join("' '", @escapedPaths) . "'";
+        $command = SVN . " diff --diff-cmd diff -x -N $escapedPathsString";
+    } elsif (isGit()) {
+        my $pathsString = "'" . join("' '", @$paths) . "'"; 
+        $command = GIT . " diff --no-ext-diff -U0 " . diffFromToString($gitCommit, $gitIndex, $mergeBase);
         $command .= " -- $pathsString" unless $gitCommit or $mergeBase;
     }
 
     return $command;
 }
 
-sub statusCommand(@)
+sub statusCommand($$$$)
 {
-    my @files = @_;
+    my ($paths, $gitCommit, $gitIndex, $mergeBase) = @_;
 
-    my $filesString = "\"" . join ("\" \"", @files) . "\"";
     my $command;
-    if ($isSVN) {
-        $command = "$SVN stat $filesString";
-    } elsif ($isGit) {
-        $command = "$GIT diff -r --name-status -M -C " . diffFromToString();
+    if (isSVN()) {
+        my @escapedFiles = map(escapeSubversionPath($_), keys %$paths);
+        my $escapedFilesString = "'" . join("' '", @escapedFiles) . "'";
+        $command = SVN . " stat $escapedFilesString";
+    } elsif (isGit()) {
+        my $filesString = '"' . join('" "', keys %$paths) . '"';
+        $command = GIT . " diff -r --name-status -M -C " . diffFromToString($gitCommit, $gitIndex, $mergeBase);
         $command .= " -- $filesString" unless $gitCommit;
     }
 
     return "$command 2>&1";
 }
 
-sub createPatchCommand($)
+sub createPatchCommand($$$$)
 {
-    my ($changedFilesString) = @_;
+    my ($changedFilesString, $gitCommit, $gitIndex, $mergeBase) = @_;
 
     my $command;
-    if ($isSVN) {
+    if (isSVN()) {
         $command = "'$FindBin::Bin/svn-create-patch' $changedFilesString";
-    } elsif ($isGit) {
-        $command = "$GIT diff -M -C " . diffFromToString();
+    } elsif (isGit()) {
+        $command = GIT . " diff -M -C " . diffFromToString($gitCommit, $gitIndex, $mergeBase);
         $command .= " -- $changedFilesString" unless $gitCommit;
     }
 
@@ -1378,15 +1596,15 @@ sub createPatchCommand($)
 
 sub diffHeaderFormat()
 {
-    return qr/^Index: (\S+)[\r\n]*$/ if $isSVN;
-    return qr/^diff --git a\/.+ b\/(.+)$/ if $isGit;
+    return qr/^Index: (\S+)[\r\n]*$/ if isSVN();
+    return qr/^diff --git a\/.+ b\/(.+)$/ if isGit();
 }
 
 sub findOriginalFileFromSvn($)
 {
     my ($file) = @_;
     my $baseUrl;
-    open INFO, "$SVN info . |" or die;
+    open INFO, SVN . " info . |" or die;
     while (<INFO>) {
         if (/^URL: (.+?)[\r\n]*$/) {
             $baseUrl = $1;
@@ -1394,7 +1612,8 @@ sub findOriginalFileFromSvn($)
     }
     close INFO;
     my $sourceFile;
-    open INFO, "$SVN info '$file' |" or die;
+    my $escapedFile = escapeSubversionPath($file);
+    open INFO, SVN . " info '$escapedFile' |" or die;
     while (<INFO>) {
         if (/^Copied From URL: (.+?)[\r\n]*$/) {
             $sourceFile = File::Spec->abs2rel($1, $baseUrl);
@@ -1408,17 +1627,19 @@ sub determinePropertyChanges($$$)
 {
     my ($file, $isAdd, $original) = @_;
 
+    my $escapedFile = escapeSubversionPath($file);
     my %changes;
     if ($isAdd) {
         my %addedProperties;
         my %removedProperties;
-        open PROPLIST, "$SVN proplist '$file' |" or die;
+        open PROPLIST, SVN . " proplist '$escapedFile' |" or die;
         while (<PROPLIST>) {
             $addedProperties{$1} = 1 if /^  (.+?)[\r\n]*$/ && $1 ne 'svn:mergeinfo';
         }
         close PROPLIST;
         if ($original) {
-            open PROPLIST, "$SVN proplist '$original' |" or die;
+            my $escapedOriginal = escapeSubversionPath($original);
+            open PROPLIST, SVN . " proplist '$escapedOriginal' |" or die;
             while (<PROPLIST>) {
                 next unless /^  (.+?)[\r\n]*$/;
                 my $property = $1;
@@ -1432,7 +1653,7 @@ sub determinePropertyChanges($$$)
         $changes{"A"} = [sort keys %addedProperties] if %addedProperties;
         $changes{"D"} = [sort keys %removedProperties] if %removedProperties;
     } else {
-        open DIFF, "$SVN diff '$file' |" or die;
+        open DIFF, SVN . " diff '$escapedFile' |" or die;
         while (<DIFF>) {
             if (/^Property changes on:/) {
                 while (<DIFF>) {
@@ -1474,11 +1695,16 @@ sub pluralizeAndList($$@)
     return "$plural " . join(", ", @items[0 .. $#items - 1]) . " and " . $items[-1];
 }
 
-sub generateFileList(\@\@\%)
+sub generateFileList(\%$$$)
 {
-    my ($changedFiles, $conflictFiles, $functionLists) = @_;
+    my ($paths, $gitCommit, $gitIndex, $mergeBase) = @_;
+
+    my @changedFiles;
+    my @conflictFiles;
+    my %functionLists;
+    my @addedRegressionTests;
     print STDERR "  Running status to find changed, added, or removed files.\n";
-    open STAT, "-|", statusCommand(keys %paths) or die "The status failed: $!.\n";
+    open STAT, "-|", statusCommand($paths, $gitCommit, $gitIndex, $mergeBase) or die "The status failed: $!.\n";
     while (<STAT>) {
         my $status;
         my $propertyStatus;
@@ -1486,7 +1712,7 @@ sub generateFileList(\@\@\%)
         my $original;
         my $file;
 
-        if ($isSVN) {
+        if (isSVN()) {
             my $matches;
             if (isSVNVersion16OrNewer()) {
                 $matches = /^([ ACDMR])([ CM]).{5} (.+?)[\r\n]*$/;
@@ -1507,7 +1733,7 @@ sub generateFileList(\@\@\%)
             } else {
                 print;  # error output from svn stat
             }
-        } elsif ($isGit) {
+        } elsif (isGit()) {
             if (/^([ADM])\t(.+)$/) {
                 $status = $1;
                 $propertyStatus = " ";  # git doesn't have properties
@@ -1529,24 +1755,24 @@ sub generateFileList(\@\@\%)
         if (isModifiedStatus($status) || isAddedStatus($status) || isModifiedStatus($propertyStatus)) {
             my @components = File::Spec->splitdir($file);
             if ($components[0] eq "LayoutTests") {
-                $didChangeRegressionTests = 1;
                 push @addedRegressionTests, $file
                     if isAddedStatus($status)
                        && $file =~ /\.([a-zA-Z]+)$/
-                       && $supportedTestExtensions{lc($1)}
+                       && SupportedTestExtensions->{lc($1)}
                        && !scalar(grep(/^resources$/i, @components))
                        && !scalar(grep(/^script-tests$/i, @components));
             }
-            push @{$changedFiles}, $file if $components[$#components] ne "ChangeLog";
-        } elsif (isConflictStatus($status) || isConflictStatus($propertyStatus)) {
-            push @{$conflictFiles}, $file;
+            push @changedFiles, $file if $components[$#components] ne changeLogFileName();
+        } elsif (isConflictStatus($status, $gitCommit, $gitIndex) || isConflictStatus($propertyStatus, $gitCommit, $gitIndex)) {
+            push @conflictFiles, $file;
         }
-        if (basename($file) ne "ChangeLog") {
+        if (basename($file) ne changeLogFileName()) {
             my $description = statusDescription($status, $propertyStatus, $original, $propertyChanges);
-            $functionLists->{$file} = $description if defined $description;
+            $functionLists{$file} = $description if defined $description;
         }
     }
     close STAT;
+    return (\@changedFiles, \@conflictFiles, \%functionLists, \@addedRegressionTests);
 }
 
 sub isUnmodifiedStatus($)
@@ -1577,16 +1803,16 @@ sub isAddedStatus($)
 
     my %statusCodes = (
         "A" => 1,
-        "C" => $isGit,
+        "C" => isGit(),
         "R" => 1,
     );
 
     return $statusCodes{$status};
 }
 
-sub isConflictStatus($)
+sub isConflictStatus($$$)
 {
-    my ($status) = @_;
+    my ($status, $gitCommit, $gitIndex) = @_;
 
     my %svn = (
         "C" => 1,
@@ -1597,8 +1823,8 @@ sub isConflictStatus($)
     );
 
     return 0 if ($gitCommit || $gitIndex); # an existing commit or staged change cannot have conflicts
-    return $svn{$status} if $isSVN;
-    return $git{$status} if $isGit;
+    return $svn{$status} if isSVN();
+    return $git{$status} if isGit();
 }
 
 sub statusDescription($$$$)
@@ -1621,8 +1847,8 @@ sub statusDescription($$$$)
     $git{"R"} = " Renamed from \%s.";
 
     my $description;
-    $description = sprintf($svn{$status}, $original) if $isSVN && exists $svn{$status};
-    $description = sprintf($git{$status}, $original) if $isGit && exists $git{$status};
+    $description = sprintf($svn{$status}, $original) if isSVN() && exists $svn{$status};
+    $description = sprintf($git{$status}, $original) if isGit() && exists $git{$status};
     return unless defined $description;
 
     $description .= $propertyDescription unless isAddedStatus($status);
@@ -1655,25 +1881,15 @@ sub extractLineRange($)
 
     my ($start, $end) = (-1, -1);
 
-    if ($isSVN && $string =~ /^\d+(,\d+)?[acd](\d+)(,(\d+))?/) {
+    if (isSVN() && $string =~ /^\d+(,\d+)?[acd](\d+)(,(\d+))?/) {
         $start = $2;
         $end = $4 || $2;
-    } elsif ($isGit && $string =~ /^@@ -\d+(,\d+)? \+(\d+)(,(\d+))? @@/) {
+    } elsif (isGit() && $string =~ /^@@ -\d+(,\d+)? \+(\d+)(,(\d+))? @@/) {
         $start = $2;
         $end = defined($4) ? $4 + $2 - 1 : $2;
     }
 
     return ($start, $end);
-}
-
-sub firstDirectoryOrCwd()
-{
-    my $dir = ".";
-    my @dirs = keys(%paths);
-
-    $dir = -d $dirs[0] ? $dirs[0] : dirname($dirs[0]) if @dirs;
-
-    return $dir;
 }
 
 sub testListForChangeLog(@)
@@ -1695,9 +1911,9 @@ sub testListForChangeLog(@)
     return $list;
 }
 
-sub reviewerAndDescriptionForGitCommit($)
+sub reviewerAndDescriptionForGitCommit($$)
 {
-    my ($commit) = @_;
+    my ($commit, $gitReviewer) = @_;
 
     my $description = '';
     my $reviewer;
@@ -1707,9 +1923,9 @@ sub reviewerAndDescriptionForGitCommit($)
     my $gitLog;
     {
         local $/ = undef;
-        open(GIT, "-|", $GIT, @args, $commit) || die;
-        $gitLog = <GIT>;
-        close(GIT);
+        open(GITLOG, "-|", GIT, @args, $commit) || die;
+        $gitLog = <GITLOG>;
+        close(GITLOG);
     }
 
     my @commitLogs = split(/^[Cc]ommit [a-f0-9]{40}/m, $gitLog);

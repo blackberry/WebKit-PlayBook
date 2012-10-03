@@ -32,7 +32,7 @@
 
 vars = {
   'chromium_svn': 'http://src.chromium.org/svn/trunk/src',
-  'chromium_rev': '109696'
+  'chromium_rev': '124511'
 }
 
 deps = {
@@ -77,6 +77,8 @@ deps = {
     Var('chromium_svn')+'/net@'+Var('chromium_rev'),
   'crypto':
     Var('chromium_svn')+'/crypto@'+Var('chromium_rev'),
+  'dbus':
+    Var('chromium_svn')+'/dbus@'+Var('chromium_rev'),
   'sdch':
     Var('chromium_svn')+'/sdch@'+Var('chromium_rev'),
   'sdch/open-vcdiff':
@@ -107,8 +109,6 @@ deps = {
     From('chromium_deps', 'src/third_party/ffmpeg'),
   'third_party/libjingle/source':
     From('chromium_deps', 'src/third_party/libjingle/source'),
-  'third_party/libwebp':
-    Var('chromium_svn')+'/third_party/libwebp@'+Var('chromium_rev'),
   'tools/grit':
     From('chromium_deps', 'src/tools/grit'),
   'tools/gritsettings':
@@ -133,8 +133,8 @@ deps = {
     From('chromium_deps', 'src/third_party/leveldatabase/src'),
   'third_party/snappy/src':
     From('chromium_deps', 'src/third_party/snappy/src'),
-  'third_party/sfntly/src/sfntly':
-    From('chromium_deps', 'src/third_party/sfntly/src/sfntly'),
+  'third_party/sfntly/cpp/src':
+    From('chromium_deps', 'src/third_party/sfntly/cpp/src'),
   'third_party/v8-i18n':
     From('chromium_deps', 'src/third_party/v8-i18n'),
   'third_party':
@@ -145,8 +145,6 @@ deps_os = {
   'win': {
     'third_party/cygwin':
       From('chromium_deps', 'src/third_party/cygwin'),
-    'third_party/ffmpeg/binaries/chromium/win/ia32':
-      From('chromium_deps', 'src/third_party/ffmpeg/binaries/chromium/win/ia32'),
     'third_party/lighttpd':
       From('chromium_deps', 'src/third_party/lighttpd'),
     'third_party/nss':
@@ -156,10 +154,6 @@ deps_os = {
       From('chromium_deps', 'src/third_party/yasm/binaries'),
   },
   'mac': {
-    'third_party/apple_apsl':
-      Var('chromium_svn')+'/third_party/apple_apsl@'+Var('chromium_rev'),
-    'third_party/apple_webkit':
-      Var('chromium_svn')+'/third_party/apple_webkit@'+Var('chromium_rev'),
     'third_party/nss':
       From('chromium_deps', 'src/third_party/nss'),
   },
@@ -167,8 +161,14 @@ deps_os = {
     # Linux, actually.
     'tools/xdisplaycheck':
       Var('chromium_svn')+'/tools/xdisplaycheck@'+Var('chromium_rev'),
+    'third_party/gold':
+      From('chromium_deps', 'src/third_party/gold'),
     'third_party/openssl':
       From('chromium_deps', 'src/third_party/openssl'),
+  },
+  'android': {
+    'third_party/freetype':
+      'https://git.chromium.org/chromium/src/third_party/freetype.git',
   },
 }
 

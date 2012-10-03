@@ -670,22 +670,26 @@ FloatQuad TransformationMatrix::mapQuad(const FloatQuad& q) const
 
 TransformationMatrix& TransformationMatrix::scaleNonUniform(double sx, double sy)
 {
-    TransformationMatrix mat;
-    mat.m_matrix[0][0] = sx;
-    mat.m_matrix[1][1] = sy;
-
-    multiply(mat);
+    m_matrix[0][0] *= sx;
+    m_matrix[0][1] *= sx;
+    m_matrix[0][2] *= sx;
+    m_matrix[0][3] *= sx;
+    
+    m_matrix[1][0] *= sy;
+    m_matrix[1][1] *= sy;
+    m_matrix[1][2] *= sy;
+    m_matrix[1][3] *= sy;
     return *this;
 }
 
 TransformationMatrix& TransformationMatrix::scale3d(double sx, double sy, double sz)
 {
-    TransformationMatrix mat;
-    mat.m_matrix[0][0] = sx;
-    mat.m_matrix[1][1] = sy;
-    mat.m_matrix[2][2] = sz;
-
-    multiply(mat);
+    scaleNonUniform(sx, sy);
+    
+    m_matrix[2][0] *= sz;
+    m_matrix[2][1] *= sz;
+    m_matrix[2][2] *= sz;
+    m_matrix[2][3] *= sz;
     return *this;
 }
 
@@ -1194,5 +1198,24 @@ TransformationMatrix TransformationMatrix::to2dTransform() const
                                 m_matrix[3][0], m_matrix[3][1], 0, m_matrix[3][3]);
 }
 
+void TransformationMatrix::toColumnMajorFloatArray(FloatMatrix4& result) const
+{
+    result[0] = m11();
+    result[1] = m12();
+    result[2] = m13();
+    result[3] = m14();
+    result[4] = m21();
+    result[5] = m22();
+    result[6] = m23();
+    result[7] = m24();
+    result[8] = m31();
+    result[9] = m32();
+    result[10] = m33();
+    result[11] = m34();
+    result[12] = m41();
+    result[13] = m42();
+    result[14] = m43();
+    result[15] = m44();
+}
 
 }

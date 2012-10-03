@@ -173,7 +173,24 @@ bool RuntimeEnabledFeatures::isMediaSourceEnabled = false;
 #endif
 
 #if ENABLE(VIDEO_TRACK)
-bool RuntimeEnabledFeatures::isVideoTrackEnabled = false;
+#if PLATFORM(MAC)
+    bool RuntimeEnabledFeatures::isVideoTrackEnabled = true;
+#else
+    bool RuntimeEnabledFeatures::isVideoTrackEnabled = false;
+#endif
 #endif
 
+#if ENABLE(SHADOW_DOM)
+void RuntimeEnabledFeatures::setMultipleShadowSubtreesEnabled(bool isEnabled)
+{
+    isMultipleShadowSubtreesEnabled = isEnabled;
+}
+
+bool RuntimeEnabledFeatures::isShadowDOMEnabled = false;
+bool RuntimeEnabledFeatures::isMultipleShadowSubtreesEnabled = false;
+#endif
+
+#if ENABLE(STYLE_SCOPED)
+bool RuntimeEnabledFeatures::isStyleScopedEnabled = false;
+#endif
 } // namespace WebCore

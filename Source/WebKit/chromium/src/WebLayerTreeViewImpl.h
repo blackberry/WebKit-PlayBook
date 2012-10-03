@@ -26,7 +26,7 @@
 #ifndef WebLayerTreeViewImpl_h
 #define WebLayerTreeViewImpl_h
 
-#include "WebLayerTreeView.h"
+#include "platform/WebLayerTreeView.h"
 #include "cc/CCLayerTreeHost.h"
 #include <wtf/PassRefPtr.h>
 
@@ -39,12 +39,13 @@ public:
     static PassRefPtr<WebLayerTreeViewImpl> create(WebLayerTreeViewClient*, const WebLayer& root, const WebLayerTreeView::Settings&);
 
 private:
-    WebLayerTreeViewImpl(WebLayerTreeViewClient*, const WebLayer& root, const WebLayerTreeView::Settings&);
+    WebLayerTreeViewImpl(WebLayerTreeViewClient*, const WebLayerTreeView::Settings&);
     virtual ~WebLayerTreeViewImpl();
-    virtual void animateAndLayout(double frameBeginTime);
+    virtual void updateAnimations(double frameBeginTime);
+    virtual void layout();
     virtual void applyScrollAndScale(const WebCore::IntSize& scrollDelta, float pageScale);
-    virtual PassRefPtr<WebCore::GraphicsContext3D> createLayerTreeHostContext3D();
-    virtual void didRecreateGraphicsContext(bool success);
+    virtual PassRefPtr<WebCore::GraphicsContext3D> createContext();
+    virtual void didRecreateContext(bool success);
     virtual void didCommitAndDrawFrame();
     virtual void didCompleteSwapBuffers();
 

@@ -44,6 +44,7 @@
 #include "RenderObject.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
+#include "ShadowTree.h"
 #include "Text.h"
 #include <wtf/PassOwnPtr.h>
 
@@ -118,13 +119,14 @@ static void adjustBubblePosition(const LayoutRect& hostRect, HTMLElement* bubble
         hostX -= containerLocation.x() + container->borderLeft();
         hostY -= containerLocation.y() + container->borderTop();
     }
-    bubble->getInlineStyleDecl()->setProperty(CSSPropertyTop, hostY + hostRect.height(), CSSPrimitiveValue::CSS_PX);
+
+    bubble->setInlineStyleProperty(CSSPropertyTop, hostY + hostRect.height(), CSSPrimitiveValue::CSS_PX);
     // The 'left' value of ::-webkit-validation-bubble-arrow.
     const int bubbleArrowTopOffset = 32;
     double bubbleX = hostX;
     if (hostRect.width() / 2 < bubbleArrowTopOffset)
         bubbleX = max(hostX + hostRect.width() / 2 - bubbleArrowTopOffset, 0.0);
-    bubble->getInlineStyleDecl()->setProperty(CSSPropertyLeft, bubbleX, CSSPrimitiveValue::CSS_PX);
+    bubble->setInlineStyleProperty(CSSPropertyLeft, bubbleX, CSSPrimitiveValue::CSS_PX);
 }
 
 void ValidationMessage::buildBubbleTree(Timer<ValidationMessage>*)
@@ -135,7 +137,7 @@ void ValidationMessage::buildBubbleTree(Timer<ValidationMessage>*)
     m_bubble->setShadowPseudoId("-webkit-validation-bubble");
     // Need to force position:absolute because RenderMenuList doesn't assume it
     // contains non-absolute or non-fixed renderers as children.
-    m_bubble->getInlineStyleDecl()->setProperty(CSSPropertyPosition, CSSValueAbsolute);
+    m_bubble->setInlineStyleProperty(CSSPropertyPosition, CSSValueAbsolute);
     ExceptionCode ec = 0;
     host->ensureShadowRoot()->appendChild(m_bubble.get(), ec);
     ASSERT(!ec);
@@ -185,7 +187,7 @@ void ValidationMessage::deleteBubbleTree(Timer<ValidationMessage>*)
         m_messageBody = 0;
         HTMLElement* host = toHTMLElement(m_element);
         ExceptionCode ec;
-        host->shadowRoot()->removeChild(m_bubble.get(), ec);
+        host->shadowTree()->oldestShadowRoot()->removeChild(m_bubble.get(), ec);
         m_bubble = 0;
     }
     m_message = String();

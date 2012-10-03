@@ -38,6 +38,7 @@
 #include "EventNames.h"
 #include "MessageEvent.h"
 #include "NotImplemented.h"
+#include "ScriptCallStack.h"
 #include "SharedWorkerThread.h"
 
 namespace WebCore {
@@ -49,8 +50,8 @@ PassRefPtr<MessageEvent> createConnectEvent(PassRefPtr<MessagePort> port)
     return event.release();
 }
 
-SharedWorkerContext::SharedWorkerContext(const String& name, const KURL& url, const String& userAgent, SharedWorkerThread* thread)
-    : WorkerContext(url, userAgent, thread)
+SharedWorkerContext::SharedWorkerContext(const String& name, const KURL& url, const String& userAgent, SharedWorkerThread* thread, const String& contentSecurityPolicy, ContentSecurityPolicy::HeaderType contentSecurityPolicyType)
+    : WorkerContext(url, userAgent, thread, contentSecurityPolicy, contentSecurityPolicyType)
     , m_name(name)
 {
 }
@@ -67,6 +68,12 @@ const AtomicString& SharedWorkerContext::interfaceName() const
 SharedWorkerThread* SharedWorkerContext::thread()
 {
     return static_cast<SharedWorkerThread*>(Base::thread());
+}
+
+void SharedWorkerContext::logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, PassRefPtr<ScriptCallStack> callStack)
+{
+    WorkerContext::logExceptionToConsole(errorMessage, sourceURL, lineNumber, callStack);
+    addMessageToWorkerConsole(JSMessageSource, LogMessageType, ErrorMessageLevel, errorMessage, sourceURL, lineNumber, callStack);
 }
 
 } // namespace WebCore

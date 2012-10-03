@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,11 +20,6 @@
 #define WebSettings_h
 
 #include "BlackBerryGlobal.h"
-
-// FIXME: We shouldn't be using WTF types in our public API. For some reason isSupportedObjectMIMEType() uses a WebCore string.
-namespace WTF {
-class String;
-}
 
 namespace BlackBerry {
 namespace WebKit {
@@ -50,10 +45,6 @@ struct BLACKBERRY_EXPORT WebSettingsDelegate {
     @class WebSettings
 */
 class BLACKBERRY_EXPORT WebSettings {
-private:
-    WebSettingsPrivate* m_private;
-    WebSettings();
-    WebSettings(const WebSettings&);
 public:
     static WebSettings* createFromStandardSettings(WebSettingsDelegate* = 0);
     ~WebSettings();
@@ -64,7 +55,7 @@ public:
     WebSettingsDelegate* delegate();
 
     static void addSupportedObjectPluginMIMEType(const char*);
-    static bool isSupportedObjectMIMEType(const WTF::String& mimeType);
+    static bool isSupportedObjectMIMEType(const WebString&);
     static WebString getNormalizedMIMEType(const WebString&);
 
     bool xssAuditorEnabled() const;
@@ -119,7 +110,7 @@ public:
     bool isScrollbarsEnabled() const;
     void setScrollbarsEnabled(bool);
 
-    // FIXME: Consider renaming this method upstream, where it is called javaScriptCanOpenWindowsAutomatically
+    // FIXME: Consider renaming this method upstream, where it is called javaScriptCanOpenWindowsAutomatically.
     bool canJavaScriptOpenWindowsAutomatically() const;
     void setJavaScriptOpenWindowsAutomatically(bool);
 
@@ -129,7 +120,7 @@ public:
     bool isGeolocationEnabled() const;
     void setGeolocationEnabled(bool);
 
-    // Context Info
+    // Context info
     bool doesGetFocusNodeContext() const;
     void setGetFocusNodeContext(bool);
 
@@ -156,7 +147,7 @@ public:
     int firstScheduledLayoutDelay() const;
     void setFirstScheduledLayoutDelay(int);
 
-    // Whether to include pattern: in the list of string patterns
+    // Whether to include pattern: in the list of string patterns.
     bool shouldHandlePatternUrls() const;
     void setShouldHandlePatternUrls(bool);
 
@@ -226,6 +217,11 @@ public:
 
     bool isSpatialNavigationEnabled() const;
     void setSpatialNavigationEnabled(bool);
+
+private:
+    WebSettingsPrivate* m_private;
+    WebSettings();
+    WebSettings(const WebSettings&);
 };
 
 /*!

@@ -270,26 +270,32 @@ WebInspector.WatchExpressionsSection.prototype = {
 
     _mouseOut: function()
     {
-        if (this._hoveredElement)
+        if (this._hoveredElement) {
             this._hoveredElement.removeStyleClass("hovered");
+            delete this._hoveredElement;
+        }
         delete this._lastMouseMovePageY;
     },
 
     _updateHoveredElement: function(pageY)
     {
-        if (this._hoveredElement)
-            this._hoveredElement.removeStyleClass("hovered");
-
-        this._hoveredElement = this.propertiesElement.firstChild;
+        var candidateElement = this.propertiesElement.firstChild;
         while (true) {
-            var next = this._hoveredElement.nextSibling;
-            while(next && !next.clientHeight)
+            var next = candidateElement.nextSibling;
+            while (next && !next.clientHeight)
                 next = next.nextSibling;
             if (!next || next.totalOffsetTop() > pageY)
                 break;
-            this._hoveredElement = next;
+            candidateElement = next;
         }
-        this._hoveredElement.addStyleClass("hovered");
+
+        if (this._hoveredElement !== candidateElement) {
+            if (this._hoveredElement)
+                this._hoveredElement.removeStyleClass("hovered");
+            if (candidateElement)
+                candidateElement.addStyleClass("hovered");
+            this._hoveredElement = candidateElement;
+        }
 
         this._lastMouseMovePageY = pageY;
     }

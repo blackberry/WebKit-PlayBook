@@ -165,16 +165,20 @@ FloatRect Path::boundingRect() const
 {
     // CGPathGetBoundingBox includes the path's control points, CGPathGetPathBoundingBox
     // does not, but only exists on 10.6 and above.
+
+    CGRect bound = CGRectZero;
 #if !defined(BUILDING_ON_LEOPARD)
-    return CGPathGetPathBoundingBox(m_path);
+    bound = CGPathGetPathBoundingBox(m_path);
 #else
-    return CGPathGetBoundingBox(m_path);
+    bound = CGPathGetBoundingBox(m_path);
 #endif
+    return CGRectIsNull(bound) ? CGRectZero : bound;
 }
 
 FloatRect Path::fastBoundingRect() const
 {
-    return CGPathGetBoundingBox(m_path);
+    CGRect bound = CGPathGetBoundingBox(m_path);
+    return CGRectIsNull(bound) ? CGRectZero : bound;
 }
 
 FloatRect Path::strokeBoundingRect(StrokeStyleApplier* applier) const
@@ -194,7 +198,7 @@ FloatRect Path::strokeBoundingRect(StrokeStyleApplier* applier) const
     CGRect box = CGContextIsPathEmpty(context) ? CGRectZero : CGContextGetPathBoundingBox(context);
     CGContextRestoreGState(context);
 
-    return box;
+    return CGRectIsNull(box) ? CGRectZero : box;
 }
 
 void Path::moveTo(const FloatPoint& point)

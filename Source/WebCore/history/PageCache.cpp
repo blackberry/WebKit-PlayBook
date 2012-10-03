@@ -31,6 +31,7 @@
 #include "MemoryCache.h"
 #include "CachedPage.h"
 #include "DOMWindow.h"
+#include "DatabaseContext.h"
 #include "DeviceMotionController.h"
 #include "DeviceOrientationController.h"
 #include "Document.h"
@@ -107,7 +108,7 @@ static bool logCanCacheFrameDecision(Frame* frame, int indentLevel)
             PCLOG("   -Main document has an error");
             cannotCache = true;
         }
-        if (frame->loader()->subframeLoader()->containsPlugins()) {
+        if (frame->loader()->subframeLoader()->containsPlugins() && !frame->page()->settings()->pageCacheSupportsPlugins()) {
             PCLOG("   -Frame contains plugins");
             cannotCache = true;
         }
@@ -120,7 +121,7 @@ static bool logCanCacheFrameDecision(Frame* frame, int indentLevel)
             cannotCache = true;
         }
 #if ENABLE(SQL_DATABASE)
-        if (frame->document()->hasOpenDatabases()) {
+        if (DatabaseContext::hasOpenDatabases(frame->document())) {
             PCLOG("   -Frame has open database handles");
             cannotCache = true;
         }
@@ -199,11 +200,11 @@ static void logCanCachePageDecision(Page* page)
         cannotCache = true;
     }
 #if ENABLE(DEVICE_ORIENTATION)
-    if (page->deviceMotionController() && page->deviceMotionController()->isActive()) {
+    if (DeviceMotionController::isActiveAt(page)) {
         PCLOG("   -Page is using DeviceMotion");
         cannotCache = true;
     }
-    if (page->deviceOrientationController() && page->deviceOrientationController()->isActive()) {
+    if (DeviceOrientationController::isActiveAt(page)) {
         PCLOG("   -Page is using DeviceOrientation");
         cannotCache = true;
     }
@@ -251,34 +252,33 @@ bool PageCache::canCachePageContainingThisFrame(Frame* frame)
             return false;
     }
     
-    return frame->loader()->documentLoader()
-        && frame->loader()->documentLoader()->mainDocumentError().isNull()
+    FrameLoader* frameLoader = frame->loader();
+    DocumentLoader* documentLoader = frameLoader->documentLoader();
+    Document* document = frame->document();
+    
+    return documentLoader
+        && documentLoader->mainDocumentError().isNull()
         // Do not cache error pages (these can be recognized as pages with substitute data or unreachable URLs).
-        && !(frame->loader()->documentLoader()->substituteData().isValid() && !frame->loader()->documentLoader()->substituteData().failingURL().isEmpty())
-        // FIXME: If we ever change this so that frames with plug-ins will be cached,
-        // we need to make sure that we don't cache frames that have outstanding NPObjects
-        // (objects created by the plug-in). Since there is no way to pause/resume a Netscape plug-in,
-        // they would need to be destroyed and then recreated, and there is no way that we can recreate
-        // the right NPObjects. See <rdar://problem/5197041> for more information.
-        && !frame->loader()->subframeLoader()->containsPlugins()
-        && !frame->document()->url().protocolIs("https")
+        && !(documentLoader->substituteData().isValid() && !documentLoader->substituteData().failingURL().isEmpty())
+        && (!frameLoader->subframeLoader()->containsPlugins() || frame->page()->settings()->pageCacheSupportsPlugins())
+        && (!document->url().protocolIs("https") || (!documentLoader->response().cacheControlContainsNoCache() && !documentLoader->response().cacheControlContainsNoStore()))
         && (!frame->domWindow() || !frame->domWindow()->hasEventListeners(eventNames().unloadEvent))
 #if ENABLE(SQL_DATABASE)
-        && !frame->document()->hasOpenDatabases()
+        && !DatabaseContext::hasOpenDatabases(document)
 #endif
 #if ENABLE(SHARED_WORKERS)
-        && !SharedWorkerRepository::hasSharedWorkers(frame->document())
+        && !SharedWorkerRepository::hasSharedWorkers(document)
 #endif
-        && !frame->document()->usingGeolocation()
-        && frame->loader()->history()->currentItem()
-        && !frame->loader()->quickRedirectComing()
-        && !frame->loader()->documentLoader()->isLoadingInAPISense()
-        && !frame->loader()->documentLoader()->isStopping()
-        && frame->document()->canSuspendActiveDOMObjects()
+        && !document->usingGeolocation()
+        && frameLoader->history()->currentItem()
+        && !frameLoader->quickRedirectComing()
+        && !documentLoader->isLoadingInAPISense()
+        && !documentLoader->isStopping()
+        && document->canSuspendActiveDOMObjects()
         // FIXME: We should investigating caching frames that have an associated
         // application cache. <rdar://problem/5917899> tracks that work.
-        && frame->loader()->documentLoader()->applicationCacheHost()->canCacheInPageCache()
-        && frame->loader()->client()->canCachePage();
+        && documentLoader->applicationCacheHost()->canCacheInPageCache()
+        && frameLoader->client()->canCachePage();
 }
     
 bool PageCache::canCache(Page* page)
@@ -301,8 +301,8 @@ bool PageCache::canCache(Page* page)
         && page->backForward()->isActive()
         && page->settings()->usesPageCache()
 #if ENABLE(DEVICE_ORIENTATION)
-        && !(page->deviceMotionController() && page->deviceMotionController()->isActive())
-        && !(page->deviceOrientationController() && page->deviceOrientationController()->isActive())
+        && !DeviceMotionController::isActiveAt(page)
+        && !DeviceOrientationController::isActiveAt(page)
 #endif
         && loadType != FrameLoadTypeReload
         && loadType != FrameLoadTypeReloadFromOrigin

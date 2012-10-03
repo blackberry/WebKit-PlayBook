@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Google Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -32,8 +32,8 @@
 #define WebPreferences_h
 
 #include "WebSettings.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 #include <wtf/HashMap.h>
 
 namespace WebKit {
@@ -82,6 +82,7 @@ struct WebPreferences {
     WebKit::WebString defaultTextEncodingName;
     bool developerExtrasEnabled;
     bool experimentalWebGLEnabled;
+    bool experimentalCSSRegionsEnabled;
     bool javaEnabled;
     bool javaScriptCanAccessClipboard;
     bool javaScriptCanOpenWindowsAutomatically;
@@ -94,20 +95,23 @@ struct WebPreferences {
     bool textAreasAreResizable;
     WebKit::WebURL userStyleSheetLocation;
     bool usesPageCache;
+    bool pageCacheSupportsPlugins;
     bool webSecurityEnabled;
     bool allowUniversalAccessFromFileURLs;
     WebKit::WebSettings::EditingBehavior editingBehavior;
     bool tabsToLinks;
     bool hyperlinkAuditingEnabled;
     bool caretBrowsingEnabled;
+    bool acceleratedCompositingForVideoEnabled;
     bool acceleratedCompositingEnabled;
-    bool threadedCompositingEnabled;
     bool compositeToTexture;
     bool forceCompositingMode;
     bool accelerated2dCanvasEnabled;
-    bool legacyAccelerated2dCanvasEnabled;
-    bool acceleratedDrawingEnabled;
+    bool deferred2dCanvasEnabled;
+    bool acceleratedPaintingEnabled;
     bool hixie76WebSocketProtocolEnabled;
+    bool perTilePaintingEnabled;
+    bool mockScrollbarsEnabled;
 
     WebPreferences() { reset(); }
     void reset();

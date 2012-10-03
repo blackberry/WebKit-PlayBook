@@ -38,7 +38,7 @@
 #include <wtf/OwnPtr.h>
 #include <wtf/Threading.h>
 
-#if PLATFORM(MAC)
+#if OS(DARWIN)
 #include <mach/mach_port.h>
 #elif PLATFORM(WIN)
 #include <string>
@@ -50,10 +50,13 @@ class QSocketNotifier;
 #include "PlatformProcessIdentifier.h"
 #endif
 
+namespace WebCore {
 class RunLoop;
+}
 
 namespace CoreIPC {
 
+class BinarySemaphore;
 class MessageID;
     
 enum MessageSendFlags {
@@ -102,13 +105,13 @@ public:
 
     class QueueClient {
     public:
-        virtual bool willProcessMessageOnClientRunLoop(Connection*, MessageID, ArgumentDecoder*) = 0;
+        virtual void didReceiveMessageOnConnectionWorkQueue(Connection*, MessageID, ArgumentDecoder*, bool& didHandleMessage) = 0;
 
     protected:
         virtual ~QueueClient() { }
     };
 
-#if PLATFORM(MAC)
+#if OS(DARWIN)
     typedef mach_port_t Identifier;
 #elif PLATFORM(WIN)
     typedef HANDLE Identifier;
@@ -117,11 +120,11 @@ public:
     typedef int Identifier;
 #endif
 
-    static PassRefPtr<Connection> createServerConnection(Identifier, Client*, RunLoop* clientRunLoop);
-    static PassRefPtr<Connection> createClientConnection(Identifier, Client*, RunLoop* clientRunLoop);
+    static PassRefPtr<Connection> createServerConnection(Identifier, Client*, WebCore::RunLoop* clientRunLoop);
+    static PassRefPtr<Connection> createClientConnection(Identifier, Client*, WebCore::RunLoop* clientRunLoop);
     ~Connection();
 
-#if PLATFORM(MAC)
+#if OS(DARWIN)
     void setShouldCloseConnectionOnMachExceptions();
 #elif PLATFORM(QT)
     void setShouldCloseConnectionOnProcessTermination(WebKit::PlatformProcessIdentifier);
@@ -206,7 +209,7 @@ public:
     typedef Message<ArgumentEncoder> OutgoingMessage;
 
 private:
-    Connection(Identifier, bool isServer, Client*, RunLoop* clientRunLoop);
+    Connection(Identifier, bool isServer, Client*, WebCore::RunLoop* clientRunLoop);
     void platformInitialize(Identifier);
     void platformInvalidate();
     
@@ -252,7 +255,7 @@ private:
 
     bool m_isConnected;
     WorkQueue m_connectionQueue;
-    RunLoop* m_clientRunLoop;
+    WebCore::RunLoop* m_clientRunLoop;
 
     Vector<QueueClient*> m_connectionQueueClients;
 
@@ -317,7 +320,7 @@ private:
     bool m_shouldWaitForSyncReplies;
     Vector<PendingSyncReply> m_pendingSyncReplies;
 
-#if PLATFORM(MAC)
+#if OS(DARWIN)
     // Called on the connection queue.
     void receiveSourceEventHandler();
     void initializeDeadNameSource();
@@ -335,6 +338,13 @@ private:
     void readEventHandler();
     void writeEventHandler();
 
+    // Called by Connection::SyncMessageState::waitWhileDispatchingSentWin32Messages.
+    // The absoluteTime is in seconds, starting on January 1, 1970. The time is assumed to use the
+    // same time zone as WTF::currentTime(). Dispatches sent (not posted) messages to the passed-in
+    // set of HWNDs until the semaphore is signaled or absoluteTime is reached. Returns true if the
+    // semaphore is signaled, false otherwise.
+    static bool dispatchSentMessagesUntil(const Vector<HWND>& windows, CoreIPC::BinarySemaphore& semaphore, double absoluteTime);
+
     Vector<uint8_t> m_readBuffer;
     OVERLAPPED m_readState;
     OwnPtr<ArgumentEncoder> m_pendingWriteArguments;
@@ -350,7 +360,6 @@ private:
     Vector<int> m_fileDescriptors;
     size_t m_fileDescriptorsSize;
     int m_socketDescriptor;
-
 #if PLATFORM(QT)
     QSocketNotifier* m_socketNotifier;
 #endif

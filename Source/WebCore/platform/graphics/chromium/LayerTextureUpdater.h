@@ -44,7 +44,7 @@ class TextureManager;
 class LayerTextureUpdater : public RefCounted<LayerTextureUpdater> {
 public:
     // Allows texture uploaders to store per-tile resources.
-    class Texture : public RefCounted<Texture> {
+    class Texture {
     public:
         virtual ~Texture() { }
 
@@ -60,25 +60,24 @@ public:
 
     virtual ~LayerTextureUpdater() { }
 
-    enum Orientation {
-        BottomUpOrientation,
-        TopDownOrientation,
-        InvalidOrientation,
-    };
     enum SampledTexelFormat {
         SampledTexelFormatRGBA,
         SampledTexelFormatBGRA,
         SampledTexelFormatInvalid,
     };
-    virtual PassRefPtr<Texture> createTexture(TextureManager*) = 0;
-    // Returns the orientation of the texture uploaded by this interface.
-    virtual Orientation orientation() = 0;
+    virtual PassOwnPtr<Texture> createTexture(TextureManager*) = 0;
     // Returns the format of the texel uploaded by this interface.
     // This format should not be confused by texture internal format.
     // This format specifies the component order in the sampled texel.
     // If the format is TexelFormatBGRA, vec4.x is blue and vec4.z is red.
     virtual SampledTexelFormat sampledTexelFormat(GC3Denum textureFormat) = 0;
-    virtual void prepareToUpdate(const IntRect& /* contentRect */, const IntSize& /* tileSize */, int /* borderTexels */) { }
+    // The |resultingOpaqueRect| gives back a region of the layer that was painted opaque. If the layer is marked opaque in the updater,
+    // then this region should be ignored in preference for the entire layer's area.
+    virtual void prepareToUpdate(const IntRect& /* contentRect */, const IntSize& /* tileSize */, int /* borderTexels */, float /* contentsScale */,
+                                 IntRect* /* resultingOpaqueRect */) { }
+
+    // Set true by the layer when it is known that the entire output is going to be opaque.
+    virtual void setOpaque(bool) { }
 };
 
 } // namespace WebCore

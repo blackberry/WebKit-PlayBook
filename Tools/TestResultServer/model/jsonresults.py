@@ -29,6 +29,8 @@
 from datetime import datetime
 from django.utils import simplejson
 import logging
+import sys
+import traceback
 
 from model.testfile import TestFile
 
@@ -42,26 +44,71 @@ JSON_RESULTS_TESTS = "tests"
 JSON_RESULTS_RESULTS = "results"
 JSON_RESULTS_TIMES = "times"
 JSON_RESULTS_PASS = "P"
+JSON_RESULTS_SKIP = "X"
 JSON_RESULTS_NO_DATA = "N"
-JSON_RESULTS_MIN_TIME = 1
-JSON_RESULTS_VERSION = 3
+JSON_RESULTS_MIN_TIME = 5
 JSON_RESULTS_HIERARCHICAL_VERSION = 4
 JSON_RESULTS_MAX_BUILDS = 750
 JSON_RESULTS_MAX_BUILDS_SMALL = 200
 
 
+def _add_path_to_trie(path, value, trie):
+    if not "/" in path:
+        trie[path] = value
+        return
+
+    directory, slash, rest = path.partition("/")
+    if not directory in trie:
+        trie[directory] = {}
+    _add_path_to_trie(rest, value, trie[directory])
+
+
+def _trie_json_tests(tests):
+    """Breaks a test name into chunks by directory and puts the test time as a value in the lowest part, e.g.
+    foo/bar/baz.html: VALUE1
+    foo/bar/baz1.html: VALUE2
+
+    becomes
+    foo: {
+        bar: {
+            baz.html: VALUE1,
+            baz1.html: VALUE2
+        }
+    }
+    """
+    trie = {}
+    for test, value in tests.iteritems():
+        _add_path_to_trie(test, value, trie)
+    return trie
+
+
+def _is_directory(subtree):
+    # FIXME: Some data got corrupted and has results/times at the directory level.
+    # Once the data is fixed, this should assert that the directory level does not have
+    # results or times and just return "JSON_RESULTS_RESULTS not in subtree".
+    if JSON_RESULTS_RESULTS not in subtree:
+        return True
+
+    for key in subtree:
+        if key not in (JSON_RESULTS_RESULTS, JSON_RESULTS_TIMES):
+            del subtree[JSON_RESULTS_RESULTS]
+            del subtree[JSON_RESULTS_TIMES]
+            return True
+
+    return False
+
+
 class JsonResults(object):
     @classmethod
     def _strip_prefix_suffix(cls, data):
-        assert(data.startswith(JSON_RESULTS_PREFIX))
-        assert(data.endswith(JSON_RESULTS_SUFFIX))
-
-        return data[len(JSON_RESULTS_PREFIX):len(data) - len(JSON_RESULTS_SUFFIX)]
+        # FIXME: Stop stripping jsonp callback once we upload pure json everywhere.
+        if data.startswith(JSON_RESULTS_PREFIX) and data.endswith(JSON_RESULTS_SUFFIX):
+            return data[len(JSON_RESULTS_PREFIX):len(data) - len(JSON_RESULTS_SUFFIX)]
+        return data
 
     @classmethod
     def _generate_file_data(cls, json, sort_keys=False):
-        data = simplejson.dumps(json, separators=(',', ':'), sort_keys=sort_keys)
-        return JSON_RESULTS_PREFIX + data + JSON_RESULTS_SUFFIX
+        return simplejson.dumps(json, separators=(',', ':'), sort_keys=sort_keys)
 
     @classmethod
     def _load_json(cls, file_data):
@@ -72,22 +119,18 @@ class JsonResults(object):
 
         try:
             return simplejson.loads(json_results_str)
-        except Exception, err:
+        except:
             logging.debug(json_results_str)
-            logging.error("Failed to load json results: %s", str(err))
+            logging.error("Failed to load json results: %s", traceback.print_exception(*sys.exc_info()))
             return None
 
     @classmethod
     def _merge_json(cls, aggregated_json, incremental_json, num_runs):
-        if not cls._merge_non_test_data(aggregated_json, incremental_json, num_runs):
-            return False
-
+        cls._merge_non_test_data(aggregated_json, incremental_json, num_runs)
         incremental_tests = incremental_json[JSON_RESULTS_TESTS]
         if incremental_tests:
             aggregated_tests = aggregated_json[JSON_RESULTS_TESTS]
             cls._merge_tests(aggregated_tests, incremental_tests, num_runs)
-
-        return True
 
     @classmethod
     def _merge_non_test_data(cls, aggregated_json, incremental_json, num_runs):
@@ -101,8 +144,6 @@ class JsonResults(object):
 
             # Merge this build into aggreagated results.
             cls._merge_one_build(aggregated_json, incremental_json, index, num_runs)
-
-        return True
 
     @classmethod
     def _merge_one_build(cls, aggregated_json, incremental_json, incremental_index, num_runs):
@@ -120,23 +161,39 @@ class JsonResults(object):
 
     @classmethod
     def _merge_tests(cls, aggregated_json, incremental_json, num_runs):
-        all_tests = set(aggregated_json.iterkeys()) | set(incremental_json.iterkeys())
-        for test_name in all_tests:
-            if test_name in aggregated_json:
-                aggregated_test = aggregated_json[test_name]
-                if test_name in incremental_json:
-                    incremental_test = incremental_json[test_name]
-                    results = incremental_test[JSON_RESULTS_RESULTS]
-                    times = incremental_test[JSON_RESULTS_TIMES]
-                else:
-                    results = [[1, JSON_RESULTS_NO_DATA]]
-                    times = [[1, 0]]
+        # FIXME: Some data got corrupted and has results/times at the directory level.
+        # Once the data is fixe, this should assert that the directory level does not have
+        # results or times and just return "JSON_RESULTS_RESULTS not in subtree".
+        if JSON_RESULTS_RESULTS in aggregated_json:
+            del aggregated_json[JSON_RESULTS_RESULTS]
+        if JSON_RESULTS_TIMES in aggregated_json:
+            del aggregated_json[JSON_RESULTS_TIMES]
 
-                cls._insert_item_run_length_encoded(results, aggregated_test[JSON_RESULTS_RESULTS], num_runs)
-                cls._insert_item_run_length_encoded(times, aggregated_test[JSON_RESULTS_TIMES], num_runs)
-                cls._normalize_results_json(test_name, aggregated_json, num_runs)
-            else:
+        all_tests = set(aggregated_json.iterkeys())
+        if incremental_json:
+            all_tests |= set(incremental_json.iterkeys())
+
+        for test_name in all_tests:
+            if test_name not in aggregated_json:
                 aggregated_json[test_name] = incremental_json[test_name]
+                continue
+
+            incremental_sub_result = incremental_json[test_name] if incremental_json and test_name in incremental_json else None
+            if _is_directory(aggregated_json[test_name]):
+                cls._merge_tests(aggregated_json[test_name], incremental_sub_result, num_runs)
+                continue
+
+            if incremental_sub_result:
+                results = incremental_sub_result[JSON_RESULTS_RESULTS]
+                times = incremental_sub_result[JSON_RESULTS_TIMES]
+            else:
+                results = [[1, JSON_RESULTS_NO_DATA]]
+                times = [[1, 0]]
+
+            aggregated_test = aggregated_json[test_name]
+            cls._insert_item_run_length_encoded(results, aggregated_test[JSON_RESULTS_RESULTS], num_runs)
+            cls._insert_item_run_length_encoded(times, aggregated_test[JSON_RESULTS_TIMES], num_runs)
+            cls._normalize_results_json(test_name, aggregated_json, num_runs)
 
     @classmethod
     def _insert_item_run_length_encoded(cls, incremental_item, aggregated_item, num_runs):
@@ -152,12 +209,16 @@ class JsonResults(object):
         aggregated_test[JSON_RESULTS_RESULTS] = cls._remove_items_over_max_number_of_builds(aggregated_test[JSON_RESULTS_RESULTS], num_runs)
         aggregated_test[JSON_RESULTS_TIMES] = cls._remove_items_over_max_number_of_builds(aggregated_test[JSON_RESULTS_TIMES], num_runs)
 
-        is_all_pass = cls._is_results_all_of_type(aggregated_test[JSON_RESULTS_RESULTS], JSON_RESULTS_PASS)
-        is_all_no_data = cls._is_results_all_of_type(aggregated_test[JSON_RESULTS_RESULTS], JSON_RESULTS_NO_DATA)
+        deletable_types = set((JSON_RESULTS_PASS, JSON_RESULTS_NO_DATA, JSON_RESULTS_SKIP))
+        for result in aggregated_test[JSON_RESULTS_RESULTS]:
+            if result[1] not in deletable_types:
+                return
 
-        max_time = max([time[1] for time in aggregated_test[JSON_RESULTS_TIMES]])
-        if (is_all_no_data or (is_all_pass and max_time < JSON_RESULTS_MIN_TIME)):
-            del aggregated_json[test_name]
+        for time in aggregated_test[JSON_RESULTS_TIMES]:
+            if time[1] >= JSON_RESULTS_MIN_TIME:
+                return
+
+        del aggregated_json[test_name]
 
     @classmethod
     def _remove_items_over_max_number_of_builds(cls, encoded_list, num_runs):
@@ -170,40 +231,6 @@ class JsonResults(object):
                 return encoded_list[:index]
 
         return encoded_list
-
-    @classmethod
-    def _is_results_all_of_type(cls, results, type):
-        return len(results) == 1 and results[0][1] == type
-
-    @classmethod
-    def _flatten_json_tests(cls, json, prefix=None):
-        """Flattens a trie directory structure of tests into a flat structure.
-        """
-        result = {}
-        for name, test in json.iteritems():
-            if prefix:
-                fullname = prefix + "/" + name
-            else:
-                fullname = name
-
-            if "results" in test:
-                result[fullname] = test
-            else:
-                result.update(cls._flatten_json_tests(test, fullname))
-
-        return result
-
-    @classmethod
-    def _remove_gtest_modifiers(cls, builder, json):
-        tests = json[builder][JSON_RESULTS_TESTS]
-        new_tests = {}
-        for name, test in tests.iteritems():
-            new_name = name.replace('.FLAKY_', '.', 1)
-            new_name = new_name.replace('.FAILS_', '.', 1)
-            new_name = new_name.replace('.MAYBE_', '.', 1)
-            new_name = new_name.replace('.DISABLED_', '.', 1)
-            new_tests[new_name] = test
-        json[builder][JSON_RESULTS_TESTS] = new_tests
 
     @classmethod
     def _check_json(cls, builder, json):
@@ -222,13 +249,10 @@ class JsonResults(object):
             logging.error("Missing build number in json results.")
             return False
 
-        # FIXME(aboxhall): Once the dashboard can read hierarchical JSON, both
-        # incremental and aggregated JSON can be hierarchical, with no need to
-        # flatten here.
-        if version == JSON_RESULTS_HIERARCHICAL_VERSION:
-            flattened_tests = cls._flatten_json_tests(results_for_builder[JSON_RESULTS_TESTS])
-            json[builder][JSON_RESULTS_TESTS] = flattened_tests
-            json[JSON_RESULTS_VERSION_KEY] = JSON_RESULTS_VERSION
+        # FIXME: Once all the bots have cycled, we can remove this code since all the results will be heirarchical.
+        if version < JSON_RESULTS_HIERARCHICAL_VERSION:
+            json[builder][JSON_RESULTS_TESTS] = _trie_json_tests(results_for_builder[JSON_RESULTS_TESTS])
+            json[JSON_RESULTS_VERSION_KEY] = JSON_RESULTS_HIERARCHICAL_VERSION
 
         return True
 
@@ -247,9 +271,6 @@ class JsonResults(object):
         if not cls._check_json(builder, incremental_json):
             return None
 
-        # FIXME: We should probably avoid doing this for layout tests.
-        cls._remove_gtest_modifiers(builder, incremental_json)
-
         logging.info("Loading existing aggregated json...")
         aggregated_json = cls._load_json(aggregated)
         if not aggregated_json:
@@ -261,13 +282,12 @@ class JsonResults(object):
 
         logging.info("Merging json results...")
         try:
-            if not cls._merge_json(aggregated_json[builder], incremental_json[builder], num_runs):
-                return None
-        except Exception, err:
-            logging.error("Failed to merge json results: %s", str(err))
+            cls._merge_json(aggregated_json[builder], incremental_json[builder], num_runs)
+        except:
+            logging.error("Failed to merge json results: %s", traceback.print_exception(*sys.exc_info()))
             return None
 
-        aggregated_json[JSON_RESULTS_VERSION_KEY] = JSON_RESULTS_VERSION
+        aggregated_json[JSON_RESULTS_VERSION_KEY] = JSON_RESULTS_HIERARCHICAL_VERSION
 
         return cls._generate_file_data(aggregated_json, sort_keys)
 
@@ -301,6 +321,14 @@ class JsonResults(object):
         return True
 
     @classmethod
+    def _delete_results_and_times(cls, tests):
+        for key in tests.keys():
+            if key in (JSON_RESULTS_RESULTS, JSON_RESULTS_TIMES):
+                del tests[key]
+            else:
+                cls._delete_results_and_times(tests[key])
+
+    @classmethod
     def get_test_list(cls, builder, json_file_data):
         logging.debug("Loading test results json...")
         json = cls._load_json(json_file_data)
@@ -313,6 +341,6 @@ class JsonResults(object):
 
         test_list_json = {}
         tests = json[builder][JSON_RESULTS_TESTS]
-        test_list_json[builder] = {"tests": dict.fromkeys(tests, {})}
-
+        cls._delete_results_and_times(tests)
+        test_list_json[builder] = {"tests": tests}
         return cls._generate_file_data(test_list_json)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -35,6 +35,9 @@
 #include "VisibleSelection.h"
 #include "WTFString.h"
 
+#include "htmlediting.h"
+#include "visible_units.h"
+
 #include <limits>
 
 using WTF::Vector;
@@ -44,6 +47,15 @@ using namespace WebCore;
 namespace BlackBerry {
 namespace WebKit {
 namespace DOMSupport {
+
+void visibleTextQuads(const VisibleSelection& selection, Vector<FloatQuad>& quads)
+{
+    if (!selection.isRange())
+        return;
+    ASSERT(selection.firstRange());
+
+    visibleTextQuads(*(selection.firstRange()), quads, true /* useSelectionHeight */);
+}
 
 void visibleTextQuads(const Range& range, Vector<FloatQuad>& quads, bool useSelectionHeight)
 {
@@ -103,7 +115,7 @@ WTF::String inputElementText(Element* element)
     return elementText;
 }
 
-bool isElementTypePlugin(const WebCore::Element* element)
+bool isElementTypePlugin(const Element* element)
 {
     if (!element)
         return false;
@@ -116,7 +128,7 @@ bool isElementTypePlugin(const WebCore::Element* element)
     return false;
 }
 
-WebCore::HTMLTextFormControlElement* toTextControlElement(WebCore::Node* node)
+HTMLTextFormControlElement* toTextControlElement(Node* node)
 {
     if (!(node && node->isElementNode()))
         return 0;
@@ -132,12 +144,12 @@ WebCore::HTMLTextFormControlElement* toTextControlElement(WebCore::Node* node)
     return static_cast<HTMLTextFormControlElement*>(formElement);
 }
 
-bool isPopupInputField(const WebCore::Element* element)
+bool isPopupInputField(const Element* element)
 {
     return isDateTimeInputField(element) || isColorInputField(element);
 }
 
-bool isDateTimeInputField(const WebCore::Element* element)
+bool isDateTimeInputField(const Element* element)
 {
     if (!element->hasTagName(HTMLNames::inputTag))
         return false;
@@ -155,7 +167,7 @@ bool isDateTimeInputField(const WebCore::Element* element)
     return false;
 }
 
-bool isColorInputField(const WebCore::Element* element)
+bool isColorInputField(const Element* element)
 {
     if (!element->hasTagName(HTMLNames::inputTag))
         return false;
@@ -170,13 +182,28 @@ bool isColorInputField(const WebCore::Element* element)
     return false;
 }
 
-AttributeState elementSupportsAutocorrect(const WebCore::Element* element)
+// This is a Tristate return to allow us to override name matching when
+// the attribute is expressly requested for a field. Default indicates
+// that the setting is On which is the default but not expressly requested
+// for the element being checked. On indicates that it is directly added
+// to the element.
+AttributeState elementSupportsAutocorrect(const Element* element)
+{
+    DEFINE_STATIC_LOCAL(QualifiedName, autocorrectAttr, (nullAtom, "autocorrect", nullAtom));
+    return elementAttributeState(element, autocorrectAttr);
+}
+
+AttributeState elementSupportsAutocomplete(const Element* element)
+{
+    return elementAttributeState(element, HTMLNames::autocompleteAttr);
+}
+
+AttributeState elementAttributeState(const Element* element, const QualifiedName& attributeName)
 {
     // First we check the input item itself. If the attribute is not defined,
     // we check its parent form.
-    QualifiedName autocorrectAttr = QualifiedName(nullAtom, "autocorrect", nullAtom);
-    if (element->fastHasAttribute(autocorrectAttr)) {
-        AtomicString attributeString = element->fastGetAttribute(autocorrectAttr);
+    if (element->fastHasAttribute(attributeName)) {
+        AtomicString attributeString = element->fastGetAttribute(attributeName);
         if (equalIgnoringCase(attributeString, "off"))
             return Off;
         if (equalIgnoringCase(attributeString, "on"))
@@ -186,14 +213,15 @@ AttributeState elementSupportsAutocorrect(const WebCore::Element* element)
     }
     if (element->isFormControlElement()) {
         const HTMLFormControlElement* formElement = static_cast<const HTMLFormControlElement*>(element);
-        if (formElement->form() && formElement->form()->fastHasAttribute(autocorrectAttr)) {
-            AtomicString attributeString = formElement->form()->fastGetAttribute(autocorrectAttr);
+        if (formElement->form() && formElement->form()->fastHasAttribute(attributeName)) {
+            AtomicString attributeString = formElement->form()->fastGetAttribute(attributeName);
             if (equalIgnoringCase(attributeString, "off"))
                 return Off;
             if (equalIgnoringCase(attributeString, "on"))
                 return On;
         }
     }
+
     return Default;
 }
 
@@ -214,14 +242,15 @@ bool isTextBasedContentEditableElement(Element* element)
 
 IntRect transformedBoundingBoxForRange(const Range& range)
 {
-    // based on Range::boundingBox, which does not handle transforms, and
-    // RenderObject::absoluteBoundingBoxRect, which does
+    // Based on Range::boundingBox, which does not handle transforms, and
+    // RenderObject::absoluteBoundingBoxRect, which does.
     IntRect result;
     Vector<FloatQuad> quads;
     visibleTextQuads(range, quads);
     const size_t n = quads.size();
     for (size_t i = 0; i < n; ++i)
         result.unite(quads[i].enclosingBoundingBox());
+
     return result;
 }
 
@@ -232,8 +261,7 @@ VisibleSelection visibleSelectionForInputElement(Element* element)
 
 VisibleSelection visibleSelectionForRangeInputElement(Element* element, int start, int end)
 {
-    HTMLTextFormControlElement* controlElement = DOMSupport::toTextControlElement(element);
-    if (controlElement) {
+    if (DOMSupport::toTextControlElement(element)) {
         RenderTextControl* textRender = toRenderTextControl(element->renderer());
         if (!textRender)
             return VisibleSelection();
@@ -250,59 +278,98 @@ VisibleSelection visibleSelectionForRangeInputElement(Element* element, int star
 
     // Must be content editable, generate the range.
     RefPtr<Range> selectionRange = TextIterator::rangeFromLocationAndLength(element, start, end - start);
+
+    if (!selectionRange)
+        return VisibleSelection();
+
     if (start == end)
         return VisibleSelection(selectionRange.get()->startPosition(), DOWNSTREAM);
 
     VisiblePosition visibleStart(selectionRange->startPosition(), DOWNSTREAM);
     VisiblePosition visibleEnd(selectionRange->endPosition(), SEL_DEFAULT_AFFINITY);
+
     return VisibleSelection(visibleStart, visibleEnd);
 }
 
 Node* DOMContainerNodeForPosition(const Position& position)
 {
     Node* nodeAtPos = position.containerNode();
-    if (nodeAtPos->isInShadowTree())
+    if (nodeAtPos && nodeAtPos->isInShadowTree())
         nodeAtPos = nodeAtPos->shadowAncestorNode();
+
     return nodeAtPos;
 }
 
 bool isPositionInNode(Node* node, const Position& position)
 {
-    int offset = 0;
+    if (!node)
+        return false;
+
     Node* domNodeAtPos = DOMContainerNodeForPosition(position);
+    if (!domNodeAtPos)
+        return false;
+
+    int offset = 0;
     if (domNodeAtPos == position.containerNode())
         offset = position.computeOffsetInContainerNode();
 
     RefPtr<Range> rangeForNode = rangeOfContents(node);
     int ec;
+
     return rangeForNode->isPointInRange(domNodeAtPos, offset, ec);
 }
 
-// This is a Tristate return to allow us to override name matching when
-// autocomplete is expressly requested for a field. Default indicates
-// that the setting is On which is the default but not expressly requested
-// for the element being checked. On indicates that it is directly added
-// to the element.
-AttributeState elementSupportsAutocomplete(const Element* element)
+static bool matchesReservedStringEmail(const AtomicString& string)
 {
-    if (element->hasTagName(HTMLNames::inputTag)) {
-        const HTMLInputElement* inputElement = static_cast<const HTMLInputElement*>(element);
-        if (inputElement->fastHasAttribute(HTMLNames::autocompleteAttr)) {
-            if (equalIgnoringCase(inputElement->fastGetAttribute(HTMLNames::autocompleteAttr), "on"))
-                return On;
-        }
-        return inputElement->shouldAutocomplete() ? Default : Off;
-    }
-    return Default;
+    return string.contains("email", false /* caseSensitive */);
 }
 
-bool matchesReservedStringPreventingAutocomplete(AtomicString& string)
+static bool matchesReservedStringUrl(const AtomicString& string)
 {
-    if (string.contains("email", false /*caseSensitive*/)
-        || string.contains("user", false /*caseSensitive*/)
-        || string.contains("name", false /*caseSensitive*/)
-        || string.contains("login", false /*caseSensitive*/))
+    return equalIgnoringCase("url", string);
+}
+
+bool elementIdOrNameIndicatesEmail(const HTMLInputElement* inputElement)
+{
+    if (!inputElement)
+        return false;
+
+    if (matchesReservedStringEmail(inputElement->getIdAttribute()))
         return true;
+
+    if (inputElement->fastHasAttribute(HTMLNames::nameAttr)) {
+        if (matchesReservedStringEmail(inputElement->fastGetAttribute(HTMLNames::nameAttr)))
+            return true;
+    }
+
+    return false;
+}
+
+bool elementIdOrNameIndicatesUrl(const HTMLInputElement* inputElement)
+{
+    if (!inputElement)
+        return false;
+
+    if (matchesReservedStringUrl(inputElement->getIdAttribute()))
+        return true;
+
+    if (inputElement->fastHasAttribute(HTMLNames::nameAttr)) {
+        if (matchesReservedStringUrl(inputElement->fastGetAttribute(HTMLNames::nameAttr)))
+            return true;
+    }
+
+    return false;
+}
+
+static bool matchesReservedStringPreventingAutocomplete(const AtomicString& string)
+{
+    if (matchesReservedStringEmail(string)
+        || matchesReservedStringUrl(string)
+        || string.contains("user", false /* caseSensitive */)
+        || string.contains("name", false /* caseSensitive */)
+        || string.contains("login", false /* caseSensitive */))
+        return true;
+
     return false;
 }
 
@@ -327,30 +394,121 @@ bool elementIdOrNameIndicatesNoAutocomplete(const Element* element)
     return false;
 }
 
-WebCore::IntPoint convertPointToFrame(const WebCore::Frame* sourceFrame, const WebCore::Frame* targetFrame, const WebCore::IntPoint& point)
+bool elementPatternIndicatesNumber(const HTMLInputElement* inputElement)
 {
+    return elementPatternMatches("[0-9]", inputElement);
+}
+
+bool elementPatternIndicatesHexadecimal(const HTMLInputElement* inputElement)
+{
+    return elementPatternMatches("[0-9a-fA-F]", inputElement);
+}
+
+bool elementPatternMatches(const char* pattern, const HTMLInputElement* inputElement)
+{
+    WTF::String patternString(pattern);
+    if (!inputElement || patternString.isEmpty())
+        return false;
+
+    if (inputElement->fastHasAttribute(HTMLNames::patternAttr)) {
+        WTF::String patternAttribute = inputElement->fastGetAttribute(HTMLNames::patternAttr);
+        if (patternAttribute.startsWith(patternString)) {
+            // The pattern is for hexadecimal, make sure nothing else is permitted.
+
+            // Check if it was an exact match.
+            if (patternAttribute.length() == patternString.length())
+                return true;
+
+            // Check for *
+            if (patternAttribute.length() == patternString.length() + 1 && patternAttribute[patternString.length()] == '*')
+                return true;
+
+            // Is the regex specifying a character count?
+            if (patternAttribute[patternString.length()] != '{' || !patternAttribute.endsWith("}"))
+                return false;
+
+            // Make sure the number in the regex is actually a number.
+            unsigned count = 0;
+            patternString = patternString + "{%d}";
+            return (sscanf(patternAttribute.latin1().data(), patternString.latin1().data() + '\0', &count) == 1) && count > 0;
+        }
+    }
+    return false;
+}
+
+IntPoint convertPointToFrame(const Frame* sourceFrame, const Frame* targetFrame, const IntPoint& point, const bool clampToTargetFrame)
+{
+    ASSERT(sourceFrame && targetFrame);
     if (sourceFrame == targetFrame)
         return point;
 
-    ASSERT(sourceFrame && sourceFrame->view());
-    ASSERT(targetFrame && targetFrame->view());
+    ASSERT(sourceFrame->view() && targetFrame->view());
     ASSERT(targetFrame->tree());
 
-    WebCore::Frame* targetFrameParent = targetFrame->tree()->parent();
-    WebCore::IntRect targetFrameRect = targetFrame->view()->frameRect();
+    Frame* targetFrameParent = targetFrame->tree()->parent();
+    IntRect targetFrameRect = targetFrame->view()->frameRect();
+    IntPoint targetPoint = point;
 
     // Convert the target frame rect to source window content coordinates. This is only required
-    // if the parent frame is not the source. If the parent is the source subframeRect
+    // if the parent frame is not the source. If the parent is the source, subframeRect
     // is already in source content coordinates.
     if (targetFrameParent != sourceFrame)
         targetFrameRect = sourceFrame->view()->windowToContents(targetFrameParent->view()->contentsToWindow(targetFrameRect));
 
     // Requested point is outside of target frame, return InvalidPoint.
-    if (!targetFrameRect.contains(point))
+    if (clampToTargetFrame && !targetFrameRect.contains(targetPoint))
+        targetPoint = IntPoint(targetPoint.x() < targetFrameRect.x() ? targetFrameRect.x() : std::min(targetPoint.x(), targetFrameRect.maxX()),
+                targetPoint.y() < targetFrameRect.y() ? targetFrameRect.y() : std::min(targetPoint.y(), targetFrameRect.maxY()));
+    else if (!targetFrameRect.contains(targetPoint))
         return InvalidPoint;
 
     // Adjust the points to be relative to the target.
-    return targetFrame->view()->windowToContents(sourceFrame->view()->contentsToWindow(point));
+    return targetFrame->view()->windowToContents(sourceFrame->view()->contentsToWindow(targetPoint));
+}
+
+VisibleSelection visibleSelectionForClosestActualWordStart(const VisibleSelection& selection)
+{
+    // VisibleSelection validation has a special case when the caret is at the end of a paragraph where
+    // it selects the paragraph marker. As well, if the position is at the end of a word, it will select
+    // only the space between words. We want to select an actual word so we move the selection to
+    // the start of the leftmost word if the character after the selection point is whitespace.
+    if (selection.selectionType() != VisibleSelection::RangeSelection && isWhitespace(selection.visibleStart().characterAfter())) {
+        VisibleSelection leftSelection(previousWordPosition(selection.start()));
+        bool leftSelectionIsOnWord = !isWhitespace(leftSelection.visibleStart().characterAfter());
+
+        VisibleSelection rangeSelection(endOfWord(leftSelection.start()), selection.visibleStart());
+        int leftDistance = TextIterator::rangeLength(rangeSelection.toNormalizedRange().get());
+
+        VisibleSelection rightSelection(nextWordPosition(selection.start()));
+        rightSelection = previousWordPosition(rightSelection.start());
+        bool rightSelectionIsOnWord = !isWhitespace(rightSelection.visibleStart().characterAfter());
+
+        rangeSelection = VisibleSelection(rightSelection.visibleStart(), selection.visibleStart());
+        int rightDistance = TextIterator::rangeLength(rangeSelection.toNormalizedRange().get());
+
+        // Make sure we found an actual word. If not, return the original selection.
+        if (!leftSelectionIsOnWord && !rightSelectionIsOnWord)
+            return selection;
+
+        if (!rightSelectionIsOnWord || (leftSelectionIsOnWord && leftDistance < rightDistance)) {
+            // Left is closer or right is invalid.
+            return leftSelection;
+        }
+
+        // Right is closer or equal, or left was invalid.
+        return rightSelection;
+    }
+
+    // No adjustment required.
+    return selection;
+}
+
+// This function is copied from WebCore/page/Page.cpp.
+Frame* incrementFrame(Frame* curr, bool forward, bool wrapFlag)
+{
+    return forward
+        ? curr->tree()->traverseNextWithWrap(wrapFlag)
+        : curr->tree()->traversePreviousWithWrap(wrapFlag);
 }
 
 } // DOMSupport

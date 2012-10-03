@@ -23,8 +23,6 @@
 #include "config.h"
 #include "EditorClientEfl.h"
 
-#include "EWebKit.h"
-#include "EditCommand.h"
 #include "Editor.h"
 #include "EventNames.h"
 #include "FocusController.h"
@@ -33,6 +31,8 @@
 #include "NotImplemented.h"
 #include "Page.h"
 #include "PlatformKeyboardEvent.h"
+#include "Settings.h"
+#include "UndoStep.h"
 #include "WindowsKeyboardCodes.h"
 #include "ewk_private.h"
 
@@ -103,7 +103,7 @@ bool EditorClientEfl::shouldChangeSelectedRange(Range*, Range*, EAffinity, bool)
     return true;
 }
 
-bool EditorClientEfl::shouldApplyStyle(CSSStyleDeclaration*, Range*)
+bool EditorClientEfl::shouldApplyStyle(StylePropertySet*, Range*)
 {
     notImplemented();
     return true;
@@ -133,25 +133,16 @@ void EditorClientEfl::respondToChangedContents()
     ewk_frame_editor_client_contents_changed(frame);
 }
 
-void EditorClientEfl::respondToChangedSelection()
+void EditorClientEfl::respondToChangedSelection(Frame* coreFrame)
 {
-    Evas_Object* frame = ewk_view_frame_focused_get(m_view);
-
-    if (!frame)
-        frame = ewk_view_frame_main_get(m_view);
-
-    if (!frame)
-        return;
-
-    WebCore::Frame* coreFrame = EWKPrivate::coreFrame(frame);
-
     if (!coreFrame)
         return;
 
     if (coreFrame->editor() && coreFrame->editor()->ignoreCompositionSelectionChange())
         return;
 
-    ewk_frame_editor_client_selection_changed(frame);
+    Evas_Object* webFrame = EWKPrivate::kitFrame(coreFrame);
+    ewk_frame_editor_client_selection_changed(webFrame);
 }
 
 void EditorClientEfl::didEndEditing()
@@ -169,16 +160,16 @@ void EditorClientEfl::didSetSelectionTypesForPasteboard()
     notImplemented();
 }
 
-void EditorClientEfl::registerCommandForUndo(WTF::PassRefPtr<EditCommand> command)
+void EditorClientEfl::registerUndoStep(WTF::PassRefPtr<UndoStep> step)
 {
     if (!m_isInRedo)
         redoStack.clear();
-    undoStack.prepend(command);
+    undoStack.prepend(step);
 }
 
-void EditorClientEfl::registerCommandForRedo(WTF::PassRefPtr<EditCommand> command)
+void EditorClientEfl::registerRedoStep(WTF::PassRefPtr<UndoStep> step)
 {
-    redoStack.prepend(command);
+    redoStack.prepend(step);
 }
 
 void EditorClientEfl::clearUndoRedoOperations()
@@ -210,19 +201,19 @@ bool EditorClientEfl::canRedo() const
 void EditorClientEfl::undo()
 {
     if (canUndo()) {
-        RefPtr<WebCore::EditCommand> command = undoStack.takeFirst();
-        command->unapply();
+        RefPtr<WebCore::UndoStep> step = undoStack.takeFirst();
+        step->unapply();
     }
 }
 
 void EditorClientEfl::redo()
 {
     if (canRedo()) {
-        RefPtr<WebCore::EditCommand> command = redoStack.takeFirst();
+        RefPtr<WebCore::UndoStep> step = redoStack.takeFirst();
 
         ASSERT(!m_isInRedo);
         m_isInRedo = true;
-        command->reapply();
+        step->reapply();
         m_isInRedo = false;
     }
 }
@@ -412,7 +403,7 @@ bool EditorClientEfl::handleEditingKeyboardEvent(KeyboardEvent* event)
 
     Editor::Command command = frame->editor()->command(interpretKeyEvent(event));
 
-    if (keyEvent->type() == PlatformKeyboardEvent::RawKeyDown) {
+    if (keyEvent->type() == PlatformEvent::RawKeyDown) {
         // WebKit doesn't have enough information about mode to decide how commands that just insert text if executed via Editor should be treated,
         // so we leave it upon WebCore to either handle them immediately (e.g. Tab that changes focus) or let a keypress event be generated
         // (e.g. Tab that inserts a Tab character, or Enter).

@@ -40,8 +40,8 @@ namespace WebCore {
         int clientX() const { return m_clientLocation.x(); }
         int clientY() const { return m_clientLocation.y(); }
 #if ENABLE(POINTER_LOCK)
-        int movementX() const { return m_movementDelta.x(); }
-        int movementY() const { return m_movementDelta.y(); }
+        int webkitMovementX() const { return m_movementDelta.x(); }
+        int webkitMovementY() const { return m_movementDelta.y(); }
 #endif
         const LayoutPoint& clientLocation() const { return m_clientLocation; }
         int layerX();
@@ -64,6 +64,9 @@ namespace WebCore {
         MouseRelatedEvent();
         MouseRelatedEvent(const AtomicString& type, bool canBubble, bool cancelable, PassRefPtr<AbstractView>,
                           int detail, const IntPoint& screenLocation, const IntPoint& windowLocation,
+#if ENABLE(POINTER_LOCK)
+                          const IntPoint& movementDelta,
+#endif
                           bool ctrlKey, bool altKey, bool shiftKey, bool metaKey, bool isSimulated = false);
 
         void initCoordinates();

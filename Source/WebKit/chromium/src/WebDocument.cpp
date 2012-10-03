@@ -53,7 +53,7 @@
 #include "WebFrameImpl.h"
 #include "WebNodeCollection.h"
 #include "WebNodeList.h"
-#include "WebURL.h"
+#include "platform/WebURL.h"
 
 #include <wtf/PassRefPtr.h>
 
@@ -203,7 +203,7 @@ WebDOMEvent WebDocument::createEvent(const WebString& eventType)
 {
     ExceptionCode ec = 0;
     WebDOMEvent event(unwrap<Document>()->createEvent(eventType, ec));
-    if (!ec)
+    if (ec)
         return WebDOMEvent();
     return event;
 }

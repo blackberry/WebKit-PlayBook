@@ -23,6 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "TestInvocation.h"
 
 #include "PlatformWebView.h"
@@ -30,7 +31,9 @@
 #include "TestController.h"
 #include <climits>
 #include <cstdio>
+#include <WebKit2/WKDictionary.h>
 #include <WebKit2/WKContextPrivate.h>
+#include <WebKit2/WKInspector.h>
 #include <WebKit2/WKRetainPtr.h>
 #include <wtf/OwnArrayPtr.h>
 #include <wtf/PassOwnArrayPtr.h>
@@ -39,6 +42,10 @@
 #include <direct.h> // For _getcwd.
 #define getcwd _getcwd // MSDN says getcwd is deprecated.
 #define PATH_MAX _MAX_PATH
+#endif
+
+#if PLATFORM(MAC)
+#include <unistd.h>
 #endif
 
 using namespace WebKit;
@@ -56,15 +63,17 @@ static WKURLRef createWKURL(const char* pathOrURL)
     if (!length)
         return 0;
 
-    const char* filePrefix = "file://";
-    static const size_t prefixLength = strlen(filePrefix);
 #if OS(WINDOWS)
     const char separator = '\\';
     bool isAbsolutePath = length >= 3 && pathOrURL[1] == ':' && pathOrURL[2] == separator;
+    // FIXME: Remove the "localhost/" suffix once <http://webkit.org/b/55683> is fixed.
+    const char* filePrefix = "file://localhost/";
 #else
     const char separator = '/';
     bool isAbsolutePath = pathOrURL[0] == separator;
+    const char* filePrefix = "file://";
 #endif
+    static const size_t prefixLength = strlen(filePrefix);
 
     OwnArrayPtr<char> buffer;
     if (isAbsolutePath) {
@@ -84,18 +93,28 @@ static WKURLRef createWKURL(const char* pathOrURL)
     return WKURLCreateWithUTF8CString(buffer.get());
 }
 
-TestInvocation::TestInvocation(const char* pathOrURL)
-    : m_url(AdoptWK, createWKURL(pathOrURL))
-    , m_pathOrURL(fastStrDup(pathOrURL))
+TestInvocation::TestInvocation(const std::string& pathOrURL)
+    : m_url(AdoptWK, createWKURL(pathOrURL.c_str()))
+    , m_pathOrURL(pathOrURL)
+    , m_dumpPixels(false)
+    , m_skipPixelTestOption(false)
     , m_gotInitialResponse(false)
     , m_gotFinalMessage(false)
+    , m_gotRepaint(false)
     , m_error(false)
 {
 }
 
 TestInvocation::~TestInvocation()
 {
-    fastFree(m_pathOrURL);
+}
+
+void TestInvocation::setIsPixelTest(const std::string& expectedPixelHash)
+{
+    if (m_skipPixelTestOption && !expectedPixelHash.length())
+        return;
+    m_dumpPixels = true;
+    m_expectedPixelHash = expectedPixelHash;
 }
 
 static const unsigned w3cSVGWidth = 480;
@@ -103,7 +122,7 @@ static const unsigned w3cSVGHeight = 360;
 static const unsigned normalWidth = 800;
 static const unsigned normalHeight = 600;
 
-static void sizeWebViewForCurrentTest(char* pathOrURL)
+static void sizeWebViewForCurrentTest(const char* pathOrURL)
 {
     bool isSVGW3CTest = strstr(pathOrURL, "svg/W3C-SVG-1.1") || strstr(pathOrURL, "svg\\W3C-SVG-1.1");
 
@@ -113,39 +132,69 @@ static void sizeWebViewForCurrentTest(char* pathOrURL)
         TestController::shared().mainWebView()->resizeTo(normalWidth, normalHeight);
 }
 
+static bool shouldOpenWebInspector(const char* pathOrURL)
+{
+    return strstr(pathOrURL, "inspector/") || strstr(pathOrURL, "inspector\\");
+}
+
 void TestInvocation::invoke()
 {
-    sizeWebViewForCurrentTest(m_pathOrURL);
+    sizeWebViewForCurrentTest(m_pathOrURL.c_str());
 
-    WKRetainPtr<WKStringRef> messageName(AdoptWK, WKStringCreateWithUTF8CString("BeginTest"));
-    WKContextPostMessageToInjectedBundle(TestController::shared().context(), messageName.get(), 0);
+    WKRetainPtr<WKStringRef> messageName = adoptWK(WKStringCreateWithUTF8CString("BeginTest"));
+    WKRetainPtr<WKBooleanRef> dumpPixels = adoptWK(WKBooleanCreate(m_dumpPixels));
+    WKContextPostMessageToInjectedBundle(TestController::shared().context(), messageName.get(), dumpPixels.get());
 
-    TestController::runUntil(m_gotInitialResponse);
+    TestController::shared().runUntil(m_gotInitialResponse, TestController::ShortTimeout);
+    if (!m_gotInitialResponse) {
+        dump("Timed out waiting for initial response from web process\n");
+        return;
+    }
     if (m_error) {
         dump("FAIL\n");
         return;
     }
+
+    if (shouldOpenWebInspector(m_pathOrURL.c_str()))
+        WKInspectorShow(WKPageGetInspector(TestController::shared().mainWebView()->page()));
 
     WKPageLoadURL(TestController::shared().mainWebView()->page(), m_url.get());
 
-    TestController::runUntil(m_gotFinalMessage);
-    if (m_error) {
+    TestController::shared().runUntil(m_gotFinalMessage, TestController::LongTimeout);
+    if (!m_gotFinalMessage)
+        dump("Timed out waiting for final message from web process\n");
+    else if (m_error)
         dump("FAIL\n");
-        return;
-    }
+
+    WKInspectorClose(WKPageGetInspector(TestController::shared().mainWebView()->page()));
 }
 
-void TestInvocation::dump(const char* stringToDump)
+void TestInvocation::dump(const char* stringToDump, bool singleEOF)
 {
     printf("Content-Type: text/plain\n");
     printf("%s", stringToDump);
 
     fputs("#EOF\n", stdout);
-    fputs("#EOF\n", stdout);
     fputs("#EOF\n", stderr);
-
+    if (!singleEOF)
+        fputs("#EOF\n", stdout);
     fflush(stdout);
     fflush(stderr);
+}
+
+bool TestInvocation::compareActualHashToExpectedAndDumpResults(const char actualHash[33])
+{
+    // Compute the hash of the bitmap context pixels
+    fprintf(stdout, "\nActualHash: %s\n", actualHash);
+
+    if (!m_expectedPixelHash.length())
+        return false;
+
+    ASSERT(m_expectedPixelHash.length() == 32);
+    fprintf(stdout, "\nExpectedHash: %s\n", m_expectedPixelHash.c_str());
+
+    // FIXME: Do case insensitive compare.
+    return m_expectedPixelHash == actualHash;
 }
 
 void TestInvocation::didReceiveMessageFromInjectedBundle(WKStringRef messageName, WKTypeRef messageBody)
@@ -155,6 +204,7 @@ void TestInvocation::didReceiveMessageFromInjectedBundle(WKStringRef messageName
         m_gotInitialResponse = true;
         m_gotFinalMessage = true;
         m_error = true;
+        TestController::shared().notifyDone();
         return;
     }
 
@@ -163,6 +213,7 @@ void TestInvocation::didReceiveMessageFromInjectedBundle(WKStringRef messageName
         WKStringRef messageBodyString = static_cast<WKStringRef>(messageBody);
         if (WKStringIsEqualToUTF8CString(messageBodyString, "BeginTest")) {
             m_gotInitialResponse = true;
+            TestController::shared().notifyDone();
             return;
         }
 
@@ -190,7 +241,12 @@ void TestInvocation::didReceiveMessageFromInjectedBundle(WKStringRef messageName
         if (m_dumpPixels && pixelResult)
             dumpPixelsAndCompareWithExpected(pixelResult, repaintRects);
 
+        fputs("#EOF\n", stdout);
+        fflush(stdout);
+        fflush(stderr);
+        
         m_gotFinalMessage = true;
+        TestController::shared().notifyDone();
         return;
     }
     

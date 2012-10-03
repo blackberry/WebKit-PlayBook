@@ -28,7 +28,6 @@
 
 #include "TraceEvent.h"
 #include "cc/CCLayerTreeHost.h"
-#include "cc/CCMainThreadTask.h"
 #include "cc/CCThreadTask.h"
 #include <wtf/MainThread.h>
 
@@ -36,42 +35,71 @@ using namespace WTF;
 
 namespace WebCore {
 
-#ifndef NDEBUG
-
 namespace {
-bool fakeImplThread = false;
-static WTF::ThreadIdentifier implThreadID;
-static WTF::ThreadIdentifier mainThreadID;
+#ifndef NDEBUG
+bool implThreadIsOverridden = false;
+ThreadIdentifier threadIDOverridenToBeImplThread;
+#endif
+CCThread* s_mainThread = 0;
+CCThread* s_implThread = 0;
 }
 
+void CCProxy::setMainThread(CCThread* thread)
+{
+    s_mainThread = thread;
+}
+
+CCThread* CCProxy::mainThread()
+{
+    return s_mainThread;
+}
+
+bool CCProxy::hasImplThread()
+{
+    return s_implThread;
+}
+
+void CCProxy::setImplThread(CCThread* thread)
+{
+    s_implThread = thread;
+}
+
+CCThread* CCProxy::implThread()
+{
+    return s_implThread;
+}
+
+#ifndef NDEBUG
 bool CCProxy::isMainThread()
 {
-    return !fakeImplThread && currentThread() == mainThreadID;
+    ASSERT(s_mainThread);
+    if (implThreadIsOverridden && currentThread() == threadIDOverridenToBeImplThread)
+        return false;
+    return currentThread() == s_mainThread->threadID();
 }
 
 bool CCProxy::isImplThread()
 {
-    return fakeImplThread || currentThread() == implThreadID;
+    WTF::ThreadIdentifier implThreadID = s_implThread ? s_implThread->threadID() : 0;
+    if (implThreadIsOverridden && currentThread() == threadIDOverridenToBeImplThread)
+        return true;
+    return currentThread() == implThreadID;
 }
 
-void CCProxy::setImplThread(bool isImplThread)
+void CCProxy::setCurrentThreadIsImplThread(bool isImplThread)
 {
-    fakeImplThread = isImplThread;
+    implThreadIsOverridden = isImplThread;
+    if (isImplThread)
+        threadIDOverridenToBeImplThread = currentThread();
 }
-
-void CCProxy::setImplThread(WTF::ThreadIdentifier id)
-{
-    implThreadID = id;
-}
-
-void CCProxy::setMainThread(WTF::ThreadIdentifier id)
-{
-    mainThreadID = id;
-}
-
-#endif // !NDEBUG
+#endif
 
 CCProxy::CCProxy()
+{
+    ASSERT(isMainThread());
+}
+
+CCProxy::~CCProxy()
 {
     ASSERT(isMainThread());
 }

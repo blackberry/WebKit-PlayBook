@@ -77,68 +77,47 @@ typedef struct _CFURLRequest* CFMutableURLRequestRef;
 typedef const struct _CFURLRequest* CFURLRequestRef;
 #endif
 
-#ifdef __OBJC__
-@class AVAsset;
-@class NSArray;
-@class NSButtonCell;
-@class NSControl;
-@class NSCursor;
-@class NSData;
-@class NSDate;
-@class NSEvent;
-@class NSFont;
-@class NSHTTPCookie;
-@class NSImage;
-@class NSMenu;
-@class NSMutableURLRequest;
-@class NSString;
-@class NSTextFieldCell;
-@class NSURL;
-@class NSURLConnection;
-@class NSURLRequest;
-@class NSURLResponse;
-@class NSView;
-@class NSWindow;
-@class QTMovie;
-@class QTMovieView;
-#else
-class AVAsset;
-class NSArray;
-class NSButtonCell;
-class NSControl;
-class NSCursor;
-class NSData;
-class NSDate;
-class NSEvent;
-class NSFont;
-class NSHTTPCookie;
-class NSImage;
-class NSMenu;
-class NSMutableArray;
-class NSMutableURLRequest;
-class NSURL;
-class NSURLRequest;
-class NSString;
-class NSTextFieldCell;
-class NSURLConnection;
-class NSURLResponse;
-class NSView;
-class NSWindow;
-class QTMovie;
-class QTMovieView;
-#endif
+OBJC_CLASS AVAsset;
+OBJC_CLASS CALayer;
+OBJC_CLASS NSArray;
+OBJC_CLASS NSButtonCell;
+OBJC_CLASS NSControl;
+OBJC_CLASS NSCursor;
+OBJC_CLASS NSData;
+OBJC_CLASS NSDate;
+OBJC_CLASS NSEvent;
+OBJC_CLASS NSFont;
+OBJC_CLASS NSHTTPCookie;
+OBJC_CLASS NSImage;
+OBJC_CLASS NSMenu;
+OBJC_CLASS NSMutableURLRequest;
+OBJC_CLASS NSString;
+OBJC_CLASS NSTextFieldCell;
+OBJC_CLASS NSURL;
+OBJC_CLASS NSURLConnection;
+OBJC_CLASS NSURLRequest;
+OBJC_CLASS NSURLResponse;
+OBJC_CLASS NSView;
+OBJC_CLASS NSWindow;
+OBJC_CLASS QTMovie;
+OBJC_CLASS QTMovieView;
 
 extern "C" {
 
 // In alphabetical order.
 
 extern void (*wkAdvanceDefaultButtonPulseAnimation)(NSButtonCell *);
+#if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+extern void (*wkCALayerEnumerateRectsBeingDrawnWithBlock)(CALayer *, CGContextRef, void (^block)(CGRect rect));
+#endif
+
 extern BOOL (*wkCGContextGetShouldSmoothFonts)(CGContextRef);
 typedef enum {
     wkPatternTilingNoDistortion,
     wkPatternTilingConstantSpacingMinimalDistortion,
     wkPatternTilingConstantSpacing
 } wkPatternTiling;
+extern void (*wkCGContextResetClip)(CGContextRef);
 extern CGPatternRef (*wkCGPatternCreateWithImageAndTransform)(CGImageRef, CGAffineTransform, int);
 extern CFReadStreamRef (*wkCreateCustomCFReadStream)(void *(*formCreate)(CFReadStreamRef, void *), 
     void (*formFinalize)(CFReadStreamRef, void *), 
@@ -172,6 +151,7 @@ extern double (*wkGetNSURLResponseCalculatedExpiration)(NSURLResponse *response)
 extern NSDate *(*wkGetNSURLResponseLastModifiedDate)(NSURLResponse *response);
 extern BOOL (*wkGetNSURLResponseMustRevalidate)(NSURLResponse *response);
 extern void (*wkGetWheelEventDeltas)(NSEvent*, float* deltaX, float* deltaY, BOOL* continuous);
+extern UInt8 (*wkGetNSEventKeyChar)(NSEvent *);
 extern BOOL (*wkHitTestMediaUIPart)(int part, int themeStyle, CGRect bounds, CGPoint point);
 extern void (*wkMeasureMediaUIPart)(int part, int themeStyle, CGRect *bounds, CGSize *naturalSize);
 extern NSView *(*wkCreateMediaUIBackgroundView)(void);
@@ -254,8 +234,10 @@ extern CTLineRef (*wkCreateCTLineWithUniCharProvider)(const UniChar* (*provide)(
 
 extern CTTypesetterRef (*wkCreateCTTypesetterWithUniCharProviderAndOptions)(const UniChar* (*provide)(CFIndex stringIndex, CFIndex* charCount, CFDictionaryRef* attributes, void*), void (*dispose)(const UniChar* chars, void*), void*, CFDictionaryRef options);
 
+#if PLATFORM(MAC) && USE(CA)
 extern CGContextRef (*wkIOSurfaceContextCreate)(IOSurfaceRef surface, unsigned width, unsigned height, CGColorSpaceRef colorSpace);
 extern CGImageRef (*wkIOSurfaceContextCreateImage)(CGContextRef context);
+#endif
 
 extern int (*wkRecommendedScrollerStyle)(void);
 
@@ -310,13 +292,19 @@ extern CFArrayRef (*wkCFURLRequestCopyHTTPRequestBodyParts)(CFURLRequestRef);
 extern void (*wkCFURLRequestSetHTTPRequestBodyParts)(CFMutableURLRequestRef, CFArrayRef bodyParts);
 extern void (*wkSetRequestStorageSession)(CFURLStorageSessionRef, CFMutableURLRequestRef);
 #endif
-    
+
 #if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
 #import <dispatch/dispatch.h>
-    
+
 extern dispatch_source_t (*wkCreateVMPressureDispatchOnMainQueue)(void);
-    
+
 #endif
+
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+extern NSString *(*wkGetMacOSXVersionString)(void);
+extern bool (*wkExecutableWasLinkedOnOrBeforeLion)(void);
+#endif
+
 }
 
 #endif

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -54,7 +54,7 @@ class MediaPlayer;
 
 class LayerData {
 public:
-    enum LayerType { Layer, TransformLayer, WebGLLayer };
+    enum LayerType { Layer, TransformLayer, WebGLLayer, CanvasLayer };
     enum FilterType { Linear, Nearest, Trilinear, Lanczos };
     enum LayerProgramShader { LayerProgramShaderRGBA = 0,
                               LayerProgramShaderBGRA,
@@ -68,26 +68,23 @@ public:
         , m_opacity(1.0)
         , m_anchorPointZ(0.0)
         , m_borderWidth(0.0)
-        , m_doubleSided(true)
-        , m_masksToBounds(false)
-        , m_opaque(true)
-        , m_preserves3D(false)
-        , m_needsDisplayOnBoundsChange(false)
         , m_layerProgramShader(LayerProgramShaderBGRA)
-        , m_needsTexture(false)
-        , m_isFixedPosition(false)
-        , m_hasFixedContainer(false)
-        , m_hasFixedAncestorInDOMTree(false)
         , m_pluginView(0)
 #if ENABLE(VIDEO)
         , m_mediaPlayer(0)
 #endif
         , m_texID(0)
-        , m_texWidth(0)
-        , m_texHeight(0)
-        , m_canvas(0)
         , m_frontBufferLock(0)
         , m_suspendTime(0)
+        , m_doubleSided(true)
+        , m_masksToBounds(false)
+        , m_isOpaque(false)
+        , m_preserves3D(false)
+        , m_needsDisplayOnBoundsChange(false)
+        , m_needsTexture(false)
+        , m_isFixedPosition(false)
+        , m_hasFixedContainer(false)
+        , m_hasFixedAncestorInDOMTree(false)
         , m_isVisible(true)
     {
     }
@@ -116,7 +113,7 @@ public:
 
     float opacity() const { return m_opacity; }
 
-    bool opaque() const { return m_opaque; }
+    bool isOpaque() const { return m_isOpaque; }
 
     FloatPoint position() const { return m_position; }
 
@@ -127,15 +124,10 @@ public:
 
     bool preserves3D() const { return m_preserves3D; }
 
-    unsigned int getTextureID() const { return m_texID; }
+    unsigned getTextureID() const { return m_texID; }
     void setTextureID(unsigned int value) { m_texID = value; }
 
-    bool needsTexture() const
-    {
-        if (m_layerType == WebGLLayer)
-            return true;
-        return m_needsTexture;
-    }
+    bool needsTexture() const { return m_layerType == WebGLLayer || m_layerType == CanvasLayer || m_needsTexture; }
 
     LayerProgramShader layerProgramShader() const { return m_layerProgramShader; }
 
@@ -152,16 +144,11 @@ public:
     MediaPlayer* mediaPlayer() const { return m_mediaPlayer; }
 #endif
 
-    HTMLCanvasElement* canvas() const { return m_canvas; }
-
-    void replicate(LayerData *to) const
-    {
-        *to = *this;
-    }
+    void replicate(LayerData *to) const { *to = *this; }
 
     LayerType layerType() const { return m_layerType; }
 
-    bool includeVisibility()
+    bool includeVisibility() const
     {
         if (pluginView())
             return true;
@@ -178,7 +165,6 @@ protected:
     LayerType m_layerType;
 
     IntSize m_bounds;
-    IntSize m_backingStoreSize;
     FloatPoint m_position;
     FloatPoint m_anchorPoint;
     Color m_backgroundColor;
@@ -192,17 +178,7 @@ protected:
     float m_anchorPointZ;
     float m_borderWidth;
 
-    bool m_doubleSided;
-    bool m_masksToBounds;
-    bool m_opaque;
-    bool m_preserves3D;
-    bool m_needsDisplayOnBoundsChange;
-
     LayerProgramShader m_layerProgramShader;
-    bool m_needsTexture;
-    bool m_isFixedPosition;
-    bool m_hasFixedContainer;
-    bool m_hasFixedAncestorInDOMTree;
 
     PluginView* m_pluginView;
 #if ENABLE(VIDEO)
@@ -211,11 +187,7 @@ protected:
 #endif
     IntRect m_holePunchRect;
 
-    unsigned int m_texID;
-    unsigned int m_texWidth;
-    unsigned int m_texHeight;
-
-    HTMLCanvasElement* m_canvas;
+    unsigned m_texID;
 
     pthread_mutex_t* m_frontBufferLock;
 
@@ -223,8 +195,19 @@ protected:
     Vector<RefPtr<LayerAnimation> > m_suspendedAnimations;
     double m_suspendTime;
 
+    unsigned m_doubleSided : 1;
+    unsigned m_masksToBounds : 1;
+    unsigned m_isOpaque : 1;
+    unsigned m_preserves3D : 1;
+    unsigned m_needsDisplayOnBoundsChange : 1;
+
+    unsigned m_needsTexture : 1;
+    unsigned m_isFixedPosition : 1;
+    unsigned m_hasFixedContainer : 1;
+    unsigned m_hasFixedAncestorInDOMTree : 1;
+
     // The following is only available for media (video) and plugin layers.
-    bool m_isVisible;
+    unsigned m_isVisible : 1;
 
     // CAUTION: all the data members are copied from one instance to another
     // i.e. from one thread to another in the replicate method.

@@ -41,15 +41,13 @@ class HTMLInputElement;
 class HTMLFormCollection;
 class TextEncoding;
 
-struct CollectionCache;
-
 class HTMLFormElement : public HTMLElement {
 public:
     static PassRefPtr<HTMLFormElement> create(Document*);
     static PassRefPtr<HTMLFormElement> create(const QualifiedName&, Document*);
     virtual ~HTMLFormElement();
 
-    PassRefPtr<HTMLCollection> elements();
+    HTMLCollection* elements();
     void getNamedElements(const AtomicString&, Vector<RefPtr<Node> >&);
 
     unsigned length() const;
@@ -122,14 +120,15 @@ private:
 
     virtual void handleLocalEvents(Event*);
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
     virtual bool isURLAttribute(Attribute*) const;
 
-    virtual void documentDidBecomeActive();
+    virtual void documentDidResumeFromPageCache();
 
-    virtual void willMoveToNewOwnerDocument();
-    virtual void didMoveToNewOwnerDocument();
+    virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
+
+    virtual bool shouldRegisterAsNamedItem() const OVERRIDE { return true; }
 
     void submit(Event*, bool activateSubmitButton, bool processingUserGesture, FormSubmissionTrigger);
 
@@ -150,7 +149,7 @@ private:
 
     FormSubmission::Attributes m_attributes;
     OwnPtr<AliasMap> m_elementAliases;
-    OwnPtr<CollectionCache> m_collectionCache;
+    OwnPtr<HTMLFormCollection> m_elementsCollection;
 
     CheckedRadioButtons m_checkedRadioButtons;
 
@@ -167,8 +166,6 @@ private:
 
     bool m_wasMalformed;
     bool m_wasDemoted;
-
-    AtomicString m_name;
 };
 
 } // namespace WebCore

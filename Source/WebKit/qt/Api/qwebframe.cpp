@@ -27,6 +27,7 @@
 #include "CallFrame.h"
 #elif USE(V8)
 #include "V8Binding.h"
+#include <QJSEngine>
 #endif
 #include "Document.h"
 #include "DocumentLoader.h"
@@ -68,6 +69,7 @@
 #include "PlatformWheelEvent.h"
 #include "PrintContext.h"
 #if USE(JSC)
+#include "PropertyDescriptor.h"
 #include "PutPropertySlot.h"
 #endif
 #include "RenderLayer.h"
@@ -102,7 +104,7 @@
 #endif
 #if USE(TEXTURE_MAPPER)
 #include "texmap/TextureMapper.h"
-#include "texmap/TextureMapperNode.h"
+#include "texmap/TextureMapperLayer.h"
 #endif
 #include "wtf/HashMap.h"
 #include <QMultiMap>
@@ -113,6 +115,10 @@
 #include <qprinter.h>
 #include <qregion.h>
 #include <qnetworkrequest.h>
+
+#if ENABLE(ORIENTATION_EVENTS) && QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+QTM_USE_NAMESPACE
+#endif
 
 using namespace WebCore;
 
@@ -325,13 +331,12 @@ void QWebFramePrivate::renderFromTiledBackingStore(GraphicsContext* context, con
 #if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
 void QWebFramePrivate::renderCompositedLayers(GraphicsContext* context, const IntRect& clip)
 {
-    if (!rootTextureMapperNode || !textureMapper)
+    if (!rootTextureMapperLayer || !textureMapper)
         return;
 
     textureMapper->setGraphicsContext(context);
     textureMapper->setImageInterpolationQuality(context->imageInterpolationQuality());
     textureMapper->setTextDrawingMode(context->textDrawingMode());
-    textureMapper->setViewportSize(frame->view()->frameRect().size());
     QPainter* painter = context->platformContext();
     const QTransform transform = painter->worldTransform();
     const TransformationMatrix matrix(
@@ -340,11 +345,11 @@ void QWebFramePrivate::renderCompositedLayers(GraphicsContext* context, const In
                 0, 0, 1, 0,
                 transform.m31(), transform.m32(), 0, transform.m33()
                 );
-    rootTextureMapperNode->setTransform(matrix);
-    rootTextureMapperNode->setOpacity(painter->opacity());
+    rootTextureMapperLayer->setTransform(matrix);
+    rootTextureMapperLayer->setOpacity(painter->opacity());
     textureMapper->beginPainting();
     textureMapper->beginClip(matrix, clip);
-    rootTextureMapperNode->paint();
+    rootTextureMapperLayer->paint();
     textureMapper->endClip();
     textureMapper->endPainting();
 }
@@ -454,20 +459,20 @@ void QWebFramePrivate::_q_orientationChanged()
     WebCore::Frame* frame = core(q);
 
     switch (m_orientation.reading()->orientation()) {
-    case QtMobility::QOrientationReading::TopUp:
+    case QOrientationReading::TopUp:
         orientation = 0;
         break;
-    case QtMobility::QOrientationReading::TopDown:
+    case QOrientationReading::TopDown:
         orientation = 180;
         break;
-    case QtMobility::QOrientationReading::LeftUp:
+    case QOrientationReading::LeftUp:
         orientation = -90;
         break;
-    case QtMobility::QOrientationReading::RightUp:
+    case QOrientationReading::RightUp:
         orientation = 90;
         break;
-    case QtMobility::QOrientationReading::FaceUp:
-    case QtMobility::QOrientationReading::FaceDown:
+    case QOrientationReading::FaceUp:
+    case QOrientationReading::FaceDown:
         // WebCore unable to handle it
     default:
         return;
@@ -513,8 +518,12 @@ void QWebFramePrivate::addQtSenderToGlobalObject()
     JSObjectRef function = JSObjectMakeFunctionWithCallback(context, propertyName.get(), qtSenderCallback);
 
     // JSC public API doesn't support setting a Getter for a property of a given object, https://bugs.webkit.org/show_bug.cgi?id=61374.
-    window->methodTable()->defineGetter(window, exec, propertyName.get()->identifier(&exec->globalData()), ::toJS(function),
-                         JSC::ReadOnly | JSC::DontEnum | JSC::DontDelete);
+    JSC::PropertyDescriptor descriptor;
+    descriptor.setGetter(::toJS(function));
+    descriptor.setSetter(JSC::jsUndefined());
+    descriptor.setEnumerable(false);
+    descriptor.setConfigurable(false);
+    window->methodTable()->defineOwnProperty(window, exec, propertyName.get()->identifier(&exec->globalData()), descriptor, false);
 }
 #endif
 
@@ -690,10 +699,10 @@ void QWebFrame::addToJavaScriptWindowObject(const QString &name, QObject *object
     JSC::PutPropertySlot slot;
     window->methodTable()->put(window, exec, JSC::Identifier(&exec->globalData(), reinterpret_cast_ptr<const UChar*>(name.constData()), name.length()), runtimeObject, slot);
 #elif USE(V8)
-    QScriptEngine* engine = d->frame->script()->qtScriptEngine();
+    QJSEngine* engine = d->frame->script()->qtScriptEngine();
     if (!engine)
         return;
-    QScriptValue v = engine->newQObject(object, ownership);
+    QJSValue v = engine->newQObject(object); // FIXME: Ownership not propagated yet.
     engine->globalObject().property(QLatin1String("window")).setProperty(name, v);
 #endif
 }
@@ -1591,7 +1600,7 @@ QVariant QWebFrame::evaluateJavaScript(const QString& scriptSource)
 
         rc = JSC::Bindings::convertValueToQVariant(proxy->globalObject(mainThreadNormalWorld())->globalExec(), v, QMetaType::Void, &distance);
 #elif USE(V8)
-        QScriptEngine* engine = d->frame->script()->qtScriptEngine();
+        QJSEngine* engine = d->frame->script()->qtScriptEngine();
         if (!engine)
             return rc;
         rc = engine->evaluate(scriptSource).toVariant();

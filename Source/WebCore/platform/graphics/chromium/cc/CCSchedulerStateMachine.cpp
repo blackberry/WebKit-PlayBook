@@ -30,16 +30,20 @@ namespace WebCore {
 
 CCSchedulerStateMachine::CCSchedulerStateMachine()
     : m_commitState(COMMIT_STATE_IDLE)
+    , m_currentFrameNumber(0)
+    , m_lastFrameNumberWhereDrawWasCalled(-1)
     , m_needsRedraw(false)
     , m_needsForcedRedraw(false)
     , m_needsCommit(false)
     , m_updateMoreResourcesPending(false)
     , m_insideVSync(false)
-    , m_visible(false) { }
+    , m_visible(false)
+    , m_canDraw(true) { }
 
 CCSchedulerStateMachine::Action CCSchedulerStateMachine::nextAction() const
 {
-    bool shouldDraw = (m_needsRedraw && m_insideVSync && m_visible) || m_needsForcedRedraw;
+    bool canDraw = m_currentFrameNumber != m_lastFrameNumberWhereDrawWasCalled;
+    bool shouldDraw = (m_needsRedraw && m_insideVSync && m_visible && canDraw && m_canDraw) || m_needsForcedRedraw;
     switch (m_commitState) {
     case COMMIT_STATE_IDLE:
         if (shouldDraw)
@@ -66,6 +70,10 @@ CCSchedulerStateMachine::Action CCSchedulerStateMachine::nextAction() const
     case COMMIT_STATE_WAITING_FOR_FIRST_DRAW:
         if (shouldDraw)
             return ACTION_DRAW;
+        // COMMIT_STATE_WAITING_FOR_FIRST_DRAW wants to enforce a draw. If m_canDraw is false,
+        // proceed to the next step (similar as in COMMIT_STATE_IDLE).
+        if (!m_canDraw && m_needsCommit && m_visible)
+            return ACTION_BEGIN_FRAME;
         return ACTION_NONE;
     }
     ASSERT_NOT_REACHED();
@@ -100,17 +108,37 @@ void CCSchedulerStateMachine::updateState(Action action)
     case ACTION_DRAW:
         m_needsRedraw = false;
         m_needsForcedRedraw = false;
+        if (m_insideVSync)
+            m_lastFrameNumberWhereDrawWasCalled = m_currentFrameNumber;
         if (m_commitState == COMMIT_STATE_WAITING_FOR_FIRST_DRAW) {
-            ASSERT(m_needsCommit);
+            ASSERT(m_needsCommit || !m_visible);
             m_commitState = COMMIT_STATE_IDLE;
         }
         return;
     }
 }
 
-void CCSchedulerStateMachine::setInsideVSync(bool insideVSync)
+bool CCSchedulerStateMachine::vsyncCallbackNeeded() const
 {
-    m_insideVSync = insideVSync;
+    if (!m_visible) {
+        if (m_needsForcedRedraw)
+            return true;
+
+        return false;
+    }
+
+    return m_needsRedraw || m_needsForcedRedraw || m_updateMoreResourcesPending;
+}
+
+void CCSchedulerStateMachine::didEnterVSync()
+{
+    m_insideVSync = true;
+}
+
+void CCSchedulerStateMachine::didLeaveVSync()
+{
+    m_currentFrameNumber++;
+    m_insideVSync = false;
 }
 
 void CCSchedulerStateMachine::setVisible(bool visible)

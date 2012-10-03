@@ -26,9 +26,8 @@
 #include <ScriptExecutionContext.h>
 #include <UUID.h>
 
-using namespace WebCore;
 
-namespace WebKit {
+namespace WebCore {
 
 NotificationPresenter* NotificationPresenterImpl::instance()
 {
@@ -66,7 +65,7 @@ bool NotificationPresenterImpl::show(Notification* notification)
         message = n->url().string();
     } else {
         // FIXME: Strip the content into one line.
-        message = n->contents().title() + ": " + n->contents().body();
+        message = n->contents().title + ": " + n->contents().body;
     }
 
     m_platformPresenter->show(std::string(uuid.utf8().data()), std::string(message.utf8().data()));
@@ -92,6 +91,10 @@ void NotificationPresenterImpl::notificationObjectDestroyed(Notification* notifi
     cancel(notification);
 }
 
+void NotificationPresenterImpl::notificationControllerDestroyed()
+{
+}
+
 void NotificationPresenterImpl::requestPermission(ScriptExecutionContext* context, PassRefPtr<VoidCallback> callback)
 {
     ASSERT(context);
@@ -104,10 +107,10 @@ void NotificationPresenterImpl::onPermission(const std::string& domain, bool isA
     ASSERT(!domain.empty());
     String domainString = String::fromUTF8(domain.c_str());
     PermissionRequestMap::iterator it = m_permissionRequests.begin();
-    PermissionRequestMap::iterator end = m_permissionRequests.end();
-    for (; it != end; ++it) {
+    for (; it != m_permissionRequests.end(); ++it) {
         if (it->first->url().host() != domainString)
             continue;
+
         if (isAllowed) {
             m_allowedDomains.add(domainString);
             it->second->handleEvent();
@@ -115,6 +118,7 @@ void NotificationPresenterImpl::onPermission(const std::string& domain, bool isA
             m_allowedDomains.remove(domainString);
 
         m_permissionRequests.remove(it);
+        return;
     }
 }
 
@@ -139,11 +143,12 @@ void NotificationPresenterImpl::notificationClicked(const std::string& id)
     ASSERT(!id.empty());
     String idString = String::fromUTF8(id.c_str());
     NotificationMap::iterator it = m_notifications.begin();
-    NotificationMap::iterator end = m_notifications.end();
-    for (; it != end; ++it) {
+    for (; it != m_notifications.end(); ++it) {
         if (it->second == idString && it->first->scriptExecutionContext()) {
+            RefPtr<Notification> notification = it->first;
             it->first->dispatchEvent(Event::create(eventNames().clickEvent, false, true));
-            m_notifications.remove(it);
+            m_notifications.remove(notification);
+            return;
         }
     }
 }

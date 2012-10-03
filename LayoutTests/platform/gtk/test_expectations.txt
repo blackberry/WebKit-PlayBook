@@ -7,9 +7,10 @@ BUGWK67007 DEBUG : fast/ruby/after-table-doesnt-crash.html = CRASH
 BUGWK67007 DEBUG : fast/ruby/generated-after-counter-doesnt-crash.html = CRASH
 BUGWK67007 DEBUG : fast/ruby/generated-before-and-after-counter-doesnt-crash.html = CRASH
 
+BUGWK76814 DEBUG : fast/xmlhttprequest/xmlhttprequest-get.xhtml = CRASH
+
 // Flaky tests
 
-BUGWK68536 : media/media-blocked-by-beforeload.html = PASS TEXT
 BUGWK68878 : media/video-playing-and-pause.html = PASS TEXT
 BUGWK36165 : media/video-played-collapse.html = PASS TEXT
 BUGWK54637 : media/video-display-toggle.html = PASS TEXT
@@ -25,8 +26,6 @@ BUGWK61914 : svg/zoom/page/zoom-svg-through-object-with-absolute-size-2.xhtml = 
 BUGWK61914 : svg/zoom/page/zoom-svg-through-object-with-absolute-size.xhtml = PASS TEXT
 
 BUGWK68520 : svg/W3C-SVG-1.1-SE/filters-image-05-f.svg = PASS TEXT
-
-BUGWK68522 : http/tests/websocket/tests/hixie76/error-detect.html = PASS TEXT
 
 BUGWK68516 : fast/workers/shared-worker-lifecycle.html = PASS TEXT
 BUGWK68516 : fast/workers/shared-worker-frame-lifecycle.html = PASS TEXT
@@ -59,10 +58,55 @@ BUGWK61932 : jquery/manipulation.html = PASS TEXT
 
 BUGWK37623 : scrollbars/scrollbar-crash-on-refresh.html = PASS TEXT
 
-BUGWK22770 : tables/mozilla_expected_failures/marvin/table_overflow_dirty_reflow_tbody.html = PASS TEXT
 BUGWK59937 : tables/mozilla_expected_failures/bugs/bug85016.html = PASS TEXT
 
 BUGWK71776 : fast/forms/password-placeholder-text-security.html = PASS TEXT
 BUGWK71777 : fast/lists/inlineBoxWrapperNullCheck.html = PASS TEXT
 
+BUGWK71655 : fast/frames/flattening/frameset-flattening-simple.html = PASS TEXT
+
+BUGWK72698 : media/audio-garbage-collect.html = PASS TEXT
+BUGWK79760 : media/video-poster-blocked-by-willsendrequest.html = PASS TEXT
+
+BUGWK72694 : fast/canvas/canvas-lineWidth.html = PASS TIMEOUT TEXT
+BUGWK73772 : fast/table/multiple-captions-display.xhtml = PASS TEXT
+
+BUGWK74279 : fullscreen/full-screen-iframe-legacy.html = PASS TEXT
+
+BUGWK74288 : fast/events/overflow-events.html = PASS TEXT
+
+BUGWK74297 DEBUG : http/tests/security/cross-origin-xsl-redirect-BLOCKED.html = PASS TEXT
+
+BUGWK74493 : platform/gtk/accessibility/unknown-roles-not-exposed.html = PASS TEXT
+
+BUGWK74710 : editing/pasteboard/paste-text-013.html = PASS TEXT
+
+BUGWK76385 : tables/mozilla_expected_failures/marvin/table_overflow_dirty_reflow_tbody.html = PASS TEXT
+
+BUGWK76831 : svg/custom/junk-data.svg = PASS TEXT
+BUGWK76831 : svg/custom/missing-xlink.svg = PASS TEXT
+BUGWK76831 : svg/custom/use-font-face-crash.svg = PASS TEXT
+BUGWK76831 : svg/hixie/error/012.xml = PASS TEXT
+
+BUGWK77636 : fast/forms/radio/radio-group.html = PASS TEXT
+
+BUGWK78344 : fast/text/international/inline-plaintext-relayout-with-leading-neutrals.html = PASS IMAGE
+
 // End of Flaky tests
+
+BUGWK73766 : css3/unicode-bidi-isolate-aharon-failing.html = FAIL
+
+BUGWK74270 : fast/forms/basic-selects.html = FAIL
+
+BUGWK76639 : fast/table/multiple-captions-crash3.html = IMAGE FAIL
+
+BUGWK79756 : css3/flexbox/inline-flexbox.html = IMAGE FAIL
+BUGWK79757 : fast/selectors/selection-window-inactive.html = IMAGE FAIL
+
+// Need rebaselining. Only TEXT is suppressed because that is all the buildbots check, however
+// images need to be rebaselined too.
+BUGWK69210: fast/encoding/utf-16-big-endian.html = TEXT
+BUGWK69210: fast/encoding/utf-16-little-endian.html = TEXT
+BUGWK69210: fast/inline/continuation-outlines-with-layers-2.html = TEXT
+BUGWK69210: fast/inline/continuation-outlines-with-layers.html = TEXT
+BUGWK69210: fast/repaint/transform-absolute-in-positioned-container.html = TEXT

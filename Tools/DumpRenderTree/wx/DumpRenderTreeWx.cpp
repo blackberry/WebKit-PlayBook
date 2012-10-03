@@ -119,7 +119,10 @@ public:
     
     void OnConsoleMessageEvent(wxWebViewConsoleMessageEvent& event)
     {
-        fprintf(stdout, "CONSOLE MESSAGE: line %d: %S\n", event.GetLineNumber(), event.GetMessage().c_str());
+        fprintf(stdout, "CONSOLE MESSAGE: ");
+        if (event.GetLineNumber())
+            fprintf(stdout, "line %d: ", event.GetLineNumber());
+        fprintf(stdout, "%S\n", event.GetMessage().c_str());
     }
     
     void OnReceivedTitleEvent(wxWebViewReceivedTitleEvent& event)
@@ -293,7 +296,7 @@ bool MyApp::OnInit()
     wxInitAllImageHandlers();
         
     // create the main application window
-    wxWebBrowserShell* webFrame = new wxWebBrowserShell(_T("wxWebKit DumpRenderTree App"));
+    wxWebBrowserShell* webFrame = new wxWebBrowserShell(_T("wxWebKit DumpRenderTree App"), "about:blank");
     SetTopWindow(webFrame);
     webView = webFrame->webview;
     webView->SetSize(wxSize(maxViewWidth, maxViewHeight));

@@ -58,7 +58,7 @@ bool ScriptValue::getString(ScriptState* scriptState, String& result) const
 
 String ScriptValue::toString(ScriptState* scriptState) const
 {
-    String result = ustringToString(m_value.get().toString(scriptState));
+    String result = ustringToString(m_value.get().toString(scriptState)->value(scriptState));
     // Handle the case where an exception is thrown as part of invoking toString on the object.
     if (scriptState->hadException())
         scriptState->clearException();
@@ -102,7 +102,7 @@ bool ScriptValue::isFunction() const
 
 PassRefPtr<SerializedScriptValue> ScriptValue::serialize(ScriptState* scriptState, SerializationErrorMode throwExceptions)
 {
-    return SerializedScriptValue::create(scriptState, jsValue(), 0, throwExceptions);
+    return SerializedScriptValue::create(scriptState, jsValue(), 0, 0, throwExceptions);
 }
 
 ScriptValue ScriptValue::deserialize(ScriptState* scriptState, SerializedScriptValue* value, SerializationErrorMode throwExceptions)
@@ -133,7 +133,7 @@ static PassRefPtr<InspectorValue> jsToInspectorValue(ScriptState* scriptState, J
         return InspectorString::create(String(s.characters(), s.length()));
     }
     if (value.isObject()) {
-        if (isJSArray(&scriptState->globalData(), value)) {
+        if (isJSArray(value)) {
             RefPtr<InspectorArray> inspectorArray = InspectorArray::create();
             JSArray* array = asArray(value);
             unsigned length = array->length();

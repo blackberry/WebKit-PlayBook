@@ -48,10 +48,12 @@ enum MessageClass {
     MessageClassWebInspector,
     MessageClassWebKeyValueStorageManager,
     MessageClassWebMediaCacheManager,
+    MessageClassWebNotificationManager,
     MessageClassWebPage,
     MessageClassWebProcess,
     MessageClassWebResourceCacheManager,
-
+    MessageClassEventDispatcher,
+    
     // Messages sent by the web process to the UI process.
     MessageClassDownloadProxy,
     MessageClassDrawingAreaProxy,
@@ -67,9 +69,13 @@ enum MessageClass {
     MessageClassWebInspectorProxy,
     MessageClassWebKeyValueStorageManagerProxy,
     MessageClassWebMediaCacheManagerProxy,
+    MessageClassWebNotificationManagerProxy,
     MessageClassWebPageProxy,
     MessageClassWebProcessProxy,
     MessageClassWebResourceCacheManagerProxy,
+
+    // Messages sent to a WebConnection
+    MessageClassWebConnectionLegacy,
 
     // Messages sent by the UI process to the plug-in process.
     MessageClassPluginProcess,

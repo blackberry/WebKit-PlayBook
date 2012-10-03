@@ -84,7 +84,7 @@ public:
     bool withCredentials() const { return m_includeCredentials; }
     void setWithCredentials(bool, ExceptionCode&);
 #if ENABLE(XHR_RESPONSE_BLOB)
-    bool asBlob() const { return responseTypeCode() == ResponseTypeBlob; }
+    bool asBlob() const { return m_responseTypeCode == ResponseTypeBlob; }
     void setAsBlob(bool, ExceptionCode&);
 #endif
     void open(const String& method, const KURL&, ExceptionCode&);
@@ -104,7 +104,7 @@ public:
     String getResponseHeader(const AtomicString& name, ExceptionCode&) const;
     String responseText(ExceptionCode&);
     Document* responseXML(ExceptionCode&);
-    Document* optionalResponseXML() const { return m_responseXML.get(); }
+    Document* optionalResponseXML() const { return m_responseDocument.get(); }
 #if ENABLE(XHR_RESPONSE_BLOB)
     Blob* responseBlob(ExceptionCode&) const;
     Blob* optionalResponseBlob() const { return m_responseBlob.get(); }
@@ -133,6 +133,7 @@ public:
     DEFINE_ATTRIBUTE_EVENT_LISTENER(abort);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(error);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(load);
+    DEFINE_ATTRIBUTE_EVENT_LISTENER(loadend);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(loadstart);
     DEFINE_ATTRIBUTE_EVENT_LISTENER(progress);
 
@@ -206,7 +207,7 @@ private:
 
     StringBuilder m_responseBuilder;
     mutable bool m_createdDocument;
-    mutable RefPtr<Document> m_responseXML;
+    mutable RefPtr<Document> m_responseDocument;
     
     RefPtr<SharedBuffer> m_binaryResponseBuilder;
     mutable RefPtr<ArrayBuffer> m_responseArrayBuffer;

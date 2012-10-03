@@ -17,31 +17,36 @@
     Boston, MA 02110-1301, USA.
 */
 
-#include "config.h"
+#include "../bytearraytestdata.h"
 #include "../util.h"
 
-#include "qquickwebpage.h"
-#include "qquickwebview.h"
 #include "qquickwebview_p.h"
-
+#include <QGuiApplication>
+#include <QVarLengthArray>
 #include <QtQuickTest/quicktest.h>
-#include <QtWidgets/QApplication>
-
-class DesktopWebView : public QQuickWebView {
-public:
-    DesktopWebView(QQuickItem* parent = 0)
-        : QQuickWebView(parent)
-    {
-        QQuickWebViewPrivate::get(this)->setUseTraditionalDesktopBehaviour(true);
-    }
-};
 
 int main(int argc, char** argv)
 {
+    QVarLengthArray<char*, 8> arguments;
+    for (int i = 0; i < argc; ++i)
+        arguments.append(argv[i]);
+
+    arguments.append(const_cast<char*>("-import"));
+    arguments.append(const_cast<char*>(IMPORT_DIR));
+
+    argc = arguments.count();
+    argv = arguments.data();
+
     suppressDebugOutput();
+    addQtWebProcessToPath();
+
     // Instantiate QApplication to prevent quick_test_main to instantiate a QGuiApplication.
     // This can be removed as soon as we do not use QtWidgets any more.
-    QApplication app(argc, argv);
-    qmlRegisterType<DesktopWebView>("QtWebKitTest", 1, 0, "DesktopWebView");
+    QGuiApplication app(argc, argv);
+    qmlRegisterType<ByteArrayTestData>("Test", 1, 0, "ByteArrayTestData");
+
+#ifdef DISABLE_FLICKABLE_VIEWPORT
+    QQuickWebViewExperimental::setFlickableViewportEnabled(false);
+#endif
     return quick_test_main(argc, argv, "qmltests", 0, QUICK_TEST_SOURCE_DIR);
 }

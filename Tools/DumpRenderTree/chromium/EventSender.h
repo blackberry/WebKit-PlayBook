@@ -41,7 +41,7 @@
 #include "Task.h"
 #include "WebDragOperation.h"
 #include "WebInputEvent.h"
-#include "WebPoint.h"
+#include "platform/WebPoint.h"
 
 class TestShell;
 
@@ -82,6 +82,7 @@ public:
     void mouseScrollBy(const CppArgumentList&, CppVariant*);
     void continuousMouseScrollBy(const CppArgumentList&, CppVariant*);
     void scheduleAsynchronousClick(const CppArgumentList&, CppVariant*);
+    void scheduleAsynchronousKeyDown(const CppArgumentList&, CppVariant*);
     void beginDragWithFiles(const CppArgumentList&, CppVariant*);
     CppVariant dragMode;
 

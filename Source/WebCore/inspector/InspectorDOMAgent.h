@@ -33,6 +33,7 @@
 #include "EventTarget.h"
 #include "InjectedScript.h"
 #include "InjectedScriptManager.h"
+#include "InspectorBaseAgent.h"
 #include "InspectorFrontend.h"
 #include "InspectorValues.h"
 #include "Timer.h"
@@ -50,24 +51,28 @@
 namespace WebCore {
 class ContainerNode;
 class CharacterData;
+class DOMEditor;
 class Document;
 class Element;
 class Event;
 class GraphicsContext;
 class InspectorClient;
-class InspectorDOMAgent;
 class InspectorFrontend;
+class InspectorHistory;
 class InspectorPageAgent;
 class IntRect;
 class HitTestResult;
 class HTMLElement;
-struct HighlightData;
 class InspectorState;
 class InstrumentingAgents;
 class NameNodeMap;
 class Node;
 class RevalidateStyleAttributeTask;
 class ScriptValue;
+class ShadowRoot;
+
+struct Highlight;
+struct HighlightData;
 
 typedef String ErrorString;
 
@@ -86,7 +91,8 @@ struct EventListenerInfo {
     const EventListenerVector eventListenerVector;
 };
 
-class InspectorDOMAgent {
+class InspectorDOMAgent : public InspectorBaseAgent<InspectorDOMAgent>, public InspectorBackendDispatcher::DOMCommandHandler {
+    WTF_MAKE_NONCOPYABLE(InspectorDOMAgent);
 public:
     struct DOMListener {
         virtual ~DOMListener()
@@ -102,42 +108,48 @@ public:
         return adoptPtr(new InspectorDOMAgent(instrumentingAgents, pageAgent, client, inspectorState, injectedScriptManager));
     }
 
+    static String toErrorString(const ExceptionCode&);
+
     ~InspectorDOMAgent();
 
-    void setFrontend(InspectorFrontend*);
-    void clearFrontend();
-    void restore();
+    virtual void setFrontend(InspectorFrontend*);
+    virtual void clearFrontend();
+    virtual void restore();
 
     Vector<Document*> documents();
     void reset();
 
     // Methods called from the frontend for DOM nodes inspection.
-    void querySelector(ErrorString*, int nodeId, const String& selectors, int* elementId);
-    void querySelectorAll(ErrorString*, int nodeId, const String& selectors, RefPtr<InspectorArray>* result);
-    void getDocument(ErrorString*, RefPtr<InspectorObject>* root);
-    void requestChildNodes(ErrorString*, int nodeId);
-    void setAttributeValue(ErrorString*, int elementId, const String& name, const String& value);
-    void setAttributesAsText(ErrorString*, int elementId, const String& text, const String* const name);
-    void removeAttribute(ErrorString*, int elementId, const String& name);
-    void removeNode(ErrorString*, int nodeId);
-    void setNodeName(ErrorString*, int nodeId, const String& name, int* newId);
-    void getOuterHTML(ErrorString*, int nodeId, WTF::String* outerHTML);
-    void setOuterHTML(ErrorString*, int nodeId, const String& outerHTML, int* newId);
-    void setNodeValue(ErrorString*, int nodeId, const String& value);
-    void getEventListenersForNode(ErrorString*, int nodeId, RefPtr<InspectorArray>* listenersArray);
-    void performSearch(ErrorString*, const String& whitespaceTrimmedQuery, String* searchId, int* resultCount);
-    void getSearchResults(ErrorString*, const String& searchId, int fromIndex, int toIndex, RefPtr<InspectorArray>*);
-    void discardSearchResults(ErrorString*, const String& searchId);
-    void resolveNode(ErrorString*, int nodeId, const String* const objectGroup, RefPtr<InspectorObject>* result);
-    void getAttributes(ErrorString*, int nodeId, RefPtr<InspectorArray>* result);
-    void setInspectModeEnabled(ErrorString*, bool enabled, const RefPtr<InspectorObject>* highlightConfig);
-    void requestNode(ErrorString*, const String& objectId, int* nodeId);
-    void pushNodeByPathToFrontend(ErrorString*, const String& path, int* nodeId);
-    void hideHighlight(ErrorString*);
-    void highlightRect(ErrorString*, int x, int y, int width, int height, const RefPtr<InspectorObject>* color, const RefPtr<InspectorObject>* outlineColor);
-    void highlightNode(ErrorString*, int nodeId, const RefPtr<InspectorObject> highlightConfig);
-    void highlightFrame(ErrorString*, const String& frameId, const RefPtr<InspectorObject>* color, const RefPtr<InspectorObject>* outlineColor);
-    void moveTo(ErrorString*, int nodeId, int targetNodeId, const int* const anchorNodeId, int* newNodeId);
+    virtual void querySelector(ErrorString*, int nodeId, const String& selectors, int* elementId);
+    virtual void querySelectorAll(ErrorString*, int nodeId, const String& selectors, RefPtr<InspectorArray>& result);
+    virtual void getDocument(ErrorString*, RefPtr<InspectorObject>& root);
+    virtual void requestChildNodes(ErrorString*, int nodeId);
+    virtual void setAttributeValue(ErrorString*, int elementId, const String& name, const String& value);
+    virtual void setAttributesAsText(ErrorString*, int elementId, const String& text, const String* name);
+    virtual void removeAttribute(ErrorString*, int elementId, const String& name);
+    virtual void removeNode(ErrorString*, int nodeId);
+    virtual void setNodeName(ErrorString*, int nodeId, const String& name, int* newId);
+    virtual void getOuterHTML(ErrorString*, int nodeId, WTF::String* outerHTML);
+    virtual void setOuterHTML(ErrorString*, int nodeId, const String& outerHTML);
+    virtual void setNodeValue(ErrorString*, int nodeId, const String& value);
+    virtual void getEventListenersForNode(ErrorString*, int nodeId, RefPtr<InspectorArray>& listenersArray);
+    virtual void performSearch(ErrorString*, const String& whitespaceTrimmedQuery, String* searchId, int* resultCount);
+    virtual void getSearchResults(ErrorString*, const String& searchId, int fromIndex, int toIndex, RefPtr<InspectorArray>&);
+    virtual void discardSearchResults(ErrorString*, const String& searchId);
+    virtual void resolveNode(ErrorString*, int nodeId, const String* objectGroup, RefPtr<InspectorObject>& result);
+    virtual void getAttributes(ErrorString*, int nodeId, RefPtr<InspectorArray>& result);
+    virtual void setInspectModeEnabled(ErrorString*, bool enabled, const RefPtr<InspectorObject>* highlightConfig);
+    virtual void requestNode(ErrorString*, const String& objectId, int* nodeId);
+    virtual void pushNodeByPathToFrontend(ErrorString*, const String& path, int* nodeId);
+    virtual void hideHighlight(ErrorString*);
+    virtual void highlightRect(ErrorString*, int x, int y, int width, int height, const RefPtr<InspectorObject>* color, const RefPtr<InspectorObject>* outlineColor);
+    virtual void highlightNode(ErrorString*, int nodeId, const RefPtr<InspectorObject>& highlightConfig);
+    virtual void highlightFrame(ErrorString*, const String& frameId, const RefPtr<InspectorObject>* color, const RefPtr<InspectorObject>* outlineColor);
+    virtual void moveTo(ErrorString*, int nodeId, int targetNodeId, const int* anchorNodeId, int* newNodeId);
+    virtual void setTouchEmulationEnabled(ErrorString*, bool);
+    virtual void undo(ErrorString*);
+    virtual void redo(ErrorString*);
+    virtual void markUndoableState(ErrorString*);
 
     Node* highlightedNode() const;
 
@@ -150,11 +162,14 @@ public:
 
     void didInsertDOMNode(Node*);
     void didRemoveDOMNode(Node*);
+    void willModifyDOMAttr(Element*, const AtomicString& oldValue, const AtomicString& newValue);
     void didModifyDOMAttr(Element*, const AtomicString& name, const AtomicString& value);
     void didRemoveDOMAttr(Element*, const AtomicString& name);
     void styleAttributeInvalidated(const Vector<Element*>& elements);
     void characterDataModified(CharacterData*);
     void didInvalidateStyleAttr(Node*);
+    void didPushShadowRoot(Element* host, ShadowRoot*);
+    void willPopShadowRoot(Element* host, ShadowRoot*);
 
     Node* nodeForId(int nodeId);
     int boundNodeId(Node*);
@@ -164,12 +179,14 @@ public:
 
     PassRefPtr<InspectorObject> resolveNode(Node*, const String& objectGroup);
     bool handleMousePress();
-    bool searchingForNodeInPage() const;
     void mouseDidMoveOverElement(const HitTestResult&, unsigned modifierFlags);
     void inspect(Node*);
     void focusNode();
 
     void drawHighlight(GraphicsContext&) const;
+    void getHighlight(Highlight*) const;
+
+    InspectorHistory* history() { return m_history.get(); }
 
     // We represent embedded doms as a part of the same hierarchy. Hence we treat children of frame owners differently.
     // We also skip whitespace text nodes conditionally. Following methods encapsulate these specifics.
@@ -193,8 +210,10 @@ private:
     typedef HashMap<RefPtr<Node>, int> NodeToIdMap;
     int bind(Node*, NodeToIdMap*);
     void unbind(Node*, NodeToIdMap*);
+
     Element* assertElement(ErrorString*, int nodeId);
-    HTMLElement* assertHTMLElement(ErrorString*, int nodeId);
+    Node* assertEditableNode(ErrorString*, int nodeId);
+    Element* assertEditableElement(ErrorString*, int nodeId);
 
     int pushNodePathToFrontend(Node*);
     void pushChildNodesToFrontend(int nodeId);
@@ -212,10 +231,12 @@ private:
 
     void discardBindings();
 
-    InstrumentingAgents* m_instrumentingAgents;
+#if ENABLE(TOUCH_EVENTS)
+    void updateTouchEventEmulationInPage(bool);
+#endif
+
     InspectorPageAgent* m_pageAgent;
     InspectorClient* m_client;
-    InspectorState* m_inspectorState;
     InjectedScriptManager* m_injectedScriptManager;
     InspectorFrontend::DOM* m_frontend;
     DOMListener* m_domListener;
@@ -233,6 +254,9 @@ private:
     OwnPtr<HighlightData> m_highlightData;
     RefPtr<Node> m_nodeToFocus;
     bool m_searchingForNode;
+    OwnPtr<InspectorHistory> m_history;
+    OwnPtr<DOMEditor> m_domEditor;
+    bool m_suppressAttributeModifiedEvent;
 };
 
 #endif // ENABLE(INSPECTOR)

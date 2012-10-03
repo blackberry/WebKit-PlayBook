@@ -25,10 +25,6 @@
 
 #include "StyledElement.h"
 
-#if ENABLE(MICRODATA)
-#include "DOMSettableTokenList.h"
-#endif
-
 namespace WebCore {
 
 class DocumentFragment;
@@ -39,12 +35,18 @@ class HTMLFormElement;
 class MicroDataItemValue;
 #endif
 
+enum TranslateAttributeMode {
+    TranslateAttributeYes,
+    TranslateAttributeNo,
+    TranslateAttributeInherit
+};
+
 class HTMLElement : public StyledElement {
 public:
     static PassRefPtr<HTMLElement> create(const QualifiedName& tagName, Document*);
 
-    PassRefPtr<HTMLCollection> children();
-    
+    HTMLCollection* children();
+
     virtual String title() const;
 
     virtual short tabIndex() const;
@@ -72,9 +74,12 @@ public:
     bool spellcheck() const;
     void setSpellcheck(bool);
 
+    bool translate() const;
+    void setTranslate(bool);
+
     void click();
 
-    virtual void accessKeyAction(bool sendToAnyElement);
+    virtual void accessKeyAction(bool sendMouseEvents);
 
     bool ieForbidsInsertHTML() const;
 
@@ -83,17 +88,11 @@ public:
 
     HTMLFormElement* form() const { return virtualForm(); }
 
-    static void addHTMLAlignmentToStyledElement(StyledElement*, Attribute*);
-
     HTMLFormElement* findFormAncestor() const;
 
     TextDirection directionalityIfhasDirAutoAttribute(bool& isAuto) const;
 
 #if ENABLE(MICRODATA)
-    PassRefPtr<DOMSettableTokenList> itemRef() const;
-    PassRefPtr<DOMSettableTokenList> itemProp() const;
-    PassRefPtr<DOMSettableTokenList> itemType() const;
-
     void setItemValue(const String&, ExceptionCode&);
     PassRefPtr<MicroDataItemValue> itemValue() const;
 #endif
@@ -101,11 +100,15 @@ public:
 protected:
     HTMLElement(const QualifiedName& tagName, Document*);
 
-    void addHTMLAlignment(Attribute*);
+    void addHTMLLengthToStyle(StylePropertySet*, int propertyID, const String& value);
+    void addHTMLColorToStyle(StylePropertySet*, int propertyID, const String& color);
 
-    virtual bool mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const;
-    virtual void parseMappedAttribute(Attribute*);
-    void applyBorderAttribute(Attribute*);
+    void applyAlignmentAttributeToStyle(Attribute*, StylePropertySet*);
+    void applyBorderAttributeToStyle(Attribute*, StylePropertySet*);
+
+    virtual void parseAttribute(Attribute*) OVERRIDE;
+    virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
+    virtual void collectStyleForAttribute(Attribute*, StylePropertySet*) OVERRIDE;
 
     virtual void childrenChanged(bool changedByParser = false, Node* beforeChange = 0, Node* afterChange = 0, int childCountDelta = 0);
     void calculateAndAdjustDirectionality();
@@ -115,7 +118,7 @@ protected:
 private:
     virtual String nodeName() const;
 
-    void setContentEditable(Attribute*);
+    void mapLanguageAttributeToLocale(Attribute*, StylePropertySet*);
 
     virtual HTMLFormElement* virtualForm() const;
 
@@ -127,17 +130,11 @@ private:
     void adjustDirectionalityIfNeededAfterChildrenChanged(Node* beforeChange, int childCountDelta);
     TextDirection directionality(Node** strongDirectionalityTextNode= 0) const;
 
-#if ENABLE(MICRODATA)
-    void setItemProp(const String&);
-    void setItemRef(const String&);
-    void setItemType(const String&);
+    TranslateAttributeMode translateAttributeMode() const;
 
+#if ENABLE(MICRODATA)
     virtual String itemValueText() const;
     virtual void setItemValueText(const String&, ExceptionCode&);
-
-    mutable RefPtr<DOMSettableTokenList> m_itemProp;
-    mutable RefPtr<DOMSettableTokenList> m_itemRef;
-    mutable RefPtr<DOMSettableTokenList> m_itemType;
 #endif
 };
 

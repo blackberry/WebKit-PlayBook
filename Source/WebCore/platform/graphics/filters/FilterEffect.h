@@ -87,6 +87,9 @@ public:
     void apply();
     
     virtual void platformApplySoftware() = 0;
+#if USE(SKIA)
+    virtual bool platformApplySkia() { return false; }
+#endif
     virtual void dump() = 0;
 
     virtual void determineAbsolutePaintRect();
@@ -118,6 +121,9 @@ public:
 
     Filter* filter() { return m_filter; }
 
+    bool clipsToBounds() const { return m_clipsToBounds; }
+    void setClipsToBounds(bool value) { m_clipsToBounds = value; }
+
 protected:
     FilterEffect(Filter*);
 
@@ -139,7 +145,7 @@ private:
     // The absolute paint rect should never be bigger than m_maxEffectRect.
     FloatRect m_maxEffectRect;
     Filter* m_filter;
-
+    
 private:
     inline void copyImageBytes(ByteArray* source, ByteArray* destination, const IntRect&);
 
@@ -157,6 +163,9 @@ private:
     bool m_hasY;
     bool m_hasWidth;
     bool m_hasHeight;
+
+    // Should the effect clip to its primitive region, or expand to use the combined region of its inputs.
+    bool m_clipsToBounds;
 };
 
 } // namespace WebCore

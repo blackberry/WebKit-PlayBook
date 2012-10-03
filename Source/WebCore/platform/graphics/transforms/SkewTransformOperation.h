@@ -39,13 +39,6 @@ public:
     double angleX() const { return m_angleX; }
     double angleY() const { return m_angleY; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s %f %f]", TransformOperation::toString().latin1().data(), angleX(), angleY());
-    }
-#endif
-
 private:
     virtual bool isIdentity() const { return m_angleX == 0 && m_angleY == 0; }
     virtual OperationType getOperationType() const { return m_type; }

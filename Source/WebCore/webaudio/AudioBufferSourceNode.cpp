@@ -30,6 +30,7 @@
 
 #include "AudioContext.h"
 #include "AudioNodeOutput.h"
+#include "AudioUtilities.h"
 #include "Document.h"
 #include "FloatConversion.h"
 #include "ScriptCallStack.h"
@@ -101,40 +102,44 @@ void AudioBufferSourceNode::process(size_t framesToProcess)
     // Careful - this is a tryLock() and not an autolocker, so we must unlock() before every return.
     if (m_processLock.tryLock()) {
         // Check if it's time to start playing.
-        float sampleRate = this->sampleRate();
-        double quantumStartTime = context()->currentTime();
-        double quantumEndTime = quantumStartTime + framesToProcess / sampleRate;
+        double sampleRate = this->sampleRate();
+        size_t quantumStartFrame = context()->currentSampleFrame();
+        size_t quantumEndFrame = quantumStartFrame + framesToProcess;
+        size_t startFrame = AudioUtilities::timeToSampleFrame(m_startTime, sampleRate);
+        size_t endFrame = m_endTime == UnknownTime ? 0 : AudioUtilities::timeToSampleFrame(m_endTime, sampleRate);
 
         // If we know the end time and it's already passed, then don't bother doing any more rendering this cycle.
-        if (m_endTime != UnknownTime && m_endTime <= quantumStartTime) {
+        if (m_endTime != UnknownTime && endFrame <= quantumStartFrame) {
             m_isPlaying = false;
             m_virtualReadIndex = 0;
             finish();
         }
         
-        if (!m_isPlaying || m_hasFinished || !buffer() || m_startTime >= quantumEndTime) {
+        if (!m_isPlaying || m_hasFinished || !buffer() || startFrame >= quantumEndFrame) {
             // FIXME: can optimize here by propagating silent hint instead of forcing the whole chain to process silence.
             outputBus->zero();
             m_processLock.unlock();
             return;
         }
 
-        double quantumTimeOffset = m_startTime > quantumStartTime ? m_startTime - quantumStartTime : 0;
-        size_t quantumFrameOffset = static_cast<unsigned>(quantumTimeOffset * sampleRate);
+        size_t quantumFrameOffset = startFrame > quantumStartFrame ? startFrame - quantumStartFrame : 0;
         quantumFrameOffset = min(quantumFrameOffset, framesToProcess); // clamp to valid range
         size_t bufferFramesToProcess = framesToProcess - quantumFrameOffset;
+
+        for (unsigned i = 0; i < outputBus->numberOfChannels(); ++i) 
+            m_destinationChannels[i] = outputBus->channel(i)->mutableData();
 
         // Render by reading directly from the buffer.
         renderFromBuffer(outputBus, quantumFrameOffset, bufferFramesToProcess);
 
         // Apply the gain (in-place) to the output bus.
-        double totalGain = gain()->value() * m_buffer->gain();
+        float totalGain = gain()->value() * m_buffer->gain();
         outputBus->copyWithGainFrom(*outputBus, &m_lastGain, totalGain);
 
         // If the end time is somewhere in the middle of this time quantum, then simply zero out the
         // frames starting at the end time.
-        if (m_endTime != UnknownTime && m_endTime >= quantumStartTime && m_endTime < quantumEndTime) {
-            size_t zeroStartFrame = narrowPrecisionToFloat((m_endTime - quantumStartTime) * sampleRate);
+        if (m_endTime != UnknownTime && endFrame >= quantumStartFrame && endFrame < quantumEndFrame) {
+            size_t zeroStartFrame = endFrame - quantumStartFrame;
             size_t framesToZero = framesToProcess - zeroStartFrame;
 
             bool isSafe = zeroStartFrame < framesToProcess && framesToZero <= framesToProcess && zeroStartFrame + framesToZero <= framesToProcess;
@@ -142,7 +147,7 @@ void AudioBufferSourceNode::process(size_t framesToProcess)
             
             if (isSafe) {
                 for (unsigned i = 0; i < outputBus->numberOfChannels(); ++i)
-                    memset(outputBus->channel(i)->data() + zeroStartFrame, 0, sizeof(float) * framesToZero);
+                    memset(m_destinationChannels[i] + zeroStartFrame, 0, sizeof(float) * framesToZero);
             }
 
             m_isPlaying = false;
@@ -155,6 +160,26 @@ void AudioBufferSourceNode::process(size_t framesToProcess)
         // Too bad - the tryLock() failed.  We must be in the middle of changing buffers and were already outputting silence anyway.
         outputBus->zero();
     }
+}
+
+// Returns true if we're finished.
+bool AudioBufferSourceNode::renderSilenceAndFinishIfNotLooping(AudioBus*, unsigned index, size_t framesToProcess)
+{
+    if (!loop()) {
+        // If we're not looping, then stop playing when we get to the end.
+        m_isPlaying = false;
+
+        if (framesToProcess > 0) {
+            // We're not looping and we've reached the end of the sample data, but we still need to provide more output,
+            // so generate silence for the remaining.
+            for (unsigned i = 0; i < numberOfChannels(); ++i) 
+                memset(m_destinationChannels[i] + index, 0, sizeof(float) * framesToProcess);
+        }
+
+        finish();
+        return true;
+    }
+    return false;
 }
 
 void AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destinationFrameOffset, size_t numberOfFrames)
@@ -170,21 +195,11 @@ void AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destination
     unsigned numberOfChannels = this->numberOfChannels();
     unsigned busNumberOfChannels = bus->numberOfChannels();
 
-    // FIXME: we can add support for sources with more than two channels, but this is not a common case.
-    bool channelCountGood = numberOfChannels == busNumberOfChannels && (numberOfChannels == 1 || numberOfChannels == 2);
+    bool channelCountGood = numberOfChannels && numberOfChannels == busNumberOfChannels;
     ASSERT(channelCountGood);
     if (!channelCountGood)
         return;
 
-    // Get the destination pointers.
-    float* destinationL = bus->channel(0)->data();
-    ASSERT(destinationL);
-    if (!destinationL)
-        return;
-    float* destinationR = (numberOfChannels < 2) ? 0 : bus->channel(1)->data();
-    
-    bool isStereo = destinationR;
-    
     // Sanity check destinationFrameOffset, numberOfFrames.
     size_t destinationLength = bus->length();
 
@@ -197,26 +212,26 @@ void AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destination
     ASSERT(isOffsetGood);
     if (!isOffsetGood)
         return;
-        
+
     // Potentially zero out initial frames leading up to the offset.
     if (destinationFrameOffset) {
-        memset(destinationL, 0, sizeof(float) * destinationFrameOffset);
-        if (destinationR)
-            memset(destinationR, 0, sizeof(float) * destinationFrameOffset);
+        for (unsigned i = 0; i < numberOfChannels; ++i) 
+            memset(m_destinationChannels[i], 0, sizeof(float) * destinationFrameOffset);
     }
 
     // Offset the pointers to the correct offset frame.
-    destinationL += destinationFrameOffset;
-    if (destinationR)
-        destinationR += destinationFrameOffset;
+    unsigned writeIndex = destinationFrameOffset;
 
     size_t bufferLength = buffer()->length();
     double bufferSampleRate = buffer()->sampleRate();
 
     // Calculate the start and end frames in our buffer that we want to play.
     // If m_isGrain is true, then we will be playing a portion of the total buffer.
-    unsigned startFrame = m_isGrain ? static_cast<unsigned>(m_grainOffset * bufferSampleRate) : 0;
-    unsigned endFrame = m_isGrain ? static_cast<unsigned>(startFrame + m_grainDuration * bufferSampleRate) : bufferLength;
+    unsigned startFrame = m_isGrain ? AudioUtilities::timeToSampleFrame(m_grainOffset, bufferSampleRate) : 0;
+
+    // Avoid converting from time to sample-frames twice by computing
+    // the grain end time first before computing the sample frame.
+    unsigned endFrame = m_isGrain ? AudioUtilities::timeToSampleFrame(m_grainOffset + m_grainDuration, bufferSampleRate) : bufferLength;
     
     ASSERT(endFrame >= startFrame);
     if (endFrame < startFrame)
@@ -237,78 +252,88 @@ void AudioBufferSourceNode::renderFromBuffer(AudioBus* bus, unsigned destination
     if (m_virtualReadIndex >= endFrame)
         m_virtualReadIndex = startFrame; // reset to start
 
-    // Get pointers to the start of the sample buffer.
-    float* sourceL = m_buffer->getChannelData(0)->data();
-    float* sourceR = m_buffer->numberOfChannels() == 2 ? m_buffer->getChannelData(1)->data() : 0;
-    
     double pitchRate = totalPitchRate();
 
     // Get local copy.
     double virtualReadIndex = m_virtualReadIndex;
 
     // Render loop - reading from the source buffer to the destination using linear interpolation.
-    // FIXME: optimize for the very common case of playing back with pitchRate == 1.
-    // We can avoid the linear interpolation.
     int framesToProcess = numberOfFrames;
-    while (framesToProcess--) {
+
+    const float** sourceChannels = m_sourceChannels.get();
+    float** destinationChannels = m_destinationChannels.get();
+
+    // Optimize for the very common case of playing back with pitchRate == 1.
+    // We can avoid the linear interpolation.
+    if (pitchRate == 1 && virtualReadIndex == floor(virtualReadIndex)) {
         unsigned readIndex = static_cast<unsigned>(virtualReadIndex);
-        double interpolationFactor = virtualReadIndex - readIndex;
-        
-        // For linear interpolation we need the next sample-frame too.
-        unsigned readIndex2 = readIndex + 1;
-        if (readIndex2 >= endFrame) {
-            if (loop()) {
-                // Make sure to wrap around at the end of the buffer.
-                readIndex2 -= deltaFrames;
-            } else
-                readIndex2 = readIndex;
-        }
+        while (framesToProcess > 0) {
+            int framesToEnd = endFrame - readIndex;
+            int framesThisTime = min(framesToProcess, framesToEnd);
+            framesThisTime = max(0, framesThisTime);
 
-        // Final sanity check on buffer access.
-        // FIXME: as an optimization, try to get rid of this inner-loop check and put assertions and guards before the loop.
-        if (readIndex >= bufferLength || readIndex2 >= bufferLength)
-            break;
+            for (unsigned i = 0; i < numberOfChannels; ++i) 
+                memcpy(destinationChannels[i] + writeIndex, sourceChannels[i] + readIndex, sizeof(float) * framesThisTime);
 
-        // Linear interpolation.
-        double sampleL1 = sourceL[readIndex];
-        double sampleL2 = sourceL[readIndex2];
-        double sampleL = (1.0 - interpolationFactor) * sampleL1 + interpolationFactor * sampleL2;
-        *destinationL++ = narrowPrecisionToFloat(sampleL);
+            writeIndex += framesThisTime;
+            readIndex += framesThisTime;
+            framesToProcess -= framesThisTime;
 
-        if (isStereo) {
-            double sampleR1 = sourceR[readIndex];
-            double sampleR2 = sourceR[readIndex2];
-            double sampleR = (1.0 - interpolationFactor) * sampleR1 + interpolationFactor * sampleR2;
-            *destinationR++ = narrowPrecisionToFloat(sampleR);
-        }
-
-        virtualReadIndex += pitchRate;
-
-        // Wrap-around, retaining sub-sample position since virtualReadIndex is floating-point.
-        if (virtualReadIndex >= endFrame) {
-            virtualReadIndex -= deltaFrames;
-
-            if (!loop()) {
-                // If we're not looping, then stop playing when we get to the end.
-                m_isPlaying = false;
-
-                if (framesToProcess > 0) {
-                    // We're not looping and we've reached the end of the sample data, but we still need to provide more output,
-                    // so generate silence for the remaining.
-                    memset(destinationL, 0, sizeof(float) * framesToProcess);
-
-                    if (isStereo)
-                        memset(destinationR, 0, sizeof(float) * framesToProcess);
-                }
-
-                finish();
-                break;
+            // Wrap-around.
+            if (readIndex >= endFrame) {
+                readIndex -= deltaFrames;
+                if (renderSilenceAndFinishIfNotLooping(bus, writeIndex, framesToProcess))
+                    break;
             }
         }
-    }
-    
+        virtualReadIndex = readIndex;
+    } else {
+        while (framesToProcess--) {
+            unsigned readIndex = static_cast<unsigned>(virtualReadIndex);
+            double interpolationFactor = virtualReadIndex - readIndex;
+
+            // For linear interpolation we need the next sample-frame too.
+            unsigned readIndex2 = readIndex + 1;
+            if (readIndex2 >= endFrame) {
+                if (loop()) {
+                    // Make sure to wrap around at the end of the buffer.
+                    readIndex2 -= deltaFrames;
+                } else
+                    readIndex2 = readIndex;
+            }
+
+            // Final sanity check on buffer access.
+            // FIXME: as an optimization, try to get rid of this inner-loop check and put assertions and guards before the loop.
+            if (readIndex >= bufferLength || readIndex2 >= bufferLength)
+                break;
+
+            // Linear interpolation.
+            for (unsigned i = 0; i < numberOfChannels; ++i) {
+                float* destination = destinationChannels[i];
+                const float* source = sourceChannels[i];
+
+                double sample1 = source[readIndex];
+                double sample2 = source[readIndex2];
+                double sample = (1.0 - interpolationFactor) * sample1 + interpolationFactor * sample2;
+
+                destination[writeIndex] = narrowPrecisionToFloat(sample);
+            }
+            writeIndex++;
+
+            virtualReadIndex += pitchRate;
+
+            // Wrap-around, retaining sub-sample position since virtualReadIndex is floating-point.
+            if (virtualReadIndex >= endFrame) {
+                virtualReadIndex -= deltaFrames;
+
+                if (renderSilenceAndFinishIfNotLooping(bus, writeIndex, framesToProcess))
+                    break;
+            }
+        }
+    } 
     m_virtualReadIndex = virtualReadIndex;
 }
+
 
 void AudioBufferSourceNode::reset()
 {
@@ -338,11 +363,13 @@ bool AudioBufferSourceNode::setBuffer(AudioBuffer* buffer)
     if (buffer) {
         // Do any necesssary re-configuration to the buffer's number of channels.
         unsigned numberOfChannels = buffer->numberOfChannels();
-        if (!numberOfChannels || numberOfChannels > 2) {
-            // FIXME: implement multi-channel greater than stereo.
-            return false;
-        }
         output(0)->setNumberOfChannels(numberOfChannels);
+
+        m_sourceChannels = adoptArrayPtr(new const float* [numberOfChannels]);
+        m_destinationChannels = adoptArrayPtr(new float* [numberOfChannels]);
+
+        for (unsigned i = 0; i < numberOfChannels; ++i) 
+            m_sourceChannels[i] = buffer->getChannelData(i)->data();
     }
 
     m_virtualReadIndex = 0;
@@ -395,11 +422,11 @@ void AudioBufferSourceNode::noteGrainOn(double when, double grainOffset, double 
     m_isGrain = true;
     m_startTime = when;
 
-    // We call floor() here since at playbackRate == 1 we don't want to go through linear interpolation
+    // We call timeToSampleFrame here since at playbackRate == 1 we don't want to go through linear interpolation
     // at a sub-sample position since it will degrade the quality.
     // When aligned to the sample-frame the playback will be identical to the PCM data stored in the buffer.
     // Since playbackRate == 1 is very common, it's worth considering quality.
-    m_virtualReadIndex = floor(m_grainOffset * buffer()->sampleRate());
+    m_virtualReadIndex = AudioUtilities::timeToSampleFrame(m_grainOffset, buffer()->sampleRate());
     
     m_isPlaying = true;
 }

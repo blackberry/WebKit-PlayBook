@@ -30,7 +30,6 @@
 """Factory method to retrieve the appropriate port implementation."""
 
 import re
-import sys
 
 from webkitpy.layout_tests.port import builders
 
@@ -42,89 +41,65 @@ class BuilderOptions(object):
 
 
 class PortFactory(object):
-    def __init__(self, host=None):
+    PORT_CLASSES = (
+        'chromium_android.ChromiumAndroidPort',
+        'chromium_gpu.ChromiumGpuAndroidPort',
+        'chromium_gpu.ChromiumGpuLinuxPort',
+        'chromium_gpu.ChromiumGpuMacPort',
+        'chromium_gpu.ChromiumGpuWinPort',
+        'chromium_linux.ChromiumLinuxPort',
+        'chromium_mac.ChromiumMacPort',
+        'chromium_win.ChromiumWinPort',
+        'efl.EflPort',
+        'google_chrome.GoogleChromeLinux32Port',
+        'google_chrome.GoogleChromeLinux64Port',
+        'google_chrome.GoogleChromeMacPort',
+        'google_chrome.GoogleChromeWinPort',
+        'gtk.GtkPort',
+        'mac.MacPort',
+        'mock_drt.MockDRTPort',
+        'qt.QtPort',
+        'test.TestPort',
+        'win.WinPort',
+    )
+
+    def __init__(self, host):
         self._host = host
 
-    def _port_name_from_arguments_and_options(self, **kwargs):
-        port_to_use = kwargs.get('port_name', None)
-        options = kwargs.get('options', None)
-        if port_to_use is None:
-            if sys.platform == 'win32' or sys.platform == 'cygwin':
-                if options and hasattr(options, 'chromium') and options.chromium:
-                    port_to_use = 'chromium-win'
-                else:
-                    port_to_use = 'win'
-            elif sys.platform.startswith('linux'):
-                port_to_use = 'chromium-linux'
-            elif sys.platform == 'darwin':
-                if options and hasattr(options, 'chromium') and options.chromium:
-                    port_to_use = 'chromium-cg-mac'
-                    # FIXME: Add a way to select the chromium-mac port.
-                else:
-                    port_to_use = 'mac'
+    def _default_port(self, options):
+        platform = self._host.platform
+        if platform.is_linux():
+            return 'chromium-linux'
+        elif platform.is_mac():
+            return 'mac'
+        elif platform.is_win():
+            return 'win'
+        raise NotImplementedError('unknown platform: %s' % platform)
 
-        if port_to_use is None:
-            raise NotImplementedError('unknown port; sys.platform = "%s"' % sys.platform)
-        return port_to_use
+    def get(self, port_name=None, options=None, **kwargs):
+        """Returns an object implementing the Port interface. If
+        port_name is None, this routine attempts to guess at the most
+        appropriate port on this platform."""
+        port_name = port_name or self._default_port(options)
 
-    def _set_default_overriding_none(self, dictionary, key, default):
-        # dict.setdefault almost works, but won't actually override None values, which we want.
-        if not dictionary.get(key):
-            dictionary[key] = default
-        return dictionary[key]
+        # FIXME(dpranke): We special-case '--platform chromium' so that it can co-exist
+        # with '--platform chromium-mac' and '--platform chromium-linux' properly (we
+        # can't look at the port_name prefix in this case).
+        if port_name == 'chromium':
+            port_name = 'chromium-' + self._host.platform.os_name
 
-    def _get_kwargs(self, host=None, **kwargs):
-        port_to_use = self._port_name_from_arguments_and_options(**kwargs)
+        # FIXME: Remove this when we remove the chromium-gpu ports.
+        if port_name == 'chromium-gpu':
+            port_name = port_name + '-' + self._host.platform.os_name
 
-        if port_to_use.startswith('test'):
-            import test
-            maker = test.TestPort
-            # FIXME: This is a hack to override the "default" filesystem
-            # provided to the port.  The unit_test_filesystem has an extra
-            # _tests attribute which a bunch of unittests depend on.
-            from .test import unit_test_filesystem
-            self._set_default_overriding_none(kwargs, 'filesystem', unit_test_filesystem())
-        elif port_to_use.startswith('dryrun'):
-            import dryrun
-            maker = dryrun.DryRunPort
-        elif port_to_use.startswith('mock-'):
-            import mock_drt
-            maker = mock_drt.MockDRTPort
-        elif port_to_use.startswith('mac'):
-            import mac
-            maker = mac.MacPort
-        elif port_to_use.startswith('win'):
-            import win
-            maker = win.WinPort
-        elif port_to_use.startswith('gtk'):
-            import gtk
-            maker = gtk.GtkPort
-        elif port_to_use.startswith('qt'):
-            import qt
-            maker = qt.QtPort
-        elif port_to_use.startswith('chromium-gpu'):
-            import chromium_gpu
-            maker = chromium_gpu.get
-        elif port_to_use.startswith('chromium-mac') or port_to_use.startswith('chromium-cg-mac'):
-            import chromium_mac
-            maker = chromium_mac.ChromiumMacPort
-        elif port_to_use.startswith('chromium-linux'):
-            import chromium_linux
-            maker = chromium_linux.ChromiumLinuxPort
-        elif port_to_use.startswith('chromium-win'):
-            import chromium_win
-            maker = chromium_win.ChromiumWinPort
-        elif port_to_use.startswith('google-chrome'):
-            import google_chrome
-            maker = google_chrome.GetGoogleChromePort
-        elif port_to_use.startswith('efl'):
-            import efl
-            maker = efl.EflPort
-        else:
-            raise NotImplementedError('unsupported port: %s' % port_to_use)
-
-        host = host or self._host
-        return maker(host, **kwargs)
+        for port_class in self.PORT_CLASSES:
+            module_name, class_name = port_class.rsplit('.', 1)
+            module = __import__(module_name, globals(), locals(), [], -1)
+            cls = module.__dict__[class_name]
+            if port_name.startswith(cls.port_name):
+                port_name = cls.determine_full_port_name(self._host, options, port_name)
+                return cls(self._host, port_name, options=options, **kwargs)
+        raise NotImplementedError('unsupported port: %s' % port_name)
 
     def all_port_names(self):
         """Return a list of all valid, fully-specified, "real" port names.
@@ -134,17 +109,6 @@ class PortFactory(object):
         or "mock-mac", and it does not include any directories that are not ."""
         # FIXME: There's probably a better way to generate this list ...
         return builders.all_port_names()
-
-    def get(self, port_name=None, options=None, **kwargs):
-        """Returns an object implementing the Port interface. If
-        port_name is None, this routine attempts to guess at the most
-        appropriate port on this platform."""
-        # Wrapped for backwards-compatibility
-        if port_name:
-            kwargs['port_name'] = port_name
-        if options:
-            kwargs['options'] = options
-        return self._get_kwargs(**kwargs)
 
     def get_from_builder_name(self, builder_name):
         port_name = builders.port_name_for_builder_name(builder_name)

@@ -19,7 +19,7 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/DateExtension.cpp
     bindings/v8/IDBBindingUtilities.cpp
     bindings/v8/IsolatedWorld.cpp
-    bindings/v8/OptionsObject.cpp
+    bindings/v8/Dictionary.cpp
     bindings/v8/PageScriptDebugServer.cpp
     bindings/v8/RetainedDOMInfo.cpp
     bindings/v8/ScheduledAction.cpp
@@ -53,6 +53,7 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/V8LazyEventListener.cpp
     bindings/v8/V8NodeFilterCondition.cpp
     bindings/v8/V8Proxy.cpp
+    bindings/v8/V8RecursionScope.cpp
     bindings/v8/V8Utilities.cpp
     bindings/v8/V8WindowErrorHandler.cpp
     bindings/v8/V8WorkerContextErrorHandler.cpp
@@ -66,7 +67,6 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/custom/V8ArrayBufferCustom.cpp
     bindings/v8/custom/V8ArrayBufferViewCustom.cpp
     bindings/v8/custom/V8AudioContextCustom.cpp
-    bindings/v8/custom/V8AudioNodeCustom.cpp
     bindings/v8/custom/V8CSSRuleCustom.cpp
     bindings/v8/custom/V8CSSStyleDeclarationCustom.cpp
     bindings/v8/custom/V8CSSStyleSheetCustom.cpp
@@ -80,7 +80,6 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/custom/V8CustomVoidCallback.cpp
     bindings/v8/custom/V8CustomXPathNSResolver.cpp
     bindings/v8/custom/V8DOMFormDataCustom.cpp
-    bindings/v8/custom/V8DOMSettableTokenListCustom.cpp
     bindings/v8/custom/V8DOMStringMapCustom.cpp
     bindings/v8/custom/V8DOMTokenListCustom.cpp
     bindings/v8/custom/V8DOMWindowCustom.cpp
@@ -130,9 +129,9 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/custom/V8MessageChannelConstructor.cpp
     bindings/v8/custom/V8MessageEventCustom.cpp
     bindings/v8/custom/V8MessagePortCustom.cpp
+    bindings/v8/custom/V8MutationCallbackCustom.cpp
     bindings/v8/custom/V8NamedNodeMapCustom.cpp
     bindings/v8/custom/V8NamedNodesCollection.cpp
-    bindings/v8/custom/V8NavigatorCustom.cpp
     bindings/v8/custom/V8NodeCustom.cpp
     bindings/v8/custom/V8NodeListCustom.cpp
     bindings/v8/custom/V8NotificationCenterCustom.cpp
@@ -149,6 +148,7 @@ LIST(APPEND WebCore_SOURCES
     bindings/v8/custom/V8Uint8ArrayCustom.cpp
     bindings/v8/custom/V8WebGLRenderingContextCustom.cpp
     bindings/v8/custom/V8WebKitAnimationCustom.cpp
+    bindings/v8/custom/V8WebKitMutationObserverCustom.cpp
     bindings/v8/custom/V8WebKitPointConstructor.cpp
     bindings/v8/custom/V8WebSocketCustom.cpp
     bindings/v8/custom/V8WorkerContextCustom.cpp
@@ -246,13 +246,24 @@ ADD_CUSTOM_COMMAND(
 LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/V8ArrayBufferViewCustomScript.h)
 
 # Create JavaScript C++ code given an IDL input
+FOREACH (_idl ${WebCore_IDL_FILES})
+    SET(IDL_FILES_LIST "${IDL_FILES_LIST}${WEBCORE_DIR}/${_idl}\n")
+ENDFOREACH ()
+FILE(WRITE ${IDL_FILES_TMP} ${IDL_FILES_LIST})
+
+ADD_CUSTOM_COMMAND(
+    OUTPUT ${SUPPLEMENTAL_DEPENDENCY_FILE}
+    DEPENDS ${WEBCORE_DIR}/bindings/scripts/preprocess-idls.pl ${SCRIPTS_PREPROCESS_IDLS} ${WebCore_IDL_FILES} ${IDL_ATTRIBUTES_FILE}
+    COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${WEBCORE_DIR}/bindings/scripts/preprocess-idls.pl --defines "${FEATURE_DEFINES_JAVASCRIPT}" --idlFilesList ${IDL_FILES_TMP} --preprocessor "${CODE_GENERATOR_PREPROCESSOR}" --supplementalDependencyFile ${SUPPLEMENTAL_DEPENDENCY_FILE} --idlAttributesFile ${IDL_ATTRIBUTES_FILE}
+    VERBATIM)
+
 FOREACH (_file ${WebCore_IDL_FILES})
     GET_FILENAME_COMPONENT (_name ${_file} NAME_WE)
     ADD_CUSTOM_COMMAND(
         OUTPUT  ${DERIVED_SOURCES_WEBCORE_DIR}/V8${_name}.cpp ${DERIVED_SOURCES_WEBCORE_DIR}/V8${_name}.h
         MAIN_DEPENDENCY ${_file}
-        DEPENDS ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/bindings/scripts/CodeGeneratorV8.pm ${_file}
-        COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl --defines "${FEATURE_DEFINES_JAVASCRIPT}" --generator V8 ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_WEBCORE_DIR}" --preprocessor "${CODE_GENERATOR_PREPROCESSOR}" ${WEBCORE_DIR}/${_file}
+        DEPENDS ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl ${SCRIPTS_BINDINGS} ${WEBCORE_DIR}/bindings/scripts/CodeGeneratorV8.pm ${SUPPLEMENTAL_DEPENDENCY_FILE}
+        COMMAND ${PERL_EXECUTABLE} -I${WEBCORE_DIR}/bindings/scripts ${WEBCORE_DIR}/bindings/scripts/generate-bindings.pl --defines "${FEATURE_DEFINES_JAVASCRIPT}" --generator V8 ${IDL_INCLUDES} --outputDir "${DERIVED_SOURCES_WEBCORE_DIR}" --preprocessor "${CODE_GENERATOR_PREPROCESSOR}" --supplementalDependencyFile ${SUPPLEMENTAL_DEPENDENCY_FILE} ${WEBCORE_DIR}/${_file}
         VERBATIM)
     LIST(APPEND WebCore_SOURCES ${DERIVED_SOURCES_WEBCORE_DIR}/V8${_name}.cpp)
 ENDFOREACH ()

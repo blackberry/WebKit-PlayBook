@@ -56,9 +56,13 @@ DisplayRefreshMonitor::DisplayRefreshMonitor(PlatformDisplayID displayID)
     : m_timestamp(0)
     , m_active(true)
     , m_scheduled(false)
+    , m_previousFrameDone(true)
     , m_displayID(displayID)
 #if PLATFORM(MAC)
     , m_displayLink(0)
+#endif
+#if PLATFORM(BLACKBERRY)
+    , m_animationClient(0)
 #endif
 {
 }
@@ -66,18 +70,27 @@ DisplayRefreshMonitor::DisplayRefreshMonitor(PlatformDisplayID displayID)
 void DisplayRefreshMonitor::refreshDisplayOnMainThread(void* data)
 {
     DisplayRefreshMonitor* monitor = static_cast<DisplayRefreshMonitor*>(data);
+    monitor->notifyClients();
+}
 
+void DisplayRefreshMonitor::notifyClients()
+{
     double timestamp;
     {
-        MutexLocker lock(monitor->m_mutex);
-        monitor->m_scheduled = false;
-        timestamp = monitor->m_timestamp;
+        MutexLocker lock(m_mutex);
+        m_scheduled = false;
+        timestamp = m_timestamp;
     }
 
-    for (size_t i = 0; i < monitor->m_clients.size(); ++i)
-        monitor->m_clients[i]->fireDisplayRefreshIfNeeded(timestamp);
+    for (size_t i = 0; i < m_clients.size(); ++i)
+        m_clients[i]->fireDisplayRefreshIfNeeded(timestamp);
+
+    {
+        MutexLocker lock(m_mutex);
+        m_previousFrameDone = true;
+    }
 }
- 
+
 DisplayRefreshMonitorManager* DisplayRefreshMonitorManager::sharedManager()
 {
     DEFINE_STATIC_LOCAL(DisplayRefreshMonitorManager, manager, ());

@@ -60,11 +60,21 @@ PlatformMouseEventBuilder::PlatformMouseEventBuilder(Widget* widget, const WebMo
     // to get rid of this once we abstract popups into a WebKit API.
     m_position = widget->convertFromContainingWindow(IntPoint(e.x, e.y));
     m_globalPosition = IntPoint(e.globalX, e.globalY);
+#if ENABLE(POINTER_LOCK)
+    m_movementDelta = IntPoint(e.movementX, e.movementY);
+#endif
     m_button = static_cast<MouseButton>(e.button);
-    m_shiftKey = (e.modifiers & WebInputEvent::ShiftKey);
-    m_ctrlKey = (e.modifiers & WebInputEvent::ControlKey);
-    m_altKey = (e.modifiers & WebInputEvent::AltKey);
-    m_metaKey = (e.modifiers & WebInputEvent::MetaKey);
+
+    m_modifiers = 0;
+    if (e.modifiers & WebInputEvent::ShiftKey)
+        m_modifiers |= PlatformEvent::ShiftKey;
+    if (e.modifiers & WebInputEvent::ControlKey)
+        m_modifiers |= PlatformEvent::CtrlKey;
+    if (e.modifiers & WebInputEvent::AltKey)
+        m_modifiers |= PlatformEvent::AltKey;
+    if (e.modifiers & WebInputEvent::MetaKey)
+        m_modifiers |= PlatformEvent::MetaKey;
+
     m_modifierFlags = e.modifiers;
     m_timestamp = e.timeStampSeconds;
     m_clickCount = e.clickCount;
@@ -72,15 +82,15 @@ PlatformMouseEventBuilder::PlatformMouseEventBuilder(Widget* widget, const WebMo
     switch (e.type) {
     case WebInputEvent::MouseMove:
     case WebInputEvent::MouseLeave:  // synthesize a move event
-        m_eventType = MouseEventMoved;
+        m_type = PlatformEvent::MouseMoved;
         break;
 
     case WebInputEvent::MouseDown:
-        m_eventType = MouseEventPressed;
+        m_type = PlatformEvent::MousePressed;
         break;
 
     case WebInputEvent::MouseUp:
-        m_eventType = MouseEventReleased;
+        m_type = PlatformEvent::MouseReleased;
         break;
 
     default:
@@ -100,10 +110,19 @@ PlatformWheelEventBuilder::PlatformWheelEventBuilder(Widget* widget, const WebMo
     m_wheelTicksY = e.wheelTicksY;
     m_granularity = e.scrollByPage ?
         ScrollByPageWheelEvent : ScrollByPixelWheelEvent;
-    m_shiftKey = (e.modifiers & WebInputEvent::ShiftKey);
-    m_ctrlKey = (e.modifiers & WebInputEvent::ControlKey);
-    m_altKey = (e.modifiers & WebInputEvent::AltKey);
-    m_metaKey = (e.modifiers & WebInputEvent::MetaKey);
+    
+    m_type = PlatformEvent::Wheel;
+
+    m_modifiers = 0;
+    if (e.modifiers & WebInputEvent::ShiftKey)
+        m_modifiers |= PlatformEvent::ShiftKey;
+    if (e.modifiers & WebInputEvent::ControlKey)
+        m_modifiers |= PlatformEvent::CtrlKey;
+    if (e.modifiers & WebInputEvent::AltKey)
+        m_modifiers |= PlatformEvent::AltKey;
+    if (e.modifiers & WebInputEvent::MetaKey)
+        m_modifiers |= PlatformEvent::MetaKey;
+
 #if OS(DARWIN)
     m_hasPreciseScrollingDeltas = e.hasPreciseScrollingDeltas;
     m_phase = static_cast<WebCore::PlatformWheelEventPhase>(e.phase);
@@ -119,17 +138,28 @@ PlatformGestureEventBuilder::PlatformGestureEventBuilder(Widget* widget, const W
 {
     switch (e.type) {
     case WebInputEvent::GestureScrollBegin:
-        m_type = PlatformGestureEvent::ScrollBeginType;
+        m_type = PlatformEvent::GestureScrollBegin;
         break;
     case WebInputEvent::GestureScrollEnd:
-        m_type = PlatformGestureEvent::ScrollEndType;
+        m_type = PlatformEvent::GestureScrollEnd;
         break;
     case WebInputEvent::GestureScrollUpdate:
-        m_type = PlatformGestureEvent::ScrollUpdateType;
+        m_type = PlatformEvent::GestureScrollUpdate;
         break;
     case WebInputEvent::GestureTap:
-        m_type = PlatformGestureEvent::TapType;
+        m_type = PlatformEvent::GestureTap;
         break;
+    case WebInputEvent::GestureTapDown:
+        m_type = PlatformEvent::GestureTapDown;
+        break;
+    case WebInputEvent::GestureDoubleTap:
+        m_type = PlatformEvent::GestureDoubleTap;
+        break;
+    case WebInputEvent::GesturePinchBegin:
+    case WebInputEvent::GesturePinchEnd:
+    case WebInputEvent::GesturePinchUpdate:
+        // FIXME: Once PlatformGestureEvent is updated to support pinch, this should set m_type to appropriate PlatformEvent type.
+        ASSERT_NOT_REACHED();
     default:
         ASSERT_NOT_REACHED();
     }
@@ -138,30 +168,36 @@ PlatformGestureEventBuilder::PlatformGestureEventBuilder(Widget* widget, const W
     m_deltaX = e.deltaX;
     m_deltaY = e.deltaY;
     m_timestamp = e.timeStampSeconds;
-    m_shiftKey = (e.modifiers & WebInputEvent::ShiftKey);
-    m_ctrlKey = (e.modifiers & WebInputEvent::ControlKey);
-    m_altKey = (e.modifiers & WebInputEvent::AltKey);
-    m_metaKey = (e.modifiers & WebInputEvent::MetaKey);
+
+    m_modifiers = 0;
+    if (e.modifiers & WebInputEvent::ShiftKey)
+        m_modifiers |= PlatformEvent::ShiftKey;
+    if (e.modifiers & WebInputEvent::ControlKey)
+        m_modifiers |= PlatformEvent::CtrlKey;
+    if (e.modifiers & WebInputEvent::AltKey)
+        m_modifiers |= PlatformEvent::AltKey;
+    if (e.modifiers & WebInputEvent::MetaKey)
+        m_modifiers |= PlatformEvent::MetaKey;
 }
 #endif
 
 // MakePlatformKeyboardEvent --------------------------------------------------
 
-static inline PlatformKeyboardEvent::Type toPlatformKeyboardEventType(WebInputEvent::Type type)
+static inline PlatformEvent::Type toPlatformKeyboardEventType(WebInputEvent::Type type)
 {
     switch (type) {
     case WebInputEvent::KeyUp:
-        return PlatformKeyboardEvent::KeyUp;
+        return PlatformEvent::KeyUp;
     case WebInputEvent::KeyDown:
-        return PlatformKeyboardEvent::KeyDown;
+        return PlatformEvent::KeyDown;
     case WebInputEvent::RawKeyDown:
-        return PlatformKeyboardEvent::RawKeyDown;
+        return PlatformEvent::RawKeyDown;
     case WebInputEvent::Char:
-        return PlatformKeyboardEvent::Char;
+        return PlatformEvent::Char;
     default:
         ASSERT_NOT_REACHED();
     }
-    return PlatformKeyboardEvent::KeyDown;
+    return PlatformEvent::KeyDown;
 }
 
 PlatformKeyboardEventBuilder::PlatformKeyboardEventBuilder(const WebKeyboardEvent& e)
@@ -174,11 +210,17 @@ PlatformKeyboardEventBuilder::PlatformKeyboardEventBuilder(const WebKeyboardEven
     m_windowsVirtualKeyCode = e.windowsKeyCode;
     m_nativeVirtualKeyCode = e.nativeKeyCode;
     m_isKeypad = (e.modifiers & WebInputEvent::IsKeyPad);
-    m_shiftKey = (e.modifiers & WebInputEvent::ShiftKey);
-    m_ctrlKey = (e.modifiers & WebInputEvent::ControlKey);
-    m_altKey = (e.modifiers & WebInputEvent::AltKey);
-    m_metaKey = (e.modifiers & WebInputEvent::MetaKey);
     m_isSystemKey = e.isSystemKey;
+
+    m_modifiers = 0;
+    if (e.modifiers & WebInputEvent::ShiftKey)
+        m_modifiers |= PlatformEvent::ShiftKey;
+    if (e.modifiers & WebInputEvent::ControlKey)
+        m_modifiers |= PlatformEvent::CtrlKey;
+    if (e.modifiers & WebInputEvent::AltKey)
+        m_modifiers |= PlatformEvent::AltKey;
+    if (e.modifiers & WebInputEvent::MetaKey)
+        m_modifiers |= PlatformEvent::MetaKey;
 }
 
 void PlatformKeyboardEventBuilder::setKeyType(Type type)
@@ -213,21 +255,21 @@ bool PlatformKeyboardEventBuilder::isCharacterKey() const
 }
 
 #if ENABLE(TOUCH_EVENTS)
-static inline TouchEventType toPlatformTouchEventType(const WebInputEvent::Type type)
+static inline PlatformEvent::Type toPlatformTouchEventType(const WebInputEvent::Type type)
 {
     switch (type) {
     case WebInputEvent::TouchStart:
-        return TouchStart;
+        return PlatformEvent::TouchStart;
     case WebInputEvent::TouchMove:
-        return TouchMove;
+        return PlatformEvent::TouchMove;
     case WebInputEvent::TouchEnd:
-        return TouchEnd;
+        return PlatformEvent::TouchEnd;
     case WebInputEvent::TouchCancel:
-        return TouchCancel;
+        return PlatformEvent::TouchCancel;
     default:
         ASSERT_NOT_REACHED();
     }
-    return TouchStart;
+    return PlatformEvent::TouchStart;
 }
 
 static inline PlatformTouchPoint::State toPlatformTouchPointState(const WebTouchPoint::State state)
@@ -264,10 +306,17 @@ PlatformTouchPointBuilder::PlatformTouchPointBuilder(Widget* widget, const WebTo
 PlatformTouchEventBuilder::PlatformTouchEventBuilder(Widget* widget, const WebTouchEvent& event)
 {
     m_type = toPlatformTouchEventType(event.type);
-    m_ctrlKey = event.modifiers & WebInputEvent::ControlKey;
-    m_altKey = event.modifiers & WebInputEvent::AltKey;
-    m_shiftKey = event.modifiers & WebInputEvent::ShiftKey;
-    m_metaKey = event.modifiers & WebInputEvent::MetaKey;
+
+    m_modifiers = 0;
+    if (event.modifiers & WebInputEvent::ShiftKey)
+        m_modifiers |= PlatformEvent::ShiftKey;
+    if (event.modifiers & WebInputEvent::ControlKey)
+        m_modifiers |= PlatformEvent::CtrlKey;
+    if (event.modifiers & WebInputEvent::AltKey)
+        m_modifiers |= PlatformEvent::AltKey;
+    if (event.modifiers & WebInputEvent::MetaKey)
+        m_modifiers |= PlatformEvent::MetaKey;
+
     m_timestamp = event.timeStampSeconds;
 
     for (unsigned i = 0; i < event.touchesLength; ++i)
@@ -340,6 +389,10 @@ WebMouseEventBuilder::WebMouseEventBuilder(const Widget* widget, const MouseEven
     windowY = p.y();
     x = event.absoluteLocation().x() - widget->location().x();
     y = event.absoluteLocation().y() - widget->location().y();
+#if ENABLE(POINTER_LOCK)
+    movementX = event.webkitMovementX();
+    movementY = event.webkitMovementY();
+#endif
     clickCount = event.detail();
 }
 

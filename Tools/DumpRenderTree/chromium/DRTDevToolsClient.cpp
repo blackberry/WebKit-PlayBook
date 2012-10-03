@@ -64,21 +64,10 @@ void DRTDevToolsClient::reset()
     m_taskList.revokeAll();
 }
 
-void DRTDevToolsClient::sendFrontendLoaded()
-{
-    if (m_drtDevToolsAgent)
-        m_drtDevToolsAgent->frontendLoaded();
-}
-
 void DRTDevToolsClient::sendMessageToBackend(const WebString& data)
 {
     if (m_drtDevToolsAgent)
         m_drtDevToolsAgent->asyncCall(data);
-}
-
-void DRTDevToolsClient::sendDebuggerCommandToAgent(const WebString& command)
-{
-    WebDevToolsAgent::executeDebuggerCommand(command, 1);
 }
 
 void DRTDevToolsClient::activateWindow()

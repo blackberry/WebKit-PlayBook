@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2008, 2009 Julien Chaffraix <julien.chaffraix@gmail.com>
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -27,6 +28,7 @@
 #define ParsedCookie_h
 
 #include "Cookie.h"
+#include <wtf/FastAllocBase.h>
 
 namespace WTF {
 class String;
@@ -39,12 +41,13 @@ class KURL;
 // It can either be created by the CookieParser which will then fill it
 // or it can be created by the backing store filling it in the constructor.
 class ParsedCookie {
+WTF_MAKE_FAST_ALLOCATED;
 public:
     // Default cookie : empty domain, non secure and session
     ParsedCookie(double currentTime);
 
     // For backing store cookies (those cookies are never session cookies).
-    ParsedCookie(const String& /*name*/, const String& /*value*/, const String& /*domain*/,const String& /*protocol*/, const String& /*path*/, double /*expiry*/, double /*lastAccessed*/, double /*creationTime*/, bool /*isSecure*/, bool /*isHttpOnly*/);
+    ParsedCookie(const String& name, const String& value, const String& domain, const String& protocol, const String& path, double expiry, double lastAccessed, double creationTime, bool isSecure, bool isHttpOnly);
 
     ParsedCookie(const ParsedCookie*);
 
@@ -103,8 +106,6 @@ private:
     String m_protocol;
     String m_path;
     double m_expiry;
-    bool m_isMaxAgeSet;
-
     double m_creationTime;
     // This is used for the LRU replacement policy.
     double m_lastAccessed;

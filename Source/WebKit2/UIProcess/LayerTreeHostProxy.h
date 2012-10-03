@@ -20,33 +20,31 @@
 #ifndef LayerTreeHostProxy_h
 #define LayerTreeHostProxy_h
 
+#if USE(UI_SIDE_COMPOSITING)
+
 #include "BackingStore.h"
 #include "DrawingAreaProxy.h"
-#include "MessageQueue.h"
 #include "Region.h"
-#include "RunLoop.h"
+#include "TextureMapper.h"
+#include "TextureMapperBackingStore.h"
 #include "WebLayerTreeInfo.h"
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/GraphicsLayer.h>
 #include <WebCore/IntRect.h>
 #include <WebCore/IntSize.h>
+#include <WebCore/RunLoop.h>
+#include <WebCore/Timer.h>
+#include <wtf/Functional.h>
 #include <wtf/HashSet.h>
 
-#if USE(TEXTURE_MAPPER)
-#include "TextureMapper.h"
-#include "TextureMapperNode.h"
-#endif
 
 namespace WebKit {
 
+class LayerBackingStore;
 class WebLayerInfo;
 class WebLayerUpdateInfo;
 
-using namespace WebCore;
-
-class LayerTreeMessageToRenderer;
-
-class LayerTreeHostProxy : public GraphicsLayerClient {
+class LayerTreeHostProxy : public WebCore::GraphicsLayerClient {
 public:
     LayerTreeHostProxy(DrawingAreaProxy*);
     virtual ~LayerTreeHostProxy();
@@ -54,10 +52,11 @@ public:
     void deleteCompositingLayer(WebLayerID);
     void setRootCompositingLayer(WebLayerID);
     void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
-    void paintToCurrentGLContext(const TransformationMatrix&, float);
-    void setVisibleContentsRectAndScale(const IntRect&, float);
-    void setVisibleContentRectTrajectoryVector(const FloatPoint&);
-#if USE(TILED_BACKING_STORE)
+    void paintToCurrentGLContext(const WebCore::TransformationMatrix&, float, const WebCore::FloatRect&);
+    void paintToGraphicsContext(BackingStore::PlatformGraphicsContext);
+    void purgeGLResources();
+    void setVisibleContentsRectForScaling(const WebCore::IntRect&, float);
+    void setVisibleContentsRectForPanning(const WebCore::IntRect&, const WebCore::FloatPoint&);
     void syncRemoteContent();
     void swapContentBuffers();
     void didRenderFrame();
@@ -67,43 +66,36 @@ public:
     void createDirectlyCompositedImage(int64_t, const WebKit::ShareableBitmap::Handle&);
     void destroyDirectlyCompositedImage(int64_t);
     void didReceiveLayerTreeHostProxyMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
-    void setVisibleContentsRectForLayer(WebLayerID, const IntRect&);
     void updateViewport();
-#endif
 
 protected:
-    PassOwnPtr<GraphicsLayer> createLayer(WebLayerID);
+    PassOwnPtr<WebCore::GraphicsLayer> createLayer(WebLayerID);
 
-    GraphicsLayer* layerByID(WebLayerID id) { return (id == InvalidWebLayerID) ? 0 : m_layers.get(id); }
-    GraphicsLayer* rootLayer() { return m_rootLayer.get(); }
+    WebCore::GraphicsLayer* layerByID(WebLayerID id) { return (id == InvalidWebLayerID) ? 0 : m_layers.get(id); }
+    WebCore::GraphicsLayer* rootLayer() { return m_rootLayer.get(); }
 
     // Reimplementations from WebCore::GraphicsLayerClient.
-    virtual void notifyAnimationStarted(const GraphicsLayer*, double) { }
-    virtual void notifySyncRequired(const GraphicsLayer*) { }
-    virtual bool showDebugBorders() const { return false; }
-    virtual bool showRepaintCounter() const { return false; }
+    virtual void notifyAnimationStarted(const WebCore::GraphicsLayer*, double) { }
+    virtual void notifySyncRequired(const WebCore::GraphicsLayer*) { }
+    virtual bool showDebugBorders(const WebCore::GraphicsLayer*) const { return false; }
+    virtual bool showRepaintCounter(const WebCore::GraphicsLayer*) const { return false; }
     void paintContents(const WebCore::GraphicsLayer*, WebCore::GraphicsContext&, WebCore::GraphicsLayerPaintingPhase, const WebCore::IntRect&) { }
 
-    RunLoop::Timer<LayerTreeHostProxy> m_animationTimer;
     DrawingAreaProxy* m_drawingAreaProxy;
 
     typedef HashMap<WebLayerID, WebCore::GraphicsLayer*> LayerMap;
-    IntRect m_visibleContentsRect;
+    WebCore::IntRect m_visibleContentsRect;
     float m_contentsScale;
 
-    MessageQueue<LayerTreeMessageToRenderer> m_messagesToRenderer;
-    void pushUpdateToQueue(PassOwnPtr<LayerTreeMessageToRenderer>);
+    Vector<Function<void()> > m_renderQueue;
+    void dispatchUpdate(const Function<void()>&);
 
 #if USE(TEXTURE_MAPPER)
-    OwnPtr<TextureMapper> m_textureMapper;
+    OwnPtr<WebCore::TextureMapper> m_textureMapper;
+    PassRefPtr<LayerBackingStore> getBackingStore(WebLayerID);
+    HashMap<int64_t, RefPtr<WebCore::TextureMapperBackingStore> > m_directlyCompositedImages;
+    HashSet<RefPtr<LayerBackingStore> > m_backingStoresWithPendingBuffers;
 #endif
-
-#if PLATFORM(QT)
-    typedef HashMap<IntPoint, RefPtr<BitmapTexture> > TiledImage;
-    TextureMapperNode::NodeRectMap m_nodeVisualContentsRectMap;
-    HashMap<int, int> m_tileToNodeTile;
-    int remoteTileIDToNodeTileID(int tileID) const;
-    HashMap<int64_t, TiledImage> m_directlyCompositedImages;
 
     void scheduleWebViewUpdate();
     void synchronizeViewport();
@@ -112,17 +104,17 @@ protected:
     void syncLayerParameters(const WebLayerInfo&);
     void createTile(WebLayerID, int, float scale);
     void removeTile(WebLayerID, int);
-    void updateTile(WebLayerID, int, const IntRect&, const IntRect&, const QImage&);
-    void createImage(int64_t, const QImage&);
+    void updateTile(WebLayerID, int, const WebCore::IntRect&, const WebCore::IntRect&, PassRefPtr<ShareableBitmap>);
+    void createImage(int64_t, PassRefPtr<ShareableBitmap>);
     void destroyImage(int64_t);
     void assignImageToLayer(WebCore::GraphicsLayer*, int64_t imageID);
     void flushLayerChanges();
     void ensureRootLayer();
     void ensureLayer(WebLayerID);
+    void swapBuffers();
+    void syncAnimations();
 
-#endif
-
-    OwnPtr<GraphicsLayer> m_rootLayer;
+    OwnPtr<WebCore::GraphicsLayer> m_rootLayer;
     Vector<WebLayerID> m_layersToDelete;
 
     LayerMap m_layers;
@@ -131,5 +123,7 @@ protected:
 };
 
 }
+
+#endif
 
 #endif // LayerTreeHostProxy_h

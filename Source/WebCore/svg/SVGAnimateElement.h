@@ -45,7 +45,7 @@ public:
     static PassRefPtr<SVGAnimateElement> create(const QualifiedName&, Document*);
 
     virtual ~SVGAnimateElement();
-    
+
     static void adjustForCurrentColor(SVGElement* targetElement, Color&);
     void adjustForInheritance(SVGElement* targetElement, const QualifiedName&, String& value);
     
@@ -65,11 +65,15 @@ protected:
     virtual void applyResultsToTarget();
     virtual float calculateDistance(const String& fromString, const String& toString);
 
+    virtual void endedActiveInterval();
+    virtual void targetElementDidChange(SVGElement* targetElement) OVERRIDE;
+
 private:
     SVGAnimatedTypeAnimator* ensureAnimator();
     
     virtual bool hasValidAttributeType();
     AnimatedPropertyType m_animatedPropertyType;
+    bool m_aboutToStopAnimation;
 
     AnimatedPropertyValueType m_fromPropertyValueType;
     AnimatedPropertyValueType m_toPropertyValueType;

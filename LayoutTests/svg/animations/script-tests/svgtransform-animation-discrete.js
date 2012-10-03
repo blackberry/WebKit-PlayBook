@@ -29,38 +29,37 @@ rootSVGElement.appendChild(rect);
 function sample1() {
     // Check initial/end conditions
     shouldBe("rect.transform.animVal.numberOfItems", "0");
-    shouldBeCloseEnough("document.defaultView.getComputedStyle(rect).getPropertyValue('x')", "0", 0.01);
-    shouldBeCloseEnough("document.defaultView.getComputedStyle(rect).getPropertyValue('y')", "0", 0.01);
+    shouldBeCloseEnough("document.defaultView.getComputedStyle(rect).getPropertyValue('x')", "0");
+    shouldBeCloseEnough("document.defaultView.getComputedStyle(rect).getPropertyValue('y')", "0");
 }
 
 function sample2() {
     // Check initial/end conditions
     shouldBe("rect.transform.animVal.numberOfItems", "1");
     shouldBe("rect.transform.animVal.getItem(0).type", "SVGTransform.SVG_TRANSFORM_TRANSLATE");
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.e", "100", 0.01);
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.f", "100", 0.01);
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.e", "100");
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.f", "100");
 }
 
 function sample3() {
     shouldBe("rect.transform.animVal.numberOfItems", "1");
     shouldBe("rect.transform.animVal.getItem(0).type", "SVGTransform.SVG_TRANSFORM_TRANSLATE");
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.e", "0", 0.01);
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.f", "0", 0.01);
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.e", "0");
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.f", "0");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,  "rect", sample1],
-        ["animation", 0.001,  "rect", sample2],
-        ["animation", 1.0,    "rect", sample2],
-        ["animation", 3.0,    "rect", sample3],
-        ["animation", 3.9999, "rect", sample3],
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 0.001, sample2],
+        ["animation", 1.0,   sample2],
+        ["animation", 3.0,   sample3],
+        ["animation", 3.999, sample3],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 50)", 0);
 var successfullyParsed = true;

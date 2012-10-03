@@ -28,16 +28,13 @@
 
 #include "DefaultAudioDestinationNode.h"
 
-#ifndef NDEBUG
-#include <stdio.h>
-#endif
+#include "Logging.h"
 
 namespace WebCore {
     
 DefaultAudioDestinationNode::DefaultAudioDestinationNode(AudioContext* context)
     : AudioDestinationNode(context, AudioDestination::hardwareSampleRate())
 {
-    initialize();
 }
 
 DefaultAudioDestinationNode::~DefaultAudioDestinationNode()
@@ -51,9 +48,7 @@ void DefaultAudioDestinationNode::initialize()
         return;
 
     float hardwareSampleRate = AudioDestination::hardwareSampleRate();
-#ifndef NDEBUG    
-    fprintf(stderr, ">>>> hardwareSampleRate = %f\n", hardwareSampleRate);
-#endif
+    LOG(WebAudio, ">>>> hardwareSampleRate = %f\n", hardwareSampleRate);
     
     m_destination = AudioDestination::create(*this, hardwareSampleRate);
     

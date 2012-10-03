@@ -5,8 +5,10 @@ generate-webkittestrunner-forwarding-headers: $(WebKit2)/Scripts/generate-forwar
 	$(AM_V_GEN)$(PERL) $< $(srcdir)/Tools/WebKitTestRunner $(GENSOURCES_WEBKIT2)/include gtk
 	$(AM_V_GEN)$(PERL) $< $(srcdir)/Tools/WebKitTestRunner $(GENSOURCES_WEBKIT2)/include soup
 
+if ENABLE_WEBKIT2
 noinst_PROGRAMS += \
 	Programs/WebKitTestRunner
+endif
 
 Programs_WebKitTestRunner_SOURCES = \
 	Tools/WebKitTestRunner/EventSenderProxy.h \
@@ -33,7 +35,6 @@ Programs_WebKitTestRunner_CPPFLAGS = \
 	-I$(srcdir)/Tools/WebKitTestRunner \
 	-I$(srcdir)/Source/WebCore/platform/gtk \
 	-I$(top_builddir)/DerivedSources/WebKit2/include \
-	-DWEBKIT_EXEC_PATH=\"${shell pwd}/$(top_builddir)/Programs/\" \
 	$(global_cppflags) \
 	$(javascriptcore_cppflags) \
 	$(GLOBALDEPS_CFLAGS) \
@@ -52,16 +53,24 @@ Programs_WebKitTestRunner_LDADD = \
 	$(GLIB_LIBS) \
 	$(LIBSOUP_LIBS) \
 	$(FREETYPE_LIBS) \
-	$(WINMM_LIBS)
+	$(WINMM_LIBS) \
+	$(XRENDER_LIBS) \
+	$(XT_LIBS)
 
 Programs_WebKitTestRunner_LDFLAGS = \
 	-no-fast-install \
 	-no-install
 
 # The InjectedBundle library allows the render process to load harness code.
+if ENABLE_WEBKIT2
 noinst_LTLIBRARIES += Libraries/libTestRunnerInjectedBundle.la
+endif
 
 webkittestrunner_built_sources += \
+	DerivedSources/InjectedBundle/JSAccessibilityController.cpp \
+	DerivedSources/InjectedBundle/JSAccessibilityTextMarker.cpp \
+	DerivedSources/InjectedBundle/JSAccessibilityTextMarkerRange.cpp \
+	DerivedSources/InjectedBundle/JSAccessibilityUIElement.cpp \
 	DerivedSources/InjectedBundle/JSEventSendingController.cpp \
 	DerivedSources/InjectedBundle/JSGCController.cpp \
 	DerivedSources/InjectedBundle/JSLayoutTestController.cpp \
@@ -70,6 +79,14 @@ nodist_Libraries_libTestRunnerInjectedBundle_la_SOURCES = $(webkittestrunner_bui
 BUILT_SOURCES += $(webkittestrunner_built_sources)
 
 Libraries_libTestRunnerInjectedBundle_la_SOURCES = \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityController.cpp \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityController.h \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityTextMarker.cpp \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityTextMarker.h \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityTextMarkerRange.cpp \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityTextMarkerRange.h \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityUIElement.cpp \
+	Tools/WebKitTestRunner/InjectedBundle/AccessibilityUIElement.h \
 	Tools/WebKitTestRunner/InjectedBundle/ActivateFonts.h \
 	Tools/WebKitTestRunner/InjectedBundle/Bindings/JSWrappable.h \
 	Tools/WebKitTestRunner/InjectedBundle/Bindings/JSWrapper.cpp \
@@ -102,6 +119,7 @@ Libraries_libTestRunnerInjectedBundle_la_LDFLAGS = \
 
 Libraries_libTestRunnerInjectedBundle_la_CPPFLAGS = \
 	-DFONTS_CONF_DIR=\"${shell pwd}/${srcdir}/Tools/DumpRenderTree/gtk/fonts\" \
+	-DTOP_LEVEL_DIR=\"${shell pwd}/${srcdir}\" \
 	-include Tools/WebKitTestRunner/WebKitTestRunnerPrefix.h \
 	-I$(srcdir)/Tools/WebKitTestRunner \
 	-I$(srcdir)/Tools/WebKitTestRunner/InjectedBundle \

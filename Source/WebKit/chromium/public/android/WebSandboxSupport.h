@@ -28,16 +28,6 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#ifndef WebSandboxSupport_h
-#define WebSandboxSupport_h
-
-namespace WebKit {
-
-// Empty class, as we need it to compile.
-class WebSandboxSupport {
-public:
-};
-
-} // namespace WebKit
-
+#ifndef WEBKIT_MIGRATE_HEADERS_TO_PLATFORM
+#include "../platform/android/WebSandboxSupport.h"
 #endif

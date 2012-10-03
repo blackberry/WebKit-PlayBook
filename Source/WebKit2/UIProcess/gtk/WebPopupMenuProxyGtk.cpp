@@ -41,7 +41,6 @@ WebPopupMenuProxyGtk::WebPopupMenuProxyGtk(GtkWidget* webView, WebPopupMenuProxy
     : WebPopupMenuProxy(client)
     , m_webView(webView)
     , m_activeItem(-1)
-    , m_runLoop(0)
 {
 }
 
@@ -87,16 +86,22 @@ void WebPopupMenuProxyGtk::showPopupMenu(const IntRect& rect, TextDirection text
     gulong unmapHandler = g_signal_connect(m_popup->platformMenu(), "unmap", G_CALLBACK(menuUnmapped), this);
     m_popup->popUp(rect.size(), menuPosition, size, selectedIndex, m_client->currentlyProcessedMouseDownEvent() ? m_client->currentlyProcessedMouseDownEvent()->nativeEvent() : 0);
 
+    // PopupMenu can fail to open when there is no mouse grab.
+    // Ensure WebCore does not go into some pesky state.
+    if (!gtk_widget_get_visible(m_popup->platformMenu())) {
+       m_client->failedToShowPopupMenu();
+       return;
+    }
+
     // WebPageProxy expects the menu to run in a nested run loop, since it invalidates the
     // menu right after calling WebPopupMenuProxy::showPopupMenu().
-    m_runLoop = g_main_loop_new(0, FALSE);
+    m_runLoop = adoptGRef(g_main_loop_new(0, FALSE));
 
     GDK_THREADS_LEAVE();
-    g_main_loop_run(m_runLoop);
+    g_main_loop_run(m_runLoop.get());
     GDK_THREADS_ENTER();
 
-    g_main_loop_unref(m_runLoop);
-    m_runLoop = 0;
+    m_runLoop.clear();
 
     g_signal_handler_disconnect(m_popup->platformMenu(), unmapHandler);
 
@@ -113,8 +118,8 @@ void WebPopupMenuProxyGtk::hidePopupMenu()
 
 void WebPopupMenuProxyGtk::shutdownRunLoop()
 {
-    if (g_main_loop_is_running(m_runLoop))
-        g_main_loop_quit(m_runLoop);
+    if (g_main_loop_is_running(m_runLoop.get()))
+        g_main_loop_quit(m_runLoop.get());
 }
 
 void WebPopupMenuProxyGtk::menuItemActivated(GtkAction* action, WebPopupMenuProxyGtk* popupMenu)

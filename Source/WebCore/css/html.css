@@ -505,7 +505,6 @@ textarea {
     color: darkGray;
     display: block !important;
     pointer-events: none !important;
-    position: relative !important;
 }
 
 input::-webkit-input-placeholder, isindex::-webkit-input-placeholder {
@@ -847,7 +846,7 @@ u, ins {
 }
 
 strong, b {
-    font-weight: bolder
+    font-weight: bold
 }
 
 i, cite, em, var, address, dfn {
@@ -992,8 +991,12 @@ summary::-webkit-details-marker {
     margin-right: 0.4em;
 }
 
-bdi {
+bdi, output {
     unicode-bidi: -webkit-isolate;
+}
+
+bdo {
+    unicode-bidi: bidi-override;
 }
 
 /* page */

@@ -1,3 +1,280 @@
+2012-02-26  Hajime Morrita  <morrita@chromium.org>
+
+        Move ChromeClient::showContextMenu() to ContextMenuClient
+        https://bugs.webkit.org/show_bug.cgi?id=79427
+
+        Reviewed by Adam Barth.
+
+        * WebKitSupport/ChromeClientWx.h:
+        (ChromeClientWx):
+
+2012-02-24  Shinya Kawanaka  <shinyak@chromium.org>
+
+        SpellCheckRequest needs to know the context where the spellcheck happened.
+        https://bugs.webkit.org/show_bug.cgi?id=79320
+
+        Reviewed by Hajime Morita.
+
+        * WebKitSupport/EditorClientWx.h:
+        (WebCore::EditorClientWx::requestCheckingOfString):
+
+2012-02-21  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebKitSupport/EditorClientWx.cpp:
+        (WebCore::EditorClientWx::shouldApplyStyle):
+        * WebKitSupport/EditorClientWx.h:
+        (EditorClientWx):
+
+2012-02-22  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebKitSupport/EditorClientWx.cpp:
+        (WebCore::EditorClientWx::shouldApplyStyle):
+        * WebKitSupport/EditorClientWx.h:
+        (EditorClientWx):
+
+2012-02-15  Sadrul Habib Chowdhury  <sadrul@chromium.org>
+
+        Notify ChromeClient when touch-event handlers are installed/removed.
+        https://bugs.webkit.org/show_bug.cgi?id=77440
+
+        Reviewed by Darin Fisher and Ryosuke Niwa.
+
+        * WebKitSupport/ChromeClientWx.h:
+        (WebCore::ChromeClientWx::numTouchEventHandlersChanged):
+
+2012-01-30  Kevin Ollivier  <kevino@theolliviers.com>
+
+        [wx] Unreviewed. Build fix, add JavaScriptCore/runtime
+        to include dirs.
+
+        * bindings/python/wscript:
+
+2012-01-26  Kevin Ollivier  <kevino@theolliviers.com>
+
+        [wx] Unreviewed. 
+        Build fixes after UndoStep and ChromeClient changes.
+
+        * WebFrame.cpp:
+        (wxWebFrame::RunScript):
+        * WebKitSupport/ChromeClientWx.cpp:
+        (WebCore):
+        (WebCore::ChromeClientWx::hasOpenedPopup):
+        * WebKitSupport/ChromeClientWx.h:
+        (ChromeClientWx):
+        * WebKitSupport/EditorClientWx.cpp:
+        (WebCore::EditorClientWx::registerUndoStep):
+        (WebCore::EditorClientWx::registerRedoStep):
+        (WebCore::EditorClientWx::undo):
+        (WebCore::EditorClientWx::redo):
+        * WebKitSupport/EditorClientWx.h:
+        (EditorClientWx):
+        * WebViewPrivate.h:
+        (WebViewPrivate):
+
+2011-12-16  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Rename registerCommandFor(Undo|Redo) to register(Undo|Redo)Step
+        https://bugs.webkit.org/show_bug.cgi?id=74748
+
+        Reviewed by Eric Seidel.
+
+        * WebKitSupport/EditorClientWx.cpp:
+        (WebCore::EditorClientWx::registerUndoStep):
+        (WebCore::EditorClientWx::registerRedoStep):
+        * WebKitSupport/EditorClientWx.h:
+
+2011-12-16  Sam Weinig  <sam@webkit.org>
+
+        Give PlatformEvents a base class
+        https://bugs.webkit.org/show_bug.cgi?id=74685
+
+        Reviewed by Anders Carlsson.
+
+        Add a base class for PlatformMouseEvent, PlatformKeyboardEvent, PlatformWheelEvent
+        and PlatformGestureEvent and move Type enumeration and modifiers down to it.
+
+        * WebKitSupport/EditorClientWx.cpp:
+        (WebCore::EditorClientWx::handleEditingKeyboardEvent):
+        (WebCore::EditorClientWx::interpretKeyEvent):
+
+2011-12-11  Robin Dunn  <robin@alldunn.com>
+
+        Add a URL argument to the wxWebView constructor,
+        and fix page calculations and margins on Windows and Mac.
+        https://bugs.webkit.org/show_bug.cgi?id=74316
+
+        Reviewed by Kevin Ollivier.
+
+        * WebBrowserShell.cpp:
+        (wxWebBrowserShell::wxWebBrowserShell):
+        * WebBrowserShell.h:
+        * WebFrame.cpp:
+        (wxWebFramePrintout::wxWebFramePrintout):
+        (wxWebFramePrintout::~wxWebFramePrintout):
+        (wxWebFramePrintout::InitializeWithPageSize):
+        (wxWebFramePrintout::OnPreparePrinting):
+        (wxWebFramePrintout::OnPrintPage):
+        (wxWebFramePrintout::OnEndPrinting):
+        (wxWebFrame::Print):
+        * WebView.cpp:
+        (wxWebView::wxWebView):
+        (wxWebView::Create):
+        * WebView.h:
+        * bindings/python/samples/simple.py:
+        (TestPanel.__init__):
+
+2011-12-07  Mary Wu  <mary.wu@torchmobile.com.cn>
+
+        Change function name InitializeLoggingChannelsIfNecessary to follow coding style guideline
+        https://bugs.webkit.org/show_bug.cgi?id=73986
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebView.cpp:
+        (wxWebView::Create):
+
+2011-12-02  Kevin Ollivier  <kevino@theolliviers.com>
+
+        [wx] Unreviewed build fixes for Windows build.
+
+        * WebKitSupport/FrameLoaderClientWx.cpp:
+
+2011-11-30  Alexey Proskuryakov  <ap@apple.com>
+
+        Remove an unneeded argument from FrameLoaderClient::download
+        https://bugs.webkit.org/show_bug.cgi?id=73486
+
+        Reviewed by Andreas Kling.
+
+        * WebKitSupport/FrameLoaderClientWx.cpp:
+        (WebCore::FrameLoaderClientWx::download):
+        * WebKitSupport/FrameLoaderClientWx.h:
+        Updated for the change.
+
+2011-11-30  Robin Dunn  <robin@alldunn.com>
+
+        Generate a more robust user agent string.
+        https://bugs.webkit.org/show_bug.cgi?id=73465
+        
+        Reviewed by Kevin Ollivier.
+        
+        * WebKitSupport/FrameLoaderClientWx.cpp:
+        (WebCore::agentOS):
+        (WebCore::composeUserAgent):
+        (WebCore::FrameLoaderClientWx::userAgent):
+
+2011-11-30  Robin Dunn  <robin@alldunn.com>
+
+        Use the wxGCDC(wxGraphicsContext) constructor on Mac as well
+        to avoid issues with the wxGCDC(wxPrinterDC) constructor.
+        https://bugs.webkit.org/show_bug.cgi?id=73463
+        
+        Reviewed by Kevin Ollivier.
+
+        * WebFrame.cpp:
+        (wxWebFramePrintout::OnPrintPage):
+
+2011-11-26  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r101193.
+        http://trac.webkit.org/changeset/101193
+        https://bugs.webkit.org/show_bug.cgi?id=73158
+
+        Breaks Windows and Qt minimal. (Requested by pfeldman on
+        #webkit).
+
+        * WebKitSupport/InspectorClientWx.cpp:
+        * WebKitSupport/InspectorClientWx.h:
+
+2011-11-22  Pavel Feldman  <pfeldman@google.com>
+
+        Web Inspector: remove Inspector::bringToFront from the protocol.
+        https://bugs.webkit.org/show_bug.cgi?id=72937
+
+        Reviewed by Yury Semikhatsky.
+
+        * WebKitSupport/InspectorClientWx.cpp:
+        (WebCore::InspectorClientWx::bringFrontendToFront):
+        * WebKitSupport/InspectorClientWx.h:
+
+2011-11-21  Robin Dunn  <robin@alldunn.com>
+
+        Add wxWebKit APIs for controlling WebKit caching behavior.
+        https://bugs.webkit.org/show_bug.cgi?id=72891
+
+        Reviewed by Kevin Ollivier.
+
+        * WebSettings.cpp:
+        (wxWebSettings::SetPrivateBrowsingEnabled):
+        (wxWebSettings::PrivateBrowsingEnabled):
+        (wxWebSettings::SetUsesPageCache):
+        (wxWebSettings::UsesPageCache):
+        (wxWebSettings::SetOfflineWebApplicationCacheEnabled):
+        (wxWebSettings::OfflineWebApplicationCacheEnabled):
+        * WebSettings.h:
+
+2011-11-21  Robin Dunn  <robin@alldunn.com>
+
+        Add wxWebKit API for retrieving frame and page URLs.
+        https://bugs.webkit.org/show_bug.cgi?id=72890
+
+        Reviewed by Kevin Ollivier.
+
+        * WebBrowserShell.cpp:
+        (wxWebBrowserShell::wxWebBrowserShell):
+        * WebFrame.cpp:
+        (wxWebFrame::GetURL):
+        * WebFrame.h:
+        * WebView.cpp:
+        (wxWebView::GetMainFrameURL):
+        * WebView.h:
+
+2011-10-17  Antonio Gomes  <agomes@rim.com>
+
+        Pass a Frame* parameter in EditorClient::respondToChangedSelection
+        https://bugs.webkit.org/show_bug.cgi?id=70248
+
+        Reviewed by Ryosuke Niwa.
+
+        * WebKitSupport/EditorClientWx.cpp: Make use of the newly added Frame* parameter.
+        (WebCore::EditorClientWx::respondToChangedSelection):
+        * WebKitSupport/EditorClientWx.h:
+
+2011-11-15  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow screenToWindow/windowToScreen should be screenToRootView/rootViewToScreen
+        https://bugs.webkit.org/show_bug.cgi?id=72397
+
+        Reviewed by Dan Bernstein.
+
+        * WebKitSupport/ChromeClientWx.cpp:
+        (WebCore::ChromeClientWx::rootViewToScreen):
+        (WebCore::ChromeClientWx::screenToRootView):
+        * WebKitSupport/ChromeClientWx.h:
+
+2011-11-14  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow invalidation functions should use root view coordinates
+        https://bugs.webkit.org/show_bug.cgi?id=72338
+
+        Reviewed by Dan Bernstein.
+
+        * WebKitSupport/ChromeClientWx.cpp:
+        (WebCore::ChromeClientWx::invalidateRootView):
+        (WebCore::ChromeClientWx::invalidateContentsForSlowScroll):
+        (WebCore::ChromeClientWx::invalidateContentsAndRootView):
+        * WebKitSupport/ChromeClientWx.h:
+
 2011-11-02  Tom Sepez  <tsepez@chromium.org>
 
         XSSAuditor is silent

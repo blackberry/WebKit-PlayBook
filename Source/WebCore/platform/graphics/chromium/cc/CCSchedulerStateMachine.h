@@ -68,8 +68,14 @@ public:
     Action nextAction() const;
     void updateState(Action);
 
-    // Indicates whether the system is inside a vsync callback.
-    void setInsideVSync(bool);
+    // Indicates whether the scheduler needs a vsync callback in order to make
+    // progress.
+    bool vsyncCallbackNeeded() const;
+
+    // Indicates that the system has entered and left a vsync callback.
+    // The scheduler will not draw more than once in a given vsync callback.
+    void didEnterVSync();
+    void didLeaveVSync();
 
     // Indicates whether the LayerTreeHostImpl is visible.
     void setVisible(bool);
@@ -96,15 +102,23 @@ public:
     // from nextState. Indicates that the specific update request completed.
     void beginUpdateMoreResourcesComplete(bool morePending);
 
+    // Indicates whether drawing would, at this time, make sense.
+    // canDraw can be used to supress flashes or checkerboarding
+    // when such behavior would be undesirable.
+    void setCanDraw(bool can) { m_canDraw = can; }
+
 protected:
     CommitState m_commitState;
 
+    int m_currentFrameNumber;
+    int m_lastFrameNumberWhereDrawWasCalled;
     bool m_needsRedraw;
     bool m_needsForcedRedraw;
     bool m_needsCommit;
     bool m_updateMoreResourcesPending;
     bool m_insideVSync;
     bool m_visible;
+    bool m_canDraw;
 };
 
 }

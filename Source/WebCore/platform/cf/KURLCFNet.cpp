@@ -33,6 +33,8 @@ using namespace std;
 
 namespace WebCore {
 
+#if !USE(WTFURL)
+
 typedef Vector<char, 512> CharBuffer;
 
 CFURLRef createCFURLFromBuffer(const CharBuffer&);
@@ -40,27 +42,16 @@ CFURLRef createCFURLFromBuffer(const CharBuffer&);
 KURL::KURL(CFURLRef url)
 {
     if (!url) {
-        parse(0, 0);
+        parse(0);
         return;
     }
 
     CFIndex bytesLength = CFURLGetBytes(url, 0, 0);
-    Vector<char, 512> buffer(bytesLength + 6); // 5 for "file:", 1 for null character to end C string
-    char* bytes = &buffer[5];
+    Vector<char, 512> buffer(bytesLength + 1);
+    char* bytes = &buffer[0];
     CFURLGetBytes(url, reinterpret_cast<UInt8*>(bytes), bytesLength);
     bytes[bytesLength] = '\0';
-    if (bytes[0] != '/') {
-        parse(bytes, 0);
-        return;
-    }
-
-    buffer[0] = 'f';
-    buffer[1] = 'i';
-    buffer[2] = 'l';
-    buffer[3] = 'e';
-    buffer[4] = ':';
-
-    parse(buffer.data(), 0);
+    parse(bytes);
 }
 
 CFURLRef createCFURLFromBuffer(const CharBuffer& buffer)
@@ -102,4 +93,21 @@ String KURL::fileSystemPath() const
     return RetainPtr<CFStringRef>(AdoptCF, CFURLCopyFileSystemPath(cfURL.get(), pathStyle)).get();
 }
 #endif
+
+#else // USE(WTFURL)
+
+KURL::KURL(CFURLRef)
+{
+    // FIXME: Add WTFURL Implementation.
+    invalidate();
+}
+
+CFURLRef KURL::createCFURL() const
+{
+    // FIXME: Add WTFURL Implementation.
+    return 0;
+}
+
+#endif // USE(WTFURL)
+
 }

@@ -24,12 +24,15 @@
  */
 
 #include "config.h"
-#include "WebLayerTreeView.h"
+#include "platform/WebLayerTreeView.h"
 
+#include "GraphicsContext3DPrivate.h"
 #include "WebLayerTreeViewImpl.h"
-#include "WebRect.h"
-#include "WebSize.h"
 #include "cc/CCLayerTreeHost.h"
+#include "platform/WebLayer.h"
+#include "platform/WebPoint.h"
+#include "platform/WebRect.h"
+#include "platform/WebSize.h"
 
 using namespace WebCore;
 
@@ -39,17 +42,15 @@ WebLayerTreeView::Settings::operator CCSettings() const
     CCSettings settings;
     settings.acceleratePainting = acceleratePainting;
     settings.compositeOffscreen = compositeOffscreen;
-    settings.enableCompositorThread = enableCompositorThread;
+    settings.showFPSCounter = showFPSCounter;
+    settings.showPlatformLayerTree = showPlatformLayerTree;
+    settings.refreshRate = refreshRate;
+    settings.perTilePainting = perTilePainting;
+    settings.partialSwapEnabled = partialSwapEnabled;
+    settings.threadedAnimationEnabled = threadedAnimationEnabled;
 
-    // FIXME: showFPSCounter / showPlatformLayerTree aren't supported currently.
-    settings.showFPSCounter = false;
-    settings.showPlatformLayerTree = false;
+    // FIXME: showFPSCounter / showPlatformLayerTree / maxPartialTextureUpdates aren't supported currently.
     return settings;
-}
-
-WebLayerTreeView WebLayerTreeView::create(WebLayerTreeViewClient* client, const WebLayer& root, const WebLayerTreeView::Settings& settings)
-{
-    return WebLayerTreeView(WebLayerTreeViewImpl::create(client, root, settings));
 }
 
 void WebLayerTreeView::reset()
@@ -67,17 +68,28 @@ bool WebLayerTreeView::equals(const WebLayerTreeView& n) const
     return (m_private.get() == n.m_private.get());
 }
 
-void WebLayerTreeView::composite()
+bool WebLayerTreeView::initialize(WebLayerTreeViewClient* client, const WebLayer& root, const WebLayerTreeView::Settings& settings)
 {
-    if (m_private->settings().enableCompositorThread)
-        m_private->setNeedsCommit();
+    m_private = WebLayerTreeViewImpl::create(client, root, settings);
+    return !isNull();
+}
+
+void WebLayerTreeView::setRootLayer(WebLayer *root)
+{
+    if (root)
+        m_private->setRootLayer(*root);
     else
-        m_private->composite();
+        m_private->setRootLayer(PassRefPtr<LayerChromium>());
+}
+
+int WebLayerTreeView::compositorIdentifier()
+{
+    return m_private->compositorIdentifier();
 }
 
 void WebLayerTreeView::setViewportSize(const WebSize& viewportSize)
 {
-    m_private->setViewport(viewportSize);
+    m_private->setViewportSize(viewportSize);
 }
 
 WebSize WebLayerTreeView::viewportSize() const
@@ -85,25 +97,62 @@ WebSize WebLayerTreeView::viewportSize() const
     return WebSize(m_private->viewportSize());
 }
 
+void WebLayerTreeView::setVisible(bool visible)
+{
+    m_private->setVisible(visible);
+}
+
+void WebLayerTreeView::setPageScaleFactorAndLimits(float pageScaleFactor, float minimum, float maximum)
+{
+    m_private->setPageScaleFactorAndLimits(pageScaleFactor, minimum, maximum);
+}
+
+void WebLayerTreeView::startPageScaleAnimation(const WebPoint& scroll, bool useAnchor, float newPageScale, double durationSec)
+{
+    m_private->startPageScaleAnimation(IntSize(scroll.x, scroll.y), useAnchor, newPageScale, durationSec);
+}
+
+void WebLayerTreeView::setNeedsAnimate()
+{
+    m_private->setNeedsAnimate();
+}
+
+void WebLayerTreeView::setNeedsRedraw()
+{
+    m_private->setNeedsRedraw();
+}
+
+void WebLayerTreeView::composite()
+{
+    if (CCProxy::hasImplThread())
+        m_private->setNeedsCommit();
+    else
+        m_private->composite();
+}
+
+void WebLayerTreeView::updateAnimations(double frameBeginTime)
+{
+    m_private->updateAnimations(frameBeginTime);
+}
+
 bool WebLayerTreeView::compositeAndReadback(void *pixels, const WebRect& rect)
 {
     return m_private->compositeAndReadback(pixels, rect);
 }
 
-WebLayerTreeView::WebLayerTreeView(const PassRefPtr<CCLayerTreeHost>& node)
-    : m_private(node)
+void WebLayerTreeView::finishAllRendering()
 {
+    m_private->finishAllRendering();
 }
 
-WebLayerTreeView& WebLayerTreeView::operator=(const PassRefPtr<CCLayerTreeHost>& node)
+WebGraphicsContext3D* WebLayerTreeView::context()
 {
-    m_private = node;
-    return *this;
+    return GraphicsContext3DPrivate::extractWebGraphicsContext3D(m_private->context());
 }
 
-WebLayerTreeView::operator PassRefPtr<CCLayerTreeHost>() const
+void WebLayerTreeView::loseCompositorContext(int numTimes)
 {
-    return m_private.get();
+    m_private->loseContext(numTimes);
 }
 
 } // namespace WebKit

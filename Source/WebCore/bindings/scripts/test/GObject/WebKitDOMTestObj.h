@@ -153,14 +153,14 @@ webkit_dom_test_obj_idb_key(WebKitDOMTestObj* self, WebKitDOMIDBKey* key);
 /**
  * webkit_dom_test_obj_options_object:
  * @self: A #WebKitDOMTestObj
- * @oo: A #WebKitDOMOptionsObject
- * @ooo: A #WebKitDOMOptionsObject
+ * @oo: A #WebKitDOMDictionary
+ * @ooo: A #WebKitDOMDictionary
  *
  * Returns:
  *
 **/
 WEBKIT_API void
-webkit_dom_test_obj_options_object(WebKitDOMTestObj* self, WebKitDOMOptionsObject* oo, WebKitDOMOptionsObject* ooo);
+webkit_dom_test_obj_options_object(WebKitDOMTestObj* self, WebKitDOMDictionary* oo, WebKitDOMDictionary* ooo);
 
 /**
  * webkit_dom_test_obj_method_with_exception:
@@ -172,62 +172,6 @@ webkit_dom_test_obj_options_object(WebKitDOMTestObj* self, WebKitDOMOptionsObjec
 **/
 WEBKIT_API void
 webkit_dom_test_obj_method_with_exception(WebKitDOMTestObj* self, GError **error);
-
-/**
- * webkit_dom_test_obj_with_dynamic_frame:
- * @self: A #WebKitDOMTestObj
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_with_dynamic_frame(WebKitDOMTestObj* self);
-
-/**
- * webkit_dom_test_obj_with_dynamic_frame_and_arg:
- * @self: A #WebKitDOMTestObj
- * @int_arg: A #glong
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_with_dynamic_frame_and_arg(WebKitDOMTestObj* self, glong int_arg);
-
-/**
- * webkit_dom_test_obj_with_dynamic_frame_and_optional_arg:
- * @self: A #WebKitDOMTestObj
- * @int_arg: A #glong
- * @optional_arg: A #glong
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_with_dynamic_frame_and_optional_arg(WebKitDOMTestObj* self, glong int_arg, glong optional_arg);
-
-/**
- * webkit_dom_test_obj_with_dynamic_frame_and_user_gesture:
- * @self: A #WebKitDOMTestObj
- * @int_arg: A #glong
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_with_dynamic_frame_and_user_gesture(WebKitDOMTestObj* self, glong int_arg, gboolean isUserGesture);
-
-/**
- * webkit_dom_test_obj_with_dynamic_frame_and_user_gesture_asad:
- * @self: A #WebKitDOMTestObj
- * @int_arg: A #glong
- * @optional_arg: A #glong
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_with_dynamic_frame_and_user_gesture_asad(WebKitDOMTestObj* self, glong int_arg, glong optional_arg, gboolean isUserGesture);
 
 /**
  * webkit_dom_test_obj_with_script_state_void:
@@ -282,6 +226,37 @@ WEBKIT_API void
 webkit_dom_test_obj_with_script_execution_context(WebKitDOMTestObj* self);
 
 /**
+ * webkit_dom_test_obj_with_script_execution_context_and_script_state:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_with_script_execution_context_and_script_state(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_with_script_execution_context_and_script_state_obj_exception:
+ * @self: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_with_script_execution_context_and_script_state_obj_exception(WebKitDOMTestObj* self, GError **error);
+
+/**
+ * webkit_dom_test_obj_with_script_execution_context_and_script_state_with_spaces:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_with_script_execution_context_and_script_state_with_spaces(WebKitDOMTestObj* self);
+
+/**
  * webkit_dom_test_obj_method_with_optional_arg:
  * @self: A #WebKitDOMTestObj
  * @opt: A #glong
@@ -316,6 +291,39 @@ webkit_dom_test_obj_method_with_non_optional_arg_and_optional_arg(WebKitDOMTestO
 **/
 WEBKIT_API void
 webkit_dom_test_obj_method_with_non_optional_arg_and_two_optional_args(WebKitDOMTestObj* self, glong non_opt, glong opt1, glong opt2);
+
+/**
+ * webkit_dom_test_obj_method_with_optional_string:
+ * @self: A #WebKitDOMTestObj
+ * @str: A #gchar
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_method_with_optional_string(WebKitDOMTestObj* self, const gchar* str);
+
+/**
+ * webkit_dom_test_obj_method_with_optional_string_is_undefined:
+ * @self: A #WebKitDOMTestObj
+ * @str: A #gchar
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_method_with_optional_string_is_undefined(WebKitDOMTestObj* self, const gchar* str);
+
+/**
+ * webkit_dom_test_obj_method_with_optional_string_is_null_string:
+ * @self: A #WebKitDOMTestObj
+ * @str: A #gchar
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_method_with_optional_string_is_null_string(WebKitDOMTestObj* self, const gchar* str);
 
 /**
  * webkit_dom_test_obj_conditional_method1:
@@ -367,6 +375,127 @@ webkit_dom_test_obj_class_method(WebKitDOMTestObj* self);
 **/
 WEBKIT_API glong
 webkit_dom_test_obj_class_method_with_optional(WebKitDOMTestObj* self, glong arg);
+
+/**
+ * webkit_dom_test_obj_overloaded_method1:
+ * @self: A #WebKitDOMTestObj
+ * @arg: A #glong
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_overloaded_method1(WebKitDOMTestObj* self, glong arg);
+
+/**
+ * webkit_dom_test_obj_overloaded_method1:
+ * @self: A #WebKitDOMTestObj
+ * @type: A #gchar
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_overloaded_method1(WebKitDOMTestObj* self, const gchar* type);
+
+/**
+ * webkit_dom_test_obj_convert1:
+ * @self: A #WebKitDOMTestObj
+ * @: A #WebKitDOMa
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_convert1(WebKitDOMTestObj* self, WebKitDOMa* );
+
+/**
+ * webkit_dom_test_obj_convert2:
+ * @self: A #WebKitDOMTestObj
+ * @: A #WebKitDOMb
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_convert2(WebKitDOMTestObj* self, WebKitDOMb* );
+
+/**
+ * webkit_dom_test_obj_convert3:
+ * @self: A #WebKitDOMTestObj
+ * @: A #WebKitDOMc
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_convert3(WebKitDOMTestObj* self, WebKitDOMc* );
+
+/**
+ * webkit_dom_test_obj_convert4:
+ * @self: A #WebKitDOMTestObj
+ * @: A #WebKitDOMd
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_convert4(WebKitDOMTestObj* self, WebKitDOMd* );
+
+/**
+ * webkit_dom_test_obj_convert5:
+ * @self: A #WebKitDOMTestObj
+ * @: A #WebKitDOMe
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_convert5(WebKitDOMTestObj* self, WebKitDOMe* );
+
+/**
+ * webkit_dom_test_obj_mutable_point_function:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMSVGPoint*
+webkit_dom_test_obj_mutable_point_function(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_immutable_point_function:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMSVGPoint*
+webkit_dom_test_obj_immutable_point_function(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_orange:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_orange(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_strict_function:
+ * @self: A #WebKitDOMTestObj
+ * @str: A #gchar
+ * @a: A #gfloat
+ * @b: A #gint
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMbool*
+webkit_dom_test_obj_strict_function(WebKitDOMTestObj* self, const gchar* str, gfloat a, gint b, GError **error);
 
 /**
  * webkit_dom_test_obj_get_read_only_int_attr:
@@ -693,27 +822,6 @@ WEBKIT_API void
 webkit_dom_test_obj_set_reflected_url_attr(WebKitDOMTestObj* self, const gchar* value);
 
 /**
- * webkit_dom_test_obj_get_reflected_non_empty_url_attr:
- * @self: A #WebKitDOMTestObj
- *
- * Returns:
- *
-**/
-WEBKIT_API gchar*
-webkit_dom_test_obj_get_reflected_non_empty_url_attr(WebKitDOMTestObj* self);
-
-/**
- * webkit_dom_test_obj_set_reflected_non_empty_url_attr:
- * @self: A #WebKitDOMTestObj
- * @value: A #gchar
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_set_reflected_non_empty_url_attr(WebKitDOMTestObj* self, const gchar* value);
-
-/**
  * webkit_dom_test_obj_get_reflected_string_attr:
  * @self: A #WebKitDOMTestObj
  *
@@ -796,27 +904,6 @@ webkit_dom_test_obj_get_reflected_custom_url_attr(WebKitDOMTestObj* self);
 **/
 WEBKIT_API void
 webkit_dom_test_obj_set_reflected_custom_url_attr(WebKitDOMTestObj* self, const gchar* value);
-
-/**
- * webkit_dom_test_obj_get_reflected_custom_non_empty_url_attr:
- * @self: A #WebKitDOMTestObj
- *
- * Returns:
- *
-**/
-WEBKIT_API gchar*
-webkit_dom_test_obj_get_reflected_custom_non_empty_url_attr(WebKitDOMTestObj* self);
-
-/**
- * webkit_dom_test_obj_set_reflected_custom_non_empty_url_attr:
- * @self: A #WebKitDOMTestObj
- * @value: A #gchar
- *
- * Returns:
- *
-**/
-WEBKIT_API void
-webkit_dom_test_obj_set_reflected_custom_non_empty_url_attr(WebKitDOMTestObj* self, const gchar* value);
 
 /**
  * webkit_dom_test_obj_get_attr_with_getter_exception:
@@ -909,14 +996,157 @@ WEBKIT_API void
 webkit_dom_test_obj_set_string_attr_with_setter_exception(WebKitDOMTestObj* self, const gchar* value, GError **error);
 
 /**
- * webkit_dom_test_obj_get_script_string_attr:
+ * webkit_dom_test_obj_get_with_script_state_attribute:
  * @self: A #WebKitDOMTestObj
  *
  * Returns:
  *
 **/
-WEBKIT_API gchar*
-webkit_dom_test_obj_get_script_string_attr(WebKitDOMTestObj* self);
+WEBKIT_API glong
+webkit_dom_test_obj_get_with_script_state_attribute(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_with_script_state_attribute:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #glong
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_state_attribute(WebKitDOMTestObj* self, glong value);
+
+/**
+ * webkit_dom_test_obj_get_with_script_execution_context_attribute:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_execution_context_attribute(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_with_script_execution_context_attribute:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_execution_context_attribute(WebKitDOMTestObj* self, WebKitDOMTestObj* value);
+
+/**
+ * webkit_dom_test_obj_get_with_script_state_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_state_attribute_raises(WebKitDOMTestObj* self, GError **error);
+
+/**
+ * webkit_dom_test_obj_set_with_script_state_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_state_attribute_raises(WebKitDOMTestObj* self, WebKitDOMTestObj* value, GError **error);
+
+/**
+ * webkit_dom_test_obj_get_with_script_execution_context_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_execution_context_attribute_raises(WebKitDOMTestObj* self, GError **error);
+
+/**
+ * webkit_dom_test_obj_set_with_script_execution_context_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_execution_context_attribute_raises(WebKitDOMTestObj* self, WebKitDOMTestObj* value, GError **error);
+
+/**
+ * webkit_dom_test_obj_get_with_script_execution_context_and_script_state_attribute:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_execution_context_and_script_state_attribute(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_with_script_execution_context_and_script_state_attribute:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_execution_context_and_script_state_attribute(WebKitDOMTestObj* self, WebKitDOMTestObj* value);
+
+/**
+ * webkit_dom_test_obj_get_with_script_execution_context_and_script_state_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_execution_context_and_script_state_attribute_raises(WebKitDOMTestObj* self, GError **error);
+
+/**
+ * webkit_dom_test_obj_set_with_script_execution_context_and_script_state_attribute_raises:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ * @error: #GError
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_execution_context_and_script_state_attribute_raises(WebKitDOMTestObj* self, WebKitDOMTestObj* value, GError **error);
+
+/**
+ * webkit_dom_test_obj_get_with_script_execution_context_and_script_state_with_spaces_attribute:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMTestObj*
+webkit_dom_test_obj_get_with_script_execution_context_and_script_state_with_spaces_attribute(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_with_script_execution_context_and_script_state_with_spaces_attribute:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_with_script_execution_context_and_script_state_with_spaces_attribute(WebKitDOMTestObj* self, WebKitDOMTestObj* value);
 
 /**
  * webkit_dom_test_obj_get_conditional_attr1:
@@ -980,6 +1210,79 @@ webkit_dom_test_obj_get_conditional_attr3(WebKitDOMTestObj* self);
 **/
 WEBKIT_API void
 webkit_dom_test_obj_set_conditional_attr3(WebKitDOMTestObj* self, glong value);
+
+/**
+ * webkit_dom_test_obj_get_content_document:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMDocument*
+webkit_dom_test_obj_get_content_document(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_get_mutable_point:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMSVGPoint*
+webkit_dom_test_obj_get_mutable_point(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_mutable_point:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMSVGPoint
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_mutable_point(WebKitDOMTestObj* self, WebKitDOMSVGPoint* value);
+
+/**
+ * webkit_dom_test_obj_get_immutable_point:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API WebKitDOMSVGPoint*
+webkit_dom_test_obj_get_immutable_point(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_immutable_point:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #WebKitDOMSVGPoint
+ *
+ * Returns: (transfer none):
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_immutable_point(WebKitDOMTestObj* self, WebKitDOMSVGPoint* value);
+
+/**
+ * webkit_dom_test_obj_get_strict_float:
+ * @self: A #WebKitDOMTestObj
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API gfloat
+webkit_dom_test_obj_get_strict_float(WebKitDOMTestObj* self);
+
+/**
+ * webkit_dom_test_obj_set_strict_float:
+ * @self: A #WebKitDOMTestObj
+ * @value: A #gfloat
+ *
+ * Returns:
+ *
+**/
+WEBKIT_API void
+webkit_dom_test_obj_set_strict_float(WebKitDOMTestObj* self, gfloat value);
 
 /**
  * webkit_dom_test_obj_get_description:

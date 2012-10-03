@@ -26,6 +26,7 @@
 #include "config.h"
 #include "StorageAreaImpl.h"
 
+#include "Document.h"
 #include "ExceptionCode.h"
 #include "Frame.h"
 #include "Page.h"
@@ -108,7 +109,9 @@ bool StorageAreaImpl::disabledByPrivateBrowsingInFrame(const Frame* frame) const
     ASSERT(!frame);
     return false;
 #else
-    if (!frame->page() || !frame->page()->settings()->privateBrowsingEnabled())
+    if (!frame->page())
+        return true;
+    if (!frame->page()->settings()->privateBrowsingEnabled())
         return false;
     if (m_storageType != LocalStorage)
         return true;

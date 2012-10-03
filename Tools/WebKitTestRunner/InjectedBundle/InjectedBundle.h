@@ -26,14 +26,16 @@
 #ifndef InjectedBundle_h
 #define InjectedBundle_h
 
+#include "AccessibilityController.h"
 #include "EventSendingController.h"
 #include "GCController.h"
 #include "LayoutTestController.h"
 #include "TextInputController.h"
 #include <WebKit2/WKBase.h>
-#include <wtf/HashMap.h>
+#include <WebKit2/WKRetainPtr.h>
 #include <wtf/OwnPtr.h>
 #include <wtf/RefPtr.h>
+#include <wtf/Vector.h>
 
 #include <sstream>
 
@@ -46,18 +48,22 @@ public:
     static InjectedBundle& shared();
 
     // Initialize the InjectedBundle.
-    void initialize(WKBundleRef);
+    void initialize(WKBundleRef, WKTypeRef initializationUserData);
 
     WKBundleRef bundle() const { return m_bundle; }
+    WKBundlePageGroupRef pageGroup() const { return m_pageGroup; }
 
     LayoutTestController* layoutTestController() { return m_layoutTestController.get(); }
     GCController* gcController() { return m_gcController.get(); }
     EventSendingController* eventSendingController() { return m_eventSendingController.get(); }
     TextInputController* textInputController() { return m_textInputController.get(); }
+    AccessibilityController* accessibilityController() { return m_accessibilityController.get(); }
 
-    InjectedBundlePage* page() { return m_mainPage.get(); }
-    size_t pageCount() { return !!m_mainPage + m_otherPages.size(); }
+    InjectedBundlePage* page() const;
+    size_t pageCount() const { return m_pages.size(); }
     void closeOtherPages();
+
+    void dumpBackForwardListsForAllPages();
 
     void done();
     std::ostringstream& os() { return m_outputStream; }
@@ -82,24 +88,32 @@ private:
     InjectedBundle();
     ~InjectedBundle();
 
-    static void _didCreatePage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo);
-    static void _willDestroyPage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo);
-    static void _didReceiveMessage(WKBundleRef bundle, WKStringRef messageName, WKTypeRef messageBody, const void *clientInfo);
+    static void didCreatePage(WKBundleRef, WKBundlePageRef, const void* clientInfo);
+    static void willDestroyPage(WKBundleRef, WKBundlePageRef, const void* clientInfo);
+    static void didInitializePageGroup(WKBundleRef, WKBundlePageGroupRef, const void* clientInfo);
+    static void didReceiveMessage(WKBundleRef, WKStringRef messageName, WKTypeRef messageBody, const void* clientInfo);
 
-    void didCreatePage(WKBundlePageRef page);
-    void willDestroyPage(WKBundlePageRef page);
+    void didCreatePage(WKBundlePageRef);
+    void willDestroyPage(WKBundlePageRef);
+    void didInitializePageGroup(WKBundlePageGroupRef);
     void didReceiveMessage(WKStringRef messageName, WKTypeRef messageBody);
+
+    void platformInitialize(WKTypeRef initializationUserData);
+    void resetLocalSettings();
 
     void beginTesting();
 
     WKBundleRef m_bundle;
-    HashMap<WKBundlePageRef, InjectedBundlePage*> m_otherPages;
-    OwnPtr<InjectedBundlePage> m_mainPage;
+    WKBundlePageGroupRef m_pageGroup;
+    Vector<OwnPtr<InjectedBundlePage> > m_pages;
 
+    RefPtr<AccessibilityController> m_accessibilityController;
     RefPtr<LayoutTestController> m_layoutTestController;
     RefPtr<GCController> m_gcController;
     RefPtr<EventSendingController> m_eventSendingController;
     RefPtr<TextInputController> m_textInputController;
+
+    WKBundleFrameRef m_topLoadingFrame;
 
     std::ostringstream m_outputStream;
     

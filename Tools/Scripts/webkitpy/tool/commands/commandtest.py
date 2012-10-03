@@ -45,4 +45,4 @@ class CommandsTest(TestCase):
         options.quiet = True
         options.reviewer = 'MOCK reviewer'
         command.bind_to_tool(tool)
-        OutputCapture().assert_outputs(self, command.execute, [options, args, tool], expected_stdout=expected_stdout, expected_stderr=expected_stderr)
+        OutputCapture().assert_outputs(self, command.execute, [options, args, tool], expected_stdout=expected_stdout, expected_stderr=expected_stderr, expected_exception=expected_exception)

@@ -25,18 +25,19 @@
 #ifndef CCLayerTreeHostImpl_h
 #define CCLayerTreeHostImpl_h
 
+#include "cc/CCAnimationEvents.h"
+#include "cc/CCInputHandler.h"
+#include "cc/CCLayerSorter.h"
 #include "cc/CCLayerTreeHost.h"
 #include "cc/CCLayerTreeHostCommon.h"
-#include "cc/CCScrollController.h"
+#include "cc/CCRenderPass.h"
+#include <wtf/PassOwnPtr.h>
 #include <wtf/RefPtr.h>
-
-#if USE(SKIA)
-class GrContext;
-#endif
 
 namespace WebCore {
 
 class CCCompletionEvent;
+class CCPageScaleAnimation;
 class CCLayerImpl;
 class LayerRendererChromium;
 class TextureAllocator;
@@ -49,24 +50,33 @@ public:
     virtual void onSwapBuffersCompleteOnImplThread() = 0;
     virtual void setNeedsRedrawOnImplThread() = 0;
     virtual void setNeedsCommitOnImplThread() = 0;
+    virtual void postAnimationEventsToMainThreadOnImplThread(PassOwnPtr<CCAnimationEventsVector>) = 0;
 };
 
 // CCLayerTreeHostImpl owns the CCLayerImpl tree as well as associated rendering state
-class CCLayerTreeHostImpl : public CCScrollController {
+class CCLayerTreeHostImpl : public CCInputHandlerClient {
     WTF_MAKE_NONCOPYABLE(CCLayerTreeHostImpl);
 public:
     static PassOwnPtr<CCLayerTreeHostImpl> create(const CCSettings&, CCLayerTreeHostImplClient*);
     virtual ~CCLayerTreeHostImpl();
 
-    // CCScrollController implementation
-    virtual void scrollRootLayer(const IntSize&);
-    virtual bool haveWheelEventHandlers();
+    // CCInputHandlerClient implementation
+    virtual void setNeedsRedraw();
+    virtual CCInputHandlerClient::ScrollStatus scrollBegin(const IntPoint&, CCInputHandlerClient::ScrollInputType);
+    virtual void scrollBy(const IntSize&);
+    virtual void scrollEnd();
+    virtual void pinchGestureBegin();
+    virtual void pinchGestureUpdate(float, const IntPoint&);
+    virtual void pinchGestureEnd();
+    virtual void startPageScaleAnimation(const IntSize& targetPosition, bool anchorPoint, float pageScale, double startTimeMs, double durationMs);
 
-    // Virtual for testing
+    // Virtual for testing.
     virtual void beginCommit();
     virtual void commitComplete();
+    virtual void animate(double frameDisplayTimeMs);
     virtual void drawLayers();
 
+    bool canDraw();
     GraphicsContext3D* context();
 
     void finishAllRendering();
@@ -84,55 +94,87 @@ public:
     void readback(void* pixels, const IntRect&);
 
     CCLayerImpl* rootLayer() const { return m_rootLayerImpl.get(); }
-    void setRootLayer(PassRefPtr<CCLayerImpl>);
+    void setRootLayer(PassOwnPtr<CCLayerImpl>);
+    PassOwnPtr<CCLayerImpl> releaseRootLayer() { return m_rootLayerImpl.release(); }
 
-    CCLayerImpl* scrollLayer() const { return m_scrollLayerImpl.get(); }
+    CCLayerImpl* scrollLayer() const { return m_scrollLayerImpl; }
 
     bool visible() const { return m_visible; }
     void setVisible(bool);
-    void setHaveWheelEventHandlers(bool haveWheelEventHandlers) { m_haveWheelEventHandlers = haveWheelEventHandlers; }
 
     int sourceFrameNumber() const { return m_sourceFrameNumber; }
     void setSourceFrameNumber(int frameNumber) { m_sourceFrameNumber = frameNumber; }
 
-    void setViewport(const IntSize& viewportSize);
+    void setViewportSize(const IntSize&);
     const IntSize& viewportSize() const { return m_viewportSize; }
-    void setZoomAnimatorTransform(const TransformationMatrix&);
 
-    void setPageScale(float);
+    void setPageScaleFactorAndLimits(float pageScale, float minPageScale, float maxPageScale);
     float pageScale() const { return m_pageScale; }
-    void setPageScaleFactorLimits(float minPageScale, float maxPageScale);
 
     const CCSettings& settings() const { return m_settings; }
 
-    virtual void pinchGestureBegin();
-    virtual void pinchGestureUpdate(float, const IntPoint&);
-    virtual void pinchGestureEnd();
     PassOwnPtr<CCScrollAndScaleSet> processScrollDeltas();
-    void updateMaxScrollPosition();
+
+    // Where possible, redraws are scissored to a damage region calculated from changes to
+    // layer properties. This function overrides the damage region for the next draw cycle.
+    void setFullRootLayerDamage();
+
+    void startPageScaleAnimation(const IntSize& tragetPosition, bool useAnchor, float scale, double durationSec);
+
+    bool needsAnimateLayers() const { return m_needsAnimateLayers; }
+    void setNeedsAnimateLayers() { m_needsAnimateLayers = true; }
 
 protected:
     CCLayerTreeHostImpl(const CCSettings&, CCLayerTreeHostImplClient*);
+
+    void animatePageScale(double frameBeginTimeMs);
+
+    // Virtual for testing.
+    virtual void animateLayers(double frameBeginTimeMs);
+
     CCLayerTreeHostImplClient* m_client;
     int m_sourceFrameNumber;
     int m_frameNumber;
 
 private:
-    void setScaleDelta(float);
+    typedef Vector<CCLayerImpl*> CCLayerList;
+
+    void computeDoubleTapZoomDeltas(CCScrollAndScaleSet* scrollInfo);
+    void computePinchZoomDeltas(CCScrollAndScaleSet* scrollInfo);
+    void makeScrollAndScaleSet(CCScrollAndScaleSet* scrollInfo, const IntSize& scrollOffset, float pageScale);
+
+    void setPageScaleDelta(float);
+    void applyPageScaleDeltaToScrollLayer();
+    void adjustScrollsForPageScaleChange(float);
+    void updateMaxScrollPosition();
+    void trackDamageForAllSurfaces(CCLayerImpl* rootDrawLayer, const CCLayerList& renderSurfaceLayerList);
+    void calculateRenderPasses(CCRenderPassList&, CCLayerList& renderSurfaceLayerList);
+    void optimizeRenderPasses(CCRenderPassList&);
+    void animateLayersRecursive(CCLayerImpl*, double frameBeginTimeSecs, CCAnimationEventsVector&, bool& didAnimate, bool& needsAnimateLayers);
+    IntSize contentSize() const;
 
     OwnPtr<LayerRendererChromium> m_layerRenderer;
-    RefPtr<CCLayerImpl> m_rootLayerImpl;
-    RefPtr<CCLayerImpl> m_scrollLayerImpl;
+    OwnPtr<CCLayerImpl> m_rootLayerImpl;
+    CCLayerImpl* m_scrollLayerImpl;
     CCSettings m_settings;
     IntSize m_viewportSize;
     bool m_visible;
-    bool m_haveWheelEventHandlers;
 
     float m_pageScale;
-    float m_scaleDelta;
+    float m_pageScaleDelta;
+    float m_sentPageScaleDelta;
     float m_minPageScale, m_maxPageScale;
 
+    // If this is true, it is necessary to traverse the layer tree ticking the animators.
+    bool m_needsAnimateLayers;
     bool m_pinchGestureActive;
+    IntPoint m_previousPinchAnchor;
+
+    OwnPtr<CCPageScaleAnimation> m_pageScaleAnimation;
+
+    CCLayerSorter m_layerSorter;
+
+    FloatRect m_rootDamageRect;
 };
 
 };

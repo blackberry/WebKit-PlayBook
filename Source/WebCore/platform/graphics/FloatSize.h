@@ -32,8 +32,6 @@
 #include <wtf/MathExtras.h>
 
 #if PLATFORM(BLACKBERRY)
-#include "PlatformString.h"
-#include <wtf/text/CString.h>
 namespace BlackBerry {
 namespace Platform {
 class FloatSize;
@@ -56,12 +54,14 @@ typedef struct _NSSize NSSize;
 namespace WebCore {
 
 class IntSize;
+class FractionalLayoutSize;
 
 class FloatSize {
 public:
     FloatSize() : m_width(0), m_height(0) { }
     FloatSize(float width, float height) : m_width(width), m_height(height) { }
     FloatSize(const IntSize&);
+    FloatSize(const FractionalLayoutSize&);
 
     static FloatSize narrowPrecision(double width, double height);
 
@@ -117,11 +117,6 @@ public:
 #if PLATFORM(BLACKBERRY)
     FloatSize(const BlackBerry::Platform::FloatSize&);
     operator BlackBerry::Platform::FloatSize() const;
-
-    String toString() const
-    {
-        return String::format("(%.2fx%.2f)", m_width, m_height);
-    }
 #endif
 
 #if USE(CG) || (PLATFORM(WX) && OS(DARWIN)) || USE(SKIA_ON_MAC_CHROMIUM)

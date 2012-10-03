@@ -32,14 +32,15 @@
 
 #include "WebFrame.h"
 #include "WebFrameClient.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLLoader.h"
-#include "WebURLLoaderClient.h"
 #include "WebURLLoaderOptions.h"
-#include "WebURLRequest.h"
-#include "WebURLResponse.h"
 #include "WebView.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLLoader.h"
+#include "platform/WebURLLoaderClient.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebURLResponse.h"
+#include <wtf/text/WTFString.h>
 
 #include <googleurl/src/gurl.h>
 #include <gtest/gtest.h>
@@ -72,6 +73,7 @@ public:
         ,  m_didReceiveCachedMetadata(false)
         ,  m_didFinishLoading(false)
         ,  m_didFail(false)
+        ,  m_runningMessageLoop(false)
     {
         // Reuse one of the test files from WebFrameTest.
         std::string filePath = webkit_support::GetWebKitRootDir().utf8();
@@ -123,8 +125,8 @@ public:
         EXPECT_EQ(m_expectedLoader, loader);
         EXPECT_EQ(m_expectedNewRequest.url(), newRequest.url());
         EXPECT_EQ(m_expectedRedirectResponse.url(), redirectResponse.url());
-        EXPECT_EQ(m_expectedRedirectResponse.mimeType(), redirectResponse.mimeType());
         EXPECT_EQ(m_expectedRedirectResponse.httpStatusCode(), redirectResponse.httpStatusCode());
+        EXPECT_EQ(m_expectedRedirectResponse.mimeType(), redirectResponse.mimeType());
     }
 
     void didSendData(WebURLLoader* loader, unsigned long long bytesSent, unsigned long long totalBytesToBeSent)
@@ -136,6 +138,7 @@ public:
     void didReceiveResponse(WebURLLoader* loader, const WebURLResponse& response)
     {
         m_didReceiveResponse = true;
+        m_actualResponse = WebURLResponse(response);
         EXPECT_EQ(m_expectedLoader, loader);
         EXPECT_EQ(m_expectedResponse.url(), response.url());
         EXPECT_EQ(m_expectedResponse.httpStatusCode(), response.httpStatusCode());
@@ -171,7 +174,10 @@ public:
     {
         m_didFail = true;
         EXPECT_EQ(m_expectedLoader, loader);
-        webkit_support::QuitMessageLoop();
+        if (m_runningMessageLoop) {
+            m_runningMessageLoop = false;
+            webkit_support::QuitMessageLoop();
+        }
     }
 
     void CheckMethodFails(const char* unsafeMethod)
@@ -210,8 +216,46 @@ public:
         // Failure should not be reported synchronously.
         EXPECT_FALSE(m_didFail);
         // Allow the loader to return the error.
+        m_runningMessageLoop = true;
         webkit_support::RunMessageLoop();
         EXPECT_TRUE(m_didFail);
+        EXPECT_FALSE(m_didReceiveResponse);
+    }
+
+    bool CheckAccessControlHeaders(const char* headerName, bool exposed)
+    {
+        std::string id("http://www.other.com/CheckAccessControlExposeHeaders_");
+        id.append(headerName);
+        if (exposed)
+            id.append("-Exposed");
+        id.append(".html");
+
+        GURL url = GURL(id);
+        WebURLRequest request;
+        request.initialize();
+        request.setURL(url);
+
+        WebString headerNameString(WebString::fromUTF8(headerName));
+        m_expectedResponse = WebURLResponse();
+        m_expectedResponse.initialize();
+        m_expectedResponse.setMIMEType("text/html");
+        m_expectedResponse.addHTTPHeaderField("Access-Control-Allow-Origin", "*");
+        if (exposed)
+            m_expectedResponse.addHTTPHeaderField("access-control-expose-header", headerNameString);
+        m_expectedResponse.addHTTPHeaderField(headerNameString, "foo");
+        webkit_support::RegisterMockedURL(url, m_expectedResponse, m_frameFilePath);
+
+        WebURLLoaderOptions options;
+        options.crossOriginRequestPolicy = WebURLLoaderOptions::CrossOriginRequestPolicyUseAccessControl;
+        m_expectedLoader = createAssociatedURLLoader(options);
+        EXPECT_TRUE(m_expectedLoader);
+        m_expectedLoader->loadAsynchronously(request, this);
+        serveRequests();
+        EXPECT_TRUE(m_didReceiveResponse);
+        EXPECT_TRUE(m_didReceiveData);
+        EXPECT_TRUE(m_didFinishLoading);
+
+        return !m_actualResponse.httpHeaderField(headerNameString).isEmpty();
     }
 
 protected:
@@ -220,6 +264,7 @@ protected:
     WebView* m_webView;
 
     WebURLLoader* m_expectedLoader;
+    WebURLResponse m_actualResponse;
     WebURLResponse m_expectedResponse;
     WebURLRequest m_expectedNewRequest;
     WebURLResponse m_expectedRedirectResponse;
@@ -231,12 +276,13 @@ protected:
     bool m_didReceiveCachedMetadata;
     bool m_didFinishLoading;
     bool m_didFail;
+    bool m_runningMessageLoop;
 };
 
-// Test a successful URL load.
-TEST_F(AssociatedURLLoaderTest, Success)
+// Test a successful same-origin URL load.
+TEST_F(AssociatedURLLoaderTest, SameOriginSuccess)
 {
-    GURL url = GURL("http://www.test.com/success.html");
+    GURL url = GURL("http://www.test.com/SameOriginSuccess.html");
     WebURLRequest request;
     request.initialize();
     request.setURL(url);
@@ -259,7 +305,7 @@ TEST_F(AssociatedURLLoaderTest, Success)
 TEST_F(AssociatedURLLoaderTest, SameOriginRestriction)
 {
     // This is cross-origin since the frame was loaded from www.test.com.
-    GURL url = GURL("http://www.other.com/failure.html");
+    GURL url = GURL("http://www.other.com/SameOriginRestriction.html");
     WebURLRequest request;
     request.initialize();
     request.setURL(url);
@@ -270,7 +316,7 @@ TEST_F(AssociatedURLLoaderTest, SameOriginRestriction)
 TEST_F(AssociatedURLLoaderTest, CrossOriginSuccess)
 {
     // This is cross-origin since the frame was loaded from www.test.com.
-    GURL url = GURL("http://www.other.com/success.html");
+    GURL url = GURL("http://www.other.com/CrossOriginSuccess.html");
     WebURLRequest request;
     request.initialize();
     request.setURL(url);
@@ -286,6 +332,142 @@ TEST_F(AssociatedURLLoaderTest, CrossOriginSuccess)
     EXPECT_TRUE(m_expectedLoader);
     m_expectedLoader->loadAsynchronously(request, this);
     serveRequests();
+    EXPECT_TRUE(m_didReceiveResponse);
+    EXPECT_TRUE(m_didReceiveData);
+    EXPECT_TRUE(m_didFinishLoading);
+}
+
+// Test a successful cross-origin load using CORS.
+TEST_F(AssociatedURLLoaderTest, CrossOriginWithAccessControlSuccess)
+{
+    // This is cross-origin since the frame was loaded from www.test.com.
+    GURL url = GURL("http://www.other.com/CrossOriginWithAccessControlSuccess.html");
+    WebURLRequest request;
+    request.initialize();
+    request.setURL(url);
+
+    m_expectedResponse = WebURLResponse();
+    m_expectedResponse.initialize();
+    m_expectedResponse.setMIMEType("text/html");
+    m_expectedResponse.addHTTPHeaderField("access-control-allow-origin", "*");
+    webkit_support::RegisterMockedURL(url, m_expectedResponse, m_frameFilePath);
+
+    WebURLLoaderOptions options;
+    options.crossOriginRequestPolicy = WebURLLoaderOptions::CrossOriginRequestPolicyUseAccessControl;
+    m_expectedLoader = createAssociatedURLLoader(options);
+    EXPECT_TRUE(m_expectedLoader);
+    m_expectedLoader->loadAsynchronously(request, this);
+    serveRequests();
+    EXPECT_TRUE(m_didReceiveResponse);
+    EXPECT_TRUE(m_didReceiveData);
+    EXPECT_TRUE(m_didFinishLoading);
+}
+
+// Test an unsuccessful cross-origin load using CORS.
+TEST_F(AssociatedURLLoaderTest, CrossOriginWithAccessControlFailure)
+{
+    // This is cross-origin since the frame was loaded from www.test.com.
+    GURL url = GURL("http://www.other.com/CrossOriginWithAccessControlFailure.html");
+    WebURLRequest request;
+    request.initialize();
+    request.setURL(url);
+
+    m_expectedResponse = WebURLResponse();
+    m_expectedResponse.initialize();
+    m_expectedResponse.setMIMEType("text/html");
+    m_expectedResponse.addHTTPHeaderField("access-control-allow-origin", "*");
+    webkit_support::RegisterMockedURL(url, m_expectedResponse, m_frameFilePath);
+
+    WebURLLoaderOptions options;
+    // Send credentials. This will cause the CORS checks to fail, because credentials can't be
+    // sent to a server which returns the header "access-control-allow-origin" with "*" as its value.
+    options.allowCredentials = true;
+    options.crossOriginRequestPolicy = WebURLLoaderOptions::CrossOriginRequestPolicyUseAccessControl;
+    m_expectedLoader = createAssociatedURLLoader(options);
+    EXPECT_TRUE(m_expectedLoader);
+    m_expectedLoader->loadAsynchronously(request, this);
+
+    // Failure should not be reported synchronously.
+    EXPECT_FALSE(m_didFail);
+    // The loader needs to receive the response, before doing the CORS check.
+    serveRequests();
+    EXPECT_TRUE(m_didFail);
+    EXPECT_FALSE(m_didReceiveResponse);
+}
+
+// Test a same-origin URL redirect and load.
+TEST_F(AssociatedURLLoaderTest, RedirectSuccess)
+{
+    GURL url = GURL("http://www.test.com/RedirectSuccess.html");
+    char redirect[] = "http://www.test.com/RedirectSuccess2.html";  // Same-origin
+    GURL redirectURL = GURL(redirect);
+
+    WebURLRequest request;
+    request.initialize();
+    request.setURL(url);
+
+    m_expectedRedirectResponse = WebURLResponse();
+    m_expectedRedirectResponse.initialize();
+    m_expectedRedirectResponse.setMIMEType("text/html");
+    m_expectedRedirectResponse.setHTTPStatusCode(301);
+    m_expectedRedirectResponse.setHTTPHeaderField("Location", redirect);
+    webkit_support::RegisterMockedURL(url, m_expectedRedirectResponse, m_frameFilePath);
+
+    m_expectedNewRequest = WebURLRequest();
+    m_expectedNewRequest.initialize();
+    m_expectedNewRequest.setURL(redirectURL);
+
+    m_expectedResponse = WebURLResponse();
+    m_expectedResponse.initialize();
+    m_expectedResponse.setMIMEType("text/html");
+    webkit_support::RegisterMockedURL(redirectURL, m_expectedResponse, m_frameFilePath);
+
+    m_expectedLoader = createAssociatedURLLoader();
+    EXPECT_TRUE(m_expectedLoader);
+    m_expectedLoader->loadAsynchronously(request, this);
+    serveRequests();
+    EXPECT_TRUE(m_willSendRequest);
+    EXPECT_TRUE(m_didReceiveResponse);
+    EXPECT_TRUE(m_didReceiveData);
+    EXPECT_TRUE(m_didFinishLoading);
+}
+
+// Test a successful redirect and cross-origin load using CORS.
+// FIXME: Enable this when DocumentThreadableLoader supports cross-origin redirects.
+TEST_F(AssociatedURLLoaderTest, DISABLED_RedirectCrossOriginWithAccessControlSuccess)
+{
+    GURL url = GURL("http://www.test.com/RedirectCrossOriginWithAccessControlSuccess.html");
+    char redirect[] = "http://www.other.com/RedirectCrossOriginWithAccessControlSuccess.html";  // Cross-origin
+    GURL redirectURL = GURL(redirect);
+
+    WebURLRequest request;
+    request.initialize();
+    request.setURL(url);
+
+    m_expectedRedirectResponse = WebURLResponse();
+    m_expectedRedirectResponse.initialize();
+    m_expectedRedirectResponse.setMIMEType("text/html");
+    m_expectedRedirectResponse.setHTTPStatusCode(301);
+    m_expectedRedirectResponse.setHTTPHeaderField("Location", redirect);
+    webkit_support::RegisterMockedURL(url, m_expectedRedirectResponse, m_frameFilePath);
+
+    m_expectedNewRequest = WebURLRequest();
+    m_expectedNewRequest.initialize();
+    m_expectedNewRequest.setURL(redirectURL);
+
+    m_expectedResponse = WebURLResponse();
+    m_expectedResponse.initialize();
+    m_expectedResponse.setMIMEType("text/html");
+    m_expectedResponse.addHTTPHeaderField("access-control-allow-origin", "*");
+    webkit_support::RegisterMockedURL(redirectURL, m_expectedResponse, m_frameFilePath);
+
+    WebURLLoaderOptions options;
+    options.crossOriginRequestPolicy = WebURLLoaderOptions::CrossOriginRequestPolicyUseAccessControl;
+    m_expectedLoader = createAssociatedURLLoader(options);
+    EXPECT_TRUE(m_expectedLoader);
+    m_expectedLoader->loadAsynchronously(request, this);
+    serveRequests();
+    EXPECT_TRUE(m_willSendRequest);
     EXPECT_TRUE(m_didReceiveResponse);
     EXPECT_TRUE(m_didReceiveData);
     EXPECT_TRUE(m_didFinishLoading);
@@ -342,6 +524,31 @@ TEST_F(AssociatedURLLoaderTest, UntrustedCheckHeaders)
 
     // Check invalid header values.
     CheckHeaderFails("foo", "bar\x0d\x0ax-csrf-token:\x20test1234");
+}
+
+// Test that the loader filters response headers according to the CORS standard.
+TEST_F(AssociatedURLLoaderTest, CrossOriginHeaderWhitelisting)
+{
+    // Test that whitelisted headers are returned without exposing them.
+    EXPECT_TRUE(CheckAccessControlHeaders("cache-control", false));
+    EXPECT_TRUE(CheckAccessControlHeaders("content-language", false));
+    EXPECT_TRUE(CheckAccessControlHeaders("content-type", false));
+    EXPECT_TRUE(CheckAccessControlHeaders("expires", false));
+    EXPECT_TRUE(CheckAccessControlHeaders("last-modified", false));
+    EXPECT_TRUE(CheckAccessControlHeaders("pragma", false));
+
+    // Test that non-whitelisted headers aren't returned.
+    EXPECT_FALSE(CheckAccessControlHeaders("non-whitelisted", false));
+
+    // Test that Set-Cookie headers aren't returned.
+    EXPECT_FALSE(CheckAccessControlHeaders("Set-Cookie", false));
+    EXPECT_FALSE(CheckAccessControlHeaders("Set-Cookie2", false));
+
+    // Test that exposed headers that aren't whitelisted are returned.
+    EXPECT_TRUE(CheckAccessControlHeaders("non-whitelisted", true));
+
+    // Test that Set-Cookie headers aren't returned, even if exposed.
+    EXPECT_FALSE(CheckAccessControlHeaders("Set-Cookie", true));
 }
 
 }

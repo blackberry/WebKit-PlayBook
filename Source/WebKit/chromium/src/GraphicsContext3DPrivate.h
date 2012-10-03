@@ -41,8 +41,7 @@ class GrContext;
 
 namespace WebKit {
 class WebGraphicsContext3D;
-class WebViewImpl;
-} // namespace WebKit
+}
 
 namespace WebCore {
 
@@ -50,25 +49,15 @@ class DrawingBuffer;
 class Extensions3DChromium;
 class GraphicsContextLostCallbackAdapter;
 class GraphicsContext3DSwapBuffersCompleteCallbackAdapter;
+class GraphicsErrorMessageCallbackAdapter;
+class GraphicsContext3DMemoryAllocationChangedCallbackAdapter;
 
 class GraphicsContext3DPrivate {
 public:
-    static PassOwnPtr<GraphicsContext3DPrivate> create(WebKit::WebViewImpl*, PassOwnPtr<WebKit::WebGraphicsContext3D>, GraphicsContext3D::Attributes);
-
-    enum ThreadUsage {
-        ForUseOnThisThread,
-        ForUseOnAnotherThread,
-    };
-
-    // createGraphicsContextForAnotherThread is equivalent to
-    // GraphicsContext3D::create, but will skip making the context
-    // current. Callers must make the context current before using it AND check
-    // that the context was created successfully via ContextLost. Once made
-    // current on a thread, the context cannot be used on any other thread.
-    static PassRefPtr<GraphicsContext3D> createGraphicsContextForAnotherThread(GraphicsContext3D::Attributes, HostWindow*, GraphicsContext3D::RenderStyle);
-
-    // Used in tests to create a GraphicsContext3D from a mocked WebGraphicsContext3D.
-    static PassRefPtr<GraphicsContext3D> createGraphicsContextFromWebContext(PassOwnPtr<WebKit::WebGraphicsContext3D>, GraphicsContext3D::Attributes, HostWindow*, GraphicsContext3D::RenderStyle, ThreadUsage);
+    // Callers must make the context current before using it AND check that the context was created successfully
+    // via ContextLost before using the context in any way. Once made current on a thread, the context cannot
+    // be used on any other thread.
+    static PassRefPtr<GraphicsContext3D> createGraphicsContextFromWebContext(PassOwnPtr<WebKit::WebGraphicsContext3D>, GraphicsContext3D::RenderStyle, bool preserveDrawingBuffer = false);
 
     ~GraphicsContext3DPrivate();
 
@@ -96,7 +85,6 @@ public:
     void paintRenderingResultsToCanvas(CanvasRenderingContext*, DrawingBuffer*);
     void paintFramebufferToCanvas(int framebuffer, int width, int height, bool premultiplyAlpha, ImageBuffer*);
     PassRefPtr<ImageData> paintRenderingResultsToImageData(DrawingBuffer*);
-    bool paintsIntoCanvasBuffer() const;
     bool paintCompositedResultsToCanvas(CanvasRenderingContext*);
 
     void prepareTexture();
@@ -137,6 +125,8 @@ public:
     void colorMask(GC3Dboolean red, GC3Dboolean green, GC3Dboolean blue, GC3Dboolean alpha);
     void compileShader(Platform3DObject);
 
+    void compressedTexImage2D(GC3Denum target, GC3Dint level, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height, GC3Dint border, GC3Dsizei imageSize, const void* data);
+    void compressedTexSubImage2D(GC3Denum target, GC3Dint level, GC3Dint xoffset, GC3Dint yoffset, GC3Dsizei width, GC3Dsizei height, GC3Denum format, GC3Dsizei imageSize, const void* data);
     void copyTexImage2D(GC3Denum target, GC3Dint level, GC3Denum internalformat, GC3Dint x, GC3Dint y, GC3Dsizei width, GC3Dsizei height, GC3Dint border);
     void copyTexSubImage2D(GC3Denum target, GC3Dint level, GC3Dint xoffset, GC3Dint yoffset, GC3Dint x, GC3Dint y, GC3Dsizei width, GC3Dsizei height);
     void cullFace(GC3Denum mode);
@@ -271,6 +261,7 @@ public:
     void synthesizeGLError(GC3Denum error);
 
     void setContextLostCallback(PassOwnPtr<GraphicsContext3D::ContextLostCallback>);
+    void setErrorMessageCallback(PassOwnPtr<GraphicsContext3D::ErrorMessageCallback>);
 
     // Extensions3D support.
     Extensions3D* getExtensions();
@@ -291,6 +282,9 @@ public:
     // GL_CHROMIUM_set_visibility
     void setVisibilityCHROMIUM(bool);
 
+    // GL_CHROMIUM_gpu_memory_manager
+    void setGpuMemoryAllocationChangedCallbackCHROMIUM(PassOwnPtr<Extensions3DChromium::GpuMemoryAllocationChangedCallbackCHROMIUM>);
+
     // GL_CHROMIUM_framebuffer_multisample
     void blitFramebufferCHROMIUM(GC3Dint srcX0, GC3Dint srcY0, GC3Dint srcX1, GC3Dint srcY1, GC3Dint dstX0, GC3Dint dstY0, GC3Dint dstX1, GC3Dint dstY1, GC3Dbitfield mask, GC3Denum filter);
     void renderbufferStorageMultisampleCHROMIUM(GC3Denum target, GC3Dsizei samples, GC3Denum internalformat, GC3Dsizei width, GC3Dsizei height);
@@ -307,14 +301,21 @@ public:
     // GL_ANGLE_translated_shader_source
     String getTranslatedShaderSourceANGLE(Platform3DObject shader);
 
+    // GL_CHROMIUM_iosurface
+    void texImageIOSurface2DCHROMIUM(GC3Denum target, GC3Dint width, GC3Dint height, GC3Duint ioSurfaceId, GC3Duint plane);
+
+    // GL_EXT_texture_storage
+    void texStorage2DEXT(GC3Denum target, GC3Dint levels, GC3Duint internalformat, GC3Dint width, GC3Dint height);
+
 private:
-    GraphicsContext3DPrivate(WebKit::WebViewImpl*, PassOwnPtr<WebKit::WebGraphicsContext3D>, GraphicsContext3D::Attributes);
+    GraphicsContext3DPrivate(PassOwnPtr<WebKit::WebGraphicsContext3D>, bool preserveDrawingBuffer);
 
     OwnPtr<WebKit::WebGraphicsContext3D> m_impl;
     OwnPtr<Extensions3DChromium> m_extensions;
     OwnPtr<GraphicsContextLostCallbackAdapter> m_contextLostCallbackAdapter;
+    OwnPtr<GraphicsErrorMessageCallbackAdapter> m_errorMessageCallbackAdapter;
     OwnPtr<GraphicsContext3DSwapBuffersCompleteCallbackAdapter> m_swapBuffersCompleteCallbackAdapter;
-    WebKit::WebViewImpl* m_webViewImpl;
+    OwnPtr<GraphicsContext3DMemoryAllocationChangedCallbackAdapter> m_memoryAllocationChangedCallbackAdapter;
     bool m_initializedAvailableExtensions;
     HashSet<String> m_enabledExtensions;
     HashSet<String> m_requestableExtensions;

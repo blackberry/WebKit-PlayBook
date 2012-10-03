@@ -33,7 +33,7 @@
 
 namespace WebCore {
 
-class HTMLMediaElement;
+class MediaControllerInterface;
 
 class MediaControls : public HTMLDivElement {
   public:
@@ -41,7 +41,9 @@ class MediaControls : public HTMLDivElement {
 
     // This function is to be implemented in your port-specific media
     // controls implementation.
-    static PassRefPtr<MediaControls> create(HTMLMediaElement*);
+    static PassRefPtr<MediaControls> create(Document*);
+
+    virtual void setMediaController(MediaControllerInterface*) = 0;
 
     virtual void show() = 0;
     virtual void hide() = 0;
@@ -71,8 +73,16 @@ class MediaControls : public HTMLDivElement {
 
     virtual bool shouldHideControls() = 0;
 
+#if ENABLE(VIDEO_TRACK)
+    virtual void showTextTrackDisplay() = 0;
+    virtual void hideTextTrackDisplay() = 0;
+    virtual void updateTextTrackDisplay() = 0;
+#endif
+
+    virtual void bufferingProgressed() = 0;
+
 protected:
-    MediaControls(HTMLMediaElement*);
+    MediaControls(Document*);
 
 private:
     MediaControls();

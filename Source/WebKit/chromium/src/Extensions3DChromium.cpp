@@ -107,6 +107,11 @@ void Extensions3DChromium::setVisibilityCHROMIUM(bool visibility)
     m_private->setVisibilityCHROMIUM(visibility);
 }
 
+void Extensions3DChromium::setGpuMemoryAllocationChangedCallbackCHROMIUM(PassOwnPtr<GpuMemoryAllocationChangedCallbackCHROMIUM> callback)
+{
+    m_private->setGpuMemoryAllocationChangedCallbackCHROMIUM(callback);
+}
+
 Platform3DObject Extensions3DChromium::createVertexArrayOES()
 {
     return 0;
@@ -143,6 +148,16 @@ void Extensions3DChromium::rateLimitOffscreenContextCHROMIUM()
 void Extensions3DChromium::paintFramebufferToCanvas(int framebuffer, int width, int height, bool premultiplyAlpha, ImageBuffer* imageBuffer)
 {
     m_private->paintFramebufferToCanvas(framebuffer, width, height, premultiplyAlpha, imageBuffer);
+}
+
+void Extensions3DChromium::texImageIOSurface2DCHROMIUM(unsigned target, int width, int height, uint32_t ioSurfaceId, unsigned plane)
+{
+    m_private->texImageIOSurface2DCHROMIUM(target, width, height, ioSurfaceId, plane);
+}
+
+void Extensions3DChromium::texStorage2DEXT(unsigned int target, int levels, unsigned int internalFormat, int width, int height)
+{
+    m_private->texStorage2DEXT(target, levels, internalFormat, width, height);
 }
 
 } // namespace WebCore

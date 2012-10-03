@@ -34,6 +34,7 @@
 #include "GlyphBuffer.h"
 #include "GraphicsContext.h"
 #include "PlatformContextSkia.h"
+#include "PlatformSupport.h"
 #include "SimpleFontData.h"
 
 #include "SkCanvas.h"
@@ -43,20 +44,14 @@
 
 namespace WebCore {
 
-// FIXME: Determine if the Mac port of Chromium using Skia can return fallback
-// fonts for complex text. (The Windows and Linux ports for Chromium do not.)
-// This issue is tracked in https://bugs.webkit.org/show_bug.cgi?id=62986
 bool Font::canReturnFallbackFontsForComplexText()
 {
-    return false;
+    return true;
 }
 
-// FIXME: Determine if the Mac port of Chromium using Skia can expand around
-// ideographs in complex text. (The Windows and Linux ports for Chromium can't.)
-// This issue is tracked in https://bugs.webkit.org/show_bug.cgi?id=62987
 bool Font::canExpandAroundIdeographsInComplexText()
 {
-    return false;
+    return true;
 }
 
 static bool isCanvasMultiLayered(SkCanvas* canvas)
@@ -76,21 +71,23 @@ static void adjustTextRenderMode(SkPaint* paint, PlatformContextSkia* skiaContex
         paint->setLCDRenderText(false);
 }
 
-static void setupPaint(SkPaint* paint, const SimpleFontData* fontData, const Font* font)
+static void setupPaint(SkPaint* paint, const SimpleFontData* fontData, const Font* font, bool shouldAntialias, bool shouldSmoothFonts)
 {
     const FontPlatformData& platformData = fontData->platformData();
     const float textSize = platformData.m_size >= 0 ? platformData.m_size : 12;
 
-    paint->setAntiAlias(true);
+    paint->setAntiAlias(shouldAntialias);
     paint->setEmbeddedBitmapText(false);
     paint->setTextSize(SkFloatToScalar(textSize));
+    paint->setVerticalText(platformData.orientation() == Vertical);
     SkTypeface* typeface = SkCreateTypefaceFromCTFont(platformData.ctFont());
     SkAutoUnref autoUnref(typeface);
     paint->setTypeface(typeface);
     paint->setFakeBoldText(platformData.m_syntheticBold);
     paint->setTextSkewX(platformData.m_syntheticOblique ? -SK_Scalar1 / 4 : 0);
     paint->setAutohinted(false); // freetype specific
-    paint->setLCDRenderText(true); // font->fontDescription().fontSmoothing() == SubpixelAntialiased);
+    paint->setLCDRenderText(shouldSmoothFonts);
+    paint->setSubpixelText(true);
 }
 
 // TODO: This needs to be split into helper functions to better scope the
@@ -101,10 +98,33 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
                       const FloatPoint& point) const {
     COMPILE_ASSERT(sizeof(GlyphBufferGlyph) == sizeof(uint16_t), GlyphBufferGlyphSize_equals_uint16_t);
 
+    bool shouldSmoothFonts = true;
+    bool shouldAntialias = true;
+    
+    switch (fontDescription().fontSmoothing()) {
+    case Antialiased:
+        shouldSmoothFonts = false;
+        break;
+    case SubpixelAntialiased:
+        break;
+    case NoSmoothing:
+        shouldAntialias = false;
+        shouldSmoothFonts = false;
+        break;
+    case AutoSmoothing:
+        // For the AutoSmooth case, don't do anything! Keep the default settings.
+        break; 
+    }
+    
+    if (!shouldUseSmoothing() || PlatformSupport::layoutTestMode())
+        shouldSmoothFonts = false;
+
     const GlyphBufferGlyph* glyphs = glyphBuffer.glyphs(from);
     SkScalar x = SkFloatToScalar(point.x());
     SkScalar y = SkFloatToScalar(point.y());
 
+    if (font->platformData().orientation() == Vertical)
+        y += SkFloatToScalar(font->fontMetrics().floatAscent(IdeographicBaseline) - font->fontMetrics().floatAscent());
     // FIXME: text rendering speed:
     // Android has code in their WebCore fork to special case when the
     // GlyphBuffer has no advances other than the defaults. In that case the
@@ -112,47 +132,35 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
     // patches may be upstreamed to WebKit so we always use the slower path
     // here.
     const GlyphBufferAdvance* adv = glyphBuffer.advances(from);
-    SkAutoSTMalloc<32, SkPoint> storage(numGlyphs), storage2(numGlyphs), storage3(numGlyphs);
+    SkAutoSTMalloc<32, SkPoint> storage(numGlyphs);
     SkPoint* pos = storage.get();
-    SkPoint* vPosBegin = storage2.get();
-    SkPoint* vPosEnd = storage3.get();
 
-    bool isVertical = font->platformData().orientation() == Vertical;
     for (int i = 0; i < numGlyphs; i++) {
-        SkScalar myWidth = SkFloatToScalar(adv[i].width);
         pos[i].set(x, y);
-        if (isVertical) {
-            vPosBegin[i].set(x + myWidth, y);
-            vPosEnd[i].set(x + myWidth, y - myWidth);
-        }
-        x += myWidth;
+        x += SkFloatToScalar(adv[i].width);
         y += SkFloatToScalar(adv[i].height);
     }
 
-    gc->platformContext()->makeGrContextCurrent();
-
     SkCanvas* canvas = gc->platformContext()->canvas();
+    if (font->platformData().orientation() == Vertical) {
+        canvas->save();
+        canvas->rotate(-90);
+        SkMatrix rotator;
+        rotator.reset();
+        rotator.setRotate(90);
+        rotator.mapPoints(pos, numGlyphs);
+    }
     TextDrawingModeFlags textMode = gc->platformContext()->getTextDrawingMode();
 
     // We draw text up to two times (once for fill, once for stroke).
     if (textMode & TextModeFill) {
         SkPaint paint;
         gc->platformContext()->setupPaintForFilling(&paint);
-        setupPaint(&paint, font, this);
+        setupPaint(&paint, font, this, shouldAntialias, shouldSmoothFonts);
         adjustTextRenderMode(&paint, gc->platformContext());
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
-        paint.setColor(gc->fillColor().rgb());
 
-        if (isVertical) {
-            SkPath path;
-            for (int i = 0; i < numGlyphs; ++i) {
-                path.reset();
-                path.moveTo(vPosBegin[i]);
-                path.lineTo(vPosEnd[i]);
-                canvas->drawTextOnPath(glyphs + i, sizeof(uint16_t), path, 0, paint);
-            }
-        } else
-            canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, paint);
+        canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, paint);
     }
 
     if ((textMode & TextModeStroke)
@@ -161,10 +169,9 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
 
         SkPaint paint;
         gc->platformContext()->setupPaintForStroking(&paint, 0, 0);
-        setupPaint(&paint, font, this);
+        setupPaint(&paint, font, this, shouldAntialias, shouldSmoothFonts);
         adjustTextRenderMode(&paint, gc->platformContext());
         paint.setTextEncoding(SkPaint::kGlyphID_TextEncoding);
-        paint.setColor(gc->strokeColor().rgb());
 
         if (textMode & TextModeFill) {
             // If we also filled, we don't want to draw shadows twice.
@@ -172,17 +179,10 @@ void Font::drawGlyphs(GraphicsContext* gc, const SimpleFontData* font,
             paint.setLooper(0);
         }
 
-        if (isVertical) {
-            SkPath path;
-            for (int i = 0; i < numGlyphs; ++i) {
-                path.reset();
-                path.moveTo(vPosBegin[i]);
-                path.lineTo(vPosEnd[i]);
-                canvas->drawTextOnPath(glyphs + i, sizeof(uint16_t), path, 0, paint);
-            }
-        } else
-            canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, paint);
+        canvas->drawPosText(glyphs, numGlyphs * sizeof(uint16_t), pos, paint);
     }
+    if (font->platformData().orientation() == Vertical)
+        canvas->restore();
 }
 
 } // namespace WebCore

@@ -22,6 +22,7 @@
 #include <BlackBerryPlatformExecutableMessage.h>
 #include <BlackBerryPlatformMessage.h>
 #include <BlackBerryPlatformMessageClient.h>
+
 typedef BlackBerry::Platform::Message PlatformMessage;
 
 namespace WebCore {

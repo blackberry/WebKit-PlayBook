@@ -114,16 +114,16 @@ public:
     virtual KeyboardUIMode keyboardUIMode();
     virtual IntRect windowResizerRect() const;
 
-    virtual void invalidateWindow(const IntRect&, bool);
-    virtual void invalidateContentsAndWindow(const IntRect&, bool);
+    virtual void invalidateRootView(const IntRect&, bool);
+    virtual void invalidateContentsAndRootView(const IntRect&, bool);
     virtual void invalidateContentsForSlowScroll(const IntRect&, bool);
     virtual void scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
 #if USE(TILED_BACKING_STORE)
     virtual void delegatedScrollRequested(const IntPoint& scrollPoint);
 #endif
 
-    virtual IntPoint screenToWindow(const IntPoint&) const;
-    virtual IntRect windowToScreen(const IntRect&) const;
+    virtual IntPoint screenToRootView(const IntPoint&) const;
+    virtual IntRect rootViewToScreen(const IntRect&) const;
     virtual PlatformPageClient platformPageClient() const;
     virtual void contentsSizeChanged(Frame*, const IntSize&) const;
 
@@ -138,13 +138,6 @@ public:
 #endif
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
     virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t totalSpaceNeeded);
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() { }
-#endif
-
-#if ENABLE(NOTIFICATIONS)
-    virtual NotificationPresenter* notificationPresenter() const;
-#endif
 
 #if USE(ACCELERATED_COMPOSITING)
     // This is a hook for WebCore to tell us what we need to do with the GraphicsLayers.
@@ -185,6 +178,7 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural();
     virtual bool selectItemAlignmentFollowsMenuWritingDirection();
+    virtual bool hasOpenedPopup() const;
     virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
     virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
     virtual void populateVisitedLinks();
@@ -195,6 +189,7 @@ public:
 
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const { return true; }
     virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void numTouchEventHandlersChanged(unsigned) { }
 
     QWebPage* m_webPage;
     KURL lastHoverURL;

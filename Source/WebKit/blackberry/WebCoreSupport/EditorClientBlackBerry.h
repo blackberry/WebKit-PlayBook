@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -27,7 +27,7 @@
 
 namespace BlackBerry {
 namespace WebKit {
-class WebPage;
+class WebPagePrivate;
 }
 }
 
@@ -35,7 +35,7 @@ namespace WebCore {
 
 class EditorClientBlackBerry : public EditorClient, public TextCheckerClient {
 public:
-    EditorClientBlackBerry(BlackBerry::WebKit::WebPage*);
+    EditorClientBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
     virtual void pageDestroyed();
     virtual bool shouldDeleteRange(Range*);
     virtual bool shouldShowDeleteInterface(HTMLElement*);
@@ -51,7 +51,7 @@ public:
     virtual bool shouldInsertNode(Node*, Range*, EditorInsertAction);
     virtual bool shouldInsertText(const String&, Range*, EditorInsertAction);
     virtual bool shouldChangeSelectedRange(Range*, Range*, EAffinity, bool);
-    virtual bool shouldApplyStyle(CSSStyleDeclaration*, Range*);
+    virtual bool shouldApplyStyle(StylePropertySet*, Range*);
     virtual bool shouldMoveRangeAfterDelete(Range*, Range*);
     virtual void didBeginEditing();
     virtual void respondToChangedContents();
@@ -60,8 +60,8 @@ public:
     virtual void didEndEditing();
     virtual void didWriteSelectionToPasteboard();
     virtual void didSetSelectionTypesForPasteboard();
-    virtual void registerCommandForUndo(WTF::PassRefPtr<EditCommand>);
-    virtual void registerCommandForRedo(WTF::PassRefPtr<EditCommand>);
+    virtual void registerUndoStep(PassRefPtr<UndoStep>);
+    virtual void registerRedoStep(PassRefPtr<UndoStep>);
     virtual void clearUndoRedoOperations();
     virtual bool canCopyCut(Frame*, bool) const;
     virtual bool canPaste(Frame*, bool) const;
@@ -82,16 +82,16 @@ public:
     virtual void learnWord(const String&);
     virtual void checkSpellingOfString(const UChar*, int, int*, int*);
     virtual String getAutoCorrectSuggestionForMisspelledWord(const String& misspelledWord);
-    virtual void checkGrammarOfString(const UChar*, int, WTF::Vector<GrammarDetail, 0u>&, int*, int*);
+    virtual void checkGrammarOfString(const UChar*, int, Vector<GrammarDetail, 0u>&, int*, int*);
     virtual void getGuessesForWord(const String&, const String&, Vector<String>&);
-    virtual void requestCheckingOfString(SpellChecker*, int, TextCheckingTypeMask, const String&);
+    virtual void requestCheckingOfString(SpellChecker*, const TextCheckingRequest&);
 
     virtual TextCheckerClient* textChecker();
     virtual void updateSpellingUIWithGrammarString(const String&, const GrammarDetail&);
     virtual void updateSpellingUIWithMisspelledWord(const String&);
     virtual void showSpellingUI(bool);
     virtual bool spellingUIIsShowing();
-    virtual void getGuessesForWord(const String&, WTF::Vector<String, 0u>&);
+    virtual void getGuessesForWord(const String&, Vector<String, 0u>&);
     virtual void willSetInputMethodState();
     virtual void setInputMethodState(bool);
 
@@ -100,7 +100,7 @@ public:
 private:
     bool shouldSpellCheckFocusedField();
 
-    BlackBerry::WebKit::WebPage* m_page;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
     bool m_waitingForCursorFocus;
 
     enum SpellCheckState { SpellCheckDefault, SpellCheckOn, SpellCheckOff };
@@ -108,7 +108,7 @@ private:
 
     bool m_inRedo;
 
-    typedef Deque<RefPtr<WebCore::EditCommand> > EditCommandStack;
+    typedef Deque<RefPtr<WebCore::UndoStep> > EditCommandStack;
     EditCommandStack m_undoStack;
     EditCommandStack m_redoStack;
 };

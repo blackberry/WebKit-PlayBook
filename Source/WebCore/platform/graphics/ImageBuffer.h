@@ -31,6 +31,7 @@
 #include "AffineTransform.h"
 #include "ColorSpace.h"
 #include "FloatRect.h"
+#include "GraphicsContext.h"
 #if USE(ACCELERATED_COMPOSITING)
 #include "GraphicsLayer.h"
 #endif
@@ -46,7 +47,6 @@
 
 namespace WebCore {
 
-    class GraphicsContext;
     class Image;
     class ImageData;
     class IntPoint;
@@ -59,6 +59,7 @@ namespace WebCore {
 
     enum RenderingMode {
         Unaccelerated,
+        UnacceleratedNonPlatformBuffer, // Use plain memory allocation rather than platform API to allocate backing store.
         Accelerated
     };
     
@@ -67,27 +68,38 @@ namespace WebCore {
         DontCopyBackingStore // Subsequent draws may affect the copy.
     };
 
+    enum DeferralMode {
+        NonDeferred,
+        Deferred
+    };
+
     class ImageBuffer {
         WTF_MAKE_NONCOPYABLE(ImageBuffer); WTF_MAKE_FAST_ALLOCATED;
     public:
         // Will return a null pointer on allocation failure.
-        static PassOwnPtr<ImageBuffer> create(const IntSize& size, ColorSpace colorSpace = ColorSpaceDeviceRGB, RenderingMode renderingMode = Unaccelerated)
+        static PassOwnPtr<ImageBuffer> create(const IntSize& size, float resolutionScale = 1, ColorSpace colorSpace = ColorSpaceDeviceRGB, RenderingMode renderingMode = Unaccelerated, DeferralMode deferralMode = NonDeferred)
         {
             bool success = false;
-            OwnPtr<ImageBuffer> buf = adoptPtr(new ImageBuffer(size, colorSpace, renderingMode, success));
-            if (success)
-                return buf.release();
-            return nullptr;
+            float scaledWidth = ceilf(resolutionScale * size.width());
+            float scaledHeight = ceilf(resolutionScale * size.height());
+            IntSize internalSize(scaledWidth, scaledHeight);
+
+            OwnPtr<ImageBuffer> buf = adoptPtr(new ImageBuffer(internalSize, colorSpace, renderingMode, deferralMode, success));
+            if (!success)
+                return nullptr;
+
+            buf->m_logicalSize = size;
+            buf->m_resolutionScale = resolutionScale;
+            buf->context()->scale(FloatSize(resolutionScale, resolutionScale));
+            return buf.release();
         }
 
         ~ImageBuffer();
 
-        const IntSize& size() const { return m_size; }
-        int width() const { return m_size.width(); }
-        int height() const { return m_size.height(); }
-        
-        size_t dataSize() const;
-        
+        // The actual resolution of the backing store
+        const IntSize& internalSize() const { return m_size; }
+        const IntSize& logicalSize() const { return m_logicalSize; }
+
         GraphicsContext* context() const;
 
         PassRefPtr<Image> copyImage(BackingStoreCopy = CopyBackingStore) const;
@@ -95,6 +107,7 @@ namespace WebCore {
         PassRefPtr<ByteArray> getUnmultipliedImageData(const IntRect&) const;
         PassRefPtr<ByteArray> getPremultipliedImageData(const IntRect&) const;
 
+        void putByteArray(Multiply multiplied, ByteArray*, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint);
         void putUnmultipliedImageData(ByteArray*, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint);
         void putPremultipliedImageData(ByteArray*, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint);
         
@@ -106,7 +119,7 @@ namespace WebCore {
         void transformColorSpace(ColorSpace srcColorSpace, ColorSpace dstColorSpace);
         void platformTransformColorSpace(const Vector<int>&);
 #else
-        AffineTransform baseTransform() const { return AffineTransform(1, 0, 0, -1, 0, m_size.height()); }
+        AffineTransform baseTransform() const { return AffineTransform(1, 0, 0, -1, 0, internalSize().height()); }
 #endif
 #if USE(ACCELERATED_COMPOSITING)
         PlatformLayer* platformLayer() const;
@@ -116,7 +129,6 @@ namespace WebCore {
 #if USE(CG)
         NativeImagePtr copyNativeImage(BackingStoreCopy = CopyBackingStore) const;
 #endif
-
         void clip(GraphicsContext*, const FloatRect&) const;
 
         void draw(GraphicsContext*, ColorSpace, const FloatRect& destRect, const FloatRect& srcRect = FloatRect(0, 0, -1, -1), CompositeOperator = CompositeSourceOver, bool useLowQualityScale = false);
@@ -126,11 +138,14 @@ namespace WebCore {
 
         friend class GraphicsContext;
         friend class GeneratedImage;
+        friend class CrossfadeGeneratedImage;
+        friend class GeneratorGeneratedImage;
 
     private:
         ImageBufferData m_data;
-
         IntSize m_size;
+        IntSize m_logicalSize;
+        float m_resolutionScale;
         OwnPtr<GraphicsContext> m_context;
         bool m_accelerateRendering;
 
@@ -141,7 +156,7 @@ namespace WebCore {
 
         // This constructor will place its success into the given out-variable
         // so that create() knows when it should return failure.
-        ImageBuffer(const IntSize&, ColorSpace, RenderingMode, bool& success);
+        ImageBuffer(const IntSize&, ColorSpace, RenderingMode, DeferralMode, bool& success);
     };
 
 #if USE(CG) || USE(SKIA)

@@ -42,6 +42,7 @@
 #include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
+#include <wtf/Vector.h>
 #include <wtf/text/TextPosition.h>
 
 namespace JSC {
@@ -80,12 +81,23 @@ public:
     void stepOverStatement();
     void stepOutOfFunction();
 
+    bool canSetScriptSource();
     bool setScriptSource(const String& sourceID, const String& newContent, bool preview, String* error, ScriptValue* newCallFrames, ScriptObject* result);
+
+    bool causesRecompilation() { return true; }
+    bool supportsNativeBreakpoints() { return false; }
 
     void recompileAllJSFunctionsSoon();
     virtual void recompileAllJSFunctions(Timer<ScriptDebugServer>* = 0) = 0;
 
+    bool isPaused() { return m_paused; }
     JavaScriptCallFrame* currentCallFrame();
+
+    class Task {
+    public:
+        virtual ~Task() { }
+        virtual void run() = 0;
+    };
 
 protected:
     typedef HashSet<ScriptDebugListener*> ListenerSet;

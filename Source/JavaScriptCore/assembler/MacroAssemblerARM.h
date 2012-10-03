@@ -156,11 +156,6 @@ public:
         m_assembler.rsbs_r(srcDest, srcDest, ARMAssembler::getOp2(0));
     }
 
-    void not32(RegisterID dest)
-    {
-        m_assembler.mvns_r(dest, dest);
-    }
-
     void or32(RegisterID src, RegisterID dest)
     {
         m_assembler.orrs_r(dest, dest, src);
@@ -239,7 +234,10 @@ public:
 
     void xor32(TrustedImm32 imm, RegisterID dest)
     {
-        m_assembler.eors_r(dest, dest, m_assembler.getImm(imm.m_value, ARMRegisters::S0));
+        if (imm.m_value == -1)
+            m_assembler.mvns_r(dest, dest);
+        else
+            m_assembler.eors_r(dest, dest, m_assembler.getImm(imm.m_value, ARMRegisters::S0));
     }
 
     void countLeadingZeros32(RegisterID src, RegisterID dest)
@@ -288,6 +286,10 @@ public:
     }
 #endif
 
+    void load16Unaligned(BaseIndex address, RegisterID dest)
+    {
+        load16(address, dest);
+    }
 #ifdef OPT_FASTACCESS
     DataLabel32 load32WithOffsetPatch(Address address, RegisterID dest)
     {
@@ -997,6 +999,11 @@ public:
     void nop()
     {
         m_assembler.nop();
+    }
+
+    static FunctionPtr readCallTarget(CodeLocationCall call)
+    {
+        return FunctionPtr(reinterpret_cast<void(*)()>(ARMAssembler::readCallTarget(call.dataLocation())));
     }
 
 protected:

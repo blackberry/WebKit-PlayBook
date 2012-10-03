@@ -35,6 +35,7 @@
 namespace WebCore {
 
 class LayerTextureUpdater;
+class Region;
 class UpdatableTile;
 
 class TiledLayerChromium : public LayerChromium {
@@ -49,52 +50,88 @@ public:
     virtual void pushPropertiesTo(CCLayerImpl*);
 
     virtual bool drawsContent() const;
+    virtual bool needsContentsScale() const;
+
+    virtual IntSize contentBounds() const;
+
+    virtual void setNeedsDisplayRect(const FloatRect&);
+
+    virtual void setIsNonCompositedContent(bool);
+
+    virtual void setLayerTreeHost(CCLayerTreeHost*);
 
     // Reserves all existing and valid tile textures to protect them from being
     // recycled by the texture manager.
-    void protectTileTextures(const IntRect& contentRect);
+    void protectTileTextures(const IntRect& layerRect);
+
+    virtual void reserveTextures();
+
+    virtual void addSelfToOccludedScreenSpace(Region& occludedScreenSpace);
 
 protected:
-    explicit TiledLayerChromium(CCLayerDelegate*);
+    TiledLayerChromium();
 
-    virtual void cleanupResources();
     void updateTileSizeAndTilingOption();
+    void updateBounds();
 
-    virtual void createTextureUpdater(const CCLayerTreeHost*) = 0;
+    // Exposed to subclasses for testing.
+    void setTileSize(const IntSize&);
+    void setTextureFormat(GC3Denum textureFormat) { m_textureFormat = textureFormat; }
+    void setBorderTexelOption(CCLayerTilingData::BorderTexelOption);
+    void setSampledTexelFormat(LayerTextureUpdater::SampledTexelFormat sampledTexelFormat) { m_sampledTexelFormat = sampledTexelFormat; }
+
     virtual LayerTextureUpdater* textureUpdater() const = 0;
+    virtual void createTextureUpdaterIfNeeded() = 0;
 
     // Set invalidations to be potentially repainted during update().
-    void invalidateRect(const IntRect& contentRect);
-    // Prepare data needed to update textures that intersect with contentRect.
-    void prepareToUpdate(const IntRect& contentRect);
+    void invalidateRect(const IntRect& layerRect);
+
+    // Reset state on tiles that will be used for updating the layer.
+    void resetUpdateState();
+
+    // Prepare data needed to update textures that intersect with layerRect.
+    void prepareToUpdate(const IntRect& layerRect);
+
+    // Same as above, but this will try to paint additional surrounding content if idle.
+    void prepareToUpdateIdle(const IntRect& layerRect);
+
+    // After preparing an update, returns true if more pre-painting is needed.
+    bool needsIdlePaint(const IntRect& layerRect);
+
+    bool skipsDraw() const { return m_skipsDraw; }
 
     virtual void protectVisibleTileTextures();
 
-private:
-    virtual PassRefPtr<CCLayerImpl> createCCLayerImpl();
+    virtual TextureManager* textureManager() const;
 
-    virtual void setLayerTreeHost(CCLayerTreeHost*);
+private:
+    virtual PassOwnPtr<CCLayerImpl> createCCLayerImpl();
 
     void createTilerIfNeeded();
     void setTilingOption(TilingOption);
 
+    bool tileOnlyNeedsPartialUpdate(UpdatableTile*);
+    bool tileNeedsBufferedUpdate(UpdatableTile*);
+
+    void prepareToUpdateTiles(bool idle, int left, int top, int right, int bottom);
+    IntRect idlePaintRect(const IntRect& visibleLayerRect);
+
     UpdatableTile* tileAt(int, int) const;
     UpdatableTile* createTile(int, int);
 
-    TextureManager* textureManager() const;
-
     // Temporary state held between prepareToUpdate() and updateCompositorResources().
-    IntRect m_requestedUpdateRect;
+    IntRect m_requestedUpdateTilesRect;
+
     // State held between prepareToUpdate() and pushPropertiesTo(). This represents the area
     // of the layer that is actually re-painted by WebKit.
     IntRect m_paintRect;
 
-    TilingOption m_tilingOption;
     GC3Denum m_textureFormat;
     bool m_skipsDraw;
-    LayerTextureUpdater::Orientation m_textureOrientation;
+    bool m_skipsIdlePaint;
     LayerTextureUpdater::SampledTexelFormat m_sampledTexelFormat;
 
+    TilingOption m_tilingOption;
     OwnPtr<CCLayerTilingData> m_tiler;
 };
 

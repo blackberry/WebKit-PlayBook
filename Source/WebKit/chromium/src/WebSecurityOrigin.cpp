@@ -33,8 +33,8 @@
 
 #include "KURL.h"
 #include "SecurityOrigin.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 #include <wtf/PassRefPtr.h>
 
 using namespace WebCore;
@@ -90,8 +90,7 @@ unsigned short WebSecurityOrigin::port() const
     return m_private->port();
 }
 
-// FIXME: Rename this API to isUnique.
-bool WebSecurityOrigin::isEmpty() const
+bool WebSecurityOrigin::isUnique() const
 {
     ASSERT(m_private);
     return m_private->isUnique();

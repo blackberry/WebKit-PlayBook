@@ -26,7 +26,7 @@
 #include "config.h"
 #include "WebKitCSSKeyframeRule.h"
 
-#include "CSSMutableStyleDeclaration.h"
+#include "StylePropertySet.h"
 
 namespace WebCore {
 
@@ -38,7 +38,7 @@ WebKitCSSKeyframeRule::WebKitCSSKeyframeRule(CSSStyleSheet* parent)
 WebKitCSSKeyframeRule::~WebKitCSSKeyframeRule()
 {
     if (m_style)
-        m_style->setParentStyleSheet(0);
+        m_style->clearParentRule(this);
 }
 
 String WebKitCSSKeyframeRule::cssText() const
@@ -46,16 +46,15 @@ String WebKitCSSKeyframeRule::cssText() const
     String result = m_key;
 
     result += " { ";
-    result += m_style->cssText();
+    result += m_style->asText();
     result += "}";
 
     return result;
 }
 
-void WebKitCSSKeyframeRule::setDeclaration(PassRefPtr<CSSMutableStyleDeclaration> style)
+void WebKitCSSKeyframeRule::setDeclaration(PassRefPtr<StylePropertySet> style)
 {
     m_style = style;
-    m_style->setParentStyleSheet(parentStyleSheet());
 }
 
 /* static */

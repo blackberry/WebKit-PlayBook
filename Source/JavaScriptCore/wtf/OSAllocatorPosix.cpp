@@ -36,13 +36,21 @@ namespace WTF {
 
 void* OSAllocator::reserveUncommitted(size_t bytes, Usage usage, bool writable, bool executable, bool includesGuardPages)
 {
-    void* result = reserveAndCommit(bytes, usage, writable, executable, includesGuardPages);
 #if OS(QNX)
-    posix_madvise(result, bytes, POSIX_MADV_DONTNEED);
-#elif HAVE(MADV_FREE_REUSE)
+    // Reserve memory with PROT_NONE and MAP_LAZY so it isn't committed now.
+    void* result = mmap(0, bytes, PROT_NONE, MAP_LAZY | MAP_PRIVATE | MAP_ANON, -1, 0);
+    if (result == MAP_FAILED)
+        CRASH();
+#else // OS(QNX)
+
+    void* result = reserveAndCommit(bytes, usage, writable, executable, includesGuardPages);
+#if HAVE(MADV_FREE_REUSE)
     // To support the "reserve then commit" model, we have to initially decommit.
     while (madvise(result, bytes, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) { }
 #endif
+
+#endif // OS(QNX)
+
     return result;
 }
 
@@ -102,7 +110,7 @@ void* OSAllocator::reserveAndCommit(size_t bytes, Usage usage, bool writable, bo
 
     result = mmap(result, bytes, protection, flags, fd, 0);
     if (result == MAP_FAILED) {
-    #if ENABLE(INTERPRETER)
+    #if ENABLE(CLASSIC_INTERPRETER)
         if (executable)
             result = 0;
         else
@@ -120,23 +128,34 @@ void* OSAllocator::reserveAndCommit(size_t bytes, Usage usage, bool writable, bo
     return result;
 }
 
-void OSAllocator::commit(void* address, size_t bytes, bool, bool)
+void OSAllocator::commit(void* address, size_t bytes, bool writable, bool executable)
 {
 #if OS(QNX)
-    posix_madvise(address, bytes, POSIX_MADV_WILLNEED);
+    int protection = PROT_READ;
+    if (writable)
+        protection |= PROT_WRITE;
+    if (executable)
+        protection |= PROT_EXEC;
+    if (MAP_FAILED == mmap(address, bytes, protection, MAP_FIXED | MAP_PRIVATE | MAP_ANON, -1, 0))
+        CRASH();
 #elif HAVE(MADV_FREE_REUSE)
+    UNUSED_PARAM(writable);
+    UNUSED_PARAM(executable);
     while (madvise(address, bytes, MADV_FREE_REUSE) == -1 && errno == EAGAIN) { }
 #else
     // Non-MADV_FREE_REUSE reservations automatically commit on demand.
     UNUSED_PARAM(address);
     UNUSED_PARAM(bytes);
+    UNUSED_PARAM(writable);
+    UNUSED_PARAM(executable);
 #endif
 }
 
 void OSAllocator::decommit(void* address, size_t bytes)
 {
 #if OS(QNX)
-    posix_madvise(address, bytes, POSIX_MADV_DONTNEED);
+    // Use PROT_NONE and MAP_LAZY to decommit the pages.
+    mmap(address, bytes, PROT_NONE, MAP_FIXED | MAP_LAZY | MAP_PRIVATE | MAP_ANON, -1, 0);
 #elif HAVE(MADV_FREE_REUSE)
     while (madvise(address, bytes, MADV_FREE_REUSABLE) == -1 && errno == EAGAIN) { }
 #elif HAVE(MADV_FREE)

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,7 +19,6 @@
 #ifndef RenderQueue_h
 #define RenderQueue_h
 
-#include "TileIndex.h"
 #include <BlackBerryPlatformIntRectRegion.h>
 #include <BlackBerryPlatformPrimitives.h>
 #include <vector>
@@ -73,13 +72,6 @@ public:
     void reset();
     RenderRect convertToRenderRect(const Platform::IntRect&) const;
 
-    // FIXME: make it private.
-    int splittingFactor(const Platform::IntRect&) const;
-
-    // FIXME: this is not needed.
-    IntRectList convertToRenderRectList(const IntRectList&) const;
-    IntRectList convertToRenderRectList(const Platform::IntRect&) const;
-
     bool isEmpty(bool shouldPerformRegularRenderJobs = true) const;
 
     bool hasCurrentRegularRenderJob() const;
@@ -118,7 +110,7 @@ private:
     void renderRegularRenderJob();
     void renderNonVisibleScrollJob();
 
-    // Methods to handle a completed set of scroll jobs
+    // Methods to handle a completed set of scroll jobs.
     void visibleScrollJobsCompleted(bool shouldBlit);
     void nonVisibleScrollJobsCompleted();
 
@@ -127,8 +119,8 @@ private:
     void addToScrollZoomQueue(const RenderRect&, RenderRectList* queue);
     void quickSort(RenderRectList*);
 
-    // The splitting factor for render rects
-    int splittingFactor() const;
+    // The splitting factor for render rects.
+    int splittingFactor(const Platform::IntRect&) const;
 
     BackingStorePrivate* m_parent;
 

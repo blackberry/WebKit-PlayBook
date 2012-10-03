@@ -138,6 +138,7 @@ public:
     bool isSelected() const;
     bool isSelectable() const;
     bool isMultiSelectable() const;
+    bool isSelectedOptionActive() const;
     void setSelectedChild(AccessibilityUIElement*) const;
     unsigned selectedChildrenCount() const;
     AccessibilityUIElement selectedChildAtIndex(unsigned) const;
@@ -199,6 +200,10 @@ public:
     // Table-specific
     AccessibilityUIElement cellForColumnAndRow(unsigned column, unsigned row);
 
+    // Scrollarea-specific
+    AccessibilityUIElement horizontalScrollbar() const;
+    AccessibilityUIElement verticalScrollbar() const;
+
     // Text markers.
     AccessibilityTextMarkerRange textMarkerRangeForElement(AccessibilityUIElement*);    
     AccessibilityTextMarkerRange textMarkerRangeForMarkers(AccessibilityTextMarker* startMarker, AccessibilityTextMarker* endMarker);
@@ -210,7 +215,12 @@ public:
     AccessibilityUIElement accessibilityElementForTextMarker(AccessibilityTextMarker*);
     JSStringRef stringForTextMarkerRange(AccessibilityTextMarkerRange*);
     int textMarkerRangeLength(AccessibilityTextMarkerRange*);
-    
+    bool attributedStringForTextMarkerRangeContainsAttribute(JSStringRef, AccessibilityTextMarkerRange*);
+
+    void scrollToMakeVisible();
+    void scrollToMakeVisibleWithSubFocus(int x, int y, int width, int height);
+    void scrollToGlobalPoint(int x, int y);
+
     // Notifications
     // Function callback should take one argument, the name of the notification.
     bool addNotificationListener(JSObjectRef functionCallback);

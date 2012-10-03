@@ -26,30 +26,29 @@
 #include "config.h"
 #include "ScrollbarGroup.h"
 
-#include "Page.h"
+#include "FrameView.h"
 #include "Scrollbar.h"
 #include "ScrollbarTheme.h"
-#include "WebRect.h"
+#include "platform/WebRect.h"
 #include "WebScrollbarImpl.h"
 
 using namespace WebCore;
 
 namespace WebKit {
 
-ScrollbarGroup::ScrollbarGroup(Page* page)
-    : m_page(page)
+ScrollbarGroup::ScrollbarGroup(FrameView* frameView)
+    : m_frameView(frameView)
     , m_horizontalScrollbar(0)
     , m_verticalScrollbar(0)
 {
-    m_page->addScrollableArea(this);
+    m_frameView->addScrollableArea(this);
 }
 
 ScrollbarGroup::~ScrollbarGroup()
 {
     ASSERT(!m_horizontalScrollbar);
     ASSERT(!m_verticalScrollbar);
-    if (m_page)
-        m_page->removeScrollableArea(this);
+    m_frameView->removeScrollableArea(this);
 }
 
 void ScrollbarGroup::scrollbarCreated(WebScrollbarImpl* scrollbar)
@@ -233,8 +232,11 @@ bool ScrollbarGroup::shouldSuspendScrollAnimations() const
     return false;
 }
 
-void ScrollbarGroup::scrollbarStyleChanged()
+void ScrollbarGroup::scrollbarStyleChanged(int, bool forceUpdate)
 {
+    if (!forceUpdate)
+        return;
+
     if (m_horizontalScrollbar)
         m_horizontalScrollbar->scrollbarStyleChanged();
     if (m_verticalScrollbar)
@@ -244,11 +246,6 @@ void ScrollbarGroup::scrollbarStyleChanged()
 bool ScrollbarGroup::isOnActivePage() const
 {
     return true;
-}
-
-void ScrollbarGroup::disconnectFromPage()
-{
-    m_page = 0;
 }
 
 } // namespace WebKit

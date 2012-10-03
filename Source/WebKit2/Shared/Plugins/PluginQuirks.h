@@ -33,7 +33,7 @@ public:
     enum PluginQuirk {
         // Mac specific quirks:
 #if PLUGIN_ARCHITECTURE(MAC)
-        // The plug-in wants the call to getprogame() to return "WebKitPluginHost".
+        // The plug-in wants the call to getprogname() to return "WebKitPluginHost".
         // Adobe Flash Will not handle key down events otherwise.
         PrognameShouldBeWebKitPluginHost,
 
@@ -86,6 +86,10 @@ public:
         // and refuse to load and work if it is not GTK 2 so we need to fake it in
         // NPN_GetValue even when it is a lie.
         RequiresGTKToolKit,
+
+        // Some version 10 releases of Flash run under nspluginwrapper will completely
+        // freeze when sending right click events to them in windowed mode.
+        IgnoreRightClickInWindowlessMode,
 
         // Windows specific quirks:
 #elif PLUGIN_ARCHITECTURE(WIN)

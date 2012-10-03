@@ -39,16 +39,16 @@ class Event;
 class Node;
 class ScriptExecutionContext;
 
-class WorkerEventQueue : public RefCounted<WorkerEventQueue>, public EventQueue {
+class WorkerEventQueue : public EventQueue {
 public:
 
     static PassOwnPtr<WorkerEventQueue> create(ScriptExecutionContext*);
     virtual ~WorkerEventQueue();
 
     // EventQueue
-    virtual void enqueueEvent(PassRefPtr<Event>);
-    virtual bool cancelEvent(Event*);
-    virtual void close();
+    virtual bool enqueueEvent(PassRefPtr<Event>) OVERRIDE;
+    virtual bool cancelEvent(Event*) OVERRIDE;
+    virtual void close() OVERRIDE;
 
 private:
     explicit WorkerEventQueue(ScriptExecutionContext*);

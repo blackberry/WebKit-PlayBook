@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,9 +19,11 @@
 #ifndef CanvasLayerWebKitThread_h
 #define CanvasLayerWebKitThread_h
 
-#if USE(ACCELERATED_COMPOSITING) && ENABLE(SKIA_GPU_CANVAS)
+#if USE(ACCELERATED_COMPOSITING) && ENABLE(ACCELERATED_2D_CANVAS)
 
 #include "LayerWebKitThread.h"
+
+class SkGpuDevice;
 
 namespace WebCore {
 
@@ -29,25 +31,28 @@ class HTMLCanvasElement;
 
 class CanvasLayerWebKitThread : public LayerWebKitThread {
 public:
-    static PassRefPtr<CanvasLayerWebKitThread> create(HTMLCanvasElement* canvas)
+    static PassRefPtr<CanvasLayerWebKitThread> create(SkGpuDevice* device)
     {
-        return adoptRef(new CanvasLayerWebKitThread(canvas));
+        return adoptRef(new CanvasLayerWebKitThread(device));
     }
 
     virtual ~CanvasLayerWebKitThread();
 
-    void setCanvas(HTMLCanvasElement*);
+    void setDevice(SkGpuDevice*);
 
     virtual void setNeedsDisplay();
+
+protected:
     virtual void updateTextureContentsIfNeeded();
 
 private:
-    CanvasLayerWebKitThread(HTMLCanvasElement*);
+    CanvasLayerWebKitThread(SkGpuDevice*);
     bool m_needsDisplay;
+    SkGpuDevice* m_device;
 };
 
 }
 
-#endif // USE(ACCELERATED_COMPOSITING) && ENABLE(SKIA_GPU_CANVAS)
+#endif // USE(ACCELERATED_COMPOSITING) && ENABLE(ACCELERATED_2D_CANVAS)
 
 #endif // CanvasLayerWebKitThread_h

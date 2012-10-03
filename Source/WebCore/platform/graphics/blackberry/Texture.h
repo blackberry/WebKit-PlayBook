@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,17 +21,17 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "Color.h"
-#include "FloatRect.h"
-#include "IntRect.h"
 #include "IntSize.h"
 
-#include <SkBitmap.h>
+#include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
+
+class SkBitmap;
 
 namespace WebCore {
 
-class GLES2Context;
+class Color;
+class IntRect;
 class TextureCacheCompositingThread;
 
 // Texture encapsulates a volatile texture - at any time, the underlying OpenGL
@@ -41,45 +41,40 @@ class TextureCacheCompositingThread;
 // If the texture isDirty(), you must updateContents() before you can use it.
 class Texture : public RefCounted<Texture> {
 public:
-    static PassRefPtr<Texture> create(GLES2Context* context)
+    static PassRefPtr<Texture> create(bool isColor = false)
     {
-        return adoptRef(new Texture(context));
-    }
-
-    static PassRefPtr<Texture> createColor(GLES2Context* context)
-    {
-        return adoptRef(new Texture(context, true));
+        return adoptRef(new Texture(isColor));
     }
 
     ~Texture();
 
-    unsigned int textureId() const { return m_textureId; }
+    unsigned textureId() const { return m_textureId; }
 
     bool isDirty() const { return !m_textureId; }
     bool hasTexture() const { return m_textureId; }
 
     bool isColor() const { return m_isColor; }
+    bool isOpaque() const { return m_isOpaque; }
+
     bool isProtected() const { return m_protectionCount > 0; }
     void protect() { ++m_protectionCount; }
     void unprotect() { --m_protectionCount; }
     bool protect(const IntSize&);
 
-    void updateContents(GLES2Context*, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tile, bool isOpaque = false);
-    void setContentsToColor(GLES2Context*, const Color&);
+    void updateContents(const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tile, bool isOpaque);
+    void setContentsToColor(const Color&);
 
     IntSize size() const { return m_size; }
     int width() const { return m_size.width(); }
     int height() const { return m_size.height(); }
     static int bytesPerPixel() { return 4; }
 
-    bool isOpaque() const { return m_isOpaque; }
-
 private:
-    Texture(GLES2Context*, bool isColor = false);
-
-    // The following method is only called by our dear
     friend class TextureCacheCompositingThread;
-    void setTextureId(unsigned int id)
+
+    Texture(bool isColor = false);
+
+    void setTextureId(unsigned id)
     {
         m_textureId = id;
 
@@ -90,7 +85,7 @@ private:
     }
 
     int m_protectionCount;
-    unsigned int m_textureId;
+    unsigned m_textureId;
     IntSize m_size;
     bool m_isColor;
     bool m_isOpaque;

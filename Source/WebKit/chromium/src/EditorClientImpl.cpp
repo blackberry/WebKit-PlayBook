@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006, 2007 Apple, Inc.  All rights reserved.
- * Copyright (C) 2010 Google, Inc.  All rights reserved.
+ * Copyright (C) 2012 Google, Inc.  All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -28,7 +28,6 @@
 #include "EditorClientImpl.h"
 
 #include "Document.h"
-#include "EditCommand.h"
 #include "Editor.h"
 #include "EventHandler.h"
 #include "EventNames.h"
@@ -41,6 +40,7 @@
 #include "PlatformString.h"
 #include "RenderObject.h"
 #include "SpellChecker.h"
+#include "UndoStep.h"
 
 #include "DOMUtilitiesPrivate.h"
 #include "WebAutofillClient.h"
@@ -57,6 +57,7 @@
 #include "WebSpellCheckClient.h"
 #include "WebTextAffinity.h"
 #include "WebTextCheckingCompletionImpl.h"
+#include "WebTextCheckingResult.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 
@@ -237,13 +238,11 @@ bool EditorClientImpl::shouldChangeSelectedRange(Range* fromRange,
     return true;
 }
 
-bool EditorClientImpl::shouldApplyStyle(CSSStyleDeclaration* style,
-                                        Range* range)
+bool EditorClientImpl::shouldApplyStyle(StylePropertySet* style, Range* range)
 {
     if (m_webView->client()) {
         // FIXME: Pass a reference to the CSSStyleDeclaration somehow.
-        return m_webView->client()->shouldApplyStyle(WebString(),
-                                                     WebRange(range));
+        return m_webView->client()->shouldApplyStyle(WebString(), WebRange(range));
     }
     return true;
 }
@@ -260,10 +259,9 @@ void EditorClientImpl::didBeginEditing()
         m_webView->client()->didBeginEditing();
 }
 
-void EditorClientImpl::respondToChangedSelection()
+void EditorClientImpl::respondToChangedSelection(Frame* frame)
 {
     if (m_webView->client()) {
-        Frame* frame = m_webView->focusedWebCoreFrame();
         if (frame)
             m_webView->client()->didChangeSelection(!frame->selection()->isRange());
     }
@@ -289,18 +287,18 @@ void EditorClientImpl::didSetSelectionTypesForPasteboard()
 {
 }
 
-void EditorClientImpl::registerCommandForUndo(PassRefPtr<EditCommand> command)
+void EditorClientImpl::registerUndoStep(PassRefPtr<UndoStep> step)
 {
     if (m_undoStack.size() == maximumUndoStackDepth)
         m_undoStack.removeFirst(); // drop oldest item off the far end
     if (!m_inRedo)
         m_redoStack.clear();
-    m_undoStack.append(command);
+    m_undoStack.append(step);
 }
 
-void EditorClientImpl::registerCommandForRedo(PassRefPtr<EditCommand> command)
+void EditorClientImpl::registerRedoStep(PassRefPtr<UndoStep> step)
 {
-    m_redoStack.append(command);
+    m_redoStack.append(step);
 }
 
 void EditorClientImpl::clearUndoRedoOperations()
@@ -336,10 +334,10 @@ bool EditorClientImpl::canRedo() const
 void EditorClientImpl::undo()
 {
     if (canUndo()) {
-        EditCommandStack::iterator back = --m_undoStack.end();
-        RefPtr<EditCommand> command(*back);
+        UndoManagerStack::iterator back = --m_undoStack.end();
+        RefPtr<UndoStep> step(*back);
         m_undoStack.remove(back);
-        command->unapply();
+        step->unapply();
         // unapply will call us back to push this command onto the redo stack.
     }
 }
@@ -347,13 +345,13 @@ void EditorClientImpl::undo()
 void EditorClientImpl::redo()
 {
     if (canRedo()) {
-        EditCommandStack::iterator back = --m_redoStack.end();
-        RefPtr<EditCommand> command(*back);
+        UndoManagerStack::iterator back = --m_redoStack.end();
+        RefPtr<UndoStep> step(*back);
         m_redoStack.remove(back);
 
         ASSERT(!m_inRedo);
         m_inRedo = true;
-        command->reapply();
+        step->reapply();
         // reapply will call us back to push this command onto the undo stack.
         m_inRedo = false;
     }
@@ -545,7 +543,7 @@ const char* EditorClientImpl::interpretKeyEvent(const KeyboardEvent* evt)
     if (keyEvent->metaKey())
         modifiers |= MetaKey;
 
-    if (keyEvent->type() == PlatformKeyboardEvent::RawKeyDown) {
+    if (keyEvent->type() == PlatformEvent::RawKeyDown) {
         int mapKey = modifiers << 16 | evt->keyCode();
         return mapKey ? keyDownCommandsMap->get(mapKey) : 0;
     }
@@ -568,7 +566,7 @@ bool EditorClientImpl::handleEditingKeyboardEvent(KeyboardEvent* evt)
     String commandName = interpretKeyEvent(evt);
     Editor::Command command = frame->editor()->command(commandName);
 
-    if (keyEvent->type() == PlatformKeyboardEvent::RawKeyDown) {
+    if (keyEvent->type() == PlatformEvent::RawKeyDown) {
         // WebKit doesn't have enough information about mode to decide how
         // commands that just insert text if executed via Editor should be treated,
         // so we leave it upon WebCore to either handle them immediately
@@ -731,10 +729,10 @@ void EditorClientImpl::checkSpellingOfString(const UChar* text, int length,
         *misspellingLength = spellLength;
 }
 
-void EditorClientImpl::requestCheckingOfString(SpellChecker* sender, int identifier, TextCheckingTypeMask, const String& text)
+void EditorClientImpl::requestCheckingOfString(SpellChecker* sender, const WebCore::TextCheckingRequest& request)
 {
     if (m_webView->spellCheckClient())
-        m_webView->spellCheckClient()->requestCheckingOfText(text, new WebTextCheckingCompletionImpl(identifier, sender));
+        m_webView->spellCheckClient()->requestCheckingOfText(request.text(), new WebTextCheckingCompletionImpl(request.sequence(), sender));
 }
 
 String EditorClientImpl::getAutoCorrectSuggestionForMisspelledWord(const String& misspelledWord)
@@ -764,6 +762,22 @@ void EditorClientImpl::checkGrammarOfString(const UChar*, int length,
         *badGrammarLocation = 0;
     if (badGrammarLength)
         *badGrammarLength = 0;
+}
+
+void EditorClientImpl::checkTextOfParagraph(const UChar* text, int length,
+                                            TextCheckingTypeMask mask,
+                                            WTF::Vector<TextCheckingResult>& results)
+{
+    if (!m_webView->spellCheckClient())
+        return;
+
+    WebTextCheckingTypeMask webMask = static_cast<WebTextCheckingTypeMask>(mask);
+    WebVector<WebTextCheckingResult> webResults;
+    m_webView->spellCheckClient()->checkTextOfParagraph(WebString(text, length), webMask, &webResults);
+
+    results.resize(webResults.size());
+    for (size_t i = 0; i < webResults.size(); ++i)
+        results[i] = webResults[i];
 }
 
 void EditorClientImpl::updateSpellingUIWithGrammarString(const String&,

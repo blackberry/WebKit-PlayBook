@@ -29,11 +29,13 @@
 #include "CacheModel.h"
 #include "ChildProcess.h"
 #include "DrawingArea.h"
+#include "EventDispatcher.h"
 #include "ResourceCachesToClear.h"
 #include "SandboxExtension.h"
 #include "SharedMemory.h"
 #include "TextCheckerState.h"
 #include "VisitedLinkTable.h"
+#include "WebConnectionToUIProcess.h"
 #include "WebGeolocationManager.h"
 #include "WebIconDatabaseProxy.h"
 #include "WebPageGroupProxy.h"
@@ -44,6 +46,10 @@
 
 #if PLATFORM(QT)
 class QNetworkAccessManager;
+#endif
+
+#if ENABLE(NOTIFICATIONS)
+#include "WebNotificationManager.h"
 #endif
 
 #if ENABLE(PLUGIN_PROCESS)
@@ -67,14 +73,21 @@ struct WebPageGroupData;
 struct WebPreferencesStore;
 struct WebProcessCreationParameters;
 
+#if PLATFORM(MAC)
+class SecItemResponseData;
+class SecKeychainItemResponseData;
+#endif
+
 class WebProcess : public ChildProcess, private CoreIPC::Connection::QueueClient {
 public:
     static WebProcess& shared();
 
-    void initialize(CoreIPC::Connection::Identifier, RunLoop*);
+    void initialize(CoreIPC::Connection::Identifier, WebCore::RunLoop*);
 
-    CoreIPC::Connection* connection() const { return m_connection.get(); }
-    RunLoop* runLoop() const { return m_runLoop; }
+    CoreIPC::Connection* connection() const { return m_connection->connection(); }
+    WebCore::RunLoop* runLoop() const { return m_runLoop; }
+
+    WebConnectionToUIProcess* webConnectionToUIProcess() const { return m_connection.get(); }
 
     WebPage* webPage(uint64_t pageID) const;
     void createWebPage(uint64_t pageID, const WebPageCreationParameters&);
@@ -119,6 +132,10 @@ public:
 
     // Geolocation
     WebGeolocationManager& geolocationManager() { return m_geolocationManager; }
+    
+#if ENABLE(NOTIFICATIONS)
+    WebNotificationManager& notificationManager() { return m_notificationManager; }
+#endif
 
     void clearResourceCaches(ResourceCachesToClear = AllResourceCaches);
     
@@ -128,6 +145,8 @@ public:
     PluginProcessConnectionManager& pluginProcessConnectionManager() { return m_pluginProcessConnectionManager; }
     bool disablePluginProcessMessageTimeout() const { return m_disablePluginProcessMessageTimeout; }
 #endif
+
+    EventDispatcher& eventDispatcher() { return m_eventDispatcher; }
 
 private:
     WebProcess();
@@ -142,7 +161,7 @@ private:
     void setDefaultRequestTimeoutInterval(double);
     void setAlwaysUsesComplexTextCodePath(bool);
     void setShouldUseFontSmoothing(bool);
-    void languageChanged(const String&) const;
+    void userPreferredLanguagesChanged(const Vector<String>&) const;
     void fullKeyboardAccessModeChanged(bool fullKeyboardAccessEnabled);
 #if PLATFORM(WIN)
     void setShouldPaintNativeControls(bool);
@@ -168,7 +187,7 @@ private:
 #endif
     
 #if ENABLE(PLUGIN_PROCESS)
-    void pluginProcessCrashed(const String& pluginPath);
+    void pluginProcessCrashed(CoreIPC::Connection*, const String& pluginPath);
 #endif
 
     void startMemorySampler(const SandboxExtension::Handle&, const String&, const double);
@@ -185,36 +204,44 @@ private:
     void getWebCoreStatistics(uint64_t callbackID);
     void garbageCollectJavaScriptObjects();
 
+#if PLATFORM(MAC)
+    void secItemResponse(CoreIPC::Connection*, uint64_t requestID, const SecItemResponseData&);
+    void secKeychainItemResponse(CoreIPC::Connection*, uint64_t requestID, const SecKeychainItemResponseData&);
+#endif
+
     // ChildProcess
     virtual bool shouldTerminate();
     virtual void terminate();
 
     // CoreIPC::Connection::Client
+    friend class WebConnectionToUIProcess;
     virtual void didReceiveMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
     virtual void didReceiveSyncMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, OwnPtr<CoreIPC::ArgumentEncoder>&);
     virtual void didClose(CoreIPC::Connection*);
     virtual void didReceiveInvalidMessage(CoreIPC::Connection*, CoreIPC::MessageID);
     virtual void syncMessageSendTimedOut(CoreIPC::Connection*);
-
-    // CoreIPC::Connection::QueueClient
-    virtual bool willProcessMessageOnClientRunLoop(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
-
 #if PLATFORM(WIN)
-    Vector<HWND> windowsToReceiveSentMessagesWhileWaitingForSyncReply();
+    virtual Vector<HWND> windowsToReceiveSentMessagesWhileWaitingForSyncReply();
 #endif
 
-    // Implemented in generated WebProcessMessageReceiver.cpp
-    bool willProcessWebProcessMessageOnClientRunLoop(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
-    void didReceiveWebProcessMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
+    // CoreIPC::Connection::QueueClient
+    virtual void didReceiveMessageOnConnectionWorkQueue(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, bool& didHandleMessage) OVERRIDE;
 
-    RefPtr<CoreIPC::Connection> m_connection;
+    // Implemented in generated WebProcessMessageReceiver.cpp
+    void didReceiveWebProcessMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
+    void didReceiveWebProcessMessageOnConnectionWorkQueue(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*, bool& didHandleMessage);
+
+    RefPtr<WebConnectionToUIProcess> m_connection;
+
     HashMap<uint64_t, RefPtr<WebPage> > m_pageMap;
     HashMap<uint64_t, RefPtr<WebPageGroupProxy> > m_pageGroupMap;
     RefPtr<InjectedBundle> m_injectedBundle;
 
+    EventDispatcher m_eventDispatcher;
+
     bool m_inDidClose;
 
-    RunLoop* m_runLoop;
+    WebCore::RunLoop* m_runLoop;
 
     // FIXME: The visited link table should not be per process.
     VisitedLinkTable m_visitedLinkTable;
@@ -241,6 +268,9 @@ private:
 
     TextCheckerState m_textCheckerState;
     WebGeolocationManager m_geolocationManager;
+#if ENABLE(NOTIFICATIONS)
+    WebNotificationManager m_notificationManager;
+#endif
     WebIconDatabaseProxy m_iconDatabaseProxy;
     
     String m_localStorageDirectory;

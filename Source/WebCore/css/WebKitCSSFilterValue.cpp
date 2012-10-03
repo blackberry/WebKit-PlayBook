@@ -35,7 +35,7 @@
 namespace WebCore {
 
 WebKitCSSFilterValue::WebKitCSSFilterValue(FilterOperationType operationType)
-    : CSSValueList(WebKitCSSFilterClass, typeUsesSpaceSeparator(operationType))
+    : CSSValueList(WebKitCSSFilterClass, typeUsesSpaceSeparator(operationType) ? SpaceSeparator : CommaSeparator)
     , m_type(operationType)
 {
 }
@@ -45,6 +45,7 @@ bool WebKitCSSFilterValue::typeUsesSpaceSeparator(FilterOperationType operationT
 #if ENABLE(CSS_SHADERS)
     return operationType != CustomFilterOperation;
 #else
+    UNUSED_PARAM(operationType);
     return true;
 #endif
 }
@@ -74,14 +75,14 @@ String WebKitCSSFilterValue::customCssText() const
     case OpacityFilterOperation:
         result = "opacity(";
         break;
-    case GammaFilterOperation:
-        result = "gamma(";
+    case BrightnessFilterOperation:
+        result = "brightness(";
+        break;
+    case ContrastFilterOperation:
+        result = "contrast(";
         break;
     case BlurFilterOperation:
         result = "blur(";
-        break;
-    case SharpenFilterOperation:
-        result = "sharpen(";
         break;
     case DropShadowFilterOperation:
         result = "drop-shadow(";

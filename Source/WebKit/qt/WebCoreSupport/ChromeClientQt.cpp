@@ -49,7 +49,6 @@
 #include "NavigationAction.h"
 #include "NetworkingContext.h"
 #include "NotImplemented.h"
-#include "NotificationPresenterClientQt.h"
 #include "Page.h"
 #include "PageClientQt.h"
 #include "PopupMenuQt.h"
@@ -398,7 +397,7 @@ IntRect ChromeClientQt::windowResizerRect() const
 #endif
 }
 
-void ChromeClientQt::invalidateWindow(const IntRect& windowRect, bool)
+void ChromeClientQt::invalidateRootView(const IntRect& windowRect, bool)
 {
 #if USE(TILED_BACKING_STORE)
     if (platformPageClient()) {
@@ -412,7 +411,7 @@ void ChromeClientQt::invalidateWindow(const IntRect& windowRect, bool)
 #endif
 }
 
-void ChromeClientQt::invalidateContentsAndWindow(const IntRect& windowRect, bool immediate)
+void ChromeClientQt::invalidateContentsAndRootView(const IntRect& windowRect, bool immediate)
 {
     // No double buffer, so only update the QWidget if content changed.
     if (platformPageClient()) {
@@ -429,7 +428,7 @@ void ChromeClientQt::invalidateContentsAndWindow(const IntRect& windowRect, bool
 
 void ChromeClientQt::invalidateContentsForSlowScroll(const IntRect& windowRect, bool immediate)
 {
-    invalidateContentsAndWindow(windowRect, immediate);
+    invalidateContentsAndRootView(windowRect, immediate);
 }
 
 void ChromeClientQt::scroll(const IntSize& delta, const IntRect& scrollViewRect, const IntRect&)
@@ -447,7 +446,7 @@ void ChromeClientQt::delegatedScrollRequested(const IntPoint& point)
 }
 #endif
 
-IntRect ChromeClientQt::windowToScreen(const IntRect& rect) const
+IntRect ChromeClientQt::rootViewToScreen(const IntRect& rect) const
 {
     QWebPageClient* pageClient = platformPageClient();
     if (!pageClient)
@@ -463,7 +462,7 @@ IntRect ChromeClientQt::windowToScreen(const IntRect& rect) const
     return screenRect;
 }
 
-IntPoint ChromeClientQt::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClientQt::screenToRootView(const IntPoint& point) const
 {
     QWebPageClient* pageClient = platformPageClient();
     if (!pageClient)
@@ -557,13 +556,6 @@ void ChromeClientQt::reachedApplicationCacheOriginQuota(SecurityOrigin* origin, 
     emit m_webPage->applicationCacheQuotaExceeded(securityOrigin, defaultOriginQuota, static_cast<quint64>(totalSpaceNeeded));
 }
 
-#if ENABLE(NOTIFICATIONS)
-NotificationPresenter* ChromeClientQt::notificationPresenter() const
-{
-    return NotificationPresenterClientQt::notificationPresenter();
-}
-#endif
-
 void ChromeClientQt::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> prpFileChooser)
 {
     RefPtr<FileChooser> fileChooser = prpFileChooser;
@@ -638,7 +630,7 @@ void ChromeClientQt::scheduleCompositingLayerSync()
 ChromeClient::CompositingTriggerFlags ChromeClientQt::allowedCompositingTriggers() const
 {
     if (platformPageClient() && platformPageClient()->allowsAcceleratedCompositing())
-        return AllTriggers;
+        return ThreeDTransformTrigger | VideoTrigger | CanvasTrigger | AnimationTrigger;
 
     return 0;
 }
@@ -717,6 +709,12 @@ bool ChromeClientQt::selectItemWritingDirectionIsNatural()
 
 bool ChromeClientQt::selectItemAlignmentFollowsMenuWritingDirection()
 {
+    return false;
+}
+
+bool ChromeClientQt::hasOpenedPopup() const
+{
+    notImplemented();
     return false;
 }
 

@@ -25,12 +25,15 @@
 
 #include "Attribute.h"
 #include "RenderSVGPath.h"
+#include "RenderSVGRect.h"
 #include "RenderSVGResource.h"
 #include "SVGElementInstance.h"
 #include "SVGLength.h"
 #include "SVGNames.h"
 
 namespace WebCore {
+
+class RenderSVGRect;
 
 // Animated property definitions
 DEFINE_ANIMATED_LENGTH(SVGRectElement, SVGNames::xAttr, X, x)
@@ -88,12 +91,12 @@ bool SVGRectElement::isSupportedAttribute(const QualifiedName& attrName)
     return supportedAttributes.contains<QualifiedName, SVGAttributeHashTranslator>(attrName);
 }
 
-void SVGRectElement::parseMappedAttribute(Attribute* attr)
+void SVGRectElement::parseAttribute(Attribute* attr)
 {
     SVGParsingError parseError = NoError;
 
     if (!isSupportedAttribute(attr->name()))
-        SVGStyledTransformableElement::parseMappedAttribute(attr);
+        SVGStyledTransformableElement::parseAttribute(attr);
     else if (attr->name() == SVGNames::xAttr)
         setXBaseValue(SVGLength::construct(LengthModeWidth, attr->value(), parseError));
     else if (attr->name() == SVGNames::yAttr)
@@ -106,9 +109,9 @@ void SVGRectElement::parseMappedAttribute(Attribute* attr)
         setWidthBaseValue(SVGLength::construct(LengthModeWidth, attr->value(), parseError, ForbidNegativeLengths));
     else if (attr->name() == SVGNames::heightAttr)
         setHeightBaseValue(SVGLength::construct(LengthModeHeight, attr->value(), parseError, ForbidNegativeLengths));
-    else if (SVGTests::parseMappedAttribute(attr)
-             || SVGLangSpace::parseMappedAttribute(attr)
-             || SVGExternalResourcesRequired::parseMappedAttribute(attr)) {
+    else if (SVGTests::parseAttribute(attr)
+             || SVGLangSpace::parseAttribute(attr)
+             || SVGExternalResourcesRequired::parseAttribute(attr)) {
     } else
         ASSERT_NOT_REACHED();
 
@@ -137,12 +140,12 @@ void SVGRectElement::svgAttributeChanged(const QualifiedName& attrName)
     if (SVGTests::handleAttributeChange(this, attrName))
         return;
 
-    RenderSVGPath* renderer = static_cast<RenderSVGPath*>(this->renderer());
+    RenderSVGRect* renderer = static_cast<RenderSVGRect*>(this->renderer());
     if (!renderer)
         return;
 
     if (isLengthAttribute) {
-        renderer->setNeedsPathUpdate();
+        renderer->setNeedsShapeUpdate();
         RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
         return;
     }
@@ -163,6 +166,11 @@ bool SVGRectElement::selfHasRelativeLengths() const
         || height().isRelative()
         || rx().isRelative()
         || ry().isRelative();
+}
+
+RenderObject* SVGRectElement::createRenderer(RenderArena* arena, RenderStyle*)
+{
+    return new (arena) RenderSVGRect(this);
 }
 
 }

@@ -36,7 +36,6 @@ import sys
 from webkitpy.common.memoized import memoized
 from webkitpy.common.system.deprecated_logging import log
 from webkitpy.common.system.executive import Executive, ScriptError
-from webkitpy.common.system import ospath
 
 from .scm import AuthenticationError, SCM, commit_error_handler
 
@@ -72,14 +71,14 @@ class SVN(SCM, SVNRepository):
 
     _svn_metadata_files = frozenset(['.svn', '_svn'])
 
-    def __init__(self, cwd, patch_directories, executive=None):
-        SCM.__init__(self, cwd, executive)
+    def __init__(self, cwd, patch_directories, **kwargs):
+        SCM.__init__(self, cwd, **kwargs)
         self._bogus_dir = None
         if patch_directories == []:
             # FIXME: ScriptError is for Executive, this should probably be a normal Exception.
             raise ScriptError(script_args=svn_info_args, message='Empty list of patch directories passed to SCM.__init__')
         elif patch_directories == None:
-            self._patch_directories = [ospath.relpath(cwd, self.checkout_root)]
+            self._patch_directories = [self._filesystem.relpath(cwd, self.checkout_root)]
         else:
             self._patch_directories = patch_directories
 
@@ -87,11 +86,10 @@ class SVN(SCM, SVNRepository):
     def in_working_directory(path):
         return os.path.isdir(os.path.join(path, '.svn'))
 
-    @classmethod
-    def find_uuid(cls, path):
-        if not cls.in_working_directory(path):
+    def find_uuid(self, path):
+        if not self.in_working_directory(path):
             return None
-        return cls.value_from_svn_info(path, 'Repository UUID')
+        return self.value_from_svn_info(path, 'Repository UUID')
 
     @classmethod
     def value_from_svn_info(cls, path, field_name):
@@ -103,19 +101,18 @@ class SVN(SCM, SVNRepository):
             raise ScriptError(script_args=svn_info_args, message='svn info did not contain a %s.' % field_name)
         return match.group('value')
 
-    @staticmethod
-    def find_checkout_root(path):
-        uuid = SVN.find_uuid(path)
+    def find_checkout_root(self, path):
+        uuid = self.find_uuid(path)
         # If |path| is not in a working directory, we're supposed to return |path|.
         if not uuid:
             return path
         # Search up the directory hierarchy until we find a different UUID.
         last_path = None
         while True:
-            if uuid != SVN.find_uuid(path):
+            if uuid != self.find_uuid(path):
                 return last_path
             last_path = path
-            (path, last_component) = os.path.split(path)
+            (path, last_component) = self._filesystem.split(path)
             if last_path == path:
                 return None
 
@@ -237,8 +234,8 @@ class SVN(SCM, SVNRepository):
     def display_name(self):
         return "svn"
 
-    def head_svn_revision(self):
-        return self.value_from_svn_info(self.checkout_root, 'Revision')
+    def svn_revision(self, path):
+        return self.value_from_svn_info(path, 'Revision')
 
     # FIXME: This method should be on Checkout.
     def create_patch(self, git_commit=None, changed_files=None):
@@ -333,12 +330,6 @@ class SVN(SCM, SVNRepository):
         if changed_files:
             svn_commit_args.extend(changed_files)
 
-        if self.dryrun:
-            _log.debug('Would run SVN command: "' + " ".join(svn_commit_args) + '"')
-
-            # Return a string which looks like a commit so that things which parse this output will succeed.
-            return "Dry run, no commit.\nCommitted revision 0."
-
         return self._run_svn(svn_commit_args, cwd=self.checkout_root, error_handler=commit_error_handler)
 
     def svn_commit_log(self, svn_revision):
@@ -349,6 +340,9 @@ class SVN(SCM, SVNRepository):
         # BASE is the checkout revision, HEAD is the remote repository revision
         # http://svnbook.red-bean.com/en/1.0/ch03s03.html
         return self.svn_commit_log('BASE')
+
+    def svn_blame(self, path):
+        return self._run_svn(['blame', path])
 
     def propset(self, pname, pvalue, path):
         dir, base = os.path.split(path)

@@ -97,7 +97,7 @@ BEGIN_EVENT_TABLE(wxWebBrowserShell, wxFrame)
 END_EVENT_TABLE()
 
 
-wxWebBrowserShell::wxWebBrowserShell(const wxString& title) : 
+wxWebBrowserShell::wxWebBrowserShell(const wxString& title, const wxString& url) : 
         wxFrame(NULL, wxID_ANY, title, wxDefaultPosition, wxSize(600, 500)),
         m_checkBeforeLoad(false)
 {
@@ -128,6 +128,7 @@ wxWebBrowserShell::wxWebBrowserShell(const wxString& title) :
     viewMenu->AppendSeparator();
     
     m_debugMenu = new wxMenu;
+    m_debugMenu->SetTitle(_("&Debug"));
     m_debugMenu->Append(ID_SET_SOURCE, _("Test SetPageSource"));
     m_debugMenu->Append(ID_RUN_SCRIPT, _("Test RunScript"));
     m_debugMenu->Append(ID_EDIT_COMMAND, _("Test EditCommand::Execute"));
@@ -166,7 +167,7 @@ wxWebBrowserShell::wxWebBrowserShell(const wxString& title) :
     SetToolBar(toolbar);
 
     // Create the wxWebView Window
-    webview = new wxWebView((wxWindow*)this, ID_WEBVIEW, wxDefaultPosition, wxSize(200, 200));
+    webview = new wxWebView((wxWindow*)this, url, ID_WEBVIEW, wxDefaultPosition, wxSize(200, 200));
     webview->SetBackgroundColour(*wxWHITE);
 
     // create a status bar just for fun (by default with 1 pane only)

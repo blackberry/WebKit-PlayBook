@@ -29,6 +29,7 @@
 #include "ImmutableDictionary.h"
 #include "NativeWebKeyboardEvent.h"
 #include "NativeWebWheelEvent.h"
+#include "NotificationPermissionRequest.h"
 #include "WKAPICast.h"
 #include "WebNumber.h"
 #include "WebOpenPanelResultListenerProxy.h"
@@ -63,6 +64,7 @@ PassRefPtr<WebPageProxy> WebUIClient::createNewPage(WebPageProxy* page, const Re
     map.set("menuBarVisible", WebBoolean::create(windowFeatures.menuBarVisible));
     map.set("statusBarVisible", WebBoolean::create(windowFeatures.statusBarVisible));
     map.set("toolBarVisible", WebBoolean::create(windowFeatures.toolBarVisible));
+    map.set("locationBarVisible", WebBoolean::create(windowFeatures.locationBarVisible));
     map.set("scrollbarsVisible", WebBoolean::create(windowFeatures.scrollbarsVisible));
     map.set("resizable", WebBoolean::create(windowFeatures.resizable));
     map.set("fullscreen", WebBoolean::create(windowFeatures.fullscreen));
@@ -328,6 +330,15 @@ bool WebUIClient::decidePolicyForGeolocationPermissionRequest(WebPageProxy* page
         return false;
 
     m_client.decidePolicyForGeolocationPermissionRequest(toAPI(page), toAPI(frame), toAPI(origin), toAPI(permissionRequest), m_client.clientInfo);
+    return true;
+}
+
+bool WebUIClient::decidePolicyForNotificationPermissionRequest(WebPageProxy* page, WebSecurityOrigin* origin, NotificationPermissionRequest* permissionRequest)
+{
+    if (!m_client.decidePolicyForNotificationPermissionRequest)
+        return false;
+    
+    m_client.decidePolicyForNotificationPermissionRequest(toAPI(page), toAPI(origin), toAPI(permissionRequest), m_client.clientInfo);
     return true;
 }
 

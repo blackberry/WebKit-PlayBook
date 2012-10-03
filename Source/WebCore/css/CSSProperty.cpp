@@ -32,11 +32,6 @@ String CSSProperty::cssText() const
     return String(getPropertyName(static_cast<CSSPropertyID>(id()))) + ": " + m_value->cssText() + (isImportant() ? " !important" : "") + "; ";
 }
 
-bool operator==(const CSSProperty& a, const CSSProperty& b)
-{
-    return a.m_id == b.m_id && a.m_important == b.m_important && a.m_value == b.m_value;
-}
-
 enum LogicalBoxSide { BeforeSide, EndSide, AfterSide, StartSide };
 enum PhysicalBoxSide { TopSide, RightSide, BottomSide, LeftSide };
 
@@ -323,7 +318,9 @@ bool CSSProperty::isInheritedProperty(unsigned propertyID)
     case CSSPropertyWebkitBoxDirection:
     case CSSPropertyWebkitColorCorrection:
     case CSSPropertyWebkitFontFeatureSettings:
+    case CSSPropertyWebkitFontKerning:
     case CSSPropertyWebkitFontSmoothing:
+    case CSSPropertyWebkitFontVariantLigatures:
     case CSSPropertyWebkitLocale:
     case CSSPropertyWebkitHighlight:
     case CSSPropertyWebkitHyphenateCharacter:
@@ -331,11 +328,15 @@ bool CSSProperty::isInheritedProperty(unsigned propertyID)
     case CSSPropertyWebkitHyphenateLimitBefore:
     case CSSPropertyWebkitHyphenateLimitLines:
     case CSSPropertyWebkitHyphens:
+    case CSSPropertyWebkitLineAlign:
     case CSSPropertyWebkitLineBoxContain:
     case CSSPropertyWebkitLineBreak:
     case CSSPropertyWebkitLineGrid:
-    case CSSPropertyWebkitLineGridSnap:
+    case CSSPropertyWebkitLineSnap:
     case CSSPropertyWebkitNbspMode:
+#if ENABLE(OVERFLOW_SCROLLING)
+    case CSSPropertyWebkitOverflowScrolling:
+#endif
     case CSSPropertyWebkitPrintColorAdjust:
     case CSSPropertyWebkitRtlOrdering:
     case CSSPropertyWebkitTextCombine:
@@ -388,7 +389,6 @@ bool CSSProperty::isInheritedProperty(unsigned propertyID)
 #endif
 #if ENABLE(TOUCH_EVENTS)
     case CSSPropertyWebkitTapHighlightColor:
-    case CSSPropertyWebkitOverflowScrolling:
 #endif
         return true;
     case CSSPropertyDisplay:
@@ -565,8 +565,18 @@ bool CSSProperty::isInheritedProperty(unsigned propertyID)
     case CSSPropertyWebkitFlexOrder:
     case CSSPropertyWebkitFlexPack:
     case CSSPropertyWebkitFlexAlign:
+    case CSSPropertyWebkitFlexItemAlign:
+    case CSSPropertyWebkitFlexDirection:
     case CSSPropertyWebkitFlexFlow:
+    case CSSPropertyWebkitFlexWrap:
     case CSSPropertyWebkitFontSizeDelta:
+#if ENABLE(CSS_GRID_LAYOUT)
+    case CSSPropertyWebkitGridColumns:
+    case CSSPropertyWebkitGridRows:
+
+    case CSSPropertyWebkitGridColumn:
+    case CSSPropertyWebkitGridRow:
+#endif
     case CSSPropertyWebkitLineClamp:
     case CSSPropertyWebkitLogicalWidth:
     case CSSPropertyWebkitLogicalHeight:
@@ -632,10 +642,16 @@ bool CSSProperty::isInheritedProperty(unsigned propertyID)
     case CSSPropertyWebkitFlowInto:
     case CSSPropertyWebkitFlowFrom:
     case CSSPropertyWebkitRegionOverflow:
-    case CSSPropertyWebkitWrapShape:
     case CSSPropertyWebkitRegionBreakAfter:
     case CSSPropertyWebkitRegionBreakBefore:
     case CSSPropertyWebkitRegionBreakInside:
+    case CSSPropertyWebkitWrap:
+    case CSSPropertyWebkitWrapFlow:
+    case CSSPropertyWebkitWrapMargin:
+    case CSSPropertyWebkitWrapPadding:
+    case CSSPropertyWebkitWrapShapeInside:
+    case CSSPropertyWebkitWrapShapeOutside:
+    case CSSPropertyWebkitWrapThrough:
 #if ENABLE(SVG)
     case CSSPropertyClipPath:
     case CSSPropertyMask:

@@ -27,49 +27,24 @@
 #import "TiledCoreAnimationDrawingArea.h"
 
 #import "DrawingAreaProxyMessages.h"
+#import "EventDispatcher.h"
 #import "LayerTreeContext.h"
+#import "RemoteLayerClient.h"
 #import "WebPage.h"
 #import "WebProcess.h"
 #import <QuartzCore/QuartzCore.h>
+#import <WebCore/Frame.h>
+#import <WebCore/FrameView.h>
 #import <WebCore/GraphicsContext.h>
-#import <WebKitSystemInterface.h>
+#import <WebCore/Page.h>
+#import <WebCore/ScrollingCoordinator.h>
+#import <WebCore/Settings.h>
 
 @interface CATransaction (Details)
 + (void)synchronize;
 @end
 
 using namespace WebCore;
-
-@interface WKContentLayer : CALayer {
-    WebKit::WebPage *_webPage;
-}
-
-- (id)initWithWebPage:(WebKit::WebPage *)webPage;
-
-@end
-
-@implementation WKContentLayer
-
-- (id)initWithWebPage:(WebKit::WebPage *)webPage
-{
-    self = [super init];
-    if (self)
-        self->_webPage = webPage;
-
-    return self;
-}
-
-- (void)drawInContext:(CGContextRef)context
-{
-    _webPage->layoutIfNeeded();
-
-    CGRect clipRect = CGContextGetClipBoundingBox(context);
-
-    GraphicsContext graphicsContext(context);
-    _webPage->drawRect(graphicsContext, enclosingIntRect(NSRectFromCGRect(clipRect)));
-}
-
-@end
 
 namespace WebKit {
 
@@ -80,7 +55,20 @@ PassOwnPtr<TiledCoreAnimationDrawingArea> TiledCoreAnimationDrawingArea::create(
 
 TiledCoreAnimationDrawingArea::TiledCoreAnimationDrawingArea(WebPage* webPage, const WebPageCreationParameters& parameters)
     : DrawingArea(DrawingAreaTypeTiledCoreAnimation, webPage)
+    , m_layerTreeStateIsFrozen(false)
+    , m_layerFlushScheduler(this)
 {
+    Page* page = webPage->corePage();
+
+    // FIXME: It's weird that we're mucking around with the settings here.
+    page->settings()->setForceCompositingMode(true);
+
+#if ENABLE(THREADED_SCROLLING)
+    page->settings()->setScrollingCoordinatorEnabled(true);
+
+    WebProcess::shared().eventDispatcher().addScrollingTreeForPage(webPage);
+#endif
+
     m_rootLayer = [CALayer layer];
 
     CGRect rootLayerFrame = m_webPage->bounds();
@@ -88,45 +76,144 @@ TiledCoreAnimationDrawingArea::TiledCoreAnimationDrawingArea(WebPage* webPage, c
     m_rootLayer.get().opaque = YES;
     m_rootLayer.get().geometryFlipped = YES;
 
-    // Give the root layer a background color so it's visible on screen.
-    m_rootLayer.get().backgroundColor = CGColorCreateGenericRGB(1, 0, 0, 1);
-
-    m_contentLayer.adoptNS([[WKContentLayer alloc] initWithWebPage:webPage]);
-    m_contentLayer.get().frame = m_rootLayer.get().frame;
-
-    [m_rootLayer.get() addSublayer:m_contentLayer.get()];
-
-    mach_port_t serverPort = WebProcess::shared().compositingRenderServerPort();
-    m_remoteLayerClient = WKCARemoteLayerClientMakeWithServerPort(serverPort);
-    WKCARemoteLayerClientSetLayer(m_remoteLayerClient.get(), m_rootLayer.get());
+    m_remoteLayerClient = RemoteLayerClient::create(WebProcess::shared().compositingRenderServerPort(), m_rootLayer.get());
 
     LayerTreeContext layerTreeContext;
-    layerTreeContext.contextID = WKCARemoteLayerClientGetClientId(m_remoteLayerClient.get());
+    layerTreeContext.contextID = m_remoteLayerClient->clientID();
     m_webPage->send(Messages::DrawingAreaProxy::EnterAcceleratedCompositingMode(0, layerTreeContext));
 }
 
 TiledCoreAnimationDrawingArea::~TiledCoreAnimationDrawingArea()
 {
+#if ENABLE(THREADED_SCROLLING)
+    WebProcess::shared().eventDispatcher().removeScrollingTreeForPage(m_webPage);
+#endif
+
+    m_layerFlushScheduler.invalidate();
 }
 
 void TiledCoreAnimationDrawingArea::setNeedsDisplay(const IntRect& rect)
 {
-    [m_contentLayer.get() setNeedsDisplayInRect:rect];
 }
 
 void TiledCoreAnimationDrawingArea::scroll(const IntRect& scrollRect, const IntSize& scrollOffset)
 {
-    [m_contentLayer.get() setNeedsDisplayInRect:scrollRect];
 }
 
-void TiledCoreAnimationDrawingArea::setRootCompositingLayer(GraphicsLayer*)
+void TiledCoreAnimationDrawingArea::setRootCompositingLayer(GraphicsLayer* graphicsLayer)
 {
-    // FIXME: Implement.
+    CALayer *rootCompositingLayer = graphicsLayer ? graphicsLayer->platformLayer() : nil;
+
+    if (m_layerTreeStateIsFrozen) {
+        m_pendingRootCompositingLayer = rootCompositingLayer;
+        return;
+    }
+
+    setRootCompositingLayer(rootCompositingLayer);
+}
+
+void TiledCoreAnimationDrawingArea::forceRepaint()
+{
+    if (m_layerTreeStateIsFrozen)
+        return;
+
+    flushLayers();
+    [CATransaction flush];
+    [CATransaction synchronize];
+}
+
+void TiledCoreAnimationDrawingArea::setLayerTreeStateIsFrozen(bool layerTreeStateIsFrozen)
+{
+    if (m_layerTreeStateIsFrozen == layerTreeStateIsFrozen)
+        return;
+
+    m_layerTreeStateIsFrozen = layerTreeStateIsFrozen;
+    if (m_layerTreeStateIsFrozen)
+        m_layerFlushScheduler.suspend();
+    else
+        m_layerFlushScheduler.resume();
+}
+
+bool TiledCoreAnimationDrawingArea::layerTreeStateIsFrozen() const
+{
+    return m_layerTreeStateIsFrozen;
 }
 
 void TiledCoreAnimationDrawingArea::scheduleCompositingLayerSync()
 {
-    // FIXME: Implement
+    m_layerFlushScheduler.schedule();
+}
+
+void TiledCoreAnimationDrawingArea::didInstallPageOverlay()
+{
+    createPageOverlayLayer();
+    scheduleCompositingLayerSync();
+}
+
+void TiledCoreAnimationDrawingArea::didUninstallPageOverlay()
+{
+    destroyPageOverlayLayer();
+    scheduleCompositingLayerSync();
+}
+
+void TiledCoreAnimationDrawingArea::setPageOverlayNeedsDisplay(const IntRect& rect)
+{
+    ASSERT(m_pageOverlayLayer);
+    m_pageOverlayLayer->setNeedsDisplayInRect(rect);
+    scheduleCompositingLayerSync();
+}
+
+void TiledCoreAnimationDrawingArea::notifyAnimationStarted(const GraphicsLayer*, double)
+{
+}
+
+void TiledCoreAnimationDrawingArea::notifySyncRequired(const GraphicsLayer*)
+{
+}
+
+void TiledCoreAnimationDrawingArea::paintContents(const GraphicsLayer* graphicsLayer, GraphicsContext& graphicsContext, GraphicsLayerPaintingPhase, const IntRect& clipRect)
+{
+    ASSERT_UNUSED(graphicsLayer, graphicsLayer == m_pageOverlayLayer);
+
+    m_webPage->drawPageOverlay(graphicsContext, clipRect);
+}
+
+bool TiledCoreAnimationDrawingArea::showDebugBorders(const GraphicsLayer*) const
+{
+    return m_webPage->corePage()->settings()->showDebugBorders();
+}
+
+bool TiledCoreAnimationDrawingArea::showRepaintCounter(const GraphicsLayer*) const
+{
+    return m_webPage->corePage()->settings()->showRepaintCounter();
+}
+
+float TiledCoreAnimationDrawingArea::deviceScaleFactor() const
+{
+    return m_webPage->corePage()->deviceScaleFactor();
+}
+
+bool TiledCoreAnimationDrawingArea::flushLayers()
+{
+    ASSERT(!m_layerTreeStateIsFrozen);
+
+    // This gets called outside of the normal event loop so wrap in an autorelease pool
+    NSAutoreleasePool *pool = [[NSAutoreleasePool alloc] init];
+
+    m_webPage->layoutIfNeeded();
+
+    if (m_pendingRootCompositingLayer) {
+        setRootCompositingLayer(m_pendingRootCompositingLayer.get());
+        m_pendingRootCompositingLayer = nullptr;
+    }
+
+    if (m_pageOverlayLayer)
+        m_pageOverlayLayer->syncCompositingStateForThisLayerOnly();
+
+    bool returnValue = m_webPage->corePage()->mainFrame()->view()->syncCompositingStateIncludingSubframes();
+
+    [pool drain];
+    return returnValue;
 }
 
 void TiledCoreAnimationDrawingArea::updateGeometry(const IntSize& viewSize)
@@ -134,11 +221,16 @@ void TiledCoreAnimationDrawingArea::updateGeometry(const IntSize& viewSize)
     m_webPage->setSize(viewSize);
     m_webPage->layoutIfNeeded();
 
+    if (m_pageOverlayLayer)
+        m_pageOverlayLayer->setSize(viewSize);
+
+    if (!m_layerTreeStateIsFrozen)
+        flushLayers();
+
     [CATransaction begin];
     [CATransaction setDisableActions:YES];
 
     m_rootLayer.get().frame = CGRectMake(0, 0, viewSize.width(), viewSize.height());
-    m_contentLayer.get().frame = CGRectMake(0, 0, viewSize.width(), viewSize.height());
 
     [CATransaction commit];
     
@@ -146,6 +238,53 @@ void TiledCoreAnimationDrawingArea::updateGeometry(const IntSize& viewSize)
     [CATransaction synchronize];
 
     m_webPage->send(Messages::DrawingAreaProxy::DidUpdateGeometry());
+}
+
+void TiledCoreAnimationDrawingArea::setDeviceScaleFactor(float deviceScaleFactor)
+{
+    m_webPage->setDeviceScaleFactor(deviceScaleFactor);
+}
+
+void TiledCoreAnimationDrawingArea::setRootCompositingLayer(CALayer *layer)
+{
+    ASSERT(!m_layerTreeStateIsFrozen);
+
+    [CATransaction begin];
+    [CATransaction setDisableActions:YES];
+
+    if (!layer)
+        m_rootLayer.get().sublayers = nil;
+    else {
+        m_rootLayer.get().sublayers = [NSArray arrayWithObject:layer];
+
+        if (m_pageOverlayLayer)
+            [m_rootLayer.get() addSublayer:m_pageOverlayLayer->platformLayer()];
+    }
+
+    [CATransaction commit];
+}
+
+void TiledCoreAnimationDrawingArea::createPageOverlayLayer()
+{
+    ASSERT(!m_pageOverlayLayer);
+
+    m_pageOverlayLayer = GraphicsLayer::create(this);
+#ifndef NDEBUG
+    m_pageOverlayLayer->setName("page overlay content");
+#endif
+
+    m_pageOverlayLayer->setDrawsContent(true);
+    m_pageOverlayLayer->setSize(m_webPage->size());
+
+    [m_rootLayer.get() addSublayer:m_pageOverlayLayer->platformLayer()];
+}
+
+void TiledCoreAnimationDrawingArea::destroyPageOverlayLayer()
+{
+    ASSERT(m_pageOverlayLayer);
+
+    [m_pageOverlayLayer->platformLayer() removeFromSuperlayer];
+    m_pageOverlayLayer = nullptr;
 }
 
 } // namespace WebKit

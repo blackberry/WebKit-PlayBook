@@ -68,11 +68,11 @@ static PlatformMouseEvent constructRelativeMouseEvent(const PlatformMouseEvent& 
                                                       FramelessScrollView* parent,
                                                       FramelessScrollView* child)
 {
-    IntPoint pos = parent->convertSelfToChild(child, e.pos());
+    IntPoint pos = parent->convertSelfToChild(child, e.position());
 
     // FIXME: This is a horrible hack since PlatformMouseEvent has no setters for x/y.
     PlatformMouseEvent relativeEvent = e;
-    IntPoint& relativePos = const_cast<IntPoint&>(relativeEvent.pos());
+    IntPoint& relativePos = const_cast<IntPoint&>(relativeEvent.position());
     relativePos.setX(pos.x());
     relativePos.setY(pos.y());
     return relativeEvent;
@@ -82,11 +82,11 @@ static PlatformWheelEvent constructRelativeWheelEvent(const PlatformWheelEvent& 
                                                       FramelessScrollView* parent,
                                                       FramelessScrollView* child)
 {
-    IntPoint pos = parent->convertSelfToChild(child, e.pos());
+    IntPoint pos = parent->convertSelfToChild(child, e.position());
 
     // FIXME: This is a horrible hack since PlatformWheelEvent has no setters for x/y.
     PlatformWheelEvent relativeEvent = e;
-    IntPoint& relativePos = const_cast<IntPoint&>(relativeEvent.pos());
+    IntPoint& relativePos = const_cast<IntPoint&>(relativeEvent.position());
     relativePos.setX(pos.x());
     relativePos.setY(pos.y());
     return relativeEvent;
@@ -142,7 +142,7 @@ IntRect PopupContainer::layoutAndCalculateWidgetRect(int targetControlHeight, co
         FloatRect screen = screenAvailableRect(m_frameView.get());
         // Use popupInitialCoordinate.x() + rightOffset because RTL position
         // needs to be considered.
-        widgetRect = chromeClient->windowToScreen(IntRect(popupInitialCoordinate.x() + rightOffset, popupInitialCoordinate.y(), targetSize.width(), targetSize.height()));
+        widgetRect = chromeClient->rootViewToScreen(IntRect(popupInitialCoordinate.x() + rightOffset, popupInitialCoordinate.y(), targetSize.width(), targetSize.height()));
 
         // If we have multiple screens and the browser rect is in one screen, we have
         // to clip the window width to the screen width.
@@ -150,7 +150,7 @@ IntRect PopupContainer::layoutAndCalculateWidgetRect(int targetControlHeight, co
         FloatRect windowRect = chromeClient->windowRect();
         if (windowRect.x() >= screen.x() && windowRect.maxX() <= screen.maxX() && (widgetRect.x() < screen.x() || widgetRect.maxX() > screen.maxX())) {
             // First, inverse the popup alignment if it does not fit the screen - this might fix things (or make them better).
-            IntRect inverseWidgetRect = chromeClient->windowToScreen(IntRect(popupInitialCoordinate.x() + (isRTL ? 0 : rtlOffset), popupInitialCoordinate.y(), targetSize.width(), targetSize.height()));
+            IntRect inverseWidgetRect = chromeClient->rootViewToScreen(IntRect(popupInitialCoordinate.x() + (isRTL ? 0 : rtlOffset), popupInitialCoordinate.y(), targetSize.width(), targetSize.height()));
             IntRect enclosingScreen = enclosingIntRect(screen);
             unsigned originalCutoff = max(enclosingScreen.x() - widgetRect.x(), 0) + max(widgetRect.maxX() - enclosingScreen.maxX(), 0);
             unsigned inverseCutoff = max(enclosingScreen.x() - inverseWidgetRect.x(), 0) + max(inverseWidgetRect.maxX() - enclosingScreen.maxX(), 0);
@@ -188,7 +188,7 @@ IntRect PopupContainer::layoutAndCalculateWidgetRect(int targetControlHeight, co
                 // Our height has changed, so recompute only Y axis of widgetRect.
                 // We don't have to recompute X axis, so we only replace Y axis
                 // in widgetRect.
-                IntRect frameInScreen = chromeClient->windowToScreen(frameRect());
+                IntRect frameInScreen = chromeClient->rootViewToScreen(frameRect());
                 widgetRect.setY(frameInScreen.y());
                 widgetRect.setHeight(frameInScreen.height());
                 // And move upwards if necessary.
@@ -292,31 +292,33 @@ bool PopupContainer::handleTouchEvent(const PlatformTouchEvent&)
 }
 #endif
 
-#if ENABLE(GESTURE_RECOGNIZER)
+#if ENABLE(GESTURE_EVENTS)
 // FIXME: Refactor this code to share functionality with EventHandler::handleGestureEvent.
 bool PopupContainer::handleGestureEvent(const PlatformGestureEvent& gestureEvent)
 {
     switch (gestureEvent.type()) {
-    case PlatformGestureEvent::TapType: {
-        PlatformMouseEvent fakeMouseMove(gestureEvent.position(), gestureEvent.globalPosition(), NoButton, MouseEventMoved, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
-        PlatformMouseEvent fakeMouseDown(gestureEvent.position(), gestureEvent.globalPosition(), LeftButton, MouseEventPressed, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
-        PlatformMouseEvent fakeMouseUp(gestureEvent.position(), gestureEvent.globalPosition(), LeftButton, MouseEventReleased, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
+    case PlatformEvent::GestureTap: {
+        PlatformMouseEvent fakeMouseMove(gestureEvent.position(), gestureEvent.globalPosition(), NoButton, PlatformEvent::MouseMoved, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
+        PlatformMouseEvent fakeMouseDown(gestureEvent.position(), gestureEvent.globalPosition(), LeftButton, PlatformEvent::MousePressed, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
+        PlatformMouseEvent fakeMouseUp(gestureEvent.position(), gestureEvent.globalPosition(), LeftButton, PlatformEvent::MouseReleased, /* clickCount */ 1, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey(), gestureEvent.timestamp());
         // handleMouseMoveEvent(fakeMouseMove);
         handleMouseDownEvent(fakeMouseDown);
         handleMouseReleaseEvent(fakeMouseUp);
         return true;
     }
-    case PlatformGestureEvent::DoubleTapType:
+    case PlatformEvent::GestureDoubleTap:
         break;
-    case PlatformGestureEvent::ScrollUpdateType: {
+    case PlatformEvent::GestureScrollUpdate: {
         PlatformWheelEvent syntheticWheelEvent(gestureEvent.position(), gestureEvent.globalPosition(), gestureEvent.deltaX(), gestureEvent.deltaY(), gestureEvent.deltaX() / 120.0f, gestureEvent.deltaY() / 120.0f, ScrollByPixelWheelEvent, gestureEvent.shiftKey(), gestureEvent.ctrlKey(), gestureEvent.altKey(), gestureEvent.metaKey());
         handleWheelEvent(syntheticWheelEvent);
         return true;
     }
-    case PlatformGestureEvent::ScrollBeginType:
-    case PlatformGestureEvent::ScrollEndType:
-    case PlatformGestureEvent::TapDownType:
+    case PlatformEvent::GestureScrollBegin:
+    case PlatformEvent::GestureScrollEnd:
+    case PlatformEvent::GestureTapDown:
         break;
+    default:
+        ASSERT_NOT_REACHED();
     }
     return false;
 }
@@ -417,7 +419,7 @@ void PopupContainer::refresh(const IntRect& targetControlRect)
     if (originalSize != widgetRect.size()) {
         ChromeClientChromium* chromeClient = chromeClientChromium();
         if (chromeClient) {
-            IntPoint widgetLocation = chromeClient->screenToWindow(widgetRect.location());
+            IntPoint widgetLocation = chromeClient->screenToRootView(widgetRect.location());
             widgetRect.setLocation(widgetLocation);
             setFrameRect(widgetRect);
         }

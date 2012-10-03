@@ -72,7 +72,7 @@ static EncodedJSValue JSC_HOST_CALL callHTMLAllCollection(ExecState* exec)
     if (exec->argumentCount() == 1) {
         // Support for document.all(<index>) etc.
         bool ok;
-        UString string = exec->argument(0).toString(exec);
+        UString string = exec->argument(0).toString(exec)->value(exec);
         unsigned index = Identifier::toUInt32(string, ok);
         if (ok)
             return JSValue::encode(toJS(exec, jsCollection->globalObject(), collection->item(index)));
@@ -83,17 +83,11 @@ static EncodedJSValue JSC_HOST_CALL callHTMLAllCollection(ExecState* exec)
 
     // The second arg, if set, is the index of the item we want
     bool ok;
-    UString string = exec->argument(0).toString(exec);
-    unsigned index = Identifier::toUInt32(exec->argument(1).toString(exec), ok);
+    UString string = exec->argument(0).toString(exec)->value(exec);
+    unsigned index = Identifier::toUInt32(exec->argument(1).toString(exec)->value(exec), ok);
     if (ok) {
-        AtomicString pstr = ustringToAtomicString(string);
-        Node* node = collection->namedItem(pstr);
-        while (node) {
-            if (!index)
-                return JSValue::encode(toJS(exec, jsCollection->globalObject(), node));
-            node = collection->nextNamedItem(pstr);
-            --index;
-        }
+        if (Node* node = collection->namedItemWithIndex(ustringToAtomicString(string), index))
+            return JSValue::encode(toJS(exec, jsCollection->globalObject(), node));
     }
 
     return JSValue::encode(jsUndefined());
@@ -107,9 +101,7 @@ CallType JSHTMLAllCollection::getCallData(JSCell*, CallData& callData)
 
 bool JSHTMLAllCollection::canGetItemsForName(ExecState*, HTMLAllCollection* collection, const Identifier& propertyName)
 {
-    Vector<RefPtr<Node> > namedItems;
-    collection->namedItems(identifierToAtomicString(propertyName), namedItems);
-    return !namedItems.isEmpty();
+    return collection->hasNamedItem(identifierToAtomicString(propertyName));
 }
 
 JSValue JSHTMLAllCollection::nameGetter(ExecState* exec, JSValue slotBase, const Identifier& propertyName)
@@ -121,15 +113,15 @@ JSValue JSHTMLAllCollection::nameGetter(ExecState* exec, JSValue slotBase, const
 JSValue JSHTMLAllCollection::item(ExecState* exec)
 {
     bool ok;
-    uint32_t index = Identifier::toUInt32(exec->argument(0).toString(exec), ok);
+    uint32_t index = Identifier::toUInt32(exec->argument(0).toString(exec)->value(exec), ok);
     if (ok)
         return toJS(exec, globalObject(), impl()->item(index));
-    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)));
+    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)->value(exec)));
 }
 
 JSValue JSHTMLAllCollection::namedItem(ExecState* exec)
 {
-    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)));
+    return getNamedItems(exec, this, Identifier(exec, exec->argument(0).toString(exec)->value(exec)));
 }
 
 } // namespace WebCore

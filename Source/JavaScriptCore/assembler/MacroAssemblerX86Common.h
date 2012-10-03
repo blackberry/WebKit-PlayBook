@@ -34,6 +34,11 @@
 namespace JSC {
 
 class MacroAssemblerX86Common : public AbstractMacroAssembler<X86Assembler> {
+protected:
+#if CPU(X86_64)
+    static const X86Registers::RegisterID scratchRegister = X86Registers::r11;
+#endif
+
     static const int DoubleConditionBitInvert = 0x10;
     static const int DoubleConditionBitSpecial = 0x20;
     static const int DoubleConditionBits = DoubleConditionBitInvert | DoubleConditionBitSpecial;
@@ -223,16 +228,6 @@ public:
         m_assembler.negl_m(srcDest.offset, srcDest.base);
     }
 
-    void not32(RegisterID srcDest)
-    {
-        m_assembler.notl_r(srcDest);
-    }
-
-    void not32(Address srcDest)
-    {
-        m_assembler.notl_m(srcDest.offset, srcDest.base);
-    }
-    
     void or32(RegisterID src, RegisterID dest)
     {
         m_assembler.orl_rr(src, dest);
@@ -375,7 +370,6 @@ public:
         m_assembler.subl_rm(src, dest.offset, dest.base);
     }
 
-
     void xor32(RegisterID src, RegisterID dest)
     {
         m_assembler.xorl_rr(src, dest);
@@ -383,11 +377,17 @@ public:
 
     void xor32(TrustedImm32 imm, Address dest)
     {
-        m_assembler.xorl_im(imm.m_value, dest.offset, dest.base);
+        if (imm.m_value == -1)
+            m_assembler.notl_m(dest.offset, dest.base);
+        else
+            m_assembler.xorl_im(imm.m_value, dest.offset, dest.base);
     }
 
     void xor32(TrustedImm32 imm, RegisterID dest)
     {
+        if (imm.m_value == -1)
+        m_assembler.notl_r(dest);
+        else
         m_assembler.xorl_ir(imm.m_value, dest);
     }
 
@@ -424,6 +424,23 @@ public:
         m_assembler.sqrtsd_rr(src, dst);
     }
 
+    void absDouble(FPRegisterID src, FPRegisterID dst)
+    {
+        ASSERT(src != dst);
+        static const double negativeZeroConstant = -0.0;
+        loadDouble(&negativeZeroConstant, dst);
+        m_assembler.andnpd_rr(src, dst);
+    }
+
+    void negateDouble(FPRegisterID src, FPRegisterID dst)
+    {
+        ASSERT(src != dst);
+        static const double negativeZeroConstant = -0.0;
+        loadDouble(&negativeZeroConstant, dst);
+        m_assembler.xorpd_rr(src, dst);
+    }
+
+
     // Memory access operations:
     //
     // Loads are of the form load(address, destination) and stores of the form
@@ -444,6 +461,11 @@ public:
     void load32WithUnalignedHalfWords(BaseIndex address, RegisterID dest)
     {
         load32(address, dest);
+    }
+
+    void load16Unaligned(BaseIndex address, RegisterID dest)
+    {
+        load16(address, dest);
     }
 
     DataLabel32 load32WithAddressOffsetPatch(Address address, RegisterID dest)
@@ -481,6 +503,16 @@ public:
         m_assembler.movzbl_mr(address.offset, address.base, dest);
     }
     
+    void load8Signed(BaseIndex address, RegisterID dest)
+    {
+        m_assembler.movsbl_mr(address.offset, address.base, address.index, address.scale, dest);
+    }
+
+    void load8Signed(ImplicitAddress address, RegisterID dest)
+    {
+        m_assembler.movsbl_mr(address.offset, address.base, dest);
+    }
+    
     void load16(BaseIndex address, RegisterID dest)
     {
         m_assembler.movzwl_mr(address.offset, address.base, address.index, address.scale, dest);
@@ -489,6 +521,16 @@ public:
     void load16(Address address, RegisterID dest)
     {
         m_assembler.movzwl_mr(address.offset, address.base, dest);
+    }
+
+    void load16Signed(BaseIndex address, RegisterID dest)
+    {
+        m_assembler.movswl_mr(address.offset, address.base, address.index, address.scale, dest);
+    }
+    
+    void load16Signed(Address address, RegisterID dest)
+    {
+        m_assembler.movswl_mr(address.offset, address.base, dest);
     }
 
     DataLabel32 store32WithAddressOffsetPatch(RegisterID src, Address address)
@@ -556,6 +598,33 @@ public:
         m_assembler.movb_rm(src, address.offset, address.base, address.index, address.scale);
     }
 
+    void store16(RegisterID src, BaseIndex address)
+    {
+#if CPU(X86)
+        // On 32-bit x86 we can only store from the first 4 registers;
+        // esp..edi are mapped to the 'h' registers!
+        if (src >= 4) {
+            // Pick a temporary register.
+            RegisterID temp;
+            if (address.base != X86Registers::eax && address.index != X86Registers::eax)
+                temp = X86Registers::eax;
+            else if (address.base != X86Registers::ebx && address.index != X86Registers::ebx)
+                temp = X86Registers::ebx;
+            else {
+                ASSERT(address.base != X86Registers::ecx && address.index != X86Registers::ecx);
+                temp = X86Registers::ecx;
+            }
+            
+            // Swap to the temporary register to perform the store.
+            swap(src, temp);
+            m_assembler.movw_rm(temp, address.offset, address.base, address.index, address.scale);
+            swap(src, temp);
+            return;
+        }
+#endif
+        m_assembler.movw_rm(src, address.offset, address.base, address.index, address.scale);
+    }
+
 
     // Floating-point operation:
     //
@@ -568,16 +637,62 @@ public:
             m_assembler.movsd_rr(src, dest);
     }
 
+    void loadDouble(const void* address, FPRegisterID dest)
+    {
+#if CPU(X86)
+        ASSERT(isSSE2Present());
+        m_assembler.movsd_mr(address, dest);
+#else
+        move(TrustedImmPtr(address), scratchRegister);
+        loadDouble(scratchRegister, dest);
+#endif
+    }
+
     void loadDouble(ImplicitAddress address, FPRegisterID dest)
     {
         ASSERT(isSSE2Present());
         m_assembler.movsd_mr(address.offset, address.base, dest);
+    }
+    
+    void loadDouble(BaseIndex address, FPRegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.movsd_mr(address.offset, address.base, address.index, address.scale, dest);
+    }
+    void loadFloat(BaseIndex address, FPRegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.movss_mr(address.offset, address.base, address.index, address.scale, dest);
     }
 
     void storeDouble(FPRegisterID src, ImplicitAddress address)
     {
         ASSERT(isSSE2Present());
         m_assembler.movsd_rm(src, address.offset, address.base);
+    }
+    
+    void storeDouble(FPRegisterID src, BaseIndex address)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.movsd_rm(src, address.offset, address.base, address.index, address.scale);
+    }
+    
+    void storeFloat(FPRegisterID src, BaseIndex address)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.movss_rm(src, address.offset, address.base, address.index, address.scale);
+    }
+    
+    void convertDoubleToFloat(FPRegisterID src, FPRegisterID dst)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.cvtsd2ss_rr(src, dst);
+    }
+
+    void convertFloatToDouble(FPRegisterID src, FPRegisterID dst)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.cvtss2sd_rr(src, dst);
     }
 
     void addDouble(FPRegisterID src, FPRegisterID dest)
@@ -719,11 +834,26 @@ public:
         return branch32(branchType ? NotEqual : Equal, dest, TrustedImm32(0x80000000));
     }
 
+    Jump branchTruncateDoubleToUint32(FPRegisterID src, RegisterID dest, BranchTruncateType branchType = BranchIfTruncateFailed)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.cvttsd2si_rr(src, dest);
+        return branch32(branchType ? GreaterThanOrEqual : LessThan, dest, TrustedImm32(0));
+    }
+
     void truncateDoubleToInt32(FPRegisterID src, RegisterID dest)
     {
         ASSERT(isSSE2Present());
         m_assembler.cvttsd2si_rr(src, dest);
     }
+    
+#if CPU(X86_64)
+    void truncateDoubleToUint32(FPRegisterID src, RegisterID dest)
+    {
+        ASSERT(isSSE2Present());
+        m_assembler.cvttsd2siq_rr(src, dest);
+    }
+#endif
     
     // Convert 'src' to an integer, and places the resulting 'dest'.
     // If the result is not representable as a 32 bit value, branch.

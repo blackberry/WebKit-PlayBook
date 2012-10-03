@@ -38,7 +38,7 @@
 #include "HTMLNames.h"
 #include "LocalizedStrings.h"
 #include "MouseEvent.h"
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
 #include "MediaPlayerPrivateBlackBerry.h"
 #endif
 #include "Page.h"
@@ -162,7 +162,7 @@ PassRefPtr<RenderStyle> MediaControlElement::styleForElement()
     style->setTextDecoration(TDNONE);
     style->setTextDecorationsInEffect(TDNONE);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     // Applying text-align to the media controls can cause strange placement
     // issues.
     style->setTextAlign(TAAUTO);
@@ -505,7 +505,7 @@ PassRefPtr<MediaControlMuteButtonElement> MediaControlMuteButtonElement::create(
 
 void MediaControlMuteButtonElement::defaultEventHandler(Event* event)
 {
-#if !(PLATFORM(BLACKBERRY) && OS(QNX)) /* Do not mute when the media player volume/mute control is touched on PlayBook */
+#if !(PLATFORM(BLACKBERRY) /* Do not mute when the media player volume/mute control is touched on PlayBook */
     if (event->type() == eventNames().clickEvent) {
         mediaElement()->setMuted(!mediaElement()->muted());
         event->setDefaultHandled();
@@ -786,7 +786,7 @@ void MediaControlVolumeSliderElement::defaultEventHandler(Event* event)
         return;
 
 // Disable PPS audio volume updates on a mouse down event.
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     if (event->type() == eventNames().mousedownEvent)
         if (mediaElement()->player() && mediaElement()->player()->implementation())
             static_cast<MediaPlayerPrivate*>(mediaElement()->player()->implementation())->setAllowPPSVolumeUpdates(false);
@@ -800,7 +800,7 @@ void MediaControlVolumeSliderElement::defaultEventHandler(Event* event)
     }
 
 // Re-enable PPS audio volume updates on a mouse up event.
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     if (event->type() == eventNames().mouseupEvent)
         if (mediaElement()->player() && mediaElement()->player()->implementation())
             static_cast<MediaPlayerPrivate*>(mediaElement()->player()->implementation())->setAllowPPSVolumeUpdates(true);

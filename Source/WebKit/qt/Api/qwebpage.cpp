@@ -46,6 +46,7 @@
 #include "ContextMenuClientQt.h"
 #include "ContextMenuController.h"
 #include "DeviceMotionClientQt.h"
+#include "DeviceOrientationClientMock.h"
 #include "DeviceOrientationClientQt.h"
 #include "DocumentLoader.h"
 #include "DragClientQt.h"
@@ -75,12 +76,12 @@
 #include "HashMap.h"
 #include "HitTestResult.h"
 #include "Image.h"
+#include "InitWebCoreQt.h"
 #include "InspectorClientQt.h"
 #include "InspectorController.h"
 #include "InspectorServerQt.h"
 #include "KURL.h"
 #include "LocalizedStrings.h"
-#include "Logging.h"
 #include "MIMETypeRegistry.h"
 #include "NavigationAction.h"
 #include "NetworkingContext.h"
@@ -92,7 +93,6 @@
 #include "PageGroup.h"
 #include "Pasteboard.h"
 #include "PlatformKeyboardEvent.h"
-#include "PlatformStrategiesQt.h"
 #include "PlatformTouchEvent.h"
 #include "PlatformWheelEvent.h"
 #include "PluginDatabase.h"
@@ -105,22 +105,19 @@
 #include "RenderThemeQt.h"
 #include "SchemeRegistry.h"
 #include "Scrollbar.h"
+#include "ScrollbarTheme.h"
 #include "SecurityOrigin.h"
-#include "SecurityPolicy.h"
 #include "Settings.h"
 #if defined Q_OS_WIN32
 #include "SystemInfo.h"
 #endif // Q_OS_WIN32
 #include "TextIterator.h"
 #include "UtilsQt.h"
-#if USE(QTKIT)
-#include "WebSystemInterface.h"
-#endif
+#include "WebEventConversion.h"
 #include "WindowFeatures.h"
 #include "WorkerThread.h"
-#include <runtime/InitializeThreading.h>
-#include <wtf/MainThread.h>
 
+#include <QAction>
 #include <QApplication>
 #include <QBasicTimer>
 #include <QBitArray>
@@ -131,8 +128,8 @@
 #include <QDragMoveEvent>
 #include <QDropEvent>
 #include <QFileDialog>
-#include <QHttpRequestHeader>
 #include <QInputDialog>
+#include <QMenu>
 #include <QMessageBox>
 #include <QNetworkProxy>
 #include <QUndoStack>
@@ -317,16 +314,11 @@ QWebPagePrivate::QWebPagePrivate(QWebPage *qq)
     , inspectorIsInternalOnly(false)
     , m_lastDropAction(Qt::IgnoreAction)
 {
-    WebCore::InitializeLoggingChannelsIfNecessary();
-    ScriptController::initializeThreading();
-    WTF::initializeMainThread();
-    WebCore::SecurityPolicy::setLocalLoadPolicy(WebCore::SecurityPolicy::AllowLocalLoadsForLocalAndSubstituteData);
-
-    PlatformStrategiesQt::initialize();
-
-#if USE(QTKIT)
-    InitWebCoreSystemInterface();
+#if ENABLE(DEVICE_ORIENTATION) || ENABLE(CLIENT_BASED_GEOLOCATION)
+    bool useMock = QWebPagePrivate::drtRun;
 #endif
+
+    WebCore::initializeWebCoreQt();
 
     Page::PageClients pageClients;
     pageClients.chromeClient = new ChromeClientQt(q);
@@ -334,17 +326,23 @@ QWebPagePrivate::QWebPagePrivate(QWebPage *qq)
     pageClients.editorClient = new EditorClientQt(q);
     pageClients.dragClient = new DragClientQt(q);
     pageClients.inspectorClient = new InspectorClientQt(q);
-#if ENABLE(DEVICE_ORIENTATION)
-    pageClients.deviceOrientationClient = new DeviceOrientationClientQt(q);
-    pageClients.deviceMotionClient = new DeviceMotionClientQt(q);
-#endif
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
-    if (QWebPagePrivate::drtRun)
-        pageClients.geolocationClient = new GeolocationClientMock();
+    if (useMock)
+        pageClients.geolocationClient = new GeolocationClientMock;
     else
         pageClients.geolocationClient = new GeolocationClientQt(q);
 #endif
     page = new Page(pageClients);
+#if ENABLE(DEVICE_ORIENTATION)
+    if (useMock)
+        WebCore::provideDeviceOrientationTo(page, new DeviceOrientationClientMock);
+    else
+        WebCore::provideDeviceOrientationTo(page, new DeviceOrientationClientQt);
+    WebCore::provideDeviceMotionTo(page, new DeviceMotionClientQt);
+#endif
+#if ENABLE(NOTIFICATIONS)
+    WebCore::provideNotification(page, NotificationPresenterClientQt::notificationPresenter());
+#endif
 
     // By default each page is put into their own unique page group, which affects popup windows
     // and visited links. Page groups (per process only) is a feature making it possible to use
@@ -682,7 +680,7 @@ void QWebPagePrivate::mouseMoveEvent(T* ev)
     if (!frame->view())
         return;
 
-    bool accepted = frame->eventHandler()->mouseMoved(PlatformMouseEvent(ev, 0));
+    bool accepted = frame->eventHandler()->mouseMoved(convertMouseEvent(ev, 0));
     ev->setAccepted(accepted);
 }
 
@@ -707,7 +705,7 @@ void QWebPagePrivate::mousePressEvent(T* ev)
 
     bool accepted = false;
     adjustPointForClicking(ev);
-    PlatformMouseEvent mev(ev, 1);
+    PlatformMouseEvent mev = convertMouseEvent(ev, 1);
     // ignore the event if we can't map Qt's mouse buttons to WebCore::MouseButton
     if (mev.button() != NoButton)
         accepted = frame->eventHandler()->handleMousePressEvent(mev);
@@ -730,7 +728,7 @@ void QWebPagePrivate::mouseDoubleClickEvent(T *ev)
         return;
 
     bool accepted = false;
-    PlatformMouseEvent mev(ev, 2);
+    PlatformMouseEvent mev = convertMouseEvent(ev, 2);
     // ignore the event if we can't map Qt's mouse buttons to WebCore::MouseButton
     if (mev.button() != NoButton)
         accepted = frame->eventHandler()->handleMousePressEvent(mev);
@@ -748,7 +746,7 @@ void QWebPagePrivate::mouseTripleClickEvent(T *ev)
         return;
 
     bool accepted = false;
-    PlatformMouseEvent mev(ev, 3);
+    PlatformMouseEvent mev = convertMouseEvent(ev, 3);
     // ignore the event if we can't map Qt's mouse buttons to WebCore::MouseButton
     if (mev.button() != NoButton)
         accepted = frame->eventHandler()->handleMousePressEvent(mev);
@@ -787,7 +785,7 @@ void QWebPagePrivate::mouseReleaseEvent(T *ev)
 
     bool accepted = false;
     adjustPointForClicking(ev);
-    PlatformMouseEvent mev(ev, 0);
+    PlatformMouseEvent mev = convertMouseEvent(ev, 0);
     // ignore the event if we can't map Qt's mouse buttons to WebCore::MouseButton
     if (mev.button() != NoButton)
         accepted = frame->eventHandler()->handleMouseReleaseEvent(mev);
@@ -857,7 +855,7 @@ void QWebPagePrivate::wheelEvent(T *ev)
     if (!frame->view())
         return;
 
-    WebCore::PlatformWheelEvent pev(ev);
+    PlatformWheelEvent pev = convertWheelEvent(ev);
     bool accepted = frame->eventHandler()->handleWheelEvent(pev);
     ev->setAccepted(accepted);
 }
@@ -1204,43 +1202,6 @@ void QWebPagePrivate::dynamicPropertyChangeEvent(QDynamicPropertyChangeEvent* ev
             }
         }
     }
-#if USE(TILED_BACKING_STORE)
-    else if (event->propertyName() == "_q_TiledBackingStoreTileSize") {
-        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
-        if (!frame->tiledBackingStore())
-            return;
-        QSize tileSize = q->property("_q_TiledBackingStoreTileSize").toSize();
-        frame->tiledBackingStore()->setTileSize(tileSize);
-    } else if (event->propertyName() == "_q_TiledBackingStoreTileCreationDelay") {
-        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
-        if (!frame->tiledBackingStore())
-            return;
-        int tileCreationDelay = q->property("_q_TiledBackingStoreTileCreationDelay").toInt();
-        frame->tiledBackingStore()->setTileCreationDelay(static_cast<double>(tileCreationDelay) / 1000.);
-    } else if (event->propertyName() == "_q_TiledBackingStoreKeepAreaMultiplier") {
-        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
-        if (!frame->tiledBackingStore())
-            return;
-        float keepMultiplier;
-        float coverMultiplier;
-        frame->tiledBackingStore()->getKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
-        QSizeF qSize = q->property("_q_TiledBackingStoreKeepAreaMultiplier").toSizeF();
-        // setKeepAndCoverAreaMultipliers do not use FloatSize anymore, keep only the height part.
-        keepMultiplier = qSize.height();
-        frame->tiledBackingStore()->setKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
-    } else if (event->propertyName() == "_q_TiledBackingStoreCoverAreaMultiplier") {
-        WebCore::Frame* frame = QWebFramePrivate::core(q->mainFrame());
-        if (!frame->tiledBackingStore())
-            return;
-        float keepMultiplier;
-        float coverMultiplier;
-        frame->tiledBackingStore()->getKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
-        QSizeF qSize = q->property("_q_TiledBackingStoreCoverAreaMultiplier").toSizeF();
-        // setKeepAndCoverAreaMultipliers do not use FloatSize anymore, keep only the height part.
-        coverMultiplier = qSize.height();
-        frame->tiledBackingStore()->setKeepAndCoverAreaMultipliers(keepMultiplier, coverMultiplier);
-    }
-#endif
     else if (event->propertyName() == "_q_webInspectorServerPort") {
         InspectorServerQt* inspectorServer = InspectorServerQt::server();
         inspectorServer->listen(inspectorServerPort());
@@ -1571,7 +1532,7 @@ static bool isClickableElement(Element* element, RefPtr<NodeList> list)
     ExceptionCode ec = 0;
     return isClickable
         || element->webkitMatchesSelector("a,*:link,*:visited,*[role=button],button,input,select,label", ec)
-        || computedStyle(element)->getPropertyValue(cssPropertyID("cursor")) == "pointer";
+        || CSSComputedStyleDeclaration::create(element)->getPropertyValue(cssPropertyID("cursor")) == "pointer";
 }
 
 static bool isValidFrameOwner(Element* element)
@@ -1603,7 +1564,7 @@ IntPoint QWebPagePrivate::TouchAdjuster::findCandidatePointForTouch(const IntPoi
     int x = touchPoint.x();
     int y = touchPoint.y();
 
-    RefPtr<NodeList> intersectedNodes = document->nodesFromRect(x, y, m_topPadding, m_rightPadding, m_bottomPadding, m_leftPadding, false);
+    RefPtr<NodeList> intersectedNodes = document->nodesFromRect(x, y, m_topPadding, m_rightPadding, m_bottomPadding, m_leftPadding, false /*ignoreClipping*/, false /*allowShadowContent*/);
     if (!intersectedNodes)
         return IntPoint();
 
@@ -2097,8 +2058,12 @@ void QWebPage::javaScriptConsoleMessage(const QString& message, int lineNumber, 
     // Catch plugin logDestroy message for LayoutTests/plugins/open-and-close-window-with-plugin.html
     // At this point DRT's WebPage has already been destroyed
     if (QWebPagePrivate::drtRun) {
-        if (message == QLatin1String("PLUGIN: NPP_Destroy"))
-            fprintf (stdout, "CONSOLE MESSAGE: line %d: %s\n", lineNumber, message.toUtf8().constData());
+        if (message == QLatin1String("PLUGIN: NPP_Destroy")) {
+            fprintf(stdout, "CONSOLE MESSAGE: ");
+            if (lineNumber)
+                fprintf(stdout, "line %d: ", lineNumber);
+            fprintf(stdout, "%s\n", message.toUtf8().constData());
+        }
     }
 }
 
@@ -2312,7 +2277,7 @@ static void openNewWindow(const QUrl& url, WebCore::Frame* frame)
         NavigationAction action;
         FrameLoadRequest request = frameLoadRequest(url, frame);
         if (Page* newPage = oldPage->chrome()->createWindow(frame, request, features, action)) {
-            newPage->mainFrame()->loader()->loadFrameRequest(request, false, false, 0, 0, SendReferrer);
+            newPage->mainFrame()->loader()->loadFrameRequest(request, false, false, 0, 0, MaybeSendReferrer);
             newPage->chrome()->show();
         }
     }
@@ -2351,7 +2316,7 @@ void QWebPage::triggerAction(WebAction action, bool)
                 WTF::RefPtr<WebCore::Frame> wcFrame = targetFrame->d->frame;
                 targetFrame->d->frame->loader()->loadFrameRequest(frameLoadRequest(d->hitTestResult.linkUrl(), wcFrame.get()),
                                                                   /*lockHistory*/ false, /*lockBackForwardList*/ false, /*event*/ 0,
-                                                                  /*FormState*/ 0, SendReferrer);
+                                                                  /*FormState*/ 0, MaybeSendReferrer);
                 break;
             }
             // fall through
@@ -3151,6 +3116,9 @@ bool QWebPage::event(QEvent *ev)
     case QEvent::TouchBegin:
     case QEvent::TouchUpdate:
     case QEvent::TouchEnd:
+#if QT_VERSION >= QT_VERSION_CHECK(5, 0, 0)
+    case QEvent::TouchCancel:
+#endif
         // Return whether the default action was cancelled in the JS event handler
         return d->touchEvent(static_cast<QTouchEvent*>(ev));
 #ifndef QT_NO_PROPERTIES
@@ -3260,6 +3228,55 @@ QWebPage::LinkDelegationPolicy QWebPage::linkDelegationPolicy() const
 }
 
 #ifndef QT_NO_CONTEXTMENU
+
+static bool handleScrollbarContextMenuEvent(Scrollbar* scrollBar, QContextMenuEvent* event)
+{
+    if (!QApplication::style()->styleHint(QStyle::SH_ScrollBar_ContextMenu))
+        return true;
+
+    bool horizontal = (scrollBar->orientation() == HorizontalScrollbar);
+
+    QMenu menu;
+    QAction* actScrollHere = menu.addAction(QCoreApplication::translate("QWebPage", "Scroll here"));
+    menu.addSeparator();
+
+    QAction* actScrollTop = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Left edge") : QCoreApplication::translate("QWebPage", "Top"));
+    QAction* actScrollBottom = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Right edge") : QCoreApplication::translate("QWebPage", "Bottom"));
+    menu.addSeparator();
+
+    QAction* actPageUp = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Page left") : QCoreApplication::translate("QWebPage", "Page up"));
+    QAction* actPageDown = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Page right") : QCoreApplication::translate("QWebPage", "Page down"));
+    menu.addSeparator();
+
+    QAction* actScrollUp = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Scroll left") : QCoreApplication::translate("QWebPage", "Scroll up"));
+    QAction* actScrollDown = menu.addAction(horizontal ? QCoreApplication::translate("QWebPage", "Scroll right") : QCoreApplication::translate("QWebPage", "Scroll down"));
+
+    QAction* actionSelected = menu.exec(event->globalPos());
+
+    if (actionSelected == actScrollHere) {
+        ScrollbarTheme* theme = scrollBar->theme();
+        // Set the pressed position to the middle of the thumb so that when we
+        // do move, the delta will be from the current pixel position of the
+        // thumb to the new position
+        int position = theme->trackPosition(scrollBar) + theme->thumbPosition(scrollBar) + theme->thumbLength(scrollBar) / 2;
+        scrollBar->setPressedPos(position);
+        const QPoint pos = scrollBar->convertFromContainingWindow(event->pos());
+        scrollBar->moveThumb(horizontal ? pos.x() : pos.y());
+    } else if (actionSelected == actScrollTop)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByDocument);
+    else if (actionSelected == actScrollBottom)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollRight : ScrollDown, ScrollByDocument);
+    else if (actionSelected == actPageUp)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByPage);
+    else if (actionSelected == actPageDown)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollRight : ScrollDown, ScrollByPage);
+    else if (actionSelected == actScrollUp)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollLeft : ScrollUp, ScrollByLine);
+    else if (actionSelected == actScrollDown)
+        scrollBar->scrollableArea()->scroll(horizontal ? ScrollRight : ScrollDown, ScrollByLine);
+    return true;
+}
+
 /*!
     Filters the context menu event, \a event, through handlers for scrollbars and
     custom event handlers in the web page. Returns true if the event was handled;
@@ -3277,14 +3294,14 @@ bool QWebPage::swallowContextMenuEvent(QContextMenuEvent *event)
     if (!RenderThemeQt::useMobileTheme()) {
         if (QWebFrame* webFrame = frameAt(event->pos())) {
             Frame* frame = QWebFramePrivate::core(webFrame);
-            if (Scrollbar* scrollbar = frame->view()->scrollbarAtPoint(PlatformMouseEvent(event, 1).pos()))
-                return scrollbar->contextMenu(PlatformMouseEvent(event, 1));
+            if (Scrollbar* scrollbar = frame->view()->scrollbarAtPoint(convertMouseEvent(event, 1).position()))
+                return handleScrollbarContextMenuEvent(scrollbar, event);
         }
     }
 #endif
 
     WebCore::Frame* focusedFrame = d->page->focusController()->focusedOrMainFrame();
-    focusedFrame->eventHandler()->sendContextMenuEvent(PlatformMouseEvent(event, 1));
+    focusedFrame->eventHandler()->sendContextMenuEvent(convertMouseEvent(event, 1));
     ContextMenu *menu = d->page->contextMenuController()->contextMenu();
     // If the website defines its own handler then sendContextMenuEvent takes care of
     // calling/showing it and the context menu pointer will be zero. This is the case

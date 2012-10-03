@@ -31,7 +31,7 @@
 #ifndef ThreadingPrimitives_h
 #define ThreadingPrimitives_h
 
-#include "Platform.h"
+#include <wtf/Platform.h>
 
 #include <wtf/Assertions.h>
 #include <wtf/FastAllocBase.h>
@@ -46,14 +46,6 @@
 #include <pthread.h>
 #endif
 
-#if PLATFORM(QT)
-#include <qglobal.h>
-QT_BEGIN_NAMESPACE
-class QMutex;
-class QWaitCondition;
-QT_END_NAMESPACE
-#endif
-
 namespace WTF {
 
 #if USE(PTHREADS)
@@ -64,10 +56,6 @@ typedef pthread_rwlock_t PlatformReadWriteLock;
 typedef void* PlatformReadWriteLock;
 #endif
 typedef pthread_cond_t PlatformCondition;
-#elif PLATFORM(QT)
-typedef QT_PREPEND_NAMESPACE(QMutex)* PlatformMutex;
-typedef void* PlatformReadWriteLock; // FIXME: Implement.
-typedef QT_PREPEND_NAMESPACE(QWaitCondition)* PlatformCondition;
 #elif OS(WINDOWS)
 struct PlatformMutex {
     CRITICAL_SECTION m_internalMutex;
@@ -94,12 +82,12 @@ typedef void* PlatformCondition;
 class Mutex {
     WTF_MAKE_NONCOPYABLE(Mutex); WTF_MAKE_FAST_ALLOCATED;
 public:
-    Mutex();
-    ~Mutex();
+    WTF_EXPORT_PRIVATE Mutex();
+    WTF_EXPORT_PRIVATE ~Mutex();
 
-    void lock();
-    bool tryLock();
-    void unlock();
+    WTF_EXPORT_PRIVATE void lock();
+    WTF_EXPORT_PRIVATE bool tryLock();
+    WTF_EXPORT_PRIVATE void unlock();
 
 public:
     PlatformMutex& impl() { return m_mutex; }
@@ -130,15 +118,15 @@ private:
 class ThreadCondition {
     WTF_MAKE_NONCOPYABLE(ThreadCondition);
 public:
-    ThreadCondition();
-    ~ThreadCondition();
+    WTF_EXPORT_PRIVATE ThreadCondition();
+    WTF_EXPORT_PRIVATE ~ThreadCondition();
     
-    void wait(Mutex& mutex);
+    WTF_EXPORT_PRIVATE void wait(Mutex& mutex);
     // Returns true if the condition was signaled before absoluteTime, false if the absoluteTime was reached or is in the past.
     // The absoluteTime is in seconds, starting on January 1, 1970. The time is assumed to use the same time zone as WTF::currentTime().
-    bool timedWait(Mutex&, double absoluteTime);
-    void signal();
-    void broadcast();
+    WTF_EXPORT_PRIVATE bool timedWait(Mutex&, double absoluteTime);
+    WTF_EXPORT_PRIVATE void signal();
+    WTF_EXPORT_PRIVATE void broadcast();
     
 private:
     PlatformCondition m_condition;

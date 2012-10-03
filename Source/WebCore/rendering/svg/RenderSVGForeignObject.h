@@ -24,6 +24,7 @@
 #if ENABLE(SVG)
 #include "AffineTransform.h"
 #include "FloatPoint.h"
+#include "FloatRect.h"
 #include "RenderSVGBlock.h"
 
 namespace WebCore {
@@ -40,14 +41,14 @@ public:
     virtual void paint(PaintInfo&, const LayoutPoint&);
 
     virtual LayoutRect clippedOverflowRectForRepaint(RenderBoxModelObject* repaintContainer) const;
-    virtual void computeRectForRepaint(RenderBoxModelObject* repaintContainer, LayoutRect&, bool fixed = false) const;
+    virtual void computeFloatRectForRepaint(RenderBoxModelObject* repaintContainer, FloatRect&, bool fixed = false) const;
 
     virtual bool requiresLayer() const { return false; }
     virtual void layout();
 
-    virtual FloatRect objectBoundingBox() const { return m_viewport; }
-    virtual FloatRect strokeBoundingBox() const { return m_viewport; }
-    virtual FloatRect repaintRectInLocalCoordinates() const { return m_viewport; }
+    virtual FloatRect objectBoundingBox() const { return FloatRect(FloatPoint(), m_viewport.size()); }
+    virtual FloatRect strokeBoundingBox() const { return FloatRect(FloatPoint(), m_viewport.size()); }
+    virtual FloatRect repaintRectInLocalCoordinates() const { return FloatRect(FloatPoint(), m_viewport.size()); }
 
     virtual bool nodeAtFloatPoint(const HitTestRequest&, HitTestResult&, const FloatPoint& pointInParent, HitTestAction);
     virtual bool nodeAtPoint(const HitTestRequest&, HitTestResult&, const LayoutPoint& pointInContainer, const LayoutPoint& accumulatedOffset, HitTestAction);

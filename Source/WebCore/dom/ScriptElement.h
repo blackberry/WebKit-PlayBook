@@ -67,7 +67,6 @@ protected:
 
     // Helper functions used by our parent classes.
     void insertedIntoDocument();
-    void removedFromDocument();
     void childrenChanged();
     void handleSourceAttribute(const String& sourceUrl);
     void handleAsyncAttribute();
@@ -104,25 +103,6 @@ private:
     bool m_willExecuteInOrder : 1;
     String m_characterEncoding;
     String m_fallbackCharacterEncoding;
-    
-#if PLATFORM(CHROMIUM)
-    // Temporary: intended to help debug how we get notifyFinished() called when m_cachedScript is null,
-    // which seems to sometimes happen (see http://code.google.com/p/chromium/issues/detail?id=75604 )
-    enum {
-        NeverSet,
-        Set,
-        ZeroedInStopLoadRequest,
-        ZeroedInNotifyFinished,
-    } m_cachedScriptState;
-
-    // We grab a backtrace when we zero m_cachedScript, so that at later crashes
-    // we'll have a debuggable stack.
-    enum {
-        MaxBacktraceSize = 32
-    };
-    int m_backtraceSize;
-    void* m_backtrace[MaxBacktraceSize];
-#endif
 };
 
 ScriptElement* toScriptElement(Element*);

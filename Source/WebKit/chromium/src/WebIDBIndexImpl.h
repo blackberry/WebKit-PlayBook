@@ -28,7 +28,7 @@
 
 #if ENABLE(INDEXED_DATABASE)
 
-#include "WebCommon.h"
+#include "platform/WebCommon.h"
 #include "WebIDBIndex.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
@@ -47,9 +47,11 @@ public:
     virtual WebString storeName() const;
     virtual WebString keyPath() const;
     virtual bool unique() const;
+    virtual bool multiEntry() const;
 
     virtual void openObjectCursor(const WebIDBKeyRange&, unsigned short direction, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&); 
     virtual void openKeyCursor(const WebIDBKeyRange&, unsigned short direction, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
+    virtual void count(const WebIDBKeyRange&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
     virtual void getObject(const WebIDBKey&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
     virtual void getKey(const WebIDBKey&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
 

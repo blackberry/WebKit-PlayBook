@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -26,6 +26,7 @@
 #include <wtf/ThreadSafeRefCounted.h>
 
 namespace BlackBerry {
+
 namespace Platform {
 namespace Graphics {
 struct Buffer;
@@ -39,11 +40,11 @@ public:
     ~CompositingSurfaceBuffer();
     Platform::IntSize surfaceSize() const;
 
-    BlackBerry::Platform::Graphics::Buffer* nativeBuffer() const;
+    Platform::Graphics::Buffer* nativeBuffer() const;
 
 private:
     Platform::IntSize m_size;
-    mutable BlackBerry::Platform::Graphics::Buffer* m_buffer;
+    mutable Platform::Graphics::Buffer* m_buffer;
 };
 
 
@@ -67,13 +68,14 @@ public:
 private:
     BackingStoreCompositingSurface(const Platform::IntSize&, bool doubleBuffered);
 
-    mutable unsigned m_frontBuffer;
-    mutable unsigned m_backBuffer;
+    mutable CompositingSurfaceBuffer* m_frontBuffer;
+    mutable CompositingSurfaceBuffer* m_backBuffer;
     bool m_isDoubleBuffered;
     bool m_needsSync;
 };
-}
-}
+
+} // namespace WebKit
+} // namespace BlackBerry
 
 #endif // USE(ACCELERATED_COMPOSITING)
 

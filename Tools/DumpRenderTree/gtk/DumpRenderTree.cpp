@@ -54,6 +54,7 @@
 #include <gtk/gtk.h>
 #include <webkit/webkit.h>
 #include <wtf/Assertions.h>
+#include <wtf/gobject/GlibUtilities.h>
 
 #if PLATFORM(X11)
 #include <fontconfig/fontconfig.h>
@@ -75,6 +76,7 @@ volatile bool done;
 static bool printSeparators;
 static int dumpPixels;
 static int dumpTree = 1;
+static int useTimeoutWatchdog = 1;
 
 AccessibilityController* axController = 0;
 RefPtr<LayoutTestController> gLayoutTestController;
@@ -154,6 +156,24 @@ static void initializeGtkFontSettings(const char* testURL)
         g_object_set(settings, "gtk-xft-rgba", "rgb", NULL);
     else
         g_object_set(settings, "gtk-xft-rgba", "none", NULL);
+
+    GdkScreen* screen = gdk_screen_get_default();
+    ASSERT(screen);
+    const cairo_font_options_t* screenOptions = gdk_screen_get_font_options(screen);
+    ASSERT(screenOptions);
+    cairo_font_options_t* options = cairo_font_options_copy(screenOptions);
+    // Turn off text metrics hinting, which quantizes metrics to pixels in device space.
+    cairo_font_options_set_hint_metrics(options, CAIRO_HINT_METRICS_OFF);
+    gdk_screen_set_font_options(screen, options);
+    cairo_font_options_destroy(options);
+}
+
+CString getTopLevelPath()
+{
+    if (!g_getenv("WEBKIT_TOP_LEVEL"))
+        g_setenv("WEBKIT_TOP_LEVEL", TOP_LEVEL_DIR, FALSE);
+
+    return TOP_LEVEL_DIR;
 }
 
 static void initializeFonts(const char* testURL = 0)
@@ -177,62 +197,21 @@ static void initializeFonts(const char* testURL = 0)
     if (!FcConfigParseAndLoad(config, reinterpret_cast<FcChar8*>(fontConfigFilename.get()), true))
         g_error("Couldn't load font configuration file from: %s", fontConfigFilename.get());
 
-    static const char *const fontDirectories[] = {
-        "/usr/share/fonts/truetype/liberation",
-        "/usr/share/fonts/truetype/ttf-liberation",
-        "/usr/share/fonts/liberation",
-        "/usr/share/fonts/truetype/ttf-dejavu",
-        "/usr/share/fonts/dejavu",
-        "/usr/share/fonts/opentype/stix",
-        "/usr/share/fonts/stix"
-    };
+    CString topLevelPath = getTopLevelPath();
+    GOwnPtr<char> fontsPath(g_build_filename(topLevelPath.data(), "WebKitBuild", "Dependencies",
+                                             "Root", "webkitgtk-test-fonts", NULL));
+    if (!g_file_test(fontsPath.get(), static_cast<GFileTest>(G_FILE_TEST_EXISTS | G_FILE_TEST_IS_DIR)))
+        g_error("Could not locate test fonts at %s. Is WEBKIT_TOP_LEVEL set?", fontsPath.get());
 
-    static const char *const fontPaths[] = {
-        "LiberationMono-BoldItalic.ttf",
-        "LiberationMono-Bold.ttf",
-        "LiberationMono-Italic.ttf",
-        "LiberationMono-Regular.ttf",
-        "LiberationSans-BoldItalic.ttf",
-        "LiberationSans-Bold.ttf",
-        "LiberationSans-Italic.ttf",
-        "LiberationSans-Regular.ttf",
-        "LiberationSerif-BoldItalic.ttf",
-        "LiberationSerif-Bold.ttf",
-        "LiberationSerif-Italic.ttf",
-        "LiberationSerif-Regular.ttf",
-        "DejaVuSans.ttf",
-        "DejaVuSerif.ttf",
+    GOwnPtr<GError> error;
+    GOwnPtr<GDir> fontsDirectory(g_dir_open(fontsPath.get(), 0, &error.outPtr()));
+    while (const char* directoryEntry = g_dir_read_name(fontsDirectory.get())) {
+        if (!g_str_has_suffix(directoryEntry, ".ttf") && !g_str_has_suffix(directoryEntry, ".otf"))
+            continue;
+        GOwnPtr<gchar> fontPath(g_build_filename(fontsPath.get(), directoryEntry, NULL));
+        if (!FcConfigAppFontAddFile(config, reinterpret_cast<const FcChar8*>(fontPath.get())))
+            g_error("Could not load font at %s!", fontPath.get());
 
-        // MathML tests require the STIX fonts.
-        "STIXGeneral.otf",
-        "STIXGeneralBolIta.otf",
-        "STIXGeneralBol.otf",
-        "STIXGeneralItalic.otf"
-    };
-
-    // TODO: Some tests use Lucida. We should load these as well, once it becomes
-    // clear how to install these fonts easily on Fedora.
-    for (size_t font = 0; font < G_N_ELEMENTS(fontPaths); font++) {
-        bool found = false;
-        for (size_t path = 0; path < G_N_ELEMENTS(fontDirectories); path++) {
-            GOwnPtr<gchar> fullPath(g_build_filename(fontDirectories[path], fontPaths[font], NULL));
-            if (g_file_test(fullPath.get(), G_FILE_TEST_EXISTS)) {
-                found = true;
-                if (!FcConfigAppFontAddFile(config, reinterpret_cast<const FcChar8*>(fullPath.get())))
-                    g_error("Could not load font at %s!", fullPath.get());
-                else
-                    break;
-            }
-        }
-
-        if (!found) {
-            GOwnPtr<gchar> directoriesDescription;
-            for (size_t path = 0; path < G_N_ELEMENTS(fontDirectories); path++)
-                directoriesDescription.set(g_strjoin(":", directoriesDescription.release(), fontDirectories[path], NULL));
-            g_error("Could not find font %s in %s. Either install this font or file a bug "
-                    "at http://bugs.webkit.org if it is installed in another location.",
-                    fontPaths[font], directoriesDescription.get());
-        }
     }
 
     // Ahem is used by many layout tests.
@@ -390,6 +369,16 @@ static void dumpBackForwardListForAllWebViews()
         dumpBackForwardListForWebView(WEBKIT_WEB_VIEW(currentView->data));
 }
 
+void setWaitToDumpWatchdog(guint timer)
+{
+    waitToDumpWatchdog = timer;
+}
+
+bool shouldSetWaitToDumpWatchdog()
+{
+    return !waitToDumpWatchdog && useTimeoutWatchdog;
+}
+
 static void invalidateAnyPreviousWaitToDumpWatchdog()
 {
     if (waitToDumpWatchdog) {
@@ -476,6 +465,8 @@ static void resetDefaultsToConsistentValues()
     DumpRenderTreeSupportGtk::clearOpener(mainFrame);
 
     DumpRenderTreeSupportGtk::resetGeolocationClientMock(webView);
+
+    DumpRenderTreeSupportGtk::setHixie76WebSocketProtocolEnabled(webView, true);
 }
 
 static bool useLongRunningServerMode(int argc, char *argv[])
@@ -507,6 +498,7 @@ static void initializeGlobalsFromCommandLineOptions(int argc, char *argv[])
         {"notree", no_argument, &dumpTree, false},
         {"pixel-tests", no_argument, &dumpPixels, true},
         {"tree", no_argument, &dumpTree, true},
+        {"no-timeout", no_argument, &useTimeoutWatchdog, false},
         {NULL, 0, NULL, 0}
     };
     
@@ -856,14 +848,19 @@ static gboolean webViewConsoleMessage(WebKitWebView* view, const gchar* message,
         gchar* filename = g_strrstr(uriScheme, G_DIR_SEPARATOR_S);
 
         if (filename) {
-            filename += strlen(G_DIR_SEPARATOR_S);
+            // If the path is a lone slash, keep it to avoid empty output.
+            if (strlen(filename) > 1)
+                filename += strlen(G_DIR_SEPARATOR_S);
             tempString = g_string_append_len(tempString, message, (uriScheme - message));
             tempString = g_string_append_len(tempString, filename, strlen(filename));
             testMessage = g_string_free(tempString, FALSE);
         }
     }
 
-    fprintf(stdout, "CONSOLE MESSAGE: line %d: %s\n", line, testMessage ? testMessage : message);
+    fprintf(stdout, "CONSOLE MESSAGE: ");
+    if (line)
+        fprintf(stdout, "line %d: ", line);
+    fprintf(stdout, "%s\n", testMessage ? testMessage : message);
     g_free(testMessage);
 
     return TRUE;
@@ -1066,13 +1063,150 @@ static void frameCreatedCallback(WebKitWebView* webView, WebKitWebFrame* webFram
     g_signal_connect(webFrame, "notify::load-status", G_CALLBACK(webFrameLoadStatusNotified), NULL);
 }
 
-static void willSendRequestCallback(WebKitWebView* webView, WebKitWebFrame*, WebKitWebResource*, WebKitNetworkRequest* request, WebKitNetworkResponse*)
+
+static CString pathFromSoupURI(SoupURI* uri)
 {
+    if (!uri)
+        return CString();
+
+    if (g_str_equal(uri->scheme, "http")) {
+        GOwnPtr<char> uriString(soup_uri_to_string(uri, FALSE));
+        return CString(uriString.get());
+    }
+
+    GOwnPtr<gchar> pathDirname(g_path_get_basename(g_path_get_dirname(uri->path)));
+    GOwnPtr<gchar> pathBasename(g_path_get_basename(uri->path));
+    GOwnPtr<gchar> urlPath(g_strdup_printf("%s/%s", pathDirname.get(), pathBasename.get()));
+    return CString(urlPath.get());
+}
+
+static CString convertSoupMessageToURLPath(SoupMessage* soupMessage)
+{
+    if (!soupMessage)
+        return CString();
+    if (SoupURI* requestURI = soup_message_get_uri(soupMessage))
+        return pathFromSoupURI(requestURI);
+    return CString();
+}
+
+static CString convertNetworkRequestToURLPath(WebKitNetworkRequest* request)
+{
+    return convertSoupMessageToURLPath(webkit_network_request_get_message(request));
+}
+
+static CString convertWebResourceToURLPath(WebKitWebResource* webResource)
+{
+    SoupURI* uri = soup_uri_new(webkit_web_resource_get_uri(webResource));
+    CString urlPath(pathFromSoupURI(uri));
+    soup_uri_free(uri);
+    return urlPath;
+}
+
+static CString urlSuitableForTestResult(const char* uriString)
+{
+    if (!g_str_has_prefix(uriString, "file://"))
+        return CString(uriString);
+
+    GOwnPtr<gchar> basename(g_path_get_basename(uriString));
+    return CString(basename.get());
+}
+
+static CString descriptionSuitableForTestResult(SoupURI* uri)
+{
+    if (!uri)
+        return CString("");
+
+    GOwnPtr<char> uriString(soup_uri_to_string(uri, false));
+    return urlSuitableForTestResult(uriString.get());
+}
+
+static CString descriptionSuitableForTestResult(WebKitWebView* webView, WebKitWebFrame* webFrame, WebKitWebResource* webResource)
+{
+    SoupURI* uri = soup_uri_new(webkit_web_resource_get_uri(webResource));
+    CString description;
+    WebKitWebDataSource* dataSource = webkit_web_frame_get_data_source(webFrame);
+
+    if (webResource == webkit_web_data_source_get_main_resource(dataSource)
+        && (!webkit_web_view_get_progress(webView) || g_str_equal(uri->scheme, "file")))
+        description = CString("<unknown>");
+    else
+        description = convertWebResourceToURLPath(webResource);
+
+    if (uri)
+        soup_uri_free(uri);
+
+    return description;
+}
+
+static CString descriptionSuitableForTestResult(GError* error, WebKitWebResource* webResource)
+{
+    const gchar* errorDomain = g_quark_to_string(error->domain);
+    CString resourceURIString(urlSuitableForTestResult(webkit_web_resource_get_uri(webResource)));
+
+    if (g_str_equal(errorDomain, "webkit-network-error-quark"))
+        errorDomain = "NSURLErrorDomain";
+
+    // TODO: the other ports get the failingURL from the ResourceError
+    GOwnPtr<char> errorString(g_strdup_printf("<NSError domain %s, code %d, failing URL \"%s\">",
+                                              errorDomain, error->code, resourceURIString.data()));
+    return CString(errorString.get());
+}
+
+static CString descriptionSuitableForTestResult(WebKitNetworkRequest* request)
+{
+    SoupMessage* soupMessage = webkit_network_request_get_message(request);
+
+    if (!soupMessage) {
+        g_printerr("GRR\n");
+        return CString("");
+    }
+
+    SoupURI* requestURI = soup_message_get_uri(soupMessage);
+    SoupURI* mainDocumentURI = soup_message_get_first_party(soupMessage);
+    CString requestURIString(descriptionSuitableForTestResult(requestURI));
+    CString mainDocumentURIString(descriptionSuitableForTestResult(mainDocumentURI));
+    CString path(convertNetworkRequestToURLPath(request));
+    GOwnPtr<char> description(g_strdup_printf("<NSURLRequest URL %s, main document URL %s, http method %s>",
+                                              path.data(), mainDocumentURIString.data(),
+                                              soupMessage ? soupMessage->method : "(none)"));
+    return CString(description.get());
+}
+
+static CString descriptionSuitableForTestResult(WebKitNetworkResponse* response)
+{
+    if (!response)
+        return CString("(null)");
+
+    int statusCode = 0;
+    CString responseURIString(urlSuitableForTestResult(webkit_network_response_get_uri(response)));
+    SoupMessage* soupMessage = webkit_network_response_get_message(response);
+    CString path;
+
+    if (soupMessage) {
+        statusCode = soupMessage->status_code;
+        path = convertSoupMessageToURLPath(soupMessage);
+    } else
+        path = CString("");
+
+    GOwnPtr<char> description(g_strdup_printf("<NSURLResponse %s, http status code %d>", path.data(), statusCode));
+    return CString(description.get());
+}
+
+static void willSendRequestCallback(WebKitWebView* webView, WebKitWebFrame* webFrame, WebKitWebResource* resource, WebKitNetworkRequest* request, WebKitNetworkResponse* response)
+{
+
+
     if (!done && gLayoutTestController->willSendRequestReturnsNull()) {
         // As requested by the LayoutTestController, don't perform the request.
         webkit_network_request_set_uri(request, "about:blank");
         return;
     }
+
+    if (!done && gLayoutTestController->dumpResourceLoadCallbacks())
+        printf("%s - willSendRequest %s redirectResponse %s\n",
+               convertNetworkRequestToURLPath(request).data(),
+               descriptionSuitableForTestResult(request).data(),
+               descriptionSuitableForTestResult(response).data());
 
     SoupMessage* soupMessage = webkit_network_request_get_message(request);
     SoupURI* uri = soup_uri_new(webkit_network_request_get_uri(request));
@@ -1081,9 +1215,13 @@ static void willSendRequestCallback(WebKitWebView* webView, WebKitWebFrame*, Web
         && g_strcmp0(uri->host, "255.255.255.255")
         && g_ascii_strncasecmp(uri->host, "localhost", 9)) {
         printf("Blocked access to external URL %s\n", soup_uri_to_string(uri, FALSE));
+        // Cancel load of blocked resource to avoid potential
+        // network-related timeouts in tests.
+        webkit_network_request_set_uri(request, "about:blank");
         soup_uri_free(uri);
         return;
     }
+
     if (uri)
         soup_uri_free(uri);
 
@@ -1091,6 +1229,34 @@ static void willSendRequestCallback(WebKitWebView* webView, WebKitWebFrame*, Web
         const set<string>& clearHeaders = gLayoutTestController->willSendRequestClearHeaders();
         for (set<string>::const_iterator header = clearHeaders.begin(); header != clearHeaders.end(); ++header)
             soup_message_headers_remove(soupMessage->request_headers, header->c_str());
+    }
+}
+
+
+static void didReceiveResponse(WebKitWebView* webView, WebKitWebFrame*, WebKitWebResource* webResource, WebKitNetworkResponse* response)
+{
+    if (!done && gLayoutTestController->dumpResourceLoadCallbacks()) {
+        CString responseDescription(descriptionSuitableForTestResult(response));
+        CString path(convertWebResourceToURLPath(webResource));
+        printf("%s - didReceiveResponse %s\n", path.data(), responseDescription.data());
+    }
+
+    // TODO: add "has MIME type" whenever dumpResourceResponseMIMETypes() is supported.
+    // See https://bugs.webkit.org/show_bug.cgi?id=58222.
+}
+
+static void didFinishLoading(WebKitWebView* webView, WebKitWebFrame* webFrame, WebKitWebResource* webResource)
+{
+    if (!done && gLayoutTestController->dumpResourceLoadCallbacks())
+        printf("%s - didFinishLoading\n", descriptionSuitableForTestResult(webView, webFrame, webResource).data());
+}
+
+static void didFailLoadingWithError(WebKitWebView* webView, WebKitWebFrame* webFrame, WebKitWebResource* webResource, GError* webError)
+{
+    if (!done && gLayoutTestController->dumpResourceLoadCallbacks()) {
+        CString webErrorString(descriptionSuitableForTestResult(webError, webResource));
+        printf("%s - didFailLoadingWithError: %s\n", descriptionSuitableForTestResult(webView, webFrame, webResource).data(),
+               webErrorString.data());
     }
 }
 
@@ -1125,7 +1291,9 @@ static WebKitWebView* createWebView()
                      "signal::drag-failed", dragFailedCallback, 0,
                      "signal::frame-created", frameCreatedCallback, 0,
                      "signal::resource-request-starting", willSendRequestCallback, 0,
-
+                     "signal::resource-response-received", didReceiveResponse, 0,
+                     "signal::resource-load-finished", didFinishLoading, 0,
+                     "signal::resource-load-failed", didFailLoadingWithError, 0,
                      NULL);
     connectEditingCallbacks(view);
 

@@ -34,19 +34,26 @@
 
 #include "FileReader.h"
 
-#include "ArrayBuffer.h"
 #include "CrossThreadTask.h"
 #include "File.h"
 #include "Logging.h"
 #include "OperationNotAllowedException.h"
 #include "ProgressEvent.h"
 #include "ScriptExecutionContext.h"
+#include <wtf/ArrayBuffer.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/text/CString.h>
 
 namespace WebCore {
 
 static const double progressNotificationIntervalMS = 50;
+
+PassRefPtr<FileReader> FileReader::create(ScriptExecutionContext* context)
+{
+    RefPtr<FileReader> fileReader(adoptRef(new FileReader(context)));
+    fileReader->suspendIfNeeded();
+    return fileReader.release();
+}
 
 FileReader::FileReader(ScriptExecutionContext* context)
     : ActiveDOMObject(context, this)

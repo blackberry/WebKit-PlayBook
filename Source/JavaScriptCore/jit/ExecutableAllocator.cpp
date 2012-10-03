@@ -27,41 +27,180 @@
 
 #include "ExecutableAllocator.h"
 
+#if ENABLE(EXECUTABLE_ALLOCATOR_DEMAND)
+#include "CodeProfiling.h"
+#include <wtf/HashSet.h>
+#include <wtf/MetaAllocator.h>
+#include <wtf/PageReservation.h>
+#if ENABLE(ASSEMBLER_WX_EXCLUSIVE)
+#include <wtf/PassOwnPtr.h>
+#endif
+#include <wtf/ThreadingPrimitives.h>
+#include <wtf/VMTags.h>
+#endif
+
 #if ENABLE(ASSEMBLER)
+
+using namespace WTF;
 
 namespace JSC {
 
 #if ENABLE(EXECUTABLE_ALLOCATOR_DEMAND)
 
-ExecutablePool::Allocation ExecutablePool::systemAlloc(size_t size)
+class DemandExecutableAllocator : public MetaAllocator {
+public:
+    DemandExecutableAllocator()
+        : MetaAllocator(32) // round up all allocations to 32 bytes
+    {
+        MutexLocker lock(allocatorsMutex());
+        allocators().add(this);
+        // Don't preallocate any memory here.
+    }
+    
+    virtual ~DemandExecutableAllocator()
+    {
+        {
+            MutexLocker lock(allocatorsMutex());
+            allocators().remove(this);
+        }
+        for (unsigned i = 0; i < reservations.size(); ++i)
+            reservations.at(i).deallocate();
+    }
+
+    static size_t bytesAllocatedByAllAllocators()
+    {
+        size_t total = 0;
+        MutexLocker lock(allocatorsMutex());
+        for (HashSet<DemandExecutableAllocator*>::const_iterator allocator = allocators().begin(); allocator != allocators().end(); ++allocator)
+            total += (*allocator)->bytesAllocated();
+        return total;
+    }
+
+    static size_t bytesCommittedByAllocactors()
+    {
+        size_t total = 0;
+        MutexLocker lock(allocatorsMutex());
+        for (HashSet<DemandExecutableAllocator*>::const_iterator allocator = allocators().begin(); allocator != allocators().end(); ++allocator)
+            total += (*allocator)->bytesCommitted();
+        return total;
+    }
+
+#if ENABLE(META_ALLOCATOR_PROFILE)
+    static void dumpProfileFromAllAllocators()
+    {
+        MutexLocker lock(allocatorsMutex());
+        for (HashSet<DemandExecutableAllocator*>::const_iterator allocator = allocators().begin(); allocator != allocators().end(); ++allocator)
+            (*allocator)->dumpProfile();
+    }
+#endif
+
+protected:
+    virtual void* allocateNewSpace(size_t& numPages)
+    {
+        size_t newNumPages = (((numPages * pageSize() + JIT_ALLOCATOR_LARGE_ALLOC_SIZE - 1) / JIT_ALLOCATOR_LARGE_ALLOC_SIZE * JIT_ALLOCATOR_LARGE_ALLOC_SIZE) + pageSize() - 1) / pageSize();
+        
+        ASSERT(newNumPages >= numPages);
+        
+        numPages = newNumPages;
+        
+        PageReservation reservation = PageReservation::reserve(numPages * pageSize(), OSAllocator::JSJITCodePages, EXECUTABLE_POOL_WRITABLE, true);
+        if (!reservation)
+            CRASH();
+        
+        reservations.append(reservation);
+        
+        return reservation.base();
+    }
+    
+    virtual void notifyNeedPage(void* page)
+    {
+        OSAllocator::commit(page, pageSize(), EXECUTABLE_POOL_WRITABLE, true);
+    }
+    
+    virtual void notifyPageIsFree(void* page)
+    {
+        OSAllocator::decommit(page, pageSize());
+    }
+
+private:
+    Vector<PageReservation, 16> reservations;
+    static HashSet<DemandExecutableAllocator*>& allocators()
+    {
+        DEFINE_STATIC_LOCAL(HashSet<DemandExecutableAllocator*>, sAllocators, ());
+        return sAllocators;
+    }
+    static Mutex& allocatorsMutex()
+    {
+        DEFINE_STATIC_LOCAL(Mutex, mutex, ());
+        return mutex;
+    }
+};
+
+#if ENABLE(ASSEMBLER_WX_EXCLUSIVE)
+void ExecutableAllocator::initializeAllocator()
 {
-    PageAllocation allocation = PageAllocation::allocate(size, OSAllocator::JSJITCodePages, EXECUTABLE_POOL_WRITABLE, true);
-    if (!allocation)
-        CRASH();
-    return allocation;
+}
+#else
+static DemandExecutableAllocator* gAllocator;
+
+namespace {
+static inline DemandExecutableAllocator* allocator()
+{
+    return gAllocator;
+}
 }
 
-void ExecutablePool::systemRelease(ExecutablePool::Allocation& allocation)
+void ExecutableAllocator::initializeAllocator()
 {
-    allocation.deallocate();
+    ASSERT(!gAllocator);
+    gAllocator = new DemandExecutableAllocator();
+    CodeProfiling::notifyAllocator(gAllocator);
+}
+#endif
+
+ExecutableAllocator::ExecutableAllocator(JSGlobalData&)
+#if ENABLE(ASSEMBLER_WX_EXCLUSIVE)
+    : m_allocator(adoptPtr(new  DemandExecutableAllocator()))
+#endif
+{
+    ASSERT(allocator());
+}
+
+ExecutableAllocator::~ExecutableAllocator()
+{
 }
 
 bool ExecutableAllocator::isValid() const
 {
     return true;
 }
-    
+
 bool ExecutableAllocator::underMemoryPressure()
 {
     return false;
 }
-    
+
+PassRefPtr<ExecutableMemoryHandle> ExecutableAllocator::allocate(JSGlobalData&, size_t sizeInBytes, void* ownerUID, JITCompilationEffort effort)
+{
+    RefPtr<ExecutableMemoryHandle> result = allocator()->allocate(sizeInBytes, ownerUID);
+    if (!result && effort == JITCompilationMustSucceed)
+        CRASH();
+    return result.release();
+}
+
 size_t ExecutableAllocator::committedByteCount()
 {
-    return 0;
-} 
+    return DemandExecutableAllocator::bytesCommittedByAllocactors();
+}
 
+#if ENABLE(META_ALLOCATOR_PROFILE)
+void ExecutableAllocator::dumpProfile()
+{
+    DemandExecutableAllocator::dumpProfileFromAllAllocators();
+}
 #endif
+
+#endif // ENABLE(EXECUTABLE_ALLOCATOR_DEMAND)
 
 #if ENABLE(ASSEMBLER_WX_EXCLUSIVE)
 

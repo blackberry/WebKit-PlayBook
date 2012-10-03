@@ -31,6 +31,7 @@
 #include "config.h"
 #include "V8DOMWindow.h"
 
+#include "ArrayBuffer.h"
 #include "Chrome.h"
 #include "ContentSecurityPolicy.h"
 #include "DOMTimer.h"
@@ -42,6 +43,7 @@
 #include "HTMLCollection.h"
 #include "HTMLDocument.h"
 #include "MediaPlayer.h"
+#include "MessagePort.h"
 #include "Page.h"
 #include "PlatformScreen.h"
 #include "ScheduledAction.h"
@@ -57,13 +59,9 @@
 #include "V8GCForContextDispose.h"
 #include "V8HiddenPropertyName.h"
 #include "V8HTMLCollection.h"
-#include "V8MessagePortCustom.h"
 #include "V8Node.h"
 #include "V8Proxy.h"
 #include "V8Utilities.h"
-#if ENABLE(WEB_SOCKETS)
-#include "WebSocket.h"
-#endif
 #include "WindowFeatures.h"
 
 namespace WebCore {
@@ -288,27 +286,43 @@ v8::Handle<v8::Value> V8DOMWindow::removeEventListenerCallback(const v8::Argumen
     return v8::Undefined();
 }
 
-static v8::Handle<v8::Value> handlePostMessageCallback(const v8::Arguments& args, bool doTransfer)
+static bool isLegacyTargetOriginDesignation(v8::Handle<v8::Value> value)
 {
+    if (value->IsString() || value->IsStringObject())
+        return true;
+    return false;
+}
+
+
+static v8::Handle<v8::Value> handlePostMessageCallback(const v8::Arguments& args, bool extendedTransfer)
+{
+    // None of these need to be RefPtr because args and context are guaranteed
+    // to hold on to them.
     DOMWindow* window = V8DOMWindow::toNative(args.Holder());
+    DOMWindow* source = V8Proxy::retrieveWindowForCallingContext();
 
-    DOMWindow* source = V8Proxy::retrieveFrameForCallingContext()->domWindow();
-    ASSERT(source->frame());
-
-    // This function has variable arguments and can either be:
-    //   postMessage(message, port, targetOrigin);
-    // or
-    //   postMessage(message, targetOrigin);
+    // This function has variable arguments and can be:
+    // Per current spec:
+    //   postMessage(message, targetOrigin)
+    //   postMessage(message, targetOrigin, {sequence of transferrables})
+    // Legacy non-standard implementations in webkit allowed:
+    //   postMessage(message, {sequence of transferrables}, targetOrigin);
     MessagePortArray portArray;
+    ArrayBufferArray arrayBufferArray;
     String targetOrigin;
     {
         v8::TryCatch tryCatch;
+        int targetOriginArgIndex = 1;
         if (args.Length() > 2) {
-            if (!getMessagePortArray(args[1], portArray))
+            int transferablesArgIndex = 2;
+            if (isLegacyTargetOriginDesignation(args[2])) {
+                targetOriginArgIndex = 2;
+                transferablesArgIndex = 1;
+            }
+            if (!extractTransferables(args[transferablesArgIndex], portArray, arrayBufferArray))
                 return v8::Undefined();
-            targetOrigin = toWebCoreStringWithNullOrUndefinedCheck(args[2]);
-        } else
-            targetOrigin = toWebCoreStringWithNullOrUndefinedCheck(args[1]);
+        } 
+        targetOrigin = toWebCoreStringWithNullOrUndefinedCheck(args[targetOriginArgIndex]);
 
         if (tryCatch.HasCaught())
             return v8::Undefined();
@@ -316,7 +330,11 @@ static v8::Handle<v8::Value> handlePostMessageCallback(const v8::Arguments& args
 
 
     bool didThrow = false;
-    RefPtr<SerializedScriptValue> message = SerializedScriptValue::create(args[0], doTransfer ? &portArray : 0, didThrow);
+    RefPtr<SerializedScriptValue> message =
+        SerializedScriptValue::create(args[0],
+                                      &portArray,
+                                      extendedTransfer ? &arrayBufferArray : 0,
+                                      didThrow);
     if (didThrow)
         return v8::Undefined();
 
@@ -458,7 +476,7 @@ v8::Handle<v8::Value> V8DOMWindow::indexedPropertyGetter(uint32_t index, const v
     if (!frame)
         return notHandledByInterceptor();
 
-    Frame* child = frame->tree()->child(index);
+    Frame* child = frame->tree()->scopedChild(index);
     if (child)
         return toV8(child->domWindow());
 
@@ -481,7 +499,7 @@ v8::Handle<v8::Value> V8DOMWindow::namedPropertyGetter(v8::Local<v8::String> nam
 
     // Search sub-frames.
     AtomicString propName = v8StringToAtomicWebCoreString(name);
-    Frame* child = frame->tree()->child(propName);
+    Frame* child = frame->tree()->scopedChild(propName);
     if (child)
         return toV8(child->domWindow());
 
@@ -494,11 +512,11 @@ v8::Handle<v8::Value> V8DOMWindow::namedPropertyGetter(v8::Local<v8::String> nam
 
     if (doc && doc->isHTMLDocument()) {
         if (static_cast<HTMLDocument*>(doc)->hasNamedItem(propName.impl()) || doc->hasElementWithId(propName.impl())) {
-            RefPtr<HTMLCollection> items = doc->windowNamedItems(propName);
+            HTMLCollection* items = doc->windowNamedItems(propName);
             if (items->length() >= 1) {
                 if (items->length() == 1)
                     return toV8(items->firstItem());
-                return toV8(items.release());
+                return toV8(items);
             }
         }
     }
@@ -538,14 +556,15 @@ bool V8DOMWindow::namedSecurityCheck(v8::Local<v8::Object> host, v8::Local<v8::V
         DEFINE_STATIC_LOCAL(AtomicString, nameOfProtoProperty, ("__proto__"));
 
         String name = toWebCoreString(key);
+        Frame* childFrame = target->tree()->scopedChild(name);
         // Notice that we can't call HasRealNamedProperty for ACCESS_HAS
         // because that would generate infinite recursion.
-        if (type == v8::ACCESS_HAS && target->tree()->child(name))
+        if (type == v8::ACCESS_HAS && childFrame)
             return true;
         // We need to explicitly compare against nameOfProtoProperty because
         // V8's JSObject::LocalLookup finds __proto__ before
         // interceptors and even when __proto__ isn't a "real named property".
-        if (type == v8::ACCESS_GET && target->tree()->child(name) && !host->HasRealNamedProperty(key->ToString()) && name != nameOfProtoProperty)
+        if (type == v8::ACCESS_GET && childFrame && !host->HasRealNamedProperty(key->ToString()) && name != nameOfProtoProperty)
             return true;
     }
 
@@ -565,12 +584,13 @@ bool V8DOMWindow::indexedSecurityCheck(v8::Local<v8::Object> host, uint32_t inde
     Frame* target = targetWindow->frame();
     if (!target)
         return false;
+    Frame* childFrame =  target->tree()->scopedChild(index);
 
     // Notice that we can't call HasRealNamedProperty for ACCESS_HAS
     // because that would generate infinite recursion.
-    if (type == v8::ACCESS_HAS && target->tree()->child(index))
+    if (type == v8::ACCESS_HAS && childFrame)
         return true;
-    if (type == v8::ACCESS_GET && target->tree()->child(index) && !host->HasRealIndexedProperty(index))
+    if (type == v8::ACCESS_GET && childFrame && !host->HasRealIndexedProperty(index))
         return true;
 
     return V8BindingSecurity::canAccessFrame(V8BindingState::Only(), target, false);

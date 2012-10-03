@@ -30,7 +30,10 @@
 #include "PlatformString.h"
 #if ENABLE(ORIENTATION_EVENTS)
 #include "qorientationsensor.h"
-#endif
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+using QTM_NAMESPACE::QOrientationSensor;
+#endif // QT_VERSION < QT_VERSION_CHECK(5, 0, 0).
+#endif // ENABLE(ORIENTATION_EVENTS).
 #include "qwebelement.h"
 #include "wtf/RefPtr.h"
 #include "Frame.h"
@@ -46,7 +49,7 @@ namespace WebCore {
     class FrameView;
     class HTMLFrameOwnerElement;
     class Scrollbar;
-    class TextureMapperNode;
+    class TextureMapperLayer;
 }
 class QWebPage;
 
@@ -82,7 +85,7 @@ public:
         , marginWidth(-1)
         , marginHeight(-1)
 #if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
-        , rootTextureMapperNode(0)
+        , rootTextureMapperLayer(0)
 #endif
         {}
     void init(QWebFrame* qframe, QWebFrameData* frameData);
@@ -122,13 +125,13 @@ public:
     int marginWidth;
     int marginHeight;
 #if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
-    WebCore::TextureMapperNode* rootTextureMapperNode;
+    WebCore::TextureMapperLayer* rootTextureMapperLayer;
     OwnPtr<WebCore::TextureMapper> textureMapper;
 #endif
 
 #if ENABLE(ORIENTATION_EVENTS)
-    QtMobility::QOrientationSensor m_orientation;
-#endif
+    QOrientationSensor m_orientation;
+#endif // ENABLE(ORIENTATION_EVENTS).
 
 private:
 #if USE(JSC)

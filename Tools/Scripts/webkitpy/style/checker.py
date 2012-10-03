@@ -39,6 +39,7 @@ from checkers.common import categories as CommonCategories
 from checkers.common import CarriageReturnChecker
 from checkers.changelog import ChangeLogChecker
 from checkers.cpp import CppChecker
+from checkers.jsonchecker import JSONChecker
 from checkers.python import PythonChecker
 from checkers.test_expectations import TestExpectationsChecker
 from checkers.text import TextChecker
@@ -180,7 +181,11 @@ _PATH_RULES_SPECIFIER = [
       # both lower-cased and camel-cased, underscore-sparated
       # values.
       "Source/WebKit/efl/ewk/",
-      "Source/WebKit2/UIProcess/API/efl/",
+      "Source/WebKit2/UIProcess/API/efl/"],
+     ["-readability/naming",
+      "-readability/parameter_name"]),
+    ([# EWebLauncher and MiniBrowser are EFL simple application.
+      # They need to use efl coding style.
       "Tools/EWebLauncher/",
       "Tools/MiniBrowser/efl/"],
      ["-readability/naming",
@@ -201,6 +206,13 @@ _PATH_RULES_SPECIFIER = [
      ["-readability/naming",
       "-readability/parameter_name",
       "-whitespace/declaration"]),
+    ([# These files define GObjects, which implies some definitions of
+      # variables and functions containing underscores.
+      "Source/WebCore/platform/graphics/gstreamer/VideoSinkGStreamer1.cpp",
+      "Source/WebCore/platform/graphics/gstreamer/VideoSinkGStreamer.cpp",
+      "Source/WebCore/platform/graphics/gstreamer/WebKitWebSourceGStreamer.cpp",
+      "Source/WebCore/platform/audio/gstreamer/WebKitWebAudioSourceGStreamer.cpp"],
+     ["-readability/naming"]),
 
     # For third-party Python code, keep only the following checks--
     #
@@ -220,6 +232,15 @@ _PATH_RULES_SPECIFIER = [
       "-whitespace",
       "-build/header_guard",
       "-build/include_order"]),
+
+    ([# There is no way to avoid the symbols __jit_debug_register_code
+      # and __jit_debug_descriptor when integrating with gdb.
+      "Source/JavaScriptCore/jit/GDBInterface.cpp"],
+     ["-readability/naming"]),
+
+    ([# On some systems the trailing CR is causing parser failure.
+      "Source/JavaScriptCore/parser/Keywords.table"],
+     ["+whitespace/carriage_return"]),
 ]
 
 
@@ -228,6 +249,8 @@ _CPP_FILE_EXTENSIONS = [
     'cpp',
     'h',
     ]
+
+_JSON_FILE_EXTENSION = 'json'
 
 _PYTHON_FILE_EXTENSION = 'py'
 
@@ -252,6 +275,7 @@ _TEXT_FILE_EXTENSIONS = [
     'pro',
     'rb',
     'sh',
+    'table',
     'txt',
     'wm',
     'xhtml',
@@ -303,6 +327,7 @@ def _all_categories():
     """Return the set of all categories used by check-webkit-style."""
     # Take the union across all checkers.
     categories = CommonCategories.union(CppChecker.categories)
+    categories = categories.union(JSONChecker.categories)
     categories = categories.union(TestExpectationsChecker.categories)
     categories = categories.union(ChangeLogChecker.categories)
 
@@ -445,11 +470,12 @@ class FileType:
     # Alphabetize remaining types
     CHANGELOG = 1
     CPP = 2
-    PYTHON = 3
-    TEXT = 4
-    WATCHLIST = 5
-    XML = 6
-    XCODEPROJ = 7
+    JSON = 3
+    PYTHON = 4
+    TEXT = 5
+    WATCHLIST = 6
+    XML = 7
+    XCODEPROJ = 8
 
 
 class CheckerDispatcher(object):
@@ -512,6 +538,8 @@ class CheckerDispatcher(object):
             # reading from stdin, cpp_style tests should not rely on
             # the extension.
             return FileType.CPP
+        elif file_extension == _JSON_FILE_EXTENSION:
+            return FileType.JSON
         elif file_extension == _PYTHON_FILE_EXTENSION:
             return FileType.PYTHON
         elif file_extension in _XML_FILE_EXTENSIONS:
@@ -542,6 +570,8 @@ class CheckerDispatcher(object):
             file_extension = self._file_extension(file_path)
             checker = CppChecker(file_path, file_extension,
                                  handle_style_error, min_confidence)
+        elif file_type == FileType.JSON:
+            checker = JSONChecker(file_path, handle_style_error)
         elif file_type == FileType.PYTHON:
             checker = PythonChecker(file_path, handle_style_error)
         elif file_type == FileType.XML:

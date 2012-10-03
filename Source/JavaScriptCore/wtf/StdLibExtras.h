@@ -26,8 +26,8 @@
 #ifndef WTF_StdLibExtras_h
 #define WTF_StdLibExtras_h
 
-#include "CheckedArithmetic.h"
-#include "Assertions.h"
+#include <wtf/Assertions.h>
+#include <wtf/CheckedArithmetic.h>
 
 // Use these to declare and define a static local variable (static T;) so that
 //  it is leaked so that its destructors are not called at exit. Using this
@@ -106,6 +106,18 @@ TypePtr reinterpret_cast_ptr(const void* ptr)
 #endif
 
 namespace WTF {
+
+static const size_t KB = 1024;
+
+inline bool isPointerAligned(void* p)
+{
+    return !((intptr_t)(p) & (sizeof(char*) - 1));
+}
+
+inline bool is8ByteAligned(void* p)
+{
+    return !((uintptr_t)(p) & (sizeof(double) - 1));
+}
 
 /*
  * C++'s idea of a reinterpret_cast lacks sufficient cojones.
@@ -275,6 +287,17 @@ inline ArrayElementType* genericBinarySearch(ArrayType& array, size_t size, KeyT
 
 } // namespace WTF
 
+// This version of placement new omits a 0 check.
+enum NotNullTag { NotNull };
+inline void* operator new(size_t, NotNullTag, void* location)
+{
+    ASSERT(location);
+    return location;
+}
+
+using WTF::KB;
+using WTF::isPointerAligned;
+using WTF::is8ByteAligned;
 using WTF::binarySearch;
 using WTF::bitwise_cast;
 using WTF::safeCast;

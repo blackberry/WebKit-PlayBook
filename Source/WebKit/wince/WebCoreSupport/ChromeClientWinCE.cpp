@@ -226,12 +226,12 @@ IntRect ChromeClientWinCE::windowResizerRect() const
     return IntRect();
 }
 
-void ChromeClientWinCE::invalidateWindow(const IntRect&, bool)
+void ChromeClientWinCE::invalidateRootView(const IntRect&, bool)
 {
     notImplemented();
 }
 
-void ChromeClientWinCE::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
+void ChromeClientWinCE::invalidateContentsAndRootView(const IntRect& updateRect, bool immediate)
 {
     RECT rect = updateRect;
     InvalidateRect(m_webView->windowHandle(), &rect, FALSE);
@@ -242,21 +242,21 @@ void ChromeClientWinCE::invalidateContentsAndWindow(const IntRect& updateRect, b
 
 void ChromeClientWinCE::invalidateContentsForSlowScroll(const IntRect& updateRect, bool immediate)
 {
-    invalidateContentsAndWindow(updateRect, immediate);
+    invalidateContentsAndRootView(updateRect, immediate);
 }
 
 void ChromeClientWinCE::scroll(const IntSize&, const IntRect& rectToScroll, const IntRect&)
 {
-    invalidateContentsAndWindow(rectToScroll, false);
+    invalidateContentsAndRootView(rectToScroll, false);
 }
 
-IntRect ChromeClientWinCE::windowToScreen(const IntRect& rect) const
+IntRect ChromeClientWinCE::rootViewToScreen(const IntRect& rect) const
 {
     notImplemented();
     return rect;
 }
 
-IntPoint ChromeClientWinCE::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClientWinCE::screenToRootView(const IntPoint& point) const
 {
     notImplemented();
     return point;
@@ -386,6 +386,12 @@ bool ChromeClientWinCE::selectItemWritingDirectionIsNatural()
 
 bool ChromeClientWinCE::selectItemAlignmentFollowsMenuWritingDirection()
 {
+    return false;
+}
+
+bool ChromeClientWinCE::hasOpenedPopup() const
+{
+    notImplemented();
     return false;
 }
 

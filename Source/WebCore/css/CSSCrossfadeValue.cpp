@@ -26,31 +26,150 @@
 #include "config.h"
 #include "CSSCrossfadeValue.h"
 
+#include "CSSImageValue.h"
+#include "CachedImage.h"
+#include "CachedResourceLoader.h"
+#include "CrossfadeGeneratedImage.h"
+#include "ImageBuffer.h"
+#include "RenderObject.h"
+#include "StyleCachedImage.h"
+#include "StyleGeneratedImage.h"
+
 namespace WebCore {
+
+static bool subimageIsPending(CSSValue* value)
+{
+    if (value->isImageValue())
+        return static_cast<CSSImageValue*>(value)->cachedOrPendingImage()->isPendingImage();
+    
+    if (value->isImageGeneratorValue())
+        return static_cast<CSSImageGeneratorValue*>(value)->isPending();
+    
+    ASSERT_NOT_REACHED();
+    
+    return false;
+}
+
+static CachedImage* cachedImageForCSSValue(CSSValue* value, CachedResourceLoader* cachedResourceLoader)
+{
+    if (!value)
+        return 0;
+
+    if (value->isImageValue()) {
+        StyleCachedImage* styleCachedImage = static_cast<CSSImageValue*>(value)->cachedImage(cachedResourceLoader);
+        if (!styleCachedImage)
+            return 0;
+
+        return styleCachedImage->cachedImage();
+    }
+    
+    if (value->isImageGeneratorValue()) {
+        static_cast<CSSImageGeneratorValue*>(value)->loadSubimages(cachedResourceLoader);
+        // FIXME: Handle CSSImageGeneratorValue (and thus cross-fades with gradients and canvas).
+        return 0;
+    }
+    
+    ASSERT_NOT_REACHED();
+    
+    return 0;
+}
+
+CSSCrossfadeValue::~CSSCrossfadeValue()
+{
+    if (m_cachedFromImage)
+        m_cachedFromImage->removeClient(&m_crossfadeSubimageObserver);
+    if (m_cachedToImage)
+        m_cachedToImage->removeClient(&m_crossfadeSubimageObserver);
+}
 
 String CSSCrossfadeValue::customCssText() const
 {
     String result = "-webkit-cross-fade(";
-    result += m_fromImage->cssText() + ", ";
-    result += m_toImage->cssText() + ", ";
-    result += m_percentage->cssText();
+    result += m_fromValue->cssText() + ", ";
+    result += m_toValue->cssText() + ", ";
+    result += m_percentageValue->cssText();
     result += ")";
     return result;
 }
 
 IntSize CSSCrossfadeValue::fixedSize(const RenderObject* renderer)
 {
-    UNUSED_PARAM(renderer);
+    float percentage = m_percentageValue->getFloatValue();
+    float inversePercentage = 1 - percentage;
 
-    return IntSize();
+    CachedResourceLoader* cachedResourceLoader = renderer->document()->cachedResourceLoader();
+    CachedImage* cachedFromImage = cachedImageForCSSValue(m_fromValue.get(), cachedResourceLoader);
+    CachedImage* cachedToImage = cachedImageForCSSValue(m_toValue.get(), cachedResourceLoader);
+
+    if (!cachedFromImage || !cachedToImage)
+        return IntSize();
+
+    IntSize fromImageSize = cachedFromImage->imageForRenderer(renderer)->size();
+    IntSize toImageSize = cachedToImage->imageForRenderer(renderer)->size();
+
+    // Rounding issues can cause transitions between images of equal size to return
+    // a different fixed size; avoid performing the interpolation if the images are the same size.
+    if (fromImageSize == toImageSize)
+        return fromImageSize;
+
+    return IntSize(fromImageSize.width() * inversePercentage + toImageSize.width() * percentage,
+        fromImageSize.height() * inversePercentage + toImageSize.height() * percentage);
+}
+
+bool CSSCrossfadeValue::isPending() const
+{
+    return subimageIsPending(m_fromValue.get()) || subimageIsPending(m_toValue.get());
+}
+
+void CSSCrossfadeValue::loadSubimages(CachedResourceLoader* cachedResourceLoader)
+{
+    m_cachedFromImage = cachedImageForCSSValue(m_fromValue.get(), cachedResourceLoader);
+    m_cachedToImage = cachedImageForCSSValue(m_toValue.get(), cachedResourceLoader);
+
+    if (m_cachedFromImage)
+        m_cachedFromImage->addClient(&m_crossfadeSubimageObserver);
+    if (m_cachedToImage)
+        m_cachedToImage->addClient(&m_crossfadeSubimageObserver);
+
+    m_crossfadeSubimageObserver.setReady(true);
 }
 
 PassRefPtr<Image> CSSCrossfadeValue::image(RenderObject* renderer, const IntSize& size)
 {
-    UNUSED_PARAM(renderer);
-    UNUSED_PARAM(size);
+    if (size.isEmpty())
+        return 0;
 
-    return 0;
+    CachedResourceLoader* cachedResourceLoader = renderer->document()->cachedResourceLoader();
+    CachedImage* cachedFromImage = cachedImageForCSSValue(m_fromValue.get(), cachedResourceLoader);
+    CachedImage* cachedToImage = cachedImageForCSSValue(m_toValue.get(), cachedResourceLoader);
+
+    if (!cachedFromImage || !cachedToImage)
+        return Image::nullImage();
+
+    Image* fromImage = cachedFromImage->imageForRenderer(renderer);
+    Image* toImage = cachedToImage->imageForRenderer(renderer);
+
+    if (!fromImage || !toImage)
+        return Image::nullImage();
+
+    m_generatedImage = CrossfadeGeneratedImage::create(fromImage, toImage, m_percentageValue->getFloatValue(), fixedSize(renderer), size);
+
+    return m_generatedImage.release();
+}
+
+void CSSCrossfadeValue::crossfadeChanged(const IntRect&)
+{
+    RenderObjectSizeCountMap::const_iterator end = clients().end();
+    for (RenderObjectSizeCountMap::const_iterator curr = clients().begin(); curr != end; ++curr) {
+        RenderObject* client = const_cast<RenderObject*>(curr->first);
+        client->imageChanged(static_cast<WrappedImagePtr>(this));
+    }
+}
+
+void CSSCrossfadeValue::CrossfadeSubimageObserverProxy::imageChanged(CachedImage*, const IntRect* rect)
+{
+    if (m_ready)
+        m_ownerValue->crossfadeChanged(*rect);
 }
 
 } // namespace WebCore

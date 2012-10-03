@@ -1,30 +1,30 @@
 /*
  * Copyright (c) 2011 Motorola Mobility, Inc.  All rights reserved.
  *
- * Redistribution and use in source and binary forms, with or without modification, 
+ * Redistribution and use in source and binary forms, with or without modification,
  * are permitted provided that the following conditions are met:
  *
- * Redistributions of source code must retain the above copyright notice, 
+ * Redistributions of source code must retain the above copyright notice,
  * this list of conditions and the following disclaimer.
  *
- * Redistributions in binary form must reproduce the above copyright notice, 
- * this list of conditions and the following disclaimer in the documentation and/or 
+ * Redistributions in binary form must reproduce the above copyright notice,
+ * this list of conditions and the following disclaimer in the documentation and/or
  * other materials provided with the distribution.
  *
- * Neither the name of Motorola Mobility, Inc. nor the names of its contributors may 
- * be used to endorse or promote products derived from this software without 
+ * Neither the name of Motorola Mobility, Inc. nor the names of its contributors may
+ * be used to endorse or promote products derived from this software without
  * specific prior written permission.
  *
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS 
- * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, 
- * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR 
- * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR 
- * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, 
- * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, 
- * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR 
- * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY 
- * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING 
- * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+ * "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO,
+ * THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
+ * PURPOSE ARE DISCLAIMED.  IN NO EVENT SHALL THE COPYRIGHT HOLDER OR
+ * CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+ * EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO,
+ * PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR
+ * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
+ * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING
+ * NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE OF THIS
  * SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
@@ -33,9 +33,6 @@
 
 #include "WebKitPrivate.h"
 #include "WebKitSettingsPrivate.h"
-#include <WebKit2/WKAPICast.h>
-#include <WebKit2/WKString.h>
-#include <WebKit2/WKRetainPtr.h>
 #include <glib/gi18n-lib.h>
 #include <wtf/text/CString.h>
 
@@ -49,15 +46,16 @@ struct _WebKitSettingsPrivate {
     CString fantasyFontFamily;
     CString pictographFontFamily;
     CString defaultCharset;
+    bool zoomTextOnly;
 };
 
 /**
  * SECTION:WebKitSettings
  * @short_description: Control the behaviour of a #WebKitWebView
  *
- * #WebKitSettings can be applied to a #WebKitWebView to control text charset, 
- * color, font sizes, printing mode, script support, loading of images and various other things. 
- * After creation, a #WebKitSettings object contains default settings. 
+ * #WebKitSettings can be applied to a #WebKitWebView to control text charset,
+ * color, font sizes, printing mode, script support, loading of images and various other things.
+ * After creation, a #WebKitSettings object contains default settings.
  *
  * <informalexample><programlisting>
  * /<!-- -->* Create a new #WebKitSettings and disable JavaScript. *<!-- -->/
@@ -97,7 +95,17 @@ enum {
     PROP_DEFAULT_MONOSPACE_FONT_SIZE,
     PROP_MINIMUM_FONT_SIZE,
     PROP_DEFAULT_CHARSET,
+    PROP_ENABLE_PRIVATE_BROWSING,
+    PROP_ENABLE_DEVELOPER_EXTRAS,
+    PROP_ENABLE_RESIZABLE_TEXT_AREAS,
+    PROP_ENABLE_TABS_TO_LINKS,
+    PROP_ENABLE_DNS_PREFETCHING,
     PROP_ENABLE_CARET_BROWSING,
+    PROP_ENABLE_FULLSCREEN,
+    PROP_PRINT_BACKGROUNDS,
+    PROP_ENABLE_WEBAUDIO,
+    PROP_ENABLE_WEBGL,
+    PROP_ZOOM_TEXT_ONLY
 };
 
 static void webKitSettingsSetProperty(GObject* object, guint propId, const GValue* value, GParamSpec* paramSpec)
@@ -174,8 +182,38 @@ static void webKitSettingsSetProperty(GObject* object, guint propId, const GValu
     case PROP_DEFAULT_CHARSET:
         webkit_settings_set_default_charset(settings, g_value_get_string(value));
         break;
+    case PROP_ENABLE_PRIVATE_BROWSING:
+        webkit_settings_set_enable_private_browsing(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_DEVELOPER_EXTRAS:
+        webkit_settings_set_enable_developer_extras(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_RESIZABLE_TEXT_AREAS:
+        webkit_settings_set_enable_resizable_text_areas(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_TABS_TO_LINKS:
+        webkit_settings_set_enable_tabs_to_links(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_DNS_PREFETCHING:
+        webkit_settings_set_enable_dns_prefetching(settings, g_value_get_boolean(value));
+        break;
     case PROP_ENABLE_CARET_BROWSING:
         webkit_settings_set_enable_caret_browsing(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_FULLSCREEN:
+        webkit_settings_set_enable_fullscreen(settings, g_value_get_boolean(value));
+        break;
+    case PROP_PRINT_BACKGROUNDS:
+        webkit_settings_set_print_backgrounds(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_WEBAUDIO:
+        webkit_settings_set_enable_webaudio(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ENABLE_WEBGL:
+        webkit_settings_set_enable_webgl(settings, g_value_get_boolean(value));
+        break;
+    case PROP_ZOOM_TEXT_ONLY:
+        webkit_settings_set_zoom_text_only(settings, g_value_get_boolean(value));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -257,8 +295,38 @@ static void webKitSettingsGetProperty(GObject* object, guint propId, GValue* val
     case PROP_DEFAULT_CHARSET:
         g_value_set_string(value, webkit_settings_get_default_charset(settings));
         break;
+    case PROP_ENABLE_PRIVATE_BROWSING:
+        g_value_set_boolean(value, webkit_settings_get_enable_private_browsing(settings));
+        break;
+    case PROP_ENABLE_DEVELOPER_EXTRAS:
+        g_value_set_boolean(value, webkit_settings_get_enable_developer_extras(settings));
+        break;
+    case PROP_ENABLE_RESIZABLE_TEXT_AREAS:
+        g_value_set_boolean(value, webkit_settings_get_enable_resizable_text_areas(settings));
+        break;
+    case PROP_ENABLE_TABS_TO_LINKS:
+        g_value_set_boolean(value, webkit_settings_get_enable_tabs_to_links(settings));
+        break;
+    case PROP_ENABLE_DNS_PREFETCHING:
+        g_value_set_boolean(value, webkit_settings_get_enable_dns_prefetching(settings));
+        break;
     case PROP_ENABLE_CARET_BROWSING:
         g_value_set_boolean(value, webkit_settings_get_enable_caret_browsing(settings));
+        break;
+    case PROP_ENABLE_FULLSCREEN:
+        g_value_set_boolean(value, webkit_settings_get_enable_fullscreen(settings));
+        break;
+    case PROP_PRINT_BACKGROUNDS:
+        g_value_set_boolean(value, webkit_settings_get_print_backgrounds(settings));
+        break;
+    case PROP_ENABLE_WEBAUDIO:
+        g_value_set_boolean(value, webkit_settings_get_enable_webaudio(settings));
+        break;
+    case PROP_ENABLE_WEBGL:
+        g_value_set_boolean(value, webkit_settings_get_enable_webgl(settings));
+        break;
+    case PROP_ZOOM_TEXT_ONLY:
+        g_value_set_boolean(value, webkit_settings_get_zoom_text_only(settings));
         break;
     default:
         G_OBJECT_WARN_INVALID_PROPERTY_ID(object, propId, paramSpec);
@@ -463,10 +531,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                          readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:default-font-family
-    *
-    * The font family to use as the default for content that does not specify a font.
-    */
+     * WebKitWebSettings:default-font-family:
+     *
+     * The font family to use as the default for content that does not specify a font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_DEFAULT_FONT_FAMILY,
                                     g_param_spec_string("default-font-family",
@@ -476,11 +544,11 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:monospace-font-family
-    *
-    * The font family used as the default for content using a monospace font.
-    *
-    */
+     * WebKitWebSettings:monospace-font-family:
+     *
+     * The font family used as the default for content using a monospace font.
+     *
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_MONOSPACE_FONT_FAMILY,
                                     g_param_spec_string("monospace-font-family",
@@ -490,10 +558,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:serif-font-family
-    *
-    * The font family used as the default for content using a serif font.
-    */
+     * WebKitWebSettings:serif-font-family:
+     *
+     * The font family used as the default for content using a serif font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_SERIF_FONT_FAMILY,
                                     g_param_spec_string("serif-font-family",
@@ -503,10 +571,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:sans-serif-font-family
-    *
-    * The font family used as the default for content using a sans-serif font.
-    */
+     * WebKitWebSettings:sans-serif-font-family:
+     *
+     * The font family used as the default for content using a sans-serif font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_SANS_SERIF_FONT_FAMILY,
                                     g_param_spec_string("sans-serif-font-family",
@@ -516,10 +584,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:cursive-font-family
-    *
-    * The font family used as the default for content using a cursive font.
-    */
+     * WebKitWebSettings:cursive-font-family:
+     *
+     * The font family used as the default for content using a cursive font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_CURSIVE_FONT_FAMILY,
                                     g_param_spec_string("cursive-font-family",
@@ -529,10 +597,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:fantasy-font-family
-    *
-    * The font family used as the default for content using a fantasy font.
-    */
+     * WebKitWebSettings:fantasy-font-family:
+     *
+     * The font family used as the default for content using a fantasy font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_FANTASY_FONT_FAMILY,
                                     g_param_spec_string("fantasy-font-family",
@@ -542,10 +610,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:pictograph-font-family
-    *
-    * The font family used as the default for content using a pictograph font.
-    */
+     * WebKitWebSettings:pictograph-font-family:
+     *
+     * The font family used as the default for content using a pictograph font.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_PICTOGRAPH_FONT_FAMILY,
                                     g_param_spec_string("pictograph-font-family",
@@ -555,40 +623,40 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:default-font-size
-    *
-    * The default font size in pixels to use for content displayed if
-    * no font size is specified.
-    */
+     * WebKitWebSettings:default-font-size:
+     *
+     * The default font size in pixels to use for content displayed if
+     * no font size is specified.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_DEFAULT_FONT_SIZE,
                                     g_param_spec_uint("default-font-size",
                                                       _("Default font size"),
                                                       _("The default font size used to display text."),
-                                                      0, G_MAXUINT, 12,
+                                                      0, G_MAXUINT, 16,
                                                       readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:default-monospace-font-size
-    *
-    * The default font size in pixels to use for content displayed in
-    * monospace font if no font size is specified.
-    */
+     * WebKitWebSettings:default-monospace-font-size:
+     *
+     * The default font size in pixels to use for content displayed in
+     * monospace font if no font size is specified.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_DEFAULT_MONOSPACE_FONT_SIZE,
                                     g_param_spec_uint("default-monospace-font-size",
                                                       _("Default monospace font size"),
                                                       _("The default font size used to display monospace text."),
-                                                      0, G_MAXUINT, 10,
+                                                      0, G_MAXUINT, 13,
                                                       readWriteConstructParamFlags));
 
     /**
-    * WebKitWebSettings:minimum-font-size
-    *
-    * The minimum font size in points used to display text. This setting 
-    * controls the absolute smallest size. Values other than 0 can 
-    * potentially break page layouts.
-    */
+     * WebKitWebSettings:minimum-font-size:
+     *
+     * The minimum font size in points used to display text. This setting
+     * controls the absolute smallest size. Values other than 0 can
+     * potentially break page layouts.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_MINIMUM_FONT_SIZE,
                                     g_param_spec_uint("minimum-font-size",
@@ -598,10 +666,10 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                       readWriteConstructParamFlags));
 
     /**
-    * WebKitSettings:default-charset
-    *
-    * The default text charset used when interpreting content with an unspecified charset.
-    */
+     * WebKitSettings:default-charset:
+     *
+     * The default text charset used when interpreting content with an unspecified charset.
+     */
     g_object_class_install_property(gObjectClass,
                                     PROP_DEFAULT_CHARSET,
                                     g_param_spec_string("default-charset",
@@ -609,6 +677,76 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                                         _("The default text charset used when interpreting content with unspecified charset."),
                                                         "iso-8859-1",
                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-private-browsing:
+     *
+     * Determines whether or not private browsing is enabled. Private browsing
+     * will disable history, cache and form auto-fill for any pages visited.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_PRIVATE_BROWSING,
+                                    g_param_spec_boolean("enable-private-browsing",
+                                                         _("Enable private browsing"),
+                                                         _("Whether to enable private browsing"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-developer-extras:
+     *
+     * Determines whether or not developer tools, such as the Web Inspector, are enabled.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_DEVELOPER_EXTRAS,
+                                    g_param_spec_boolean("enable-developer-extras",
+                                                         _("Enable developer extras"),
+                                                         _("Whether to enable developer extras"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-resizable-text-areas:
+     *
+     * Determines whether or not text areas can be resized.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_RESIZABLE_TEXT_AREAS,
+                                    g_param_spec_boolean("enable-resizable-text-areas",
+                                                         _("Enable resizable text areas"),
+                                                         _("Whether to enable resizable text areas"),
+                                                         TRUE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-tabs-to-links:
+     *
+     * Determines whether the tab key cycles through the elements on the page.
+     * When this setting is enabled, users will be able to focus the next element
+     * in the page by pressing the tab key. If the selected element is editable,
+     * then pressing tab key will insert the tab character.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_TABS_TO_LINKS,
+                                    g_param_spec_boolean("enable-tabs-to-links",
+                                                         _("Enable tabs to links"),
+                                                         _("Whether to enable tabs to links"),
+                                                         TRUE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-dns-prefetching:
+     *
+     * Determines whether or not to prefetch domain names. DNS prefetching attempts
+     * to resolve domain names before a user tries to follow a link.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_DNS_PREFETCHING,
+                                    g_param_spec_boolean("enable-dns-prefetching",
+                                                         _("Enable DNS prefetching"),
+                                                         _("Whether to enable DNS prefetching"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
 
     /**
      * WebKitSettings:enable-caret-browsing:
@@ -620,6 +758,85 @@ static void webkit_settings_class_init(WebKitSettingsClass* klass)
                                     g_param_spec_boolean("enable-caret-browsing",
                                                          _("Enable Caret Browsing"),
                                                          _("Whether to enable accessibility enhanced keyboard navigation"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-fullscreen:
+     *
+     * Whether to enable the Javascript Fullscreen API. The API
+     * allows any HTML element to request fullscreen display. See also
+     * the current draft of the spec:
+     * http://dvcs.w3.org/hg/fullscreen/raw-file/tip/Overview.html
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_FULLSCREEN,
+                                    g_param_spec_boolean("enable-fullscreen",
+                                                         _("Enable Fullscreen"),
+                                                         _("Whether to enable the Javascriipt Fullscreen API"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:print-backgrounds:
+     *
+     * Whether background images should be drawn during printing.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_PRINT_BACKGROUNDS,
+                                    g_param_spec_boolean("print-backgrounds",
+                                                         _("Print Backgrounds"),
+                                                         _("Whether background images should be drawn during printing"),
+                                                         TRUE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:enable-webaudio:
+     *
+     *
+     * Enable or disable support for WebAudio on pages. WebAudio is an
+     * experimental proposal for allowing web pages to generate Audio
+     * WAVE data from JavaScript. The standard is currently a
+     * work-in-progress by the W3C Audio Working Group.
+     *
+     * See also https://dvcs.w3.org/hg/audio/raw-file/tip/webaudio/specification.html
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_WEBAUDIO,
+                                    g_param_spec_boolean("enable-webaudio",
+                                                         _("Enable WebAudio"),
+                                                         _("Whether WebAudio content should be handled"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+    * WebKitSettings:enable-webgl:
+    *
+    * Enable or disable support for WebGL on pages. WebGL is an experimental
+    * proposal for allowing web pages to use OpenGL ES-like calls directly. The
+    * standard is currently a work-in-progress by the Khronos Group.
+    */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ENABLE_WEBGL,
+                                    g_param_spec_boolean("enable-webgl",
+                                                         _("Enable WebGL"),
+                                                         _("Whether WebGL content should be rendered"),
+                                                         FALSE,
+                                                         readWriteConstructParamFlags));
+
+    /**
+     * WebKitSettings:zoom-text-only:
+     *
+     * Whether #WebKitWebView:zoom-level affects only the
+     * text of the page or all the contents. Other contents containing text
+     * like form controls will be also affected by zoom factor when
+     * this property is enabled.
+     */
+    g_object_class_install_property(gObjectClass,
+                                    PROP_ZOOM_TEXT_ONLY,
+                                    g_param_spec_boolean("zoom-text-only",
+                                                         _("Zoom Text Only"),
+                                                         _("Whether zoom level of web view changes only the text size"),
                                                          FALSE,
                                                          readWriteConstructParamFlags));
 
@@ -1532,6 +1749,181 @@ void webkit_settings_set_default_charset(WebKitSettings* settings, const gchar* 
 }
 
 /**
+ * webkit_settings_get_enable_private_browsing:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-private-browsing property.
+ *
+ * Returns: %TRUE If private browsing is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_private_browsing(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetPrivateBrowsingEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_private_caret_browsing:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-private-browsing property.
+ */
+void webkit_settings_set_enable_private_browsing(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetPrivateBrowsingEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetPrivateBrowsingEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-private-browsing");
+}
+
+/**
+ * webkit_settings_get_enable_developer_extras:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-developer-extras property.
+ *
+ * Returns: %TRUE If developer extras is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_developer_extras(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetDeveloperExtrasEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_developer_extras:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-developer-extras property.
+ */
+void webkit_settings_set_enable_developer_extras(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetDeveloperExtrasEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetDeveloperExtrasEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-developer-extras");
+}
+
+/**
+ * webkit_settings_get_enable_resizable_text_areas:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-resizable-text-areas property.
+ *
+ * Returns: %TRUE If text areas can be resized or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_resizable_text_areas(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetTextAreasAreResizable(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_resizable_text_areas:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-resizable-text-areas property.
+ */
+void webkit_settings_set_enable_resizable_text_areas(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetTextAreasAreResizable(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetTextAreasAreResizable(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-resizable-text-areas");
+}
+
+/**
+ * webkit_settings_get_enable_tabs_to_links:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-tabs-to-links property.
+ *
+ * Returns: %TRUE If tabs to link is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_tabs_to_links(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetTabsToLinks(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_tabs_to_links:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-tabs-to-links property.
+ */
+void webkit_settings_set_enable_tabs_to_links(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetTabsToLinks(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetTabsToLinks(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-tabs-to-links");
+}
+
+/**
+ * webkit_settings_get_enable_dns_prefetching:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-dns-prefetching property.
+ *
+ * Returns: %TRUE If DNS prefetching is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_dns_prefetching(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetDNSPrefetchingEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_dns_prefetching:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-dns-prefetching property.
+ */
+void webkit_settings_set_enable_dns_prefetching(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetDNSPrefetchingEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetDNSPrefetchingEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-dns-prefetching");
+}
+
+/**
  * webkit_settings_get_enable_caret_browsing:
  * @settings: a #WebKitSettings
  *
@@ -1565,3 +1957,179 @@ void webkit_settings_set_enable_caret_browsing(WebKitSettings* settings, gboolea
     WKPreferencesSetCaretBrowsingEnabled(priv->preferences.get(), enabled);
     g_object_notify(G_OBJECT(settings), "enable-caret-browsing");
 }
+
+/**
+ * webkit_settings_get_enable_fullscreen:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-fullscreen property.
+ *
+ * Returns: %TRUE If fullscreen support is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_fullscreen(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetFullScreenEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_fullscreen:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-fullscreen property.
+ */
+void webkit_settings_set_enable_fullscreen(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetFullScreenEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetFullScreenEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-fullscreen");
+}
+
+/**
+ * webkit_settings_get_print_backgrounds:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:print-backgrounds property.
+ *
+ * Returns: %TRUE If background images should be printed or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_print_backgrounds(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetShouldPrintBackgrounds(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_print_backgrounds:
+ * @settings: a #WebKitSettings
+ * @print_backgrounds: Value to be set
+ *
+ * Set the #WebKitSettings:print-backgrounds property.
+ */
+void webkit_settings_set_print_backgrounds(WebKitSettings* settings, gboolean printBackgrounds)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetShouldPrintBackgrounds(priv->preferences.get());
+    if (currentValue == printBackgrounds)
+        return;
+
+    WKPreferencesSetShouldPrintBackgrounds(priv->preferences.get(), printBackgrounds);
+    g_object_notify(G_OBJECT(settings), "print-backgrounds");
+}
+
+/**
+ * webkit_settings_get_enable_webaudio:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-webaudio property.
+ *
+ * Returns: %TRUE If webaudio support is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_webaudio(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetWebAudioEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_webaudio:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-webaudio property.
+ */
+void webkit_settings_set_enable_webaudio(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetWebAudioEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetWebAudioEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-webaudio");
+}
+
+/**
+ * webkit_settings_get_enable_webgl:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:enable-webgl property.
+ *
+ * Returns: %TRUE If webgl support is enabled or %FALSE otherwise.
+ */
+gboolean webkit_settings_get_enable_webgl(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return WKPreferencesGetWebGLEnabled(settings->priv->preferences.get());
+}
+
+/**
+ * webkit_settings_set_enable_webgl:
+ * @settings: a #WebKitSettings
+ * @enabled: Value to be set
+ *
+ * Set the #WebKitSettings:enable-webgl property.
+ */
+void webkit_settings_set_enable_webgl(WebKitSettings* settings, gboolean enabled)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    bool currentValue = WKPreferencesGetWebGLEnabled(priv->preferences.get());
+    if (currentValue == enabled)
+        return;
+
+    WKPreferencesSetWebGLEnabled(priv->preferences.get(), enabled);
+    g_object_notify(G_OBJECT(settings), "enable-webgl");
+}
+
+/**
+ * webkit_settings_set_zoom_text_only:
+ * @settings: a #WebKitSettings
+ * @zoom_text_only: Value to be set
+ *
+ * Set the #WebKitSettings:zoom-text-only property.
+ */
+void webkit_settings_set_zoom_text_only(WebKitSettings* settings, gboolean zoomTextOnly)
+{
+    g_return_if_fail(WEBKIT_IS_SETTINGS(settings));
+
+    WebKitSettingsPrivate* priv = settings->priv;
+    if (priv->zoomTextOnly == zoomTextOnly)
+        return;
+
+    priv->zoomTextOnly = zoomTextOnly;
+    g_object_notify(G_OBJECT(settings), "zoom-text-only");
+}
+
+/**
+ * webkit_settings_get_zoom_text_only:
+ * @settings: a #WebKitSettings
+ *
+ * Get the #WebKitSettings:zoom-text-only property.
+ *
+ * Returns: %TRUE If zoom level of the view should only affect the text
+ *    or %FALSE if all view contents should be scaled.
+ */
+gboolean webkit_settings_get_zoom_text_only(WebKitSettings* settings)
+{
+    g_return_val_if_fail(WEBKIT_IS_SETTINGS(settings), FALSE);
+
+    return settings->priv->zoomTextOnly;
+}
+

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,37 +19,43 @@
 #ifndef GeolocationControllerClientBlackBerry_h
 #define GeolocationControllerClientBlackBerry_h
 
-#include "WebPage.h"
 #include <BlackBerryPlatformGeoTracker.h>
 #include <BlackBerryPlatformGeoTrackerListener.h>
 #include <GeolocationClient.h>
-#include <GeolocationPosition.h>
+#include <RefPtr.h>
+
+namespace BlackBerry {
+namespace WebKit {
+class WebPagePrivate;
+}
+}
 
 namespace WebCore {
 
-class GeolocationControllerClientBlackBerry : public WebCore::GeolocationClient, public BlackBerry::Platform::GeoTrackerListener {
+class GeolocationControllerClientBlackBerry : public GeolocationClient, public BlackBerry::Platform::GeoTrackerListener {
 public:
-    GeolocationControllerClientBlackBerry(BlackBerry::WebKit::WebPage*);
+    GeolocationControllerClientBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
 
     virtual void geolocationDestroyed();
     virtual void startUpdating();
     virtual void stopUpdating();
-    virtual WebCore::GeolocationPosition* lastPosition();
+    virtual GeolocationPosition* lastPosition();
     virtual void setEnableHighAccuracy(bool);
     virtual void requestPermission(Geolocation*);
     virtual void cancelPermissionRequest(Geolocation*);
 
-    virtual void onLocationUpdate(double timestamp, double latitude, double longitude, double accuracy, double altitude, bool altitudeValid, double altitudeAccuracy, 
+    virtual void onLocationUpdate(double timestamp, double latitude, double longitude, double accuracy, double altitude, bool altitudeValid, double altitudeAccuracy,
                                   bool altitudeAccuracyValid, double speed, bool speedValid, double heading, bool headingValid);
     virtual void onLocationError(const char* error);
     virtual void onPermission(void* context, bool isAllowed);
     BlackBerry::Platform::GeoTracker* tracker() const { return m_tracker; }
 
 private:
-    BlackBerry::WebKit::WebPage* m_webPage;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
     BlackBerry::Platform::GeoTracker* m_tracker;
     RefPtr<GeolocationPosition> m_lastPosition;
     bool m_accuracy;
 };
 }
+
 #endif // GeolocationControllerClientBlackBerry_h

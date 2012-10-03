@@ -46,7 +46,7 @@ class TreeScope;
 class FocusController {
     WTF_MAKE_NONCOPYABLE(FocusController); WTF_MAKE_FAST_ALLOCATED;
 public:
-    FocusController(Page*);
+    static PassOwnPtr<FocusController> create(Page*);
 
     void setFocusedFrame(PassRefPtr<Frame>);
     Frame* focusedFrame() const { return m_focusedFrame.get(); }
@@ -63,9 +63,14 @@ public:
     void setFocused(bool);
     bool isFocused() const { return m_isFocused; }
 
+    void setContainingWindowIsVisible(bool);
+    bool containingWindowIsVisible() const { return m_containingWindowIsVisible; }
+
     bool transferFocusToElementInShadowRoot(Element* shadowHost, bool restorePreviousSelection);
 
 private:
+    FocusController(Page*);
+
     bool advanceFocusDirectionally(FocusDirection, KeyboardEvent*);
     bool advanceFocusInDocumentOrder(FocusDirection, KeyboardEvent*, bool initialFocus);
 
@@ -99,6 +104,7 @@ public:
     bool m_isActive;
     bool m_isFocused;
     bool m_isChangingFocusedFrame;
+    bool m_containingWindowIsVisible;
 
 };
 

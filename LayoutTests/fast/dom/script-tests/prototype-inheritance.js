@@ -12,6 +12,7 @@ var skippedProperties = [
     "objCController", "textInputController", "navigationController",
     "eventSender", "objCPlugin", "objCPluginFunction",
     "appleScriptController", "plainText", "accessibilityController",
+    "gamepadController",
     "internals",
     // Ignore these properties because they do not exist in all implementations. They will be tested separately
     "webkitNotifications",
@@ -20,14 +21,13 @@ var skippedProperties = [
     "WebGLRenderingContext", "WebGLActiveInfo", "WebGLBuffer", "WebGLFramebuffer", "WebGLProgram", "WebGLRenderbuffer", "WebGLShader", "WebGLTexture", "WebGLUniformLocation",
     "ArrayBuffer",
     "DataView", "Int8Array", "Uint8Array", "Int16Array", "Uint16Array", "Int32Array", "Uint32Array", "Float32Array", "Float64Array",
-    "FileError", "FileReader", "WebKitBlobBuilder", "requestFileSystem",
+    "FileError", "FileReader", "WebKitBlobBuilder", "webkitRequestFileSystem",
     "indexedDB", "IDBKeyRange", "IDBCursor", "IDBDatabase", "IDBDatabaseError", "IDBDatabaseException", "IDBErrorEvent", "IDBEvent", "IDBFactory", "IDBIndex", "IDBObjectStore", "IDBRequest", "IDBSuccessEvent", "IDBTransaction",
     "showModalDialog",
     "webkitURL",
     "DeviceOrientationEvent",
     "DeviceMotionEvent",
     "TEMPORARY", "PERSISTENT",
-    "WebKitFlags",
     "v8Locale",
     // Ignore this property because it only appears in debug builds.
     "jscprint"

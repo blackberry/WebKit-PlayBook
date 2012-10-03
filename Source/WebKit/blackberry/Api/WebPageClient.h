@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,34 +23,29 @@
 #include "WebString.h"
 
 #include <BlackBerryPlatformCursor.h>
-#include <BlackBerryPlatformGeoTrackerListener.h>
-#include <BlackBerryPlatformGraphics.h>
 #include <BlackBerryPlatformInputEvents.h>
-#include <BlackBerryPlatformIntRectRegion.h>
 #include <BlackBerryPlatformNavigationType.h>
 #include <BlackBerryPlatformPrimitives.h>
-#include <BlackBerryPlatformWindow.h>
 #include <interaction/ScrollViewBase.h>
-#include <pthread.h>
+#include <vector>
 
 template<typename T> class ScopeArray;
 template<typename T> class SharedArray;
 
 typedef void* WebFrame;
 
-namespace WTF {
-class String;
-}
-
 namespace BlackBerry {
 
 namespace Platform {
 class FilterStream;
-class GeoTracker;
-class IntPoint;
-class IntRect;
+class GeoTrackerListener;
+class IntRectRegion;
 class NetworkRequest;
 class NetworkStreamFactory;
+
+namespace Graphics {
+class Window;
+}
 }
 
 namespace WebKit {
@@ -71,42 +66,6 @@ public:
         FlagWindowDefault = 0xFFFFFFFF,
     };
 
-    enum FocusType {
-        FocusUnknown = 0,
-        FocusNone,
-        FocusCanvas,
-        FocusImage,
-        FocusInputButton,
-        FocusInputCheckBox,
-        FocusInputColor,
-        FocusInputDate,
-        FocusInputDateTime,
-        FocusInputDateTimeLocal,
-        FocusInputEmail,
-        FocusInputFile,
-        FocusInputImage,
-        FocusInputMonth,
-        FocusInputNumber,
-        FocusInputPassword,
-        FocusInputRadio,
-        FocusInputRange,
-        FocusInputReset,
-        FocusInputSearch,
-        FocusInputSubmit,
-        FocusInputTelephone,
-        FocusInputText,
-        FocusInputTime,
-        FocusInputURL,
-        FocusInputWeek,
-        FocusInputUnknown,
-        FocusLink,
-        FocusObject,
-        FocusSelect,
-        FocusSVGElement,
-        FocusTextArea,
-        FocusVideo,
-    };
-
     enum AlertType {
         MediaOK = 0,
         MediaDecodeError,
@@ -116,6 +75,12 @@ public:
         MediaVideoReceiveError,
         MediaAudioReceiveError,
         MediaInvalidError,
+    };
+
+    enum SaveCredentialType {
+        SaveCredentialNeverForThisSite = 0,
+        SaveCredentialNotNow,
+        SaveCredentialYes
     };
 
     virtual int getInstanceId() const = 0;
@@ -156,42 +121,41 @@ public:
     virtual void javascriptContinued() = 0;
 
     // All of these methods use transformed coordinates.
-    virtual void contentsSizeChanged(const BlackBerry::Platform::IntSize&) const = 0;
-    virtual void scrollChanged(const BlackBerry::Platform::IntPoint&) const = 0;
+    virtual void contentsSizeChanged(const Platform::IntSize&) const = 0;
+    virtual void scrollChanged(const Platform::IntPoint&) const = 0;
     virtual void zoomChanged(bool isMinZoomed, bool isMaxZoomed, bool isAtInitialZoom, double newZoom) const = 0;
 
     virtual void setPageTitle(const unsigned short* title, unsigned titleLength) = 0;
 
-    virtual BlackBerry::Platform::Graphics::Window* window() const = 0;
-    virtual BlackBerry::Platform::Graphics::Window* compositingWindow() const = 0;
+    virtual Platform::Graphics::Window* window() const = 0;
 
-    virtual void notifyContentRendered(const BlackBerry::Platform::IntRect&) = 0;
+    virtual void notifyContentRendered(const Platform::IntRect&) = 0;
     virtual void notifyScreenRotated() = 0;
 
-    virtual void drawTapHighlight(const BlackBerry::Platform::IntRectRegion&, int /*red*/, int /*green*/, int /*blue*/, int /*alpha*/, bool /*hide after scroll*/) = 0;
+    virtual void drawTapHighlight(const Platform::IntRectRegion&, int red, int green, int blue, int alpha, bool hideAfterScroll) = 0;
     virtual void hideTapHighlight() = 0;
 
-    virtual void focusChanged(FocusType, int elementId) = 0;
-    virtual void inputFocusGained(BlackBerry::Platform::BlackBerryInputType, int inputStyle) = 0;
+    virtual void inputFocusGained(Platform::BlackBerryInputType, int inputStyle) = 0;
     virtual void inputFocusLost() = 0;
     virtual void inputTextChanged() = 0;
     virtual void inputSelectionChanged(unsigned selectionStart, unsigned selectionEnd) = 0;
-    virtual void inputSetNavigationMode(bool) = 0;
     virtual void inputLearnText(wchar_t* text, int length) = 0;
+
+    virtual void showVirtualKeyboard(bool) = 0;
 
     virtual void checkSpellingOfString(const unsigned short* text, int length, int& misspellingLocation, int& misspellingLength) = 0;
     virtual void requestSpellingSuggestionsForString(unsigned start, unsigned end) = 0;
 
-    virtual void notifySelectionDetailsChanged(const BlackBerry::Platform::IntRect& start, const BlackBerry::Platform::IntRect& end, const BlackBerry::Platform::IntRectRegion&) = 0;
+    virtual void notifySelectionDetailsChanged(const Platform::IntRect& start, const Platform::IntRect& end, const Platform::IntRectRegion&) = 0;
     virtual void cancelSelectionVisuals() = 0;
     virtual void notifySelectionHandlesReversed() = 0;
-    virtual void notifyCaretChanged(const BlackBerry::Platform::IntRect& caret, bool userTouchTriggered) = 0;
+    virtual void notifyCaretChanged(const Platform::IntRect& caret, bool userTouchTriggered) = 0;
 
-    virtual void cursorChanged(BlackBerry::Platform::CursorType, const char* url, int x, int y) = 0;
+    virtual void cursorChanged(Platform::CursorType, const char* url, int x, int y) = 0;
 
-    virtual void requestGeolocationPermission(BlackBerry::Platform::GeoTrackerListener*, void*, const char*, unsigned) = 0;
-    virtual void cancelGeolocationPermission(BlackBerry::Platform::GeoTrackerListener*, void*) = 0;
-    virtual BlackBerry::Platform::NetworkStreamFactory* networkStreamFactory() = 0;
+    virtual void requestGeolocationPermission(Platform::GeoTrackerListener*, void* context, const char* origin, unsigned originLength) = 0;
+    virtual void cancelGeolocationPermission(Platform::GeoTrackerListener*, void* context) = 0;
+    virtual Platform::NetworkStreamFactory* networkStreamFactory() = 0;
 
     virtual void handleStringPattern(const unsigned short* pattern, unsigned length) = 0;
     virtual void handleExternalLink(const Platform::NetworkRequest&, const unsigned short* context, unsigned contextLength, bool isClientRedirect) = 0;
@@ -204,7 +168,7 @@ public:
 
     virtual bool chooseFilenames(bool allowMultiple, const WebString& acceptTypes, const SharedArray<WebString>& initialFiles, unsigned initialFileSize, SharedArray<WebString>& chosenFiles, unsigned& chosenFileSize) = 0;
 
-    virtual void loadPluginForMimetype(int, int width, int height, const SharedArray<BlackBerry::WebKit::WebString>& paramNames, const SharedArray<BlackBerry::WebKit::WebString>& paramValues, int size, const char* url) = 0;
+    virtual void loadPluginForMimetype(int, int width, int height, const SharedArray<WebString>& paramNames, const SharedArray<WebString>& paramValues, int size, const char* url) = 0;
     virtual void notifyPluginRectChanged(int, Platform::IntRect rectChanged) = 0;
     virtual void destroyPlugin(int) = 0;
     virtual void playMedia(int) = 0;
@@ -240,14 +204,15 @@ public:
     virtual void handleWebInspectorMessageToFrontend(int id, const char* message, int length) = 0;
 
     virtual bool hasPendingScrollOrZoomEvent() const = 0;
-    virtual BlackBerry::Platform::IntRect userInterfaceBlittedDestinationRect() const = 0;
-    virtual BlackBerry::Platform::IntRect userInterfaceBlittedVisibleContentsRect() const = 0;
+    virtual Platform::IntRect userInterfaceBlittedDestinationRect() const = 0;
+    virtual Platform::IntRect userInterfaceBlittedVisibleContentsRect() const = 0;
 
     virtual void resetBitmapZoomScale(double scale) = 0;
-    virtual void animateBlockZoom(const BlackBerry::Platform::FloatPoint& finalPoint, double finalScale) = 0;
+    virtual void animateBlockZoom(const Platform::FloatPoint& finalPoint, double finalScale) = 0;
 
     virtual void setPreventsScreenIdleDimming(bool noDimming) = 0;
-    virtual void authenticationChallenge(const unsigned short* realm, unsigned int realmLength, WebString& username, WebString& password) = 0;
+    virtual bool authenticationChallenge(const unsigned short* realm, unsigned int realmLength, WebString& username, WebString& password) = 0;
+    virtual SaveCredentialType notifyShouldSaveCredential(bool isNew) = 0;
 
     virtual bool shouldPluginEnterFullScreen() = 0;
     virtual void didPluginEnterFullScreen() = 0;
@@ -257,22 +222,19 @@ public:
     virtual bool lockOrientation(bool landscape) = 0;
     virtual void unlockOrientation() = 0;
     virtual bool isActive() const = 0;
+    virtual bool isVisible() const = 0;
     virtual void requestWebGLPermission(const WebString&) = 0;
 
-#if defined(__QNXNTO__)
     virtual void setToolTip(WebString) = 0;
     virtual void setStatus(WebString) = 0;
-#endif
-    virtual bool acceptNavigationRequest(const BlackBerry::Platform::NetworkRequest&,
-                                         BlackBerry::Platform::NavigationType) = 0;
-    virtual void cursorEventModeChanged(BlackBerry::Platform::CursorEventMode) = 0;
-    virtual void touchEventModeChanged(BlackBerry::Platform::TouchEventMode) = 0;
+    virtual bool acceptNavigationRequest(const Platform::NetworkRequest&, Platform::NavigationType) = 0;
+    virtual void cursorEventModeChanged(Platform::CursorEventMode) = 0;
+    virtual void touchEventModeChanged(Platform::TouchEventMode) = 0;
 
     virtual bool downloadAllowed(const char* url) = 0;
-    virtual void downloadRequested(const BlackBerry::Platform::NetworkRequest&) = 0;
-    virtual void downloadRequested(BlackBerry::Platform::FilterStream*, const WebString& suggestedFilename) = 0;
+    virtual void downloadRequested(Platform::FilterStream*, const WebString& suggestedFilename) = 0;
 
-    virtual int fullscreenStart(const char* contextName, BlackBerry::Platform::Graphics::Window*, unsigned x, unsigned y, unsigned width, unsigned height) = 0;
+    virtual int fullscreenStart(const char* contextName, Platform::Graphics::Window*, unsigned x, unsigned y, unsigned width, unsigned height) = 0;
 
     virtual int fullscreenStop() = 0;
 
@@ -280,15 +242,17 @@ public:
 
     virtual void drawVerticalScrollbar() = 0;
     virtual void drawHorizontalScrollbar() = 0;
-    virtual void populateCustomHeaders(BlackBerry::Platform::NetworkRequest&) = 0;
+    virtual void populateCustomHeaders(Platform::NetworkRequest&) = 0;
 
     virtual void notifyWillUpdateApplicationCache() = 0;
     virtual void notifyDidLoadFromApplicationCache() = 0;
 
     virtual void clearCookies() = 0;
     virtual void clearCache() = 0;
+
+    virtual bool hasKeyboardFocus() = 0;
 };
-}
-}
+} // namespace WebKit
+} // namespace BlackBerry
 
 #endif // WebPageClient_h

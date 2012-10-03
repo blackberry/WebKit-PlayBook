@@ -21,10 +21,10 @@
 #ifndef JSFloat64Array_h
 #define JSFloat64Array_h
 
-#include "Float64Array.h"
 #include "JSArrayBufferView.h"
 #include "JSDOMBinding.h"
 #include <runtime/JSObject.h>
+#include <wtf/Float64Array.h>
 
 namespace WebCore {
 
@@ -33,7 +33,7 @@ public:
     typedef JSArrayBufferView Base;
     static JSFloat64Array* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<Float64Array> impl)
     {
-        JSFloat64Array* ptr = new (JSC::allocateCell<JSFloat64Array>(globalObject->globalData().heap)) JSFloat64Array(structure, globalObject, impl);
+        JSFloat64Array* ptr = new (NotNull, JSC::allocateCell<JSFloat64Array>(globalObject->globalData().heap)) JSFloat64Array(structure, globalObject, impl);
         ptr->finishCreation(globalObject->globalData());
         return ptr;
     }
@@ -57,6 +57,9 @@ public:
     {
         return static_cast<Float64Array*>(Base::impl());
     }
+    static const JSC::TypedArrayType TypedArrayStorageType = JSC::TypedArrayFloat64;
+    intptr_t m_storageLength;
+    void* m_storage;
 protected:
     JSFloat64Array(JSC::Structure*, JSDOMGlobalObject*, PassRefPtr<Float64Array>);
     void finishCreation(JSC::JSGlobalData&);
@@ -74,12 +77,14 @@ public:
     static JSC::JSObject* self(JSC::ExecState*, JSC::JSGlobalObject*);
     static JSFloat64ArrayPrototype* create(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::Structure* structure)
     {
-        JSFloat64ArrayPrototype* ptr = new (JSC::allocateCell<JSFloat64ArrayPrototype>(globalData.heap)) JSFloat64ArrayPrototype(globalData, globalObject, structure);
+        JSFloat64ArrayPrototype* ptr = new (NotNull, JSC::allocateCell<JSFloat64ArrayPrototype>(globalData.heap)) JSFloat64ArrayPrototype(globalData, globalObject, structure);
         ptr->finishCreation(globalData);
         return ptr;
     }
 
     static const JSC::ClassInfo s_info;
+    static bool getOwnPropertySlot(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier&, JSC::PropertySlot&);
+    static bool getOwnPropertyDescriptor(JSC::JSObject*, JSC::ExecState*, const JSC::Identifier&, JSC::PropertyDescriptor&);
     static JSC::Structure* createStructure(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::JSValue prototype)
     {
         return JSC::Structure::create(globalData, globalObject, prototype, JSC::TypeInfo(JSC::ObjectType, StructureFlags), &s_info);
@@ -88,7 +93,7 @@ public:
 private:
     JSFloat64ArrayPrototype(JSC::JSGlobalData& globalData, JSC::JSGlobalObject*, JSC::Structure* structure) : JSC::JSNonFinalObject(globalData, structure) { }
 protected:
-    static const unsigned StructureFlags = Base::StructureFlags;
+    static const unsigned StructureFlags = JSC::OverridesGetOwnPropertySlot | Base::StructureFlags;
 };
 
 class JSFloat64ArrayConstructor : public DOMConstructorObject {
@@ -100,7 +105,7 @@ public:
     typedef DOMConstructorObject Base;
     static JSFloat64ArrayConstructor* create(JSC::ExecState* exec, JSC::Structure* structure, JSDOMGlobalObject* globalObject)
     {
-        JSFloat64ArrayConstructor* ptr = new (JSC::allocateCell<JSFloat64ArrayConstructor>(*exec->heap())) JSFloat64ArrayConstructor(structure, globalObject);
+        JSFloat64ArrayConstructor* ptr = new (NotNull, JSC::allocateCell<JSFloat64ArrayConstructor>(*exec->heap())) JSFloat64ArrayConstructor(structure, globalObject);
         ptr->finishCreation(exec, globalObject);
         return ptr;
     }
@@ -118,6 +123,9 @@ protected:
     static JSC::ConstructType getConstructData(JSC::JSCell*, JSC::ConstructData&);
 };
 
+// Functions
+
+JSC::EncodedJSValue JSC_HOST_CALL jsFloat64ArrayPrototypeFunctionFoo(JSC::ExecState*);
 // Attributes
 
 JSC::JSValue jsFloat64ArrayConstructor(JSC::ExecState*, JSC::JSValue, const JSC::Identifier&);

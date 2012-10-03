@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -25,7 +25,7 @@
 #include <wtf/text/StringHash.h>
 
 #define synthesizeAccessorsForPrimitiveValuePrefixAndType(prefix, type) \
-     void set##prefix(const WTF::String& key, type newValue) { \
+     void set##prefix(const String& key, type newValue) { \
          ASSERT(impl); \
          if (get##prefix(key) == newValue) \
             return; \
@@ -39,16 +39,12 @@
          if (delegate) \
             delegate->didChangeSettings(sender); \
      } \
-     type get##prefix(const WTF::String& key) const { \
+     type get##prefix(const String& key) const { \
           ASSERT(impl); \
           if (!impl->primitiveValues.contains(key)) \
               return static_cast<type>(false); \
           return impl->primitiveValues.get(key).prefix##Value; \
       }
-
-namespace WTF {
-class String;
-}
 
 namespace BlackBerry {
 namespace WebKit {
@@ -64,8 +60,8 @@ struct WebSettingsPrivate {
     };
 
     struct WebSettingsPrivateImpl {
-        WTF::HashMap<WTF::String, PrimitiveValue> primitiveValues;
-        WTF::HashMap<WTF::String, WTF::String> stringValues;
+        HashMap<String, PrimitiveValue> primitiveValues;
+        HashMap<String, String> stringValues;
     };
 
     WebSettingsPrivateImpl* impl;
@@ -87,23 +83,25 @@ struct WebSettingsPrivate {
 
     synthesizeAccessorsForPrimitiveValuePrefixAndType(UnsignedLongLong, unsigned long long);
 
-    WTF::String getString(const WTF::String& key) const
+    String getString(const String& key) const
     {
         ASSERT(impl);
         if (!impl->stringValues.contains(key))
-            return WTF::String();
+            return String();
         return impl->stringValues.get(key);
     }
 
-    void setString(const WTF::String& key, const WTF::String& newValue)
+    void setString(const String& key, const String& newValue)
     {
         ASSERT(impl);
         if (getString(key) == newValue)
             return;
+
         if (copyOnWrite) {
             copyOnWrite = false;
             impl = new WebSettingsPrivateImpl(*impl);
         }
+
         impl->stringValues.set(key, newValue);
         if (delegate)
             delegate->didChangeSettings(sender);

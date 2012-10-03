@@ -137,13 +137,13 @@ void InsertLineBreakCommand::doApply()
         setEndingSelection(VisibleSelection(positionInParentAfterNode(nodeToInsert.get()), DOWNSTREAM, endingSelection().isDirectional()));
     } else if (pos.deprecatedNode()->isTextNode()) {
         // Split a text node
-        Text* textNode = static_cast<Text*>(pos.deprecatedNode());
+        Text* textNode = toText(pos.deprecatedNode());
         splitTextNode(textNode, pos.deprecatedEditingOffset());
         insertNodeBefore(nodeToInsert, textNode);
         Position endingPosition = firstPositionInNode(textNode);
         
         // Handle whitespace that occurs after the split
-        updateLayout();
+        document()->updateLayoutIgnorePendingStylesheets();
         if (!endingPosition.isRenderedCharacter()) {
             Position positionBeforeTextNode(positionInParentBeforeNode(textNode));
             // Clear out all whitespace and insert one non-breaking space

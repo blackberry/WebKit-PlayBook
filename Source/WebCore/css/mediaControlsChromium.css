@@ -25,9 +25,18 @@
 
 /* Chromium default media controls */
 
+body:-webkit-full-page-media {
+    background-color: rgb(0, 0, 0);
+}
+
 audio {
     width: 300px;
     height: 32px;
+}
+
+audio:-webkit-full-page-media, video:-webkit-full-page-media {
+    max-height: 100%;
+    max-width: 100%;
 }
 
 audio::-webkit-media-controls-panel, video::-webkit-media-controls-panel {

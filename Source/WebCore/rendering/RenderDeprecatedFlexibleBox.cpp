@@ -228,6 +228,13 @@ void RenderDeprecatedFlexibleBox::layoutBlock(bool relayoutChildren, LayoutUnit 
     LayoutRepainter repainter(*this, checkForRepaintDuringLayout());
     LayoutStateMaintainer statePusher(view(), this, LayoutSize(x(), y()), hasTransform() || hasReflection() || style()->isFlippedBlocksWritingMode());
 
+    if (inRenderFlowThread()) {
+        // Regions changing widths can force us to relayout our children.
+        if (logicalWidthChangedInRegions())
+            relayoutChildren = true;
+    }
+    computeInitialRegionRangeForBlock();
+
     LayoutSize previousSize = size();
 
     computeLogicalWidth();
@@ -266,6 +273,8 @@ void RenderDeprecatedFlexibleBox::layoutBlock(bool relayoutChildren, LayoutUnit 
         relayoutChildren = true;
 
     bool needAnotherLayoutPass = layoutPositionedObjects(relayoutChildren || isRoot());
+
+    computeRegionRangeForBlock();
 
     if (!isFloatingOrPositioned() && height() == 0) {
         // We are a block with no border and padding and a computed height
@@ -567,11 +576,11 @@ void RenderDeprecatedFlexibleBox::layoutHorizontalBox(bool relayoutChildren)
 
     RenderBlock::finishDelayUpdateScrollInfo();
 
-    if (remainingSpace > 0 && ((style()->isLeftToRightDirection() && style()->boxPack() != BSTART)
-        || (!style()->isLeftToRightDirection() && style()->boxPack() != BEND))) {
+    if (remainingSpace > 0 && ((style()->isLeftToRightDirection() && style()->boxPack() != Start)
+        || (!style()->isLeftToRightDirection() && style()->boxPack() != End))) {
         // Children must be repositioned.
         LayoutUnit offset = 0;
-        if (style()->boxPack() == BJUSTIFY) {
+        if (style()->boxPack() == Justify) {
             // Determine the total number of children.
             int totalChildren = 0;
             for (RenderBox* child = iterator.first(); child; child = iterator.next()) {
@@ -602,7 +611,7 @@ void RenderDeprecatedFlexibleBox::layoutHorizontalBox(bool relayoutChildren)
                 }
             }
         } else {
-            if (style()->boxPack() == BCENTER)
+            if (style()->boxPack() == Center)
                 offset += remainingSpace / 2;
             else // END for LTR, START for RTL
                 offset += remainingSpace;
@@ -816,10 +825,10 @@ void RenderDeprecatedFlexibleBox::layoutVerticalBox(bool relayoutChildren)
 
     RenderBlock::finishDelayUpdateScrollInfo();
 
-    if (style()->boxPack() != BSTART && remainingSpace > 0) {
+    if (style()->boxPack() != Start && remainingSpace > 0) {
         // Children must be repositioned.
         LayoutUnit offset = 0;
-        if (style()->boxPack() == BJUSTIFY) {
+        if (style()->boxPack() == Justify) {
             // Determine the total number of children.
             int totalChildren = 0;
             for (RenderBox* child = iterator.first(); child; child = iterator.next()) {
@@ -850,7 +859,7 @@ void RenderDeprecatedFlexibleBox::layoutVerticalBox(bool relayoutChildren)
                 }
             }
         } else {
-            if (style()->boxPack() == BCENTER)
+            if (style()->boxPack() == Center)
                 offset += remainingSpace / 2;
             else // END
                 offset += remainingSpace;

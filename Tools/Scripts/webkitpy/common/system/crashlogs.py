@@ -26,6 +26,7 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
+import os
 import re
 import sys
 
@@ -34,9 +35,9 @@ class CrashLogs(object):
     def __init__(self, filesystem):
         self._filesystem = filesystem
 
-    def find_newest_log(self, process_name):
+    def find_newest_log(self, process_name, pid=None):
         if sys.platform == "darwin":
-            return self._find_newest_log_darwin(process_name)
+            return self._find_newest_log_darwin(process_name, pid)
 
     def _log_directory_darwin(self):
         log_directory = self._filesystem.expanduser("~")
@@ -47,7 +48,7 @@ class CrashLogs(object):
             log_directory = self._filesystem.join(log_directory, "CrashReporter")
         return log_directory
 
-    def _find_newest_log_darwin(self, process_name):
+    def _find_newest_log_darwin(self, process_name, pid):
         def is_crash_log(fs, dirpath, basename):
             return basename.startswith(process_name + "_") and basename.endswith(".crash")
 
@@ -55,4 +56,21 @@ class CrashLogs(object):
         logs = self._filesystem.files_under(log_directory, file_filter=is_crash_log)
         if not logs:
             return None
-        return self._filesystem.read_text_file(sorted(logs)[-1])
+        first_line_regex = re.compile(r'^Process:\s+(?P<process_name>.*) \[(?P<pid>\d+)\]$')
+        for path in reversed(sorted(logs)):
+            try:
+                with self._filesystem.open_text_file_for_reading(path) as f:
+                    first_line = f.readline()
+
+                    match = first_line_regex.match(first_line)
+                    if not match:
+                        continue
+                    if match.group('process_name') != process_name:
+                        continue
+                    if pid is not None and int(match.group('pid')) != pid:
+                        continue
+
+                    f.seek(0, os.SEEK_SET)
+                    return f.read()
+            except IOError:
+                continue

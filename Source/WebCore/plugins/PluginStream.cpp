@@ -339,7 +339,7 @@ void PluginStream::deliverData()
         int32_t deliveryBytes = m_pluginFuncs->writeready(m_instance, &m_stream);
 
         if (deliveryBytes <= 0) {
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
             int delay = deliveryDelay();
 
             // one shot timer expects a time in seconds.
@@ -381,7 +381,7 @@ void PluginStream::deliverData()
             memmove(m_deliveryData->data(), m_deliveryData->data() + totalBytesDelivered, remainingBytes);
             m_deliveryData->resize(remainingBytes);
         } else {
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
             if (m_loader)
                 m_loader->pauseLoad(false);
 #endif
@@ -437,7 +437,7 @@ void PluginStream::didReceiveData(NetscapePlugInStreamLoader* loader, const char
         m_deliveryData->resize(oldSize + length);
         memcpy(m_deliveryData->data() + oldSize, data, length);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
         if(!m_delayDeliveryTimer.isActive())
             deliverData();
 #else
@@ -491,7 +491,7 @@ bool PluginStream::wantsAllStreams() const
     return result != 0;
 }
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
 int PluginStream::deliveryDelay() const
 {
     if (!m_pluginFuncs->getvalue)

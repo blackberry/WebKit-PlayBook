@@ -24,7 +24,12 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
+
 #include "TestController.h"
+#include "qquickwebview_p.h"
+
+#include <stdio.h>
 
 #include <QApplication>
 #include <QObject>
@@ -87,6 +92,7 @@ int main(int argc, char** argv)
             qputenv("QT_WEBKIT_SUPPRESS_WEB_PROCESS_OUTPUT", "1");
     }
 
+    QQuickWebViewExperimental::setFlickableViewportEnabled(false);
     QApplication app(argc, argv);
     Launcher launcher(argc, argv);
     QTimer::singleShot(0, &launcher, SLOT(launch()));

@@ -27,7 +27,6 @@
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 import logging
-import platform
 import re
 
 from webkitpy.layout_tests.port.apple import ApplePort
@@ -36,27 +35,6 @@ from webkitpy.layout_tests.port.leakdetector import LeakDetector
 
 _log = logging.getLogger(__name__)
 
-
-def os_version(os_version_string=None, supported_versions=None):
-    if not os_version_string:
-        if hasattr(platform, 'mac_ver') and platform.mac_ver()[0]:
-            os_version_string = platform.mac_ver()[0]
-        else:
-            # Make up something for testing.
-            os_version_string = "10.5.6"
-    release_version = int(os_version_string.split('.')[1])
-    version_strings = {
-        5: 'leopard',
-        6: 'snowleopard',
-        7: 'lion',
-    }
-    assert release_version >= min(version_strings.keys())
-    version_string = version_strings.get(release_version, 'future')
-    if supported_versions:
-        assert version_string in supported_versions
-    return version_string
-
-
 class MacPort(ApplePort):
     port_name = "mac"
 
@@ -64,19 +42,8 @@ class MacPort(ApplePort):
     # and the order of fallback between them.  Matches ORWT.
     VERSION_FALLBACK_ORDER = ["mac-leopard", "mac-snowleopard", "mac-lion", "mac"]
 
-    def _detect_version(self, os_version_string):
-        # FIXME: MacPort and WinPort implement _detect_version differently.
-        # WinPort uses os_version_string as a replacement for self.version.
-        # Thus just returns os_version_string from this function if not None.
-        # Mac (incorrectly) uses os_version_string as a way to unit-test
-        # the os_version parsing logic.  We should split the os_version parsing tests
-        # into separate unittests so that they do not need to construct
-        # MacPort objects just to test our version parsing.
-        return os_version(os_version_string)
-
-    def __init__(self, host, **kwargs):
-        ApplePort.__init__(self, host, **kwargs)
-        self._operating_system = 'mac'
+    def __init__(self, host, port_name, **kwargs):
+        ApplePort.__init__(self, host, port_name, **kwargs)
         self._leak_detector = LeakDetector(self)
         if self.get_option("leaks"):
             # DumpRenderTree slows down noticably if we run more than about 1000 tests in a batch
@@ -84,12 +51,8 @@ class MacPort(ApplePort):
             self.set_option_default("batch_size", 1000)
 
     def baseline_search_path(self):
-        try:
-            fallback_index = self.VERSION_FALLBACK_ORDER.index(self._port_name_with_version())
-            fallback_names = list(self.VERSION_FALLBACK_ORDER[fallback_index:])
-        except ValueError:
-            # Unknown versions just fall back to the base port results.
-            fallback_names = [self.port_name]
+        fallback_index = self.VERSION_FALLBACK_ORDER.index(self._port_name_with_version())
+        fallback_names = list(self.VERSION_FALLBACK_ORDER[fallback_index:])
         if self.get_option('webkit_test_runner'):
             fallback_names.insert(0, self._wk2_port_name())
             # Note we do not add 'wk2' here, even though it's included in _skipped_search_paths().
@@ -102,7 +65,11 @@ class MacPort(ApplePort):
                 env['MallocStackLogging'] = '1'
             if self.get_option('guard_malloc'):
                 env['DYLD_INSERT_LIBRARIES'] = '/usr/lib/libgmalloc.dylib'
+        env['XML_CATALOG_FILES'] = ''  # work around missing /etc/catalog <rdar://problem/4292995>
         return env
+
+    def operating_system(self):
+        return 'mac'
 
     # Belongs on a Platform object.
     def is_leopard(self):
@@ -113,8 +80,18 @@ class MacPort(ApplePort):
         return self._version == "snowleopard"
 
     # Belongs on a Platform object.
+    def is_lion(self):
+        return self._version == "lion"
+
+    # Belongs on a Platform object.
     def is_crash_reporter(self, process_name):
         return re.search(r'ReportCrash', process_name)
+
+    def default_child_processes(self):
+        if self.is_snowleopard():
+            _log.warn("Cannot run tests in parallel on Snow Leopard due to rdar://problem/10621525.")
+            return 1
+        return super(MacPort, self).default_child_processes()
 
     def _build_java_test_support(self):
         java_tests_path = self._filesystem.join(self.layout_tests_dir(), "java")
@@ -151,7 +128,7 @@ class MacPort(ApplePort):
         return self._build_path('WebCore.framework/Versions/A/WebCore')
 
     def show_results_html_file(self, results_filename):
-        self._run_script('run-safari', ['-NSOpen', results_filename])
+        self._run_script('run-safari', ['--no-saved-state', '-NSOpen', results_filename])
 
     # FIXME: The next two routines turn off the http locking in order
     # to work around failures on the bots caused when the slave restarts.

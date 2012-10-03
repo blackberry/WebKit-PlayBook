@@ -31,7 +31,6 @@
 #include "NetscapePluginStream.h"
 #include "PluginController.h"
 #include "ShareableBitmap.h"
-#include "WorkItem.h"
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/HTTPHeaderMap.h>
 #include <WebCore/IntRect.h>
@@ -308,7 +307,7 @@ void NetscapePlugin::popPopupsEnabledState()
 
 void NetscapePlugin::pluginThreadAsyncCall(void (*function)(void*), void* userData)
 {
-    RunLoop::main()->scheduleWork(WorkItem::create(this, &NetscapePlugin::handlePluginThreadAsyncCall, function, userData));
+    RunLoop::main()->dispatch(bind(&NetscapePlugin::handlePluginThreadAsyncCall, this, function, userData));
 }
     
 void NetscapePlugin::handlePluginThreadAsyncCall(void (*function)(void*), void* userData)
@@ -817,8 +816,9 @@ void NetscapePlugin::manualStreamDidFail(bool wasCancelled)
 {
     ASSERT(m_isStarted);
     ASSERT(m_loadManually);
-    ASSERT(m_manualStream);
 
+    if (!m_manualStream)
+        return;
     m_manualStream->didFail(wasCancelled);
 }
 

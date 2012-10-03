@@ -181,6 +181,17 @@ function runTests()
         assertTrue(document.getElementById('timeout-tests-table').textContent.indexOf('expected actual diff') != -1);
     });
 
+    function isExpanded(expandLink)
+    {
+        var enDash = '\u2013';
+        return expandLink.textContent == enDash;
+    }
+
+    function isCollapsed(expandLink)
+    {
+        return expandLink.textContent == '+';
+    }
+
     results = mockResults();
     var subtree = results.tests['foo'] = {}
     subtree['bar.html'] = mockExpectation('TEXT', 'PASS');
@@ -194,21 +205,19 @@ function runTests()
         expandAllExpectations();
         assertTrue(document.querySelectorAll('tbody tr').length == 8);
         var expandLinks = document.querySelectorAll('.expand-button-text');
-        var enDash = '\u2013';
-        for (var i = 0; i < expandLinks.length; i++) {
-            assertTrue(expandLinks[i].textContent == enDash);
-        }
+        for (var i = 0; i < expandLinks.length; i++)
+            assertTrue(isExpanded(expandLinks[i]));
         
         collapseAllExpectations();
         // Collapsed expectations stay in the dom, but are display:none.
         assertTrue(document.querySelectorAll('tbody tr').length == 8);
         var expandLinks = document.querySelectorAll('.expand-button-text');
         for (var i = 0; i < expandLinks.length; i++)
-            assertTrue(expandLinks[i].textContent == '+');
+            assertTrue(isCollapsed(expandLinks[i]));
             
         expandExpectations(expandLinks[1]);
-        assertTrue(expandLinks[0].textContent == '+');
-        assertTrue(expandLinks[1].textContent == enDash);
+        assertTrue(isCollapsed(expandLinks[0]));
+        assertTrue(isExpanded(expandLinks[1]));
 
         collapseExpectations(expandLinks[1]);
         assertTrue(expandLinks[1].textContent == '+');
@@ -547,6 +556,132 @@ function runTests()
         document.getElementById('unexpected-results').onchange();
         expandAllExpectations();
         assertTrue(visibleExpandLinks().length == 2);
+    });
+    
+
+    results = mockResults();
+    var subtree = results.tests['foo'] = {}
+    subtree['bar.html'] = mockExpectation('TEXT', 'FAIL');
+    subtree['bar1.html'] = mockExpectation('TEXT', 'FAIL');
+    subtree['bar2.html'] = mockExpectation('TEXT', 'FAIL');
+
+    runTest(results, function() {
+        if (window.eventSender) {
+            eventSender.keyDown('k'); // previous
+            var testRows = document.querySelectorAll('#results-table tbody tr');
+            assertTrue(!testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(testRows[2].classList.contains('current'));
+        }
+    });
+
+    runTest(results, function() {
+        if (window.eventSender) {
+            eventSender.keyDown('j'); // next
+            var testRows = document.querySelectorAll('#results-table tbody tr');
+            assertTrue(testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+        }
+    });
+
+    runTest(results, function() {
+        assertTrue(document.getElementById('results-table'));
+        assertTrue(visibleExpandLinks().length == 3);
+        
+        if (window.eventSender) {
+            eventSender.keyDown('i', ["metaKey"]);
+            eventSender.keyDown('i', ["shiftKey"]);
+            eventSender.keyDown('i', ["ctrlKey"]);
+            var testRows = document.querySelectorAll('#results-table tbody tr');
+            assertTrue(!testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('i'); // first
+            assertTrue(testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('j', ["metaKey"]);
+            eventSender.keyDown('j', ["shiftKey"]);
+            eventSender.keyDown('j', ["ctrlKey"]);
+            assertTrue(testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('j'); // next
+            assertTrue(!testRows[0].classList.contains('current'));
+            assertTrue(testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('k', ["metaKey"]);
+            eventSender.keyDown('k', ["shiftKey"]);
+            eventSender.keyDown('k', ["ctrlKey"]);
+            assertTrue(!testRows[0].classList.contains('current'));
+            assertTrue(testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('k'); // previous
+            assertTrue(testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('l', ["metaKey"]);
+            eventSender.keyDown('l', ["shiftKey"]);
+            eventSender.keyDown('l', ["ctrlKey"]);
+            assertTrue(testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(!testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('l'); // last
+            assertTrue(!testRows[0].classList.contains('current'));
+            assertTrue(!testRows[1].classList.contains('current'));
+            assertTrue(testRows[2].classList.contains('current'));
+
+            eventSender.keyDown('i'); // first
+
+            eventSender.keyDown('e', ["metaKey"]);
+            eventSender.keyDown('e', ["shiftKey"]);
+            eventSender.keyDown('e', ["ctrlKey"]);
+            var expandLinks = document.querySelectorAll('.expand-button-text');
+            assertTrue(!isExpanded(expandLinks[0]));
+
+            eventSender.keyDown('e'); // expand
+            assertTrue(isExpanded(expandLinks[0]));
+
+            eventSender.keyDown('c', ["metaKey"]);
+            eventSender.keyDown('c', ["shiftKey"]);
+            eventSender.keyDown('c', ["ctrlKey"]);
+            assertTrue(isExpanded(expandLinks[0]));
+
+            eventSender.keyDown('c'); // collapse
+            assertTrue(isCollapsed(expandLinks[0]));
+
+            eventSender.keyDown('f', ["metaKey"]);
+            eventSender.keyDown('f', ["shiftKey"]);
+            eventSender.keyDown('f', ["ctrlKey"]);
+            var flaggedTestsTextbox = document.getElementById('flagged-tests');
+            assertTrue(flaggedTestsTextbox.innerText == '');
+
+            eventSender.keyDown('f'); // flag
+            assertTrue(flaggedTestsTextbox.innerText == 'foo/bar.html');
+
+            eventSender.keyDown('j'); // next
+            eventSender.keyDown('f'); // flag
+            assertTrue(flaggedTestsTextbox.innerText == 'foo/bar.html\nfoo/bar1.html');
+
+            document.getElementById('use-newlines').checked = false;
+            TestNavigator.updateFlaggedTests();
+            assertTrue(flaggedTestsTextbox.innerText == 'foo/bar.html foo/bar1.html');
+
+            eventSender.keyDown('f'); // unflag
+            assertTrue(flaggedTestsTextbox.innerText == 'foo/bar.html');
+
+            eventSender.keyDown('k'); // previous
+            eventSender.keyDown('f'); // flag
+            assertTrue(flaggedTestsTextbox.innerText == '');
+        }
     });
 
     document.body.innerHTML = '<pre>' + g_log.join('\n') + '</pre>';

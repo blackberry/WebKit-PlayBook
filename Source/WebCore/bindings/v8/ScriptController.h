@@ -47,7 +47,7 @@
 #if PLATFORM(QT)
 #include <qglobal.h>
 QT_BEGIN_NAMESPACE
-class QScriptEngine;
+class QJSEngine;
 QT_END_NAMESPACE
 #endif
 
@@ -147,9 +147,6 @@ public:
     // V8Proxy::retrieveFrameForEnteredContext() for more information.
     static Frame* retrieveFrameForCurrentContext();
 
-    // Check whether it is safe to access a frame in another domain.
-    static bool isSafeScript(Frame*);
-
     // Pass command-line flags to the JS engine.
     static void setFlags(const char* string, int length);
 
@@ -175,13 +172,11 @@ public:
     void updatePlatformScriptObjects();
     void cleanupScriptObjectsForPlugin(Widget*);
 
-#if ENABLE(NETSCAPE_PLUGIN_API)
     NPObject* createScriptObjectForPluginElement(HTMLPlugInElement*);
     NPObject* windowScriptNPObject();
-#endif
 
 #if PLATFORM(QT)
-    QScriptEngine* qtScriptEngine();
+    QJSEngine* qtScriptEngine();
 #endif
 
     // Dummy method to avoid a bunch of ifdef's in WebCore.
@@ -192,14 +187,12 @@ private:
     Frame* m_frame;
     const String* m_sourceURL;
 
-    bool m_inExecuteScript;
-
     bool m_paused;
 
     OwnPtr<V8Proxy> m_proxy;
     typedef HashMap<Widget*, NPObject*> PluginObjectMap;
 #if PLATFORM(QT)
-    OwnPtr<QScriptEngine> m_qtScriptEngine;
+    OwnPtr<QJSEngine> m_qtScriptEngine;
 #endif
 
     // A mapping between Widgets and their corresponding script object.
@@ -207,7 +200,6 @@ private:
     // invalidate all sub-objects which are associated with that plugin.
     // The frame keeps a NPObject reference for each item on the list.
     PluginObjectMap m_pluginObjects;
-#if ENABLE(NETSCAPE_PLUGIN_API)
     // The window script object can get destroyed while there are outstanding
     // references to it. Please refer to ScriptController::clearScriptObjects
     // for more information as to why this is necessary. To avoid crashes due
@@ -216,7 +208,6 @@ private:
     // pointer in this object is cleared out when the window object is
     // destroyed.
     NPObject* m_wrappedWindowScriptNPObject;
-#endif
 };
 
 } // namespace WebCore

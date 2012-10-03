@@ -28,31 +28,32 @@
 #include "config.h"
 #include "WebKitWebViewBase.h"
 
-#include "ClipboardGtk.h"
-#include "ClipboardUtilitiesGtk.h"
-#include "DataObjectGtk.h"
-#include "DragData.h"
 #include "DrawingAreaProxyImpl.h"
-#include "GOwnPtrGtk.h"
-#include "GtkClickCounter.h"
-#include "GtkUtilities.h"
-#include "GtkVersioning.h"
 #include "NativeWebKeyboardEvent.h"
 #include "NativeWebMouseEvent.h"
 #include "NativeWebWheelEvent.h"
-#include "NotImplemented.h"
 #include "PageClientImpl.h"
-#include "PasteboardHelper.h"
-#include "RefPtrCairo.h"
 #include "WebContext.h"
 #include "WebEventFactory.h"
+#include "WebKitPrivate.h"
+#include "WebKitWebViewBaseAccessible.h"
 #include "WebKitWebViewBasePrivate.h"
 #include "WebPageProxy.h"
+#include <WebCore/ClipboardGtk.h>
+#include <WebCore/ClipboardUtilitiesGtk.h>
+#include <WebCore/DataObjectGtk.h>
+#include <WebCore/DragData.h>
 #include <WebCore/DragIcon.h>
+#include <WebCore/GtkClickCounter.h>
 #include <WebCore/GtkDragAndDropHelper.h>
+#include <WebCore/GtkUtilities.h>
+#include <WebCore/GtkVersioning.h>
+#include <WebCore/NotImplemented.h>
+#include <WebCore/PasteboardHelper.h>
 #include <WebCore/RefPtrCairo.h>
 #include <WebCore/Region.h>
-#include <WebKit2/WKContext.h>
+#include <wtf/gobject/GOwnPtr.h>
+#include <wtf/gobject/GRefPtr.h>
 #include <wtf/text/CString.h>
 
 using namespace WebKit;
@@ -61,16 +62,45 @@ using namespace WebCore;
 struct _WebKitWebViewBasePrivate {
     OwnPtr<PageClientImpl> pageClient;
     RefPtr<WebPageProxy> pageProxy;
-    gboolean isPageActive;
-    gboolean shouldForwardNextKeyEvent;
-    GtkIMContext* imContext;
+    bool isPageActive;
+    bool shouldForwardNextKeyEvent;
+    GRefPtr<GtkIMContext> imContext;
     GtkClickCounter clickCounter;
     CString tooltipText;
     GtkDragAndDropHelper dragAndDropHelper;
     DragIcon dragIcon;
+    IntSize resizerSize;
+    GRefPtr<AtkObject> accessible;
+    bool needsResizeOnMap;
 };
 
 G_DEFINE_TYPE(WebKitWebViewBase, webkit_web_view_base, GTK_TYPE_CONTAINER)
+
+static void webkitWebViewBaseNotifyResizerSizeForWindow(WebKitWebViewBase* webViewBase, GtkWindow* window)
+{
+    gboolean resizerVisible;
+    g_object_get(G_OBJECT(window), "resize-grip-visible", &resizerVisible, NULL);
+
+    IntSize resizerSize;
+    if (resizerVisible) {
+        GdkRectangle resizerRect;
+        gtk_window_get_resize_grip_area(window, &resizerRect);
+        GdkRectangle allocation;
+        gtk_widget_get_allocation(GTK_WIDGET(webViewBase), &allocation);
+        if (gdk_rectangle_intersect(&resizerRect, &allocation, 0))
+            resizerSize = IntSize(resizerRect.width, resizerRect.height);
+    }
+
+    if (resizerSize != webViewBase->priv->resizerSize) {
+        webViewBase->priv->resizerSize = resizerSize;
+        webViewBase->priv->pageProxy->setWindowResizerSize(resizerSize);
+    }
+}
+
+static void toplevelWindowResizeGripVisibilityChanged(GObject* object, GParamSpec*, WebKitWebViewBase* webViewBase)
+{
+    webkitWebViewBaseNotifyResizerSizeForWindow(webViewBase, GTK_WINDOW(object));
+}
 
 static void webkitWebViewBaseRealize(GtkWidget* widget)
 {
@@ -91,6 +121,7 @@ static void webkitWebViewBaseRealize(GtkWidget* widget)
         | GDK_EXPOSURE_MASK
         | GDK_BUTTON_PRESS_MASK
         | GDK_BUTTON_RELEASE_MASK
+        | GDK_SCROLL_MASK
         | GDK_POINTER_MOTION_MASK
         | GDK_KEY_PRESS_MASK
         | GDK_KEY_RELEASE_MASK
@@ -109,7 +140,14 @@ static void webkitWebViewBaseRealize(GtkWidget* widget)
 
     WebKitWebViewBase* webView = WEBKIT_WEB_VIEW_BASE(widget);
     WebKitWebViewBasePrivate* priv = webView->priv;
-    gtk_im_context_set_client_window(priv->imContext, window);
+    gtk_im_context_set_client_window(priv->imContext.get(), window);
+
+    GtkWidget* toplevel = gtk_widget_get_toplevel(widget);
+    if (widgetIsOnscreenToplevelWindow(toplevel)) {
+        webkitWebViewBaseNotifyResizerSizeForWindow(webView, GTK_WINDOW(toplevel));
+        g_signal_connect(toplevel, "notify::resize-grip-visible",
+                         G_CALLBACK(toplevelWindowResizeGripVisibilityChanged), webView);
+    }
 }
 
 static void webkitWebViewBaseContainerAdd(GtkContainer* container, GtkWidget* widget)
@@ -120,25 +158,17 @@ static void webkitWebViewBaseContainerAdd(GtkContainer* container, GtkWidget* wi
 static void webkitWebViewBaseFinalize(GObject* gobject)
 {
     WebKitWebViewBase* webkitWebViewBase = WEBKIT_WEB_VIEW_BASE(gobject);
-    WebKitWebViewBasePrivate* priv = webkitWebViewBase->priv;
+    webkitWebViewBase->priv->pageProxy->close();
 
-    if (priv->imContext) {
-        g_object_unref(priv->imContext);
-        priv->imContext = 0;
-    }
-
-    priv->pageProxy->close();
-
-    delete priv;
-    webkitWebViewBase->priv = 0;
-
+    webkitWebViewBase->priv->~WebKitWebViewBasePrivate();
     G_OBJECT_CLASS(webkit_web_view_base_parent_class)->finalize(gobject);
 }
 
 static void webkit_web_view_base_init(WebKitWebViewBase* webkitWebViewBase)
 {
-    WebKitWebViewBasePrivate* priv = new WebKitWebViewBasePrivate();
+    WebKitWebViewBasePrivate* priv = G_TYPE_INSTANCE_GET_PRIVATE(webkitWebViewBase, WEBKIT_TYPE_WEB_VIEW_BASE, WebKitWebViewBasePrivate);
     webkitWebViewBase->priv = priv;
+    new (priv) WebKitWebViewBasePrivate();
 
     priv->isPageActive = TRUE;
     priv->shouldForwardNextKeyEvent = FALSE;
@@ -146,7 +176,7 @@ static void webkit_web_view_base_init(WebKitWebViewBase* webkitWebViewBase)
     GtkWidget* viewWidget = GTK_WIDGET(webkitWebViewBase);
     gtk_widget_set_double_buffered(viewWidget, FALSE);
     gtk_widget_set_can_focus(viewWidget, TRUE);
-    priv->imContext = gtk_im_multicontext_new();
+    priv->imContext = adoptGRef(gtk_im_multicontext_new());
 
     priv->pageClient = PageClientImpl::create(viewWidget);
 
@@ -173,16 +203,43 @@ static gboolean webkitWebViewBaseDraw(GtkWidget* widget, cairo_t* cr)
     return FALSE;
 }
 
-static void webkitWebViewBaseSizeAllocate(GtkWidget* widget, GtkAllocation* allocation)
+static void resizeWebKitWebViewBaseFromAllocation(WebKitWebViewBase* webViewBase, GtkAllocation* allocation)
 {
-    WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
 
-    if (!priv->pageProxy->drawingArea())
+    if (priv->pageProxy->drawingArea())
+        priv->pageProxy->drawingArea()->setSize(IntSize(allocation->width, allocation->height), IntSize());
+
+    GtkWidget* toplevel = gtk_widget_get_toplevel(GTK_WIDGET(webViewBase));
+    if (widgetIsOnscreenToplevelWindow(toplevel))
+        webkitWebViewBaseNotifyResizerSizeForWindow(webViewBase, GTK_WINDOW(toplevel));
+}
+
+static void webkitWebViewBaseSizeAllocate(GtkWidget* widget, GtkAllocation* allocation)
+{
+    GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->size_allocate(widget, allocation);
+
+    WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
+    if (!gtk_widget_get_mapped(GTK_WIDGET(webViewBase)) && !webViewBase->priv->pageProxy->drawingArea()->size().isEmpty()) {
+        webViewBase->priv->needsResizeOnMap = true;
+        return;
+    }
+    resizeWebKitWebViewBaseFromAllocation(webViewBase, allocation);
+}
+
+static void webkitWebViewBaseMap(GtkWidget* widget)
+{
+    GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->map(widget);
+
+    WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
+    if (!webViewBase->priv->needsResizeOnMap)
         return;
 
-    GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->size_allocate(widget, allocation);
-    priv->pageProxy->drawingArea()->setSize(IntSize(allocation->width, allocation->height), IntSize());
+    GtkAllocation allocation;
+    gtk_widget_get_allocation(widget, &allocation);
+    resizeWebKitWebViewBaseFromAllocation(webViewBase, &allocation);
+    webViewBase->priv->needsResizeOnMap = false;
+
 }
 
 static gboolean webkitWebViewBaseFocusInEvent(GtkWidget* widget, GdkEventFocus* event)
@@ -191,8 +248,8 @@ static gboolean webkitWebViewBaseFocusInEvent(GtkWidget* widget, GdkEventFocus* 
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
 
     GtkWidget* toplevel = gtk_widget_get_toplevel(widget);
-    if (gtk_widget_is_toplevel(toplevel) && gtk_window_has_toplevel_focus(GTK_WINDOW(toplevel))) {
-        gtk_im_context_focus_in(priv->imContext);
+    if (widgetIsOnscreenToplevelWindow(toplevel) && gtk_window_has_toplevel_focus(GTK_WINDOW(toplevel))) {
+        gtk_im_context_focus_in(priv->imContext.get());
         if (!priv->isPageActive) {
             priv->isPageActive = TRUE;
             priv->pageProxy->viewStateDidChange(WebPageProxy::ViewWindowIsActive);
@@ -210,7 +267,7 @@ static gboolean webkitWebViewBaseFocusOutEvent(GtkWidget* widget, GdkEventFocus*
     priv->isPageActive = FALSE;
     priv->pageProxy->viewStateDidChange(WebPageProxy::ViewWindowIsActive);
     if (priv->imContext)
-        gtk_im_context_focus_out(priv->imContext);
+        gtk_im_context_focus_out(priv->imContext.get());
 
     return GTK_WIDGET_CLASS(webkit_web_view_base_parent_class)->focus_out_event(widget, event);
 }
@@ -221,8 +278,8 @@ static gboolean webkitWebViewBaseKeyPressEvent(GtkWidget* widget, GdkEventKey* e
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
 
     // Since WebProcess key event handling is not synchronous, handle the event in two passes.
-    // When WebProcess processes the input event, it will call PageClientImpl::doneWithKeyEvent 
-    // with event handled status which determines whether to pass the input event to parent or not 
+    // When WebProcess processes the input event, it will call PageClientImpl::doneWithKeyEvent
+    // with event handled status which determines whether to pass the input event to parent or not
     // using gtk_main_do_event().
     if (priv->shouldForwardNextKeyEvent) {
         priv->shouldForwardNextKeyEvent = FALSE;
@@ -237,7 +294,7 @@ static gboolean webkitWebViewBaseKeyReleaseEvent(GtkWidget* widget, GdkEventKey*
     WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
     WebKitWebViewBasePrivate* priv = webViewBase->priv;
 
-    if (gtk_im_context_filter_keypress(priv->imContext, event))
+    if (gtk_im_context_filter_keypress(priv->imContext.get(), event))
         return TRUE;
 
     if (priv->shouldForwardNextKeyEvent) {
@@ -344,6 +401,34 @@ static void webkitWebViewBaseDragDataReceived(GtkWidget* widget, GdkDragContext*
     gdk_drag_status(context, dragOperationToSingleGdkDragAction(operation), time);
 }
 
+static AtkObject* webkitWebViewBaseGetAccessible(GtkWidget* widget)
+{
+    // If the socket has already been created and embedded a plug ID, return it.
+    WebKitWebViewBasePrivate* priv = WEBKIT_WEB_VIEW_BASE(widget)->priv;
+    if (priv->accessible && atk_socket_is_occupied(ATK_SOCKET(priv->accessible.get())))
+        return priv->accessible.get();
+
+    // Create the accessible object and associate it to the widget.
+    if (!priv->accessible) {
+        priv->accessible = adoptGRef(ATK_OBJECT(webkitWebViewBaseAccessibleNew(widget)));
+
+        // Set the parent not to break bottom-up navigation.
+        GtkWidget* parentWidget = gtk_widget_get_parent(widget);
+        AtkObject* axParent = parentWidget ? gtk_widget_get_accessible(parentWidget) : 0;
+        if (axParent)
+            atk_object_set_parent(priv->accessible.get(), axParent);
+    }
+
+    // Try to embed the plug in the socket, if posssible.
+    String plugID = priv->pageProxy->accessibilityPlugID();
+    if (plugID.isNull())
+        return priv->accessible.get();
+
+    atk_socket_embed(ATK_SOCKET(priv->accessible.get()), const_cast<gchar*>(plugID.utf8().data()));
+
+    return priv->accessible.get();
+}
+
 static gboolean webkitWebViewBaseDragMotion(GtkWidget* widget, GdkDragContext* context, gint x, gint y, guint time)
 {
     WebKitWebViewBase* webViewBase = WEBKIT_WEB_VIEW_BASE(widget);
@@ -393,6 +478,7 @@ static void webkit_web_view_base_class_init(WebKitWebViewBaseClass* webkitWebVie
     widgetClass->realize = webkitWebViewBaseRealize;
     widgetClass->draw = webkitWebViewBaseDraw;
     widgetClass->size_allocate = webkitWebViewBaseSizeAllocate;
+    widgetClass->map = webkitWebViewBaseMap;
     widgetClass->focus_in_event = webkitWebViewBaseFocusInEvent;
     widgetClass->focus_out_event = webkitWebViewBaseFocusOutEvent;
     widgetClass->key_press_event = webkitWebViewBaseKeyPressEvent;
@@ -408,12 +494,15 @@ static void webkit_web_view_base_class_init(WebKitWebViewBaseClass* webkitWebVie
     widgetClass->drag_leave = webkitWebViewBaseDragLeave;
     widgetClass->drag_drop = webkitWebViewBaseDragDrop;
     widgetClass->drag_data_received = webkitWebViewBaseDragDataReceived;
+    widgetClass->get_accessible = webkitWebViewBaseGetAccessible;
 
     GObjectClass* gobjectClass = G_OBJECT_CLASS(webkitWebViewBaseClass);
     gobjectClass->finalize = webkitWebViewBaseFinalize;
 
     GtkContainerClass* containerClass = GTK_CONTAINER_CLASS(webkitWebViewBaseClass);
     containerClass->add = webkitWebViewBaseContainerAdd;
+
+    g_type_class_add_private(webkitWebViewBaseClass, sizeof(WebKitWebViewBasePrivate));
 }
 
 WebKitWebViewBase* webkitWebViewBaseCreate(WebContext* context, WebPageGroup* pageGroup)
@@ -425,7 +514,7 @@ WebKitWebViewBase* webkitWebViewBaseCreate(WebContext* context, WebPageGroup* pa
 
 GtkIMContext* webkitWebViewBaseGetIMContext(WebKitWebViewBase* webkitWebViewBase)
 {
-    return webkitWebViewBase->priv->imContext;
+    return webkitWebViewBase->priv->imContext.get();
 }
 
 WebPageProxy* webkitWebViewBaseGetPage(WebKitWebViewBase* webkitWebViewBase)

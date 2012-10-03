@@ -32,6 +32,7 @@
 #include "FontCache.h"
 #include "FontDescription.h"
 #include "GraphicsContext3D.h"
+#include "InspectorController.h"
 #include "LayerChromium.h"
 #include "LayerRendererChromium.h"
 #include "ManagedTexture.h"
@@ -90,7 +91,7 @@ void CCHeadsUpDisplay::onSwapBuffers()
 bool CCHeadsUpDisplay::enabled() const
 {
     // FIXME: HUD does not work in compositor thread mode.
-    if (settings().enableCompositorThread)
+    if (CCProxy::hasImplThread())
         return false;
     return settings().showPlatformLayerTree || settings().showFPSCounter;
 }

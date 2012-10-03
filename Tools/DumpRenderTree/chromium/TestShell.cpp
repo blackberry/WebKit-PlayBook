@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Google Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -34,7 +34,8 @@
 #include "DRTDevToolsAgent.h"
 #include "DRTDevToolsClient.h"
 #include "LayoutTestController.h"
-#include "WebArrayBufferView.h"
+#include "platform/WebArrayBufferView.h"
+#include "WebCompositor.h"
 #include "WebDataSource.h"
 #include "WebDocument.h"
 #include "WebElement.h"
@@ -42,17 +43,18 @@
 #include "WebHistoryItem.h"
 #include "WebIDBFactory.h"
 #include "WebTestingSupport.h"
+#include "platform/WebThread.h"
 #include "WebKit.h"
+#include "platform/WebKitPlatformSupport.h"
 #include "WebPermissions.h"
-#include "WebPoint.h"
+#include "platform/WebPoint.h"
 #include "WebRuntimeFeatures.h"
 #include "WebScriptController.h"
 #include "WebSettings.h"
-#include "WebSize.h"
-#include "WebSpeechInputControllerMock.h"
-#include "WebString.h"
-#include "WebURLRequest.h"
-#include "WebURLResponse.h"
+#include "platform/WebSize.h"
+#include "platform/WebString.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebURLResponse.h"
 #include "WebView.h"
 #include "WebViewHost.h"
 #include "skia/ext/platform_canvas.h"
@@ -103,28 +105,35 @@ TestShell::TestShell(bool testShellMode)
     , m_testShellMode(testShellMode)
     , m_devTools(0)
     , m_allowExternalPages(false)
-    , m_acceleratedCompositingEnabled(false)
+    , m_acceleratedCompositingForVideoEnabled(false)
     , m_threadedCompositingEnabled(false)
     , m_compositeToTexture(false)
     , m_forceCompositingMode(false)
     , m_accelerated2dCanvasEnabled(false)
-    , m_legacyAccelerated2dCanvasEnabled(false)
-    , m_acceleratedDrawingEnabled(false)
+    , m_deferred2dCanvasEnabled(false)
+    , m_acceleratedPaintingEnabled(false)
+    , m_perTilePaintingEnabled(false)
     , m_stressOpt(false)
     , m_stressDeopt(false)
     , m_dumpWhenFinished(true)
+    , m_isDisplayingModalDialog(false)
 {
     WebRuntimeFeatures::enableDataTransferItems(true);
     WebRuntimeFeatures::enableGeolocation(true);
+    WebRuntimeFeatures::enablePointerLock(true);
     WebRuntimeFeatures::enableIndexedDatabase(true);
     WebRuntimeFeatures::enableFileSystem(true);
     WebRuntimeFeatures::enableJavaScriptI18NAPI(true);
     WebRuntimeFeatures::enableMediaStream(true);
     WebRuntimeFeatures::enableWebAudio(true); 
     WebRuntimeFeatures::enableVideoTrack(true);
+    WebRuntimeFeatures::enableGamepad(true);
+    WebRuntimeFeatures::enableShadowDOM(true);
+    WebRuntimeFeatures::enableStyleScoped(true);
 
     m_webPermissions = adoptPtr(new WebPermissions(this));
     m_accessibilityController = adoptPtr(new AccessibilityController(this));
+    m_gamepadController = adoptPtr(new GamepadController(this));
     m_layoutTestController = adoptPtr(new LayoutTestController(this));
     m_eventSender = adoptPtr(new EventSender(this));
     m_plainTextController = adoptPtr(new PlainTextController());
@@ -133,6 +142,15 @@ TestShell::TestShell(bool testShellMode)
     m_notificationPresenter = adoptPtr(new NotificationPresenter(this));
 #endif
     m_printer = m_testShellMode ? TestEventPrinter::createTestShellPrinter() : TestEventPrinter::createDRTPrinter();
+
+    WTF::initializeThreading();
+
+    if (m_threadedCompositingEnabled) {
+        m_webCompositorThread = adoptPtr(WebKit::webKitPlatformSupport()->createThread("Compositor"));
+        WebCompositor::initialize(m_webCompositorThread.get());
+    } else
+        WebCompositor::initialize(0);
+
 
     // 30 second is the same as the value in Mac DRT.
     // If we use a value smaller than the timeout value of
@@ -158,6 +176,8 @@ TestShell::~TestShell()
 
     // Destroy the WebView before its WebViewHost.
     m_drtDevToolsAgent->setWebView(0);
+
+    WebCompositor::shutdown();
 }
 
 void TestShell::createDRTDevToolsClient(DRTDevToolsAgent* agent)
@@ -196,13 +216,14 @@ void TestShell::closeDevTools()
 void TestShell::resetWebSettings(WebView& webView)
 {
     m_prefs.reset();
-    m_prefs.acceleratedCompositingEnabled = m_acceleratedCompositingEnabled;
-    m_prefs.threadedCompositingEnabled = m_threadedCompositingEnabled;
+    m_prefs.acceleratedCompositingEnabled = true;
+    m_prefs.acceleratedCompositingForVideoEnabled = m_acceleratedCompositingForVideoEnabled;
     m_prefs.compositeToTexture = m_compositeToTexture;
     m_prefs.forceCompositingMode = m_forceCompositingMode;
     m_prefs.accelerated2dCanvasEnabled = m_accelerated2dCanvasEnabled;
-    m_prefs.legacyAccelerated2dCanvasEnabled = m_legacyAccelerated2dCanvasEnabled;
-    m_prefs.acceleratedDrawingEnabled = m_acceleratedDrawingEnabled;
+    m_prefs.deferred2dCanvasEnabled = m_deferred2dCanvasEnabled;
+    m_prefs.acceleratedPaintingEnabled = m_acceleratedPaintingEnabled;
+    m_prefs.perTilePaintingEnabled = m_perTilePaintingEnabled;
     m_prefs.applyTo(&webView);
 }
 
@@ -216,6 +237,14 @@ void TestShell::runFileTest(const TestParams& params)
     if (testUrl.find("loading/") != string::npos
         || testUrl.find("loading\\") != string::npos)
         m_layoutTestController->setShouldDumpFrameLoadCallbacks(true);
+
+    if (testUrl.find("compositing/") != string::npos || testUrl.find("compositing\\") != string::npos) {
+        m_prefs.acceleratedCompositingForVideoEnabled = true;
+        m_prefs.accelerated2dCanvasEnabled = true;
+        m_prefs.deferred2dCanvasEnabled = true;
+        m_prefs.mockScrollbarsEnabled = true;
+        m_prefs.applyTo(m_webView);
+    }
 
     if (testUrl.find("/dumpAsText/") != string::npos
         || testUrl.find("\\dumpAsText\\") != string::npos) {
@@ -261,6 +290,7 @@ void TestShell::resetTestController()
     resetWebSettings(*webView());
     m_webPermissions->reset();
     m_accessibilityController->reset();
+    m_gamepadController->reset();
     m_layoutTestController->reset();
     m_eventSender->reset();
     m_webViewHost->reset();
@@ -664,6 +694,7 @@ void TestShell::bindJSObjectsToWindow(WebFrame* frame)
 {
     WebTestingSupport::injectInternalsObject(frame);
     m_accessibilityController->bindToJavascript(frame, WebString::fromUTF8("accessibilityController"));
+    m_gamepadController->bindToJavascript(frame, WebString::fromUTF8("gamepadController"));
     m_layoutTestController->bindToJavascript(frame, WebString::fromUTF8("layoutTestController"));
     m_eventSender->bindToJavascript(frame, WebString::fromUTF8("eventSender"));
     m_plainTextController->bindToJavascript(frame, WebString::fromUTF8("plainText"));

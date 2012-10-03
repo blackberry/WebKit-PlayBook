@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,21 +20,16 @@
 #include "RenderQueue.h"
 
 #include "BackingStore_p.h"
-#include "WebPage.h"
 #include "WebPageClient.h"
 #include "WebPage_p.h"
-
-#include <BlackBerryPlatformLog.h>
-#include <math.h>
-#include <wtf/CurrentTime.h>
-#include <wtf/MathExtras.h>
-#include <wtf/text/CString.h>
-#include <wtf/text/WTFString.h>
 
 #define DEBUG_RENDER_QUEUE 0
 #define DEBUG_RENDER_QUEUE_SORT 0
 
-using WTF::String;
+#if DEBUG_RENDER_QUEUE
+#include <BlackBerryPlatformLog.h>
+#include <wtf/CurrentTime.h>
+#endif
 
 namespace BlackBerry {
 namespace WebKit {
@@ -60,7 +55,7 @@ static inline int compareRectOneDirection(const Platform::IntRect& r1, const Pla
 
 template<SortDirection primarySortDirection, SortDirection secondarySortDirection>
 static bool rectIsLessThan(const Platform::IntRect& r1, const Platform::IntRect& r2)
-{                    
+{
     int primaryResult = compareRectOneDirection<primarySortDirection>(r1, r2);
     if (primaryResult || secondarySortDirection == primarySortDirection)
         return primaryResult < 0;
@@ -111,7 +106,7 @@ public:
     }
 
     bool operator()(const Platform::IntRect& r1, const Platform::IntRect& r2)
-    {              
+    {
         return m_rectIsLessThan(r1, r2);
     }
 
@@ -127,7 +122,7 @@ public:
     }
 
     bool operator()(const RenderRect& r1, const RenderRect& r2)
-    {              
+    {
         return m_rectIsLessThan(r1.subRects()[0], r2.subRects()[0]);
     }
 
@@ -262,25 +257,9 @@ RenderRect RenderQueue::convertToRenderRect(const Platform::IntRect& rect) const
     return RenderRect(rect.location(), rect.size(), splittingFactor(rect));
 }
 
-IntRectList RenderQueue::convertToRenderRectList(const IntRectList& rectList) const
-{
-    IntRectList renderRectList;
-    for (size_t i = 0; i < rectList.size(); ++i) {
-        IntRectList tail = convertToRenderRectList(rectList.at(i));
-        renderRectList.insert(renderRectList.end(), tail.begin(), tail.end());
-    }
-    return renderRectList;
-}
-
-IntRectList RenderQueue::convertToRenderRectList(const Platform::IntRect& rect) const
-{
-    return convertToRenderRect(rect).subRects();
-}
-
 bool RenderQueue::isEmpty(bool shouldPerformRegularRenderJobs) const
 {
-    return m_visibleZoomJobs.empty()
-        && m_visibleScrollJobs.empty()
+    return m_visibleZoomJobs.empty() && m_visibleScrollJobs.empty()
         && (!shouldPerformRegularRenderJobs || m_currentRegularRenderJobsBatch.empty())
         && (!shouldPerformRegularRenderJobs || m_regularRenderJobsRegion.isEmpty())
         && m_nonVisibleScrollJobs.empty();
@@ -356,7 +335,7 @@ void RenderQueue::addToQueue(JobType type, const Platform::IntRect& rect)
         return;
     case RegularRender:
         {
-            // Flag that we added rects in the current event queue cycle
+            // Flag that we added rects in the current event queue cycle.
             m_rectsAddedToRegularRenderJobsInCurrentCycle = true;
 
             // We try and detect if this newly added rect intersects or is contained in the currently running
@@ -420,6 +399,7 @@ void RenderQueue::quickSort(RenderRectList* queue)
     size_t length = queue->size();
     if (!length)
         return;
+
     for (size_t i = 0; i < length; ++i)
         queue->at(i).updateSortDirection(m_primarySortDirection, m_secondarySortDirection);
     return std::sort(queue->begin(), queue->end(), RenderRectLessThan(m_primarySortDirection, m_secondarySortDirection));
@@ -445,7 +425,7 @@ void RenderQueue::visibleContentChanged(const Platform::IntRect& visibleContent)
     }
 
     // Move visibleScrollJobs to nonVisibleScrollJobs if they do not intersect
-    // the visible content rect
+    // the visible content rect.
     for (size_t i = 0; i < m_visibleScrollJobs.size(); ++i) {
         RenderRect rect = m_visibleScrollJobs.at(i);
         if (!rect.intersects(visibleContent)) {
@@ -587,7 +567,7 @@ void RenderQueue::render(bool shouldPerformRegularRenderJobs)
     // next rendering job.
 
 #if DEBUG_RENDER_QUEUE
-    // Start the time measurement...
+    // Start the time measurement.
     double time = WTF::currentTime();
 #endif
 
@@ -680,7 +660,6 @@ void RenderQueue::renderAllCurrentRegularRenderJobs()
 #endif
 
     // Clear the region and blit since this batch is now complete.
-
     Platform::IntRect renderedRect = m_currentRegularRenderJobsBatchRegion.extents();
     m_currentRegularRenderJobsBatch.clear();
     m_currentRegularRenderJobsBatchRegion = Platform::IntRectRegion();
@@ -727,7 +706,7 @@ void RenderQueue::renderVisibleZoomJob()
     ASSERT(m_visibleZoomJobs.size() > 0);
 
 #if DEBUG_RENDER_QUEUE
-    // Start the time measurement...
+    // Start the time measurement.
     double time = WTF::currentTime();
 #endif
 
@@ -755,7 +734,7 @@ void RenderQueue::renderVisibleScrollJob()
     ASSERT(!m_visibleScrollJobs.empty());
 
 #if DEBUG_RENDER_QUEUE || DEBUG_RENDER_QUEUE_SORT
-    // Start the time measurement...
+    // Start the time measurement.
     double time = WTF::currentTime();
 #endif
 
@@ -796,7 +775,7 @@ void RenderQueue::renderVisibleScrollJob()
 void RenderQueue::renderRegularRenderJob()
 {
 #if DEBUG_RENDER_QUEUE
-    // Start the time measurement...
+    // Start the time measurement.
     double time = WTF::currentTime();
 #endif
 
@@ -816,7 +795,7 @@ void RenderQueue::renderRegularRenderJob()
         m_regularRenderJobsNotRenderedRegion = Platform::IntRectRegion::unionRegions(m_regularRenderJobsNotRenderedRegion, regionNotRendered);
 
 #if DEBUG_RENDER_QUEUE
-        if (!regionNotRendered.empty()) {
+        if (!regionNotRendered.isEmpty()) {
             BlackBerry::Platform::log(BlackBerry::Platform::LogLevelCritical, "RenderQueue::renderRegularRenderJob rect (%d,%d %dx%d) not completely rendered!",
                                   rect.x(), rect.y(), rect.width(), rect.height());
         }
@@ -852,7 +831,7 @@ void RenderQueue::renderRegularRenderJob()
     }
 
     // Make sure we didn't alter state of the queues that should have been empty
-    // before this method was called
+    // before this method was called.
     ASSERT(m_visibleScrollJobs.empty());
 
     if (m_parent->shouldSuppressNonVisibleRegularRenderJobs() && !regionNotRendered.isEmpty())
@@ -864,7 +843,7 @@ void RenderQueue::renderNonVisibleScrollJob()
     ASSERT(!m_nonVisibleScrollJobs.empty());
 
 #if DEBUG_RENDER_QUEUE || DEBUG_RENDER_QUEUE_SORT
-    // Start the time measurement...
+    // Start the time measurement.
     double time = WTF::currentTime();
 #endif
 

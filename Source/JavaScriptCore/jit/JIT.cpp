@@ -35,7 +35,7 @@ JSC::MacroAssemblerX86Common::SSE2CheckState JSC::MacroAssemblerX86Common::s_sse
 #endif
 
 #include "CodeBlock.h"
-#include "CryptographicallyRandomNumber.h"
+#include <wtf/CryptographicallyRandomNumber.h>
 #include "DFGNode.h" // for DFG_SUCCESS_STATS
 #include "Interpreter.h"
 #include "JITInlineMethods.h"
@@ -107,7 +107,7 @@ void JIT::emitOptimizationCheck(OptimizationCheckKind kind)
     if (!shouldEmitProfiling())
         return;
     
-    Jump skipOptimize = branchAdd32(Signed, TrustedImm32(kind == LoopOptimizationCheck ? Heuristics::executionCounterIncrementForLoop : Heuristics::executionCounterIncrementForReturn), AbsoluteAddress(m_codeBlock->addressOfExecuteCounter()));
+    Jump skipOptimize = branchAdd32(Signed, TrustedImm32(kind == LoopOptimizationCheck ? Options::executionCounterIncrementForLoop : Options::executionCounterIncrementForReturn), AbsoluteAddress(m_codeBlock->addressOfJITExecuteCounter()));
     JITStubCall stubCall(this, kind == LoopOptimizationCheck ? cti_optimize_from_loop : cti_optimize_from_ret);
     if (kind == LoopOptimizationCheck)
         stubCall.addArgument(Imm32(m_bytecodeOffset));
@@ -237,7 +237,7 @@ void JIT::privateCompileMainPass()
         m_labels[m_bytecodeOffset] = label();
 
 #if ENABLE(JIT_VERBOSE)
-        printf("Old JIT emitting code for bc#%u at offset 0x%lx.\n", m_bytecodeOffset, (long)debugOffset());
+        dataLog("Old JIT emitting code for bc#%u at offset 0x%lx.\n", m_bytecodeOffset, (long)debugOffset());
 #endif
 
         switch (m_interpreter->getOpcodeID(currentInstruction->u.opcode)) {
@@ -253,14 +253,10 @@ void JIT::privateCompileMainPass()
         DEFINE_UNARY_OP(op_is_object)
         DEFINE_UNARY_OP(op_is_string)
         DEFINE_UNARY_OP(op_is_undefined)
-#if USE(JSVALUE64)
-        DEFINE_UNARY_OP(op_negate)
-#endif
         DEFINE_UNARY_OP(op_typeof)
 
         DEFINE_OP(op_add)
         DEFINE_OP(op_bitand)
-        DEFINE_OP(op_bitnot)
         DEFINE_OP(op_bitor)
         DEFINE_OP(op_bitxor)
         DEFINE_OP(op_call)
@@ -320,9 +316,7 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_mod)
         DEFINE_OP(op_mov)
         DEFINE_OP(op_mul)
-#if USE(JSVALUE32_64)
         DEFINE_OP(op_negate)
-#endif
         DEFINE_OP(op_neq)
         DEFINE_OP(op_neq_null)
         DEFINE_OP(op_new_array)
@@ -343,13 +337,14 @@ void JIT::privateCompileMainPass()
         DEFINE_OP(op_profile_will_call)
         DEFINE_OP(op_push_new_scope)
         DEFINE_OP(op_push_scope)
+        case op_put_by_id_transition_direct:
+        case op_put_by_id_transition_normal:
         DEFINE_OP(op_put_by_id)
         DEFINE_OP(op_put_by_index)
         DEFINE_OP(op_put_by_val)
-        DEFINE_OP(op_put_getter)
+        DEFINE_OP(op_put_getter_setter)
         DEFINE_OP(op_put_global_var)
         DEFINE_OP(op_put_scoped_var)
-        DEFINE_OP(op_put_setter)
         DEFINE_OP(op_resolve)
         DEFINE_OP(op_resolve_base)
         DEFINE_OP(op_ensure_property_exists)
@@ -451,13 +446,12 @@ void JIT::privateCompileSlowCases()
 #endif
 
 #if ENABLE(JIT_VERBOSE)
-        printf("Old JIT emitting slow code for bc#%u at offset 0x%lx.\n", m_bytecodeOffset, (long)debugOffset());
+        dataLog("Old JIT emitting slow code for bc#%u at offset 0x%lx.\n", m_bytecodeOffset, (long)debugOffset());
 #endif
 
         switch (m_interpreter->getOpcodeID(currentInstruction->u.opcode)) {
         DEFINE_SLOWCASE_OP(op_add)
         DEFINE_SLOWCASE_OP(op_bitand)
-        DEFINE_SLOWCASE_OP(op_bitnot)
         DEFINE_SLOWCASE_OP(op_bitor)
         DEFINE_SLOWCASE_OP(op_bitxor)
         DEFINE_SLOWCASE_OP(op_call)
@@ -495,10 +489,9 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_method_check)
         DEFINE_SLOWCASE_OP(op_mod)
         DEFINE_SLOWCASE_OP(op_mul)
-#if USE(JSVALUE32_64)
         DEFINE_SLOWCASE_OP(op_negate)
-#endif
         DEFINE_SLOWCASE_OP(op_neq)
+        DEFINE_SLOWCASE_OP(op_new_array)
         DEFINE_SLOWCASE_OP(op_new_object)
         DEFINE_SLOWCASE_OP(op_new_func)
         DEFINE_SLOWCASE_OP(op_new_func_exp)
@@ -508,6 +501,8 @@ void JIT::privateCompileSlowCases()
         DEFINE_SLOWCASE_OP(op_post_inc)
         DEFINE_SLOWCASE_OP(op_pre_dec)
         DEFINE_SLOWCASE_OP(op_pre_inc)
+        case op_put_by_id_transition_direct:
+        case op_put_by_id_transition_normal:
         DEFINE_SLOWCASE_OP(op_put_by_id)
         DEFINE_SLOWCASE_OP(op_put_by_val)
         DEFINE_SLOWCASE_OP(op_resolve_global)
@@ -546,11 +541,15 @@ void JIT::privateCompileSlowCases()
 }
 
 #if defined(DISASSEMBLE) && !defined(NDEBUG)
-JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck, ExecState* exec)
+JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck, JITCompilationEffort effort, ExecState* exec)
 #else
-JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
+JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck, JITCompilationEffort effort)
 #endif
 {
+#if ENABLE(JIT_VERBOSE_OSR)
+    printf("Compiling JIT code!\n");
+#endif
+    
 #if ENABLE(VALUE_PROFILER)
     m_canBeOptimized = m_codeBlock->canCompileWithDFG();
 #endif
@@ -586,21 +585,19 @@ JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
 #if ENABLE(VALUE_PROFILER)
         ASSERT(m_bytecodeOffset == (unsigned)-1);
         if (shouldEmitProfiling()) {
-            for (int argumentRegister = -RegisterFile::CallFrameHeaderSize - m_codeBlock->m_numParameters; argumentRegister < -RegisterFile::CallFrameHeaderSize; ++argumentRegister) {
+            for (int argument = 0; argument < m_codeBlock->numParameters(); ++argument) {
                 // If this is a constructor, then we want to put in a dummy profiling site (to
                 // keep things consistent) but we don't actually want to record the dummy value.
-                if (m_codeBlock->m_isConstructor
-                    && argumentRegister == -RegisterFile::CallFrameHeaderSize - m_codeBlock->m_numParameters)
-                    m_codeBlock->addValueProfile(-1);
-                else {
+                if (m_codeBlock->m_isConstructor && !argument)
+                    continue;
+                int offset = CallFrame::argumentOffsetIncludingThis(argument) * static_cast<int>(sizeof(Register));
 #if USE(JSVALUE64)
-                    loadPtr(Address(callFrameRegister, argumentRegister * sizeof(Register)), regT0);
+                loadPtr(Address(callFrameRegister, offset), regT0);
 #elif USE(JSVALUE32_64)
-                    load32(Address(callFrameRegister, argumentRegister * sizeof(Register) + OBJECT_OFFSETOF(JSValue, u.asBits.payload)), regT0);
-                    load32(Address(callFrameRegister, argumentRegister * sizeof(Register) + OBJECT_OFFSETOF(JSValue, u.asBits.tag)), regT1);
+                load32(Address(callFrameRegister, offset + OBJECT_OFFSETOF(JSValue, u.asBits.payload)), regT0);
+                load32(Address(callFrameRegister, offset + OBJECT_OFFSETOF(JSValue, u.asBits.tag)), regT1);
 #endif
-                    emitValueProfilingSite(FirstProfilingSite);
-                }
+                emitValueProfilingSite(m_codeBlock->valueProfileForArgument(argument));
             }
         }
 #endif
@@ -610,6 +607,11 @@ JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
     }
 
     Label functionBody = label();
+    
+#if ENABLE(VALUE_PROFILER)
+    if (m_canBeOptimized)
+        add32(Imm32(1), AbsoluteAddress(&m_codeBlock->m_executionEntryCount));
+#endif
 
     privateCompileMainPass();
     privateCompileLinkPass();
@@ -630,17 +632,23 @@ JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
         emitPutToCallFrameHeader(regT2, RegisterFile::ReturnPC);
         emitPutImmediateToCallFrameHeader(m_codeBlock, RegisterFile::CodeBlock);
 
-        load32(Address(callFrameRegister, RegisterFile::ArgumentCount * static_cast<int>(sizeof(Register))), regT1);
-        branch32(Equal, regT1, TrustedImm32(m_codeBlock->m_numParameters)).linkTo(beginLabel, this);
+        load32(payloadFor(RegisterFile::ArgumentCount), regT1);
+        branch32(AboveOrEqual, regT1, TrustedImm32(m_codeBlock->m_numParameters)).linkTo(beginLabel, this);
 
+        m_bytecodeOffset = 0;
         JITStubCall(this, m_codeBlock->m_isConstructor ? cti_op_construct_arityCheck : cti_op_call_arityCheck).call(callFrameRegister);
+#if !ASSERT_DISABLED
+        m_bytecodeOffset = (unsigned)-1; // Reset this, in order to guard its use with ASSERTs.
+#endif
 
         jump(beginLabel);
     }
 
     ASSERT(m_jmpTable.isEmpty());
 
-    LinkBuffer patchBuffer(*m_globalData, this, m_globalData->executableAllocator);
+    LinkBuffer patchBuffer(*m_globalData, this, m_codeBlock, effort);
+    if (patchBuffer.didFailToAllocate())
+        return JITCode();
 
     // Translate vPC offsets into addresses in JIT generated code, for switch tables.
     for (unsigned i = 0; i < m_switches.size(); ++i) {
@@ -716,8 +724,12 @@ JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
         info.callReturnLocation = m_codeBlock->structureStubInfo(m_methodCallCompilationInfo[i].propertyAccessIndex).callReturnLocation;
     }
 
-#if ENABLE(DFG_JIT)
-    if (m_canBeOptimized) {
+#if ENABLE(DFG_JIT) || ENABLE(LLINT)
+    if (canBeOptimized()
+#if ENABLE(LLINT)
+        || true
+#endif
+        ) {
         CompactJITCodeMap::Encoder jitCodeMapEncoder;
         for (unsigned bytecodeOffset = 0; bytecodeOffset < m_labels.size(); ++bytecodeOffset) {
             if (m_labels[bytecodeOffset].isSet())
@@ -733,7 +745,7 @@ JITCode JIT::privateCompile(CodePtr* functionEntryArityCheck)
     CodeRef result = patchBuffer.finalizeCode();
     
 #if ENABLE(JIT_VERBOSE)
-    printf("JIT generated code for %p at [%p, %p).\n", m_codeBlock, result.executableMemory()->start(), result.executableMemory()->end());
+    dataLog("JIT generated code for %p at [%p, %p).\n", m_codeBlock, result.executableMemory()->start(), result.executableMemory()->end());
 #endif
     
     return JITCode(result, JITCode::BaselineJIT);

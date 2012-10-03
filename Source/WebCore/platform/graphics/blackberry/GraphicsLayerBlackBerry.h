@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -34,14 +34,13 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "GraphicsContext.h"
 #include "GraphicsLayer.h"
-#include "LayerAnimation.h"
 
 #include <wtf/Vector.h>
 
 namespace WebCore {
 
+class LayerAnimation;
 class LayerWebKitThread;
 
 class GraphicsLayerBlackBerry : public GraphicsLayer {
@@ -93,9 +92,9 @@ public:
 
     virtual void setContentsRect(const IntRect&);
 
-    virtual bool addAnimation(const KeyframeValueList&, const IntSize& /*boxSize*/, const Animation*, const String& /*animationName*/, double /*timeOffset*/);
-    virtual void pauseAnimation(const String& /*animationName*/, double /*timeOffset*/);
-    virtual void removeAnimation(const String& /*animationName*/);
+    virtual bool addAnimation(const KeyframeValueList&, const IntSize& boxSize, const Animation*, const String& animationName, double timeOffset);
+    virtual void pauseAnimation(const String& animationName, double timeOffset);
+    virtual void removeAnimation(const String& animationName);
 
     virtual void suspendAnimations(double time);
     virtual void resumeAnimations();

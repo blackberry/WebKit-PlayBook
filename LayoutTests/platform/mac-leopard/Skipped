@@ -80,6 +80,7 @@ http/tests/media/video-play-stall-seek.html
 
 # IndexedDB is not yet enabled.
 storage/indexeddb
+http/tests/inspector/indexeddb
 
 # Disable the tests until the mesa renderer is integrated.
 # https://bugs.webkit.org/show_bug.cgi?id=41545
@@ -96,6 +97,8 @@ http/tests/media/video-seekable-stall.html
 
 # Available 10.6 or later
 editing/spelling/spellcheck-paste.html
+editing/spelling/spellcheck-async-mutation.html
+editing/spelling/grammar-paste.html
 fast/html/set-text-direction.html
 
 # Disable tests which started failing after r66961
@@ -166,7 +169,6 @@ canvas/philip/tests/2d.text.draw.baseline.hanging.html
 canvas/philip/tests/2d.text.draw.baseline.ideographic.html
 canvas/philip/tests/2d.text.draw.baseline.middle.html
 canvas/philip/tests/2d.text.draw.baseline.top.html
-canvas/philip/tests/2d.text.draw.fill.maxWidth.fontface.html
 canvas/philip/tests/2d.text.draw.space.collapse.end.html
 canvas/philip/tests/2d.text.draw.space.collapse.nonspace.html
 canvas/philip/tests/2d.text.draw.space.collapse.other.html

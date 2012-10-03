@@ -30,14 +30,22 @@ namespace WebCore {
 class TestObj;
 };
 
+class WebDOMDictionary;
+class WebDOMDocument;
 class WebDOMEventListener;
 class WebDOMIDBKey;
-class WebDOMOptionsObject;
+class WebDOMSVGPoint;
 class WebDOMString;
 class WebDOMTestObj;
 class WebDOMTestObjectAConstructor;
 class WebDOMTestObjectBConstructor;
 class WebDOMTestObjectCConstructor;
+class WebDOMa;
+class WebDOMb;
+class WebDOMbool;
+class WebDOMc;
+class WebDOMd;
+class WebDOMe;
 
 class WebDOMTestObj : public WebDOMObject {
 public:
@@ -48,6 +56,9 @@ public:
     virtual ~WebDOMTestObj();
 
     enum {
+#if ENABLE(Condition1)
+        WEBDOM_CONDITIONAL_CONST = 0,
+#endif
         WEBDOM_CONST_VALUE_0 = 0,
         WEBDOM_CONST_VALUE_1 = 1,
         WEBDOM_CONST_VALUE_2 = 2,
@@ -93,8 +104,6 @@ public:
     void setReflectedBooleanAttr(bool);
     WebDOMString reflectedURLAttr() const;
     void setReflectedURLAttr(const WebDOMString&);
-    WebDOMString reflectedNonEmptyURLAttr() const;
-    void setReflectedNonEmptyURLAttr(const WebDOMString&);
     WebDOMString reflectedStringAttr() const;
     void setReflectedStringAttr(const WebDOMString&);
     int reflectedCustomIntegralAttr() const;
@@ -103,8 +112,6 @@ public:
     void setReflectedCustomBooleanAttr(bool);
     WebDOMString reflectedCustomURLAttr() const;
     void setReflectedCustomURLAttr(const WebDOMString&);
-    WebDOMString reflectedCustomNonEmptyURLAttr() const;
-    void setReflectedCustomNonEmptyURLAttr(const WebDOMString&);
     int attrWithGetterException() const;
     void setAttrWithGetterException(int);
     int attrWithSetterException() const;
@@ -113,9 +120,6 @@ public:
     void setStringAttrWithGetterException(const WebDOMString&);
     WebDOMString stringAttrWithSetterException() const;
     void setStringAttrWithSetterException(const WebDOMString&);
-    int customAttr() const;
-    void setCustomAttr(int);
-    WebDOMString scriptStringAttr() const;
 #if ENABLE(Condition1)
     int conditionalAttr1() const;
     void setConditionalAttr1(int);
@@ -140,6 +144,13 @@ public:
     WebDOMTestObjectCConstructor conditionalAttr6() const;
     void setConditionalAttr6(const WebDOMTestObjectCConstructor&);
 #endif
+    WebDOMDocument contentDocument() const;
+    WebDOMSVGPoint mutablePoint() const;
+    void setMutablePoint(const WebDOMSVGPoint&);
+    WebDOMSVGPoint immutablePoint() const;
+    void setImmutablePoint(const WebDOMSVGPoint&);
+    float strictFloat() const;
+    void setStrictFloat(float);
     int description() const;
     int id() const;
     void setId(int);
@@ -154,30 +165,32 @@ public:
     WebDOMTestObj methodThatRequiresAllArgsAndThrows(const WebDOMString& strArg, const WebDOMTestObj& objArg);
     void serializedValue(const WebDOMString& serializedArg);
     void idbKey(const WebDOMIDBKey& key);
-    void optionsObject(const WebDOMOptionsObject& oo, const WebDOMOptionsObject& ooo);
+    void optionsObject(const WebDOMDictionary& oo, const WebDOMDictionary& ooo);
     void methodWithException();
-    void customMethod();
-    void customMethodWithArgs(int intArg, const WebDOMString& strArg, const WebDOMTestObj& objArg);
     void addEventListener(const WebDOMString& type, const WebDOMEventListener& listener, bool useCapture);
     void removeEventListener(const WebDOMString& type, const WebDOMEventListener& listener, bool useCapture);
-    void withDynamicFrame();
-    void withDynamicFrameAndArg(int intArg);
-    void withDynamicFrameAndOptionalArg(int intArg, int optionalArg);
-    void withDynamicFrameAndUserGesture(int intArg);
-    void withDynamicFrameAndUserGestureASAD(int intArg, int optionalArg);
-    void withScriptStateVoid();
-    WebDOMTestObj withScriptStateObj();
-    void withScriptStateVoidException();
-    WebDOMTestObj withScriptStateObjException();
-    void withScriptExecutionContext();
     void methodWithOptionalArg(int opt);
     void methodWithNonOptionalArgAndOptionalArg(int nonOpt, int opt);
     void methodWithNonOptionalArgAndTwoOptionalArgs(int nonOpt, int opt1, int opt2);
+    void methodWithOptionalString(const WebDOMString& str);
+    void methodWithOptionalStringIsUndefined(const WebDOMString& str);
+    void methodWithOptionalStringIsNullString(const WebDOMString& str);
     WebDOMString conditionalMethod1();
     void conditionalMethod2();
     void conditionalMethod3();
     void classMethod();
     int classMethodWithOptional(int arg);
+    void overloadedMethod1(int arg);
+    void overloadedMethod1(const WebDOMString& type);
+    void convert1(const WebDOMa& );
+    void convert2(const WebDOMb& );
+    void convert3(const WebDOMc& );
+    void convert4(const WebDOMd& );
+    void convert5(const WebDOMe& );
+    WebDOMSVGPoint mutablePointFunction();
+    WebDOMSVGPoint immutablePointFunction();
+    void banana();
+    WebDOMbool strictFunction(const WebDOMString& str, float a, int b);
 
     WebCore::TestObj* impl() const;
 

@@ -58,6 +58,7 @@ GtkAction* PopupMenuGtk::createGtkActionForMenuItem(int itemIndex)
     g_object_set_data(G_OBJECT(action), "popup-menu-action-index", GINT_TO_POINTER(itemIndex));
     g_signal_connect(action, "activate", G_CALLBACK(menuItemActivated), this);
     // FIXME: Apply the PopupMenuStyle from client()->itemStyle(i)
+    gtk_action_set_visible(action, !client()->itemStyle(itemIndex).isDisplayNone());
     gtk_action_set_sensitive(action, client()->itemIsEnabled(itemIndex));
 
     return action;
@@ -87,6 +88,11 @@ void PopupMenuGtk::show(const IntRect& rect, FrameView* view, int index)
     menuPosition.move(0, rect.height());
 
     m_popup->popUp(rect.size(), menuPosition, size, index, gtk_get_current_event());
+
+    // GTK can refuse to actually open the menu when mouse grabs fails.
+    // Ensure WebCore does not go into some pesky state.
+    if (!gtk_widget_get_visible(m_popup->platformMenu()))
+        client()->popupDidHide();
 }
 
 void PopupMenuGtk::hide()

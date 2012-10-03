@@ -37,7 +37,7 @@ namespace JSC {
 
         static FunctionConstructor* create(ExecState* exec, JSGlobalObject* globalObject, Structure* structure, FunctionPrototype* functionPrototype)
         {
-            FunctionConstructor* constructor = new (allocateCell<FunctionConstructor>(*exec->heap())) FunctionConstructor(globalObject, structure);
+            FunctionConstructor* constructor = new (NotNull, allocateCell<FunctionConstructor>(*exec->heap())) FunctionConstructor(globalObject, structure);
             constructor->finishCreation(exec, functionPrototype);
             return constructor;
         }
@@ -59,7 +59,7 @@ namespace JSC {
     JSObject* constructFunction(ExecState*, JSGlobalObject*, const ArgList&, const Identifier& functionName, const UString& sourceURL, const WTF::TextPosition&);
     JSObject* constructFunction(ExecState*, JSGlobalObject*, const ArgList&);
 
-    JSObject* constructFunctionSkippingEvalEnabledCheck(ExecState*, JSGlobalObject*, const ArgList&, const Identifier&, const UString&, const WTF::TextPosition&);
+    JS_EXPORT_PRIVATE JSObject* constructFunctionSkippingEvalEnabledCheck(ExecState*, JSGlobalObject*, const ArgList&, const Identifier&, const UString&, const WTF::TextPosition&);
 
 } // namespace JSC
 

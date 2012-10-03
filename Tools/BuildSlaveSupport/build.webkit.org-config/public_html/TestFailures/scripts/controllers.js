@@ -94,6 +94,42 @@ controllers.ResultsDetails = base.extends(Object, {
     }
 });
 
+controllers.ExpectedFailures = base.extends(Object, {
+    init: function(model, view, delegate)
+    {
+        this._model = model;
+        this._view = view;
+        this._delegate = delegate;
+    },
+    update: function()
+    {
+        var expectedOrUnexpectedFailures = results.expectedOrUnexpectedFailuresByTest(this._model.resultsByBuilder);
+        var failingTestsList = Object.keys(expectedOrUnexpectedFailures);
+
+        $(this._view).empty();
+        base.forEachDirectory(failingTestsList, function(label, testsFailingInDirectory) {
+            var listItem = new ui.failures.ListItem(label, testsFailingInDirectory);
+            this._view.appendChild(listItem);
+            $(listItem).bind('examine', function() {
+                this.onExamine(testsFailingInDirectory);
+            }.bind(this));
+        }.bind(this));
+    },
+    onExamine: function(failingTestsList)
+    {
+        var resultsView = new ui.results.View({
+            fetchResultsURLs: results.fetchResultsURLs
+        });
+        var failuresByTest = base.filterDictionary(
+            results.expectedOrUnexpectedFailuresByTest(this._model.resultsByBuilder),
+            function(key) {
+                return failingTestsList.indexOf(key) != -1;
+            });
+        var controller = new controllers.ResultsDetails(resultsView, failuresByTest);
+        this._delegate.showResults(resultsView);
+    }
+});
+
 var FailureStreamController = base.extends(Object, {
     _resultsFilter: null,
     _keyFor: function(failureAnalysis) { throw "Not implemented!"; },
@@ -232,9 +268,10 @@ controllers.Failures = base.extends(FailureStreamController, {
 });
 
 controllers.FailingBuilders = base.extends(Object, {
-    init: function(view)
+    init: function(view, message)
     {
         this._view = view;
+        this._message = message;
         this._notification = null;
     },
     update: function(builderNameList)
@@ -247,7 +284,7 @@ controllers.FailingBuilders = base.extends(Object, {
             return;
         }
         if (!this._notification) {
-            this._notification = new ui.notifications.BuildersFailing();
+            this._notification = new ui.notifications.BuildersFailing(this._message);
             this._view.add(this._notification);
         }
         // FIXME: We should provide regression ranges for the failing builders.

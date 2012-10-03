@@ -36,7 +36,7 @@ public:
 
     static JSGlobalThis* create(JSGlobalData& globalData, Structure* structure)
     {
-        JSGlobalThis* globalThis = new (allocateCell<JSGlobalThis>(globalData.heap)) JSGlobalThis(globalData, structure);
+        JSGlobalThis* globalThis = new (NotNull, allocateCell<JSGlobalThis>(globalData.heap)) JSGlobalThis(globalData, structure);
         globalThis->finishCreation(globalData);
         return globalThis;
     }
@@ -63,7 +63,7 @@ protected:
 
     static const unsigned StructureFlags = OverridesVisitChildren | Base::StructureFlags;
 
-    static void visitChildren(JSCell*, SlotVisitor&);
+    JS_EXPORT_PRIVATE static void visitChildren(JSCell*, SlotVisitor&);
 
     WriteBarrier<JSGlobalObject> m_unwrappedObject;
 };

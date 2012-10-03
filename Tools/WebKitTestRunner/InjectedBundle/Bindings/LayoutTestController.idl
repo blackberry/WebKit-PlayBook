@@ -27,13 +27,14 @@ module WTR {
 
     interface LayoutTestController {
         // The basics.
-        void dumpAsText();
+        void dumpAsText(in boolean dumpPixels);
         void dumpChildFramesAsText();
         void waitForPolicyDelegate();
         void waitUntilDone();
         void notifyDone();
 
         // Other dumping.
+        void dumpBackForwardList();
         void dumpChildFrameScrollPositions();
         void dumpEditingCallbacks();
         void dumpSelectionRect();
@@ -48,14 +49,25 @@ module WTR {
         void setCanOpenWindows(in boolean value);
         void setCloseRemainingWindowsWhenComplete(in boolean value);
         void setXSSAuditorEnabled(in boolean value);
-        unsigned long windowCount();
+        void setAllowUniversalAccessFromFileURLs(in boolean value);
+        void setAllowFileAccessFromFileURLs(in boolean value);
+        void setFrameFlatteningEnabled(in boolean value);
+        void setGeolocationPermission(in boolean value);
+        void setJavaScriptCanAccessClipboard(in boolean value);
+        void setPrivateBrowsingEnabled(in boolean value);
+        void setPopupBlockingEnabled(in boolean value);
+        void setAuthorAndUserStylesEnabled(in boolean value);
+        void addOriginAccessWhitelistEntry(in DOMString sourceOrigin, in DOMString destinationProtocol, in DOMString destinationHost, in boolean allowDestinationSubdomains);
+        void removeOriginAccessWhitelistEntry(in DOMString sourceOrigin, in DOMString destinationProtocol, in DOMString destinationHost, in boolean allowDestinationSubdomains);
 
         // Special DOM functions.
+        void clearBackForwardList();
         object computedStyleIncludingVisitedInfo(in object element);
         DOMString counterValueForElementById(in DOMString elementId);
-        DOMString markerTextForListItem(in object element);
         void execCommand(in DOMString name, in DOMString argument);
         boolean isCommandEnabled(in DOMString name);
+        DOMString markerTextForListItem(in object element);
+        unsigned long windowCount();
 
         // Special DOM variables.
         attribute boolean globalFlag;
@@ -65,9 +77,18 @@ module WTR {
         void repaintSweepHorizontally();
         void display();
 
+        // Printing
+        int numberOfPages(in double pageWidthInPixels, in double pageHeightInPixels);
+        int pageNumberForElementById(in DOMString id, in double pageWidthInPixels, in double pageHeightInPixels);
+        DOMString pageSizeAndMarginsInPixels(in int pageIndex, in int width, in int height, in int marginTop, in int marginRight, in int marginBottom, in int marginLeft);
+        boolean isPageBoxVisible(in int pageIndex);
+
         // Animation testing.
         int numberOfActiveAnimations();
         boolean pauseAnimationAtTimeOnElementWithId(in DOMString animationName, in double time, in DOMString elementId);
+        boolean pauseTransitionAtTimeOnElementWithId(in DOMString propertyName, in double time, in DOMString elementId);
+        void suspendAnimations();
+        void resumeAnimations();
 
         // UserContent testing.
         void addUserScript(in DOMString source, in boolean runAtStart, in boolean allFrames);
@@ -112,6 +133,11 @@ module WTR {
         void setBackingScaleFactor(in double backingScaleFactor, in object callback);
 
         void setWindowIsKey(in boolean isKey);
+
+        // FIXME: handle non-boolean preferences.
+        void overridePreference(in DOMString preference, in boolean value);
+
+        readonly attribute DOMString platformName;
     };
 
 }

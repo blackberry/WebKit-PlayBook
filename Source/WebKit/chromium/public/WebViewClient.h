@@ -38,14 +38,18 @@
 #include "WebFileChooserParams.h"
 #include "WebPageVisibilityState.h"
 #include "WebPopupType.h"
-#include "WebString.h"
 #include "WebTextAffinity.h"
 #include "WebTextDirection.h"
 #include "WebWidgetClient.h"
+#include "platform/WebColor.h"
+#include "platform/WebGraphicsContext3D.h"
+#include "platform/WebString.h"
 
 namespace WebKit {
 
 class WebAccessibilityObject;
+class WebColorChooser;
+class WebColorChooserClient;
 class WebDeviceOrientationClient;
 class WebDragData;
 class WebElement;
@@ -67,12 +71,14 @@ class WebSpeechInputListener;
 class WebStorageNamespace;
 class WebURL;
 class WebURLRequest;
+class WebUserMediaClient;
 class WebView;
 class WebWidget;
 struct WebConsoleMessage;
 struct WebContextMenuData;
 struct WebPoint;
 struct WebPopupMenuInfo;
+struct WebSize;
 struct WebWindowFeatures;
 
 // Since a WebView is a WebWidget, a WebViewClient is a WebWidgetClient.
@@ -103,6 +109,12 @@ public:
 
     // Create a session storage namespace object associated with this WebView.
     virtual WebStorageNamespace* createSessionStorageNamespace(unsigned quota) { return 0; }
+
+    // Creates a graphics context associated with the client's WebView.
+    // renderDirectlyToWebView means whether the context should be setup to
+    // render directly to the WebView (e.g. compositor context), or to an
+    // offscreen surface (e.g. WebGL context).
+    virtual WebGraphicsContext3D* createGraphicsContext3D(const WebGraphicsContext3D::Attributes&, bool renderDirectlyToWebView) { return 0; }
 
     // Misc ----------------------------------------------------------------
 
@@ -175,8 +187,14 @@ public:
     // indicating that the default action should be suppressed.
     virtual bool handleCurrentKeyboardEvent() { return false; }
 
-
     // Dialogs -------------------------------------------------------------
+
+    // This method opens the color chooser and returns a new WebColorChooser
+    // instance. If there is a WebColorChooser already from the last time this
+    // was called, it ends the color chooser by calling endChooser, and replaces
+    // it with the new one.
+    virtual WebColorChooser* createColorChooser(WebColorChooserClient*,
+                                                const WebColor&) { return 0; }
 
     // This method returns immediately after showing the dialog. When the
     // dialog is closed, it should call the WebFileChooserCompletion to
@@ -212,11 +230,6 @@ public:
     virtual bool runModalBeforeUnloadDialog(
         WebFrame*, const WebString& message) { return true; }
 
-    virtual bool supportsFullscreen() { return false; }
-    virtual void enterFullscreenForNode(const WebNode&) { }
-    virtual void exitFullscreenForNode(const WebNode&) { }
-    virtual void enterFullscreen() { }
-    virtual void exitFullscreen() { }
 
     // UI ------------------------------------------------------------------
 
@@ -250,6 +263,14 @@ public:
     virtual void focusedNodeChanged(const WebNode&) { }
 
     virtual void numberOfWheelEventHandlersChanged(unsigned) { }
+    virtual void numberOfTouchEventHandlersChanged(unsigned) { }
+
+    // Indicates two things:
+    //   1) This view may have a new layout now.
+    //   2) Calling layout() is a no-op.
+    // After calling WebWidget::layout(), expect to get this notification
+    // unless the view did not need a layout.
+    virtual void didUpdateLayout() { }
 
     // Session history -----------------------------------------------------
 
@@ -323,6 +344,10 @@ public:
     {
         return WebPageVisibilityStateVisible;
     }
+
+    // Media Streams -------------------------------------------------------
+
+    virtual WebUserMediaClient* userMediaClient() { return 0; }
 
 protected:
     ~WebViewClient() { }

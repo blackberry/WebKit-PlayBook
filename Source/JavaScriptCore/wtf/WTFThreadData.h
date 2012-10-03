@@ -78,8 +78,8 @@ typedef void (*AtomicStringTableDestructor)(AtomicStringTable*);
 class WTFThreadData {
     WTF_MAKE_NONCOPYABLE(WTFThreadData);
 public:
-    WTFThreadData();
-    ~WTFThreadData();
+    WTF_EXPORT_PRIVATE WTFThreadData();
+    WTF_EXPORT_PRIVATE ~WTFThreadData();
 
     AtomicStringTable* atomicStringTable()
     {
@@ -120,7 +120,7 @@ private:
     StackBounds m_stackBounds;
 #endif
 
-    static JS_EXPORTDATA ThreadSpecific<WTFThreadData>* staticData;
+    static WTF_EXPORTDATA ThreadSpecific<WTFThreadData>* staticData;
     friend WTFThreadData& wtfThreadData();
     friend class AtomicStringTable;
 };

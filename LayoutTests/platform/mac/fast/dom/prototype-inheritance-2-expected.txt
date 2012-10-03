@@ -81,9 +81,6 @@ PASS DOMStringMapPrototype from inner.document.forms.testForm.0.dataset.__proto_
 PASS DOMTokenList from inner.document.forms.testForm.0.0.classList
 PASS DOMTokenListConstructor from inner.document.forms.testForm.0.classList.constructor
 PASS DOMTokenListPrototype from inner.document.forms.testForm.0.0.classList.__proto__
-PASS DOMWindow from inner
-PASS DOMWindowConstructor from inner.document.forms.testForm.0.ownerDocument.defaultView.constructor
-PASS DOMWindowPrototype from inner.document.forms.testForm.0.ownerDocument.defaultView.__proto__
 PASS DocumentPrototype from inner.document.forms.testForm.0.ownerDocument.__proto__.__proto__
 PASS ElementPrototype from inner.document.forms.testForm.0.__proto__.__proto__.__proto__
 PASS Function from inner.document.createElement
@@ -144,12 +141,15 @@ PASS HTMLSpanElementPrototype from inner.document.forms.testForm.0.parentNode.la
 PASS HTMLStyleElement from inner.document.forms.testForm.0.parentNode.lastElementChild.previousElementSibling
 PASS HTMLStyleElementConstructor from inner.document.forms.testForm.0.parentNode.lastElementChild.previousElementSibling.constructor
 PASS HTMLStyleElementPrototype from inner.document.forms.testForm.0.parentNode.lastElementChild.previousElementSibling.__proto__
-PASS HTMLTextAreaElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling
-PASS HTMLTextAreaElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.constructor
-PASS HTMLTextAreaElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
-PASS HTMLTitleElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling
-PASS HTMLTitleElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.constructor
-PASS HTMLTitleElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
+PASS HTMLTextAreaElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling
+PASS HTMLTextAreaElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.constructor
+PASS HTMLTextAreaElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
+PASS HTMLTitleElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling
+PASS HTMLTitleElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.constructor
+PASS HTMLTitleElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
+PASS HTMLTrackElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling
+PASS HTMLTrackElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.constructor
+PASS HTMLTrackElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
 PASS HTMLUListElement from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling
 PASS HTMLUListElementConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.constructor
 PASS HTMLUListElementPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.__proto__
@@ -213,6 +213,12 @@ PASS StyleSheetPrototype from inner.document.forms.testForm.0.ownerDocument.styl
 PASS Text from inner.document.forms.testForm.0.parentNode.lastElementChild.previousElementSibling.firstChild
 PASS TextConstructor from inner.document.forms.testForm.0.attributes.0.lastChild.constructor
 PASS TextPrototype from inner.document.forms.testForm.0.attributes.0.lastChild.__proto__
+PASS TextTrack from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.track
+PASS TextTrackConstructor from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.track.constructor
+PASS TextTrackList from inner.document.forms.testForm.0.previousElementSibling.textTracks
+PASS TextTrackListConstructor from inner.document.forms.testForm.0.previousElementSibling.textTracks.constructor
+PASS TextTrackListPrototype from inner.document.forms.testForm.0.previousElementSibling.textTracks.__proto__
+PASS TextTrackPrototype from inner.document.forms.testForm.0.previousElementSibling.previousElementSibling.previousElementSibling.previousElementSibling.track.__proto__
 PASS TimeRanges from inner.document.forms.testForm.0.previousElementSibling.played
 PASS TimeRangesConstructor from inner.document.forms.testForm.0.previousElementSibling.played.constructor
 PASS TimeRangesPrototype from inner.document.forms.testForm.0.previousElementSibling.played.__proto__
@@ -224,6 +230,9 @@ PASS WebKitCSSKeyframeRulePrototype from inner.document.getElementById("dummySty
 PASS WebKitCSSKeyframesRule from inner.document.getElementById("dummyStyle").sheet.cssRules.6
 PASS WebKitCSSKeyframesRuleConstructor from inner.document.getElementById("dummyStyle").sheet.cssRules.6.constructor
 PASS WebKitCSSKeyframesRulePrototype from inner.document.getElementById("dummyStyle").sheet.cssRules.6.__proto__
+PASS Window from inner
+PASS WindowConstructor from inner.document.forms.testForm.0.ownerDocument.defaultView.constructor
+PASS WindowPrototype from inner.document.forms.testForm.0.ownerDocument.defaultView.__proto__
 Never found Audio
 Never found AudioContext
 Never found AudioPannerNode
@@ -236,6 +245,7 @@ Never found Clipboard
 Never found DOMParser
 Never found DOMSettableTokenList
 Never found DOMStringList
+Never found DOMURL
 Never found Document
 Never found DocumentFragment
 Never found DocumentType
@@ -259,7 +269,6 @@ Never found HTMLHRElement
 Never found HTMLHeadingElement
 Never found HTMLIFrameElement
 Never found HTMLImageElement
-Never found HTMLIsIndexElement
 Never found HTMLKeygenElement
 Never found HTMLLIElement
 Never found HTMLLabelElement
@@ -292,6 +301,7 @@ Never found HTMLTableRowElement
 Never found HTMLTableSectionElement
 Never found Image
 Never found ImageData
+Never found MediaController
 Never found MessageChannel
 Never found MessagePort
 Never found Node
@@ -437,11 +447,15 @@ Never found SVGUnitTypes
 Never found SVGUseElement
 Never found SVGVKernElement
 Never found SVGViewElement
+Never found Selection
 Never found SharedWorker
 Never found StyleSheet
 Never found TextMetrics
+Never found TextTrackCue
+Never found TextTrackCueList
 Never found WebKitCSSFilterValue
 Never found WebKitCSSMatrix
+Never found WebKitCSSRegionRule
 Never found WebKitCSSTransformValue
 Never found WebKitPoint
 Never found WebSocket

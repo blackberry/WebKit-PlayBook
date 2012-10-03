@@ -31,6 +31,7 @@
 
 #include "AXObjectCache.h"
 #include "AccessibilityRenderObject.h"
+#include "AccessibilityTable.h"
 #include "FloatRect.h"
 #include "FocusController.h"
 #include "Frame.h"
@@ -89,20 +90,20 @@ void AccessibilityObject::detach()
 #endif    
 }
 
-bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* axObject, AccessibilitySearchPredicate* axSearchPredicate)
+bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* axObject, AccessibilitySearchCriteria* criteria)
 {
-    if (!axObject || !axSearchPredicate)
+    if (!axObject || !criteria)
         return false;
     
-    switch (axSearchPredicate->axSearchKey) {
+    switch (criteria->searchKey) {
     // The AnyTypeSearchKey matches any non-null AccessibilityObject.
     case AnyTypeSearchKey:
         return true;
         
     case BlockquoteSameLevelSearchKey:
-        return axSearchPredicate->axStartObject
+        return criteria->startObject
             && axObject->isBlockquote()
-            && axObject->blockquoteLevel() == axSearchPredicate->axStartObject->blockquoteLevel();
+            && axObject->blockquoteLevel() == criteria->startObject->blockquoteLevel();
         
     case BlockquoteSearchKey:
         return axObject->isBlockquote();
@@ -120,20 +121,19 @@ bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* 
         return axObject->isControl();
         
     case DifferentTypeSearchKey:
-        return axSearchPredicate->axStartObject
-            && axObject->roleValue() != axSearchPredicate->axStartObject->roleValue();
+        return criteria->startObject
+            && axObject->roleValue() != criteria->startObject->roleValue();
         
     case FontChangeSearchKey:
-        return axSearchPredicate->axStartObject
-            && !axObject->hasSameFont(axSearchPredicate->axStartObject->renderer());
+        return criteria->startObject
+            && !axObject->hasSameFont(criteria->startObject->renderer());
         
     case FontColorChangeSearchKey:
-        return axSearchPredicate->axStartObject
-            && !axObject->hasSameFontColor(axSearchPredicate->axStartObject->renderer());
+        return criteria->startObject
+            && !axObject->hasSameFontColor(criteria->startObject->renderer());
         
-    // FIXME: Handle this search key.
     case FrameSearchKey:
-        return false;
+        return axObject->isWebArea();
         
     case GraphicSearchKey:
         return axObject->isImage();
@@ -157,13 +157,16 @@ bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* 
         return axObject->headingLevel() == 6;
         
     case HeadingSameLevelSearchKey:
-        return axSearchPredicate->axStartObject
+        return criteria->startObject
             && axObject->isHeading()
-            && axObject->headingLevel() == axSearchPredicate->axStartObject->headingLevel();
+            && axObject->headingLevel() == criteria->startObject->headingLevel();
         
     case HeadingSearchKey:
         return axObject->isHeading();
-        
+    
+    case HighlightedSearchKey:
+        return axObject->hasHighlighting();
+            
     case ItalicFontSearchKey:
         return axObject->hasItalicFont();
         
@@ -189,20 +192,20 @@ bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* 
         return axObject->isRadioGroup();
         
     case SameTypeSearchKey:
-        return axSearchPredicate->axStartObject
-            && axObject->roleValue() == axSearchPredicate->axStartObject->roleValue();
+        return criteria->startObject
+            && axObject->roleValue() == criteria->startObject->roleValue();
         
     case StaticTextSearchKey:
         return axObject->hasStaticText();
         
     case StyleChangeSearchKey:
-        return axSearchPredicate->axStartObject
-            && !axObject->hasSameStyle(axSearchPredicate->axStartObject->renderer());
+        return criteria->startObject
+            && !axObject->hasSameStyle(criteria->startObject->renderer());
         
     case TableSameLevelSearchKey:
-        return axSearchPredicate->axStartObject
+        return criteria->startObject
             && axObject->isAccessibilityTable()
-            && axObject->tableLevel() == axSearchPredicate->axStartObject->tableLevel();
+            && axObject->tableLevel() == criteria->startObject->tableLevel();
         
     case TableSearchKey:
         return axObject->isAccessibilityTable();
@@ -224,12 +227,12 @@ bool AccessibilityObject::isAccessibilityObjectSearchMatch(AccessibilityObject* 
     }
 }
 
-bool AccessibilityObject::isAccessibilityTextSearchMatch(AccessibilityObject* axObject, AccessibilitySearchPredicate* axSearchPredicate)
+bool AccessibilityObject::isAccessibilityTextSearchMatch(AccessibilityObject* axObject, AccessibilitySearchCriteria* criteria)
 {
-    if (!axObject || !axSearchPredicate)
+    if (!axObject || !criteria)
         return false;
     
-    return axObject->accessibilityObjectContainsText(axSearchPredicate->searchText);
+    return axObject->accessibilityObjectContainsText(criteria->searchText);
 }
 
 bool AccessibilityObject::accessibilityObjectContainsText(String* text) const
@@ -246,7 +249,6 @@ bool AccessibilityObject::isBlockquote() const
 {
     return node() && node()->hasTagName(blockquoteTag);
 }
-
 
 bool AccessibilityObject::isARIATextControl() const
 {
@@ -330,8 +332,6 @@ AccessibilityObject* AccessibilityObject::parentObjectUnignored() const
 
 AccessibilityObject* AccessibilityObject::firstAccessibleObjectFromNode(const Node* node)
 {
-    ASSERT(AXObjectCache::accessibilityEnabled());
-
     if (!node)
         return 0;
 
@@ -357,37 +357,124 @@ AccessibilityObject* AccessibilityObject::firstAccessibleObjectFromNode(const No
     return accessibleObject;
 }
 
-void AccessibilityObject::accessibleObjectsWithAccessibilitySearchPredicate(AccessibilitySearchPredicate* axSearchPredicate, AccessibilityChildrenVector& axResults)
+static void appendAccessibilityObject(AccessibilityObject* object, AccessibilityObject::AccessibilityChildrenVector& results)
 {
-    ASSERT(AXObjectCache::accessibilityEnabled());
+    // Find the next descendant of this attachment object so search can continue through frames.
+    if (object->isAttachment()) {
+        Widget* widget = object->widgetForAttachmentView();
+        if (!widget || !widget->isFrameView())
+            return;
+        
+        Document* doc = static_cast<FrameView*>(widget)->frame()->document();
+        if (!doc || !doc->renderer())
+            return;
+        
+        object = object->axObjectCache()->getOrCreate(doc->renderer());
+    }
+
+    if (object)
+        results.append(object);
+}
     
-    if (!axSearchPredicate)
+static void appendChildrenToArray(AccessibilityObject* object, bool isForward, AccessibilityObject* startObject, AccessibilityObject::AccessibilityChildrenVector& results)
+{
+    AccessibilityObject::AccessibilityChildrenVector searchChildren;
+    // A table's children includes elements whose own children are also the table's children (due to the way the Mac exposes tables).
+    // The rows from the table should be queried, since those are direct descendants of the table, and they contain content.
+    if (object->isAccessibilityTable())
+        searchChildren = toAccessibilityTable(object)->rows();
+    else
+        searchChildren = object->children();
+
+    size_t childrenSize = searchChildren.size();
+
+    size_t startIndex = isForward ? childrenSize : 0;
+    size_t endIndex = isForward ? 0 : childrenSize;
+
+    size_t searchPosition = startObject ? searchChildren.find(startObject) : WTF::notFound;
+    if (searchPosition != WTF::notFound) {
+        if (isForward)
+            endIndex = searchPosition + 1;
+        else
+            endIndex = searchPosition;
+    }
+
+    // This is broken into two statements so that it's easier read.
+    if (isForward) {
+        for (size_t i = startIndex; i > endIndex; i--)
+            appendAccessibilityObject(searchChildren.at(i - 1).get(), results);
+    } else {
+        for (size_t i = startIndex; i < endIndex; i++)
+            appendAccessibilityObject(searchChildren.at(i).get(), results);
+    }
+}
+
+// Returns true if the number of results is now >= the number of results desired.
+bool AccessibilityObject::objectMatchesSearchCriteriaWithResultLimit(AccessibilityObject* object, AccessibilitySearchCriteria* criteria, AccessibilityChildrenVector& results)
+{
+    if (isAccessibilityObjectSearchMatch(object, criteria) && isAccessibilityTextSearchMatch(object, criteria)) {
+        results.append(object);
+        
+        // Enough results were found to stop searching.
+        if (results.size() >= criteria->resultsLimit)
+            return true;
+    }
+    
+    return false;
+}
+
+void AccessibilityObject::findMatchingObjects(AccessibilitySearchCriteria* criteria, AccessibilityChildrenVector& results)
+{
+    ASSERT(criteria);
+    
+    if (!criteria)
         return;
+
+    // This search mechanism only searches the elements before/after the starting object.
+    // It does this by stepping up the parent chain and at each level doing a DFS.
     
-    AccessibilityChildrenVector axChildren;
-    if (axSearchPredicate->axContainerObject)
-        axChildren.append(axSearchPredicate->axContainerObject);
+    // If there's no start object, it means we want to search everything.
+    AccessibilityObject* startObject = criteria->startObject;
+    if (!startObject)
+        startObject = this;
     
-    bool isSearchDirectionNext = (axSearchPredicate->axSearchDirection == SearchDirectionNext);
-    bool didFindAXStartObject = (!axSearchPredicate->axStartObject);
+    bool isForward = criteria->searchDirection == SearchDirectionNext;
     
-    // FIXME: Iterate the AccessibilityObject cache creating and adding objects if nessesary.
-    while (!axChildren.isEmpty() && axResults.size() < axSearchPredicate->resultsLimit) {
-        AccessibilityObject* axChild = axChildren.last().get();
-        axChildren.removeLast();
+    // In the first iteration of the loop, it will examine the children of the start object for matches.
+    // However, when going backwards, those children should not be considered, so the loop is skipped ahead.
+    AccessibilityObject* previousObject = 0;
+    if (!isForward) {
+        previousObject = startObject;
+        startObject = startObject->parentObjectUnignored();
+    }
+    
+    // The outer loop steps up the parent chain each time (unignored is important here because otherwise elements would be searched twice)
+    for (AccessibilityObject* stopSearchElement = parentObjectUnignored(); startObject != stopSearchElement; startObject = startObject->parentObjectUnignored()) {
+
+        // Only append the children after/before the previous element, so that the search does not check elements that are 
+        // already behind/ahead of start element.
+        AccessibilityChildrenVector searchStack;
+        appendChildrenToArray(startObject, isForward, previousObject, searchStack);
+
+        // This now does a DFS at the current level of the parent.
+        while (!searchStack.isEmpty()) {
+            AccessibilityObject* searchObject = searchStack.last().get();
+            searchStack.removeLast();
+            
+            if (objectMatchesSearchCriteriaWithResultLimit(searchObject, criteria, results))
+                break;
+            
+            appendChildrenToArray(searchObject, isForward, 0, searchStack);
+        }
         
-        if (didFindAXStartObject) {
-            if (isAccessibilityObjectSearchMatch(axChild, axSearchPredicate)
-                && isAccessibilityTextSearchMatch(axChild, axSearchPredicate))
-                axResults.append(axChild);
-        } else if (axChild == axSearchPredicate->axStartObject)
-            didFindAXStartObject = true;
-        
-        AccessibilityChildrenVector axGrandchildren = axChild->children();
-        unsigned axGrandchildrenSize = axChild->children().size();
-        for (unsigned i = (isSearchDirectionNext) ? axGrandchildrenSize : 0; (isSearchDirectionNext) ? i > 0 : i < axGrandchildrenSize; (isSearchDirectionNext) ? i-- : i++)
-            // FIXME: Handle attachments.
-            axChildren.append(axGrandchildren.at((isSearchDirectionNext) ? i - 1 : i).get());
+        if (results.size() >= criteria->resultsLimit)
+            break;
+
+        // When moving backwards, the parent object needs to be checked, because technically it's "before" the starting element.
+        if (!isForward && objectMatchesSearchCriteriaWithResultLimit(startObject, criteria, results))
+            break;
+
+        previousObject = startObject;
     }
 }
 
@@ -939,24 +1026,29 @@ AccessibilityObject* AccessibilityObject::accessibilityObjectForPosition(const V
 
 int AccessibilityObject::lineForPosition(const VisiblePosition& visiblePos) const
 {
-    if (visiblePos.isNull())
-        return 0;
+    if (visiblePos.isNull() || !node())
+        return -1;
 
-    unsigned lineCount = 0;
+    // If the position is not in the same editable region as this AX object, return -1.
+    Node* containerNode = visiblePos.deepEquivalent().containerNode();
+    if (!containerNode->containsIncludingShadowDOM(node()) && !node()->containsIncludingShadowDOM(containerNode))
+        return -1;
+
+    int lineCount = -1;
     VisiblePosition currentVisiblePos = visiblePos;
     VisiblePosition savedVisiblePos;
 
     // move up until we get to the top
     // FIXME: This only takes us to the top of the rootEditableElement, not the top of the
     // top document.
-    while (currentVisiblePos.isNotNull() && !(inSameLine(currentVisiblePos, savedVisiblePos))) {
-        ++lineCount;
+    do {
         savedVisiblePos = currentVisiblePos;
-        VisiblePosition prevVisiblePos = previousLinePosition(currentVisiblePos, 0);
+        VisiblePosition prevVisiblePos = previousLinePosition(currentVisiblePos, 0, HasEditableAXRole);
         currentVisiblePos = prevVisiblePos;
-    }
+        ++lineCount;
+    }  while (currentVisiblePos.isNotNull() && !(inSameLine(currentVisiblePos, savedVisiblePos)));
 
-    return lineCount - 1;
+    return lineCount;
 }
 
 // NOTE: Consider providing this utility method as AX API
@@ -1205,6 +1297,26 @@ AccessibilityOrientation AccessibilityObject::orientation() const
     return AccessibilityOrientationHorizontal;
 }    
 
+bool AccessibilityObject::isDescendantOfObject(const AccessibilityObject* axObject) const
+{
+    if (!axObject || !axObject->hasChildren())
+        return false;
+
+    for (const AccessibilityObject* parent = parentObject(); parent; parent = parent->parentObject()) {
+        if (parent == axObject)
+            return true;
+    }
+    return false;
+}
+
+bool AccessibilityObject::isAncestorOfObject(const AccessibilityObject* axObject) const
+{
+    if (!axObject)
+        return false;
+
+    return this == axObject || axObject->isDescendantOfObject(this);
+}
+
 typedef HashMap<String, AccessibilityRole, CaseFoldingHash> ARIARoleMap;
 
 struct RoleEntry {
@@ -1303,6 +1415,16 @@ AccessibilityRole AccessibilityObject::ariaRoleToWebCoreRole(const String& value
     }
     
     return role;
+}
+
+bool AccessibilityObject::hasHighlighting() const
+{
+    for (Node* node = this->node(); node; node = node->parentNode()) {
+        if (node->hasTagName(markTag))
+            return true;
+    }
+    
+    return false;
 }
 
 const AtomicString& AccessibilityObject::placeholderValue() const
@@ -1415,6 +1537,179 @@ AccessibilityButtonState AccessibilityObject::checkboxOrRadioValue() const
         return ButtonStateMixed;
     
     return ButtonStateOff;
+}
+
+// This is a 1-dimensional scroll offset helper function that's applied
+// separately in the horizontal and vertical directions, because the
+// logic is the same. The goal is to compute the best scroll offset
+// in order to make an object visible within a viewport.
+//
+// In case the whole object cannot fit, you can specify a
+// subfocus - a smaller region within the object that should
+// be prioritized. If the whole object can fit, the subfocus is
+// ignored.
+//
+// Example: the viewport is scrolled to the right just enough
+// that the object is in view.
+//   Before:
+//   +----------Viewport---------+
+//                         +---Object---+
+//                         +--SubFocus--+
+//
+//   After:
+//          +----------Viewport---------+
+//                         +---Object---+
+//                         +--SubFocus--+
+//
+// When constraints cannot be fully satisfied, the min
+// (left/top) position takes precedence over the max (right/bottom).
+//
+// Note that the return value represents the ideal new scroll offset.
+// This may be out of range - the calling function should clip this
+// to the available range.
+static int computeBestScrollOffset(int currentScrollOffset,
+                                   int subfocusMin, int subfocusMax,
+                                   int objectMin, int objectMax,
+                                   int viewportMin, int viewportMax) {
+    int viewportSize = viewportMax - viewportMin;
+
+    // If the focus size is larger than the viewport size, shrink it in the
+    // direction of subfocus.
+    if (objectMax - objectMin > viewportSize) {
+        // Subfocus must be within focus:
+        subfocusMin = std::max(subfocusMin, objectMin);
+        subfocusMax = std::min(subfocusMax, objectMax);
+
+        // Subfocus must be no larger than the viewport size; favor top/left.
+        if (subfocusMax - subfocusMin > viewportSize)
+            subfocusMax = subfocusMin + viewportSize;
+
+        if (subfocusMin + viewportSize > objectMax)
+            objectMin = objectMax - viewportSize;
+        else {
+            objectMin = subfocusMin;
+            objectMax = subfocusMin + viewportSize;
+        }
+    }
+
+    // Exit now if the focus is already within the viewport.
+    if (objectMin - currentScrollOffset >= viewportMin
+        && objectMax - currentScrollOffset <= viewportMax)
+        return currentScrollOffset;
+
+    // Scroll left if we're too far to the right.
+    if (objectMax - currentScrollOffset > viewportMax)
+        return objectMax - viewportMax;
+
+    // Scroll right if we're too far to the left.
+    if (objectMin - currentScrollOffset < viewportMin)
+        return objectMin - viewportMin;
+
+    ASSERT_NOT_REACHED();
+
+    // This shouldn't happen.
+    return currentScrollOffset;
+}
+
+void AccessibilityObject::scrollToMakeVisible() const
+{
+    IntRect objectRect = boundingBoxRect();
+    objectRect.move(-objectRect.x(), -objectRect.y());
+    scrollToMakeVisibleWithSubFocus(objectRect);
+}
+
+void AccessibilityObject::scrollToMakeVisibleWithSubFocus(const IntRect& subfocus) const
+{
+    // Search up the parent chain until we find the first one that's scrollable.
+    AccessibilityObject* scrollParent = parentObject();
+    ScrollableArea* scrollableArea;
+    for (scrollableArea = 0;
+         scrollParent && !(scrollableArea = scrollParent->getScrollableAreaIfScrollable());
+         scrollParent = scrollParent->parentObject()) { }
+    if (!scrollableArea)
+        return;
+
+    LayoutRect objectRect = boundingBoxRect();
+    IntPoint scrollPosition = scrollableArea->scrollPosition();
+    IntRect scrollVisibleRect = scrollableArea->visibleContentRect();
+
+    int desiredX = computeBestScrollOffset(
+        scrollPosition.x(),
+        objectRect.x() + subfocus.x(), objectRect.x() + subfocus.maxX(),
+        objectRect.x(), objectRect.maxX(),
+        0, scrollVisibleRect.width());
+    int desiredY = computeBestScrollOffset(
+        scrollPosition.y(),
+        objectRect.y() + subfocus.y(), objectRect.y() + subfocus.maxY(),
+        objectRect.y(), objectRect.maxY(),
+        0, scrollVisibleRect.height());
+
+    scrollParent->scrollTo(IntPoint(desiredX, desiredY));
+
+    // Recursively make sure the scroll parent itself is visible.
+    if (scrollParent->parentObject())
+        scrollParent->scrollToMakeVisible();
+}
+
+void AccessibilityObject::scrollToGlobalPoint(const IntPoint& globalPoint) const
+{
+    // Search up the parent chain and create a vector of all scrollable parent objects
+    // and ending with this object itself.
+    Vector<const AccessibilityObject*> objects;
+    AccessibilityObject* parentObject;
+    for (parentObject = this->parentObject(); parentObject; parentObject = parentObject->parentObject()) {
+        if (parentObject->getScrollableAreaIfScrollable())
+            objects.prepend(parentObject);
+    }
+    objects.append(this);
+
+    // Start with the outermost scrollable (the main window) and try to scroll the
+    // next innermost object to the given point.
+    int offsetX = 0, offsetY = 0;
+    IntPoint point = globalPoint;
+    size_t levels = objects.size() - 1;
+    for (size_t i = 0; i < levels; i++) {
+        const AccessibilityObject* outer = objects[i];
+        const AccessibilityObject* inner = objects[i + 1];
+
+        ScrollableArea* scrollableArea = outer->getScrollableAreaIfScrollable();
+
+        LayoutRect innerRect = inner->isAccessibilityScrollView() ? inner->parentObject()->boundingBoxRect() : inner->boundingBoxRect();
+        LayoutRect objectRect = innerRect;
+        IntPoint scrollPosition = scrollableArea->scrollPosition();
+
+        // Convert the object rect into local coordinates.
+        objectRect.move(offsetX, offsetY);
+        if (!outer->isAccessibilityScrollView())
+            objectRect.move(scrollPosition.x(), scrollPosition.y());
+
+        int desiredX = computeBestScrollOffset(
+            0,
+            objectRect.x(), objectRect.maxX(),
+            objectRect.x(), objectRect.maxX(),
+            point.x(), point.x());
+        int desiredY = computeBestScrollOffset(
+            0,
+            objectRect.y(), objectRect.maxY(),
+            objectRect.y(), objectRect.maxY(),
+            point.y(), point.y());
+        outer->scrollTo(IntPoint(desiredX, desiredY));
+
+        if (outer->isAccessibilityScrollView() && !inner->isAccessibilityScrollView()) {
+            // If outer object we just scrolled is a scroll view (main window or iframe) but the
+            // inner object is not, keep track of the coordinate transformation to apply to
+            // future nested calculations.
+            scrollPosition = scrollableArea->scrollPosition();
+            offsetX -= (scrollPosition.x() + point.x());
+            offsetY -= (scrollPosition.y() + point.y());
+            point.move(scrollPosition.x() - innerRect.x(),
+                       scrollPosition.y() - innerRect.y());
+        } else if (inner->isAccessibilityScrollView()) {
+            // Otherwise, if the inner object is a scroll view, reset the coordinate transformation.
+            offsetX = 0;
+            offsetY = 0;
+        }
+    }
 }
     
 } // namespace WebCore

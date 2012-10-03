@@ -24,16 +24,16 @@
  */
 
 #include "config.h"
-#include "WebExternalTextureLayer.h"
+#include "platform/WebExternalTextureLayer.h"
 
+#include "platform/WebFloatRect.h"
 #include "WebExternalTextureLayerImpl.h"
-#include "WebFloatRect.h"
 
 namespace WebKit {
 
-WebExternalTextureLayer WebExternalTextureLayer::create(WebLayerClient* client)
+WebExternalTextureLayer WebExternalTextureLayer::create()
 {
-    return WebExternalTextureLayer(WebExternalTextureLayerImpl::create(client));
+    return WebExternalTextureLayer(WebExternalTextureLayerImpl::create());
 }
 
 void WebExternalTextureLayer::setTextureId(unsigned id)
@@ -64,6 +64,11 @@ void WebExternalTextureLayer::setUVRect(const WebFloatRect& rect)
 WebFloatRect WebExternalTextureLayer::uvRect() const
 {
     return WebFloatRect(constUnwrap<WebExternalTextureLayerImpl>()->uvRect());
+}
+
+void WebExternalTextureLayer::invalidateRect(const WebFloatRect& updateRect)
+{
+    unwrap<WebExternalTextureLayerImpl>()->setNeedsDisplayRect(updateRect);
 }
 
 WebExternalTextureLayer::WebExternalTextureLayer(const PassRefPtr<WebExternalTextureLayerImpl>& node)

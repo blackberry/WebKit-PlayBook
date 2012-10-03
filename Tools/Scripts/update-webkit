@@ -2,6 +2,7 @@
 
 # Copyright (C) 2005, 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
 # Copyright (C) 2009 Google Inc. All rights reserved.
+# Copyright (C) 2011 Brent Fulgham. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -47,20 +48,21 @@ my $quiet = '';
 my $showHelp;
 my $useGYP = 0;
 my $useMake = 0;
+my $useNinja = 0;
 
 determineIsChromium();
 determineIsChromiumAndroid();
+determineIsQt();
+determineIsWinCairo();
 
 chdirWebKit();
-
-my $isGit = isGit();
-my $isSVN = isSVN();
 
 my $getOptionsResult = GetOptions(
     'h|help'  => \$showHelp,
     'q|quiet' => \$quiet,
     'gyp' => \$useGYP,
     'make' => \$useMake,
+    'ninja' => \$useNinja,
 ); 
 
 if (!$getOptionsResult || $showHelp) {
@@ -68,6 +70,7 @@ if (!$getOptionsResult || $showHelp) {
 Usage: @{[ basename($0) ]} [options]
   --chromium          also update dependencies of the chromium port
   --make              generate the Makefile-based build system (Chromium only)
+  --ninja             generate the ninja-based build system (Chromium only)
   --chromium-android  also update dependencies of the chromium port for Android
   -h|--help           show the help message
   -q|--quiet          pass -q to svn update for quiet updates
@@ -80,6 +83,9 @@ __END__
 if ($useMake) {
     $ENV{"GYP_GENERATORS"} = "make";
 }
+if ($useNinja) {
+    $ENV{"GYP_GENERATORS"} = "ninja";
+}
 
 my $startTime = time();
 
@@ -90,14 +96,14 @@ push @svnOptions, '-q' if $quiet;
 push @svnOptions, qw(--accept postpone) if isSVNVersion16OrNewer();
 
 print "Updating OpenSource\n" unless $quiet;
-runSvnUpdate() if $isSVN;
-runGitUpdate() if $isGit;
+runSvnUpdate() if isSVN();
+runGitUpdate() if isGit();
 
 if (-d "../Internal") {
     chdir("../Internal");
     print "Updating Internal\n" unless $quiet;
-    runSvnUpdate() if $isSVN;
-    runGitUpdate() if $isGit;
+    runSvnUpdate() if isSVNDirectory(".");
+    runGitUpdate() if isGitDirectory(".");
 } elsif (isChromium()) {
     # Workaround for https://bugs.webkit.org/show_bug.cgi?id=38926
     # We should remove the following "if" block when we find a right fix.
@@ -108,12 +114,22 @@ if (-d "../Internal") {
 
     my @chromiumUpdateArgs = ("perl", "Tools/Scripts/update-webkit-chromium");
     push @chromiumUpdateArgs, "--chromium-android" if isChromiumAndroid();
+    push @chromiumUpdateArgs, "--force" if forceChromiumUpdate();
     system(@chromiumUpdateArgs) == 0 or die $!;
 } elsif (isAppleWinWebKit()) {
-    system("perl", "WebKitTools/Scripts/update-webkit-auxiliary-libs") == 0 or die;
+    system("perl", "Tools/Scripts/update-webkit-auxiliary-libs") == 0 or die;
+    if (isWinCairo()) {
+        # WinCairo shares the auxiliary libs from the Apple port.
+        system("perl", "Tools/Scripts/update-webkit-wincairo-libs") == 0 or die;
+    }
 }
 
 setupAppleWinEnv() if isAppleWinWebKit();
+
+if ($useGYP) {
+    print "Generating Project Files\n";
+    system("perl", "Tools/Scripts/generate-project-files") == 0 or die "Failed to run generate-project-files";
+}
 
 exit 0;
 
@@ -141,5 +157,14 @@ sub runSvnUpdate()
 
 sub runGitUpdate()
 {
-    system("git", "svn", "rebase") == 0 or die;
+    # Doing a git fetch first allows setups with svn-remote.svn.fetch = trunk:refs/remotes/origin/master
+    # to perform the rebase much much faster.
+    system("git", "fetch") == 0 or die;
+    if (isGitSVN()) {
+        system("git", "svn", "rebase") == 0 or die;
+    } else {
+        # This will die if branch.$BRANCHNAME.merge isn't set, which is
+        # almost certainly what we want.
+        system("git", "pull") == 0 or die;
+    }
 }

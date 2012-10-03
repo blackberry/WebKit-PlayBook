@@ -33,15 +33,19 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "ContentLayerChromium.h"
 #include "LayerChromium.h"
 #include "GraphicsContext.h"
 #include "GraphicsLayer.h"
+#include "cc/CCLayerAnimationDelegate.h"
+
+#include <wtf/HashMap.h>
 
 namespace WebCore {
 
 class LayerChromium;
 
-class GraphicsLayerChromium : public GraphicsLayer, public CCLayerDelegate {
+class GraphicsLayerChromium : public GraphicsLayer, public ContentLayerDelegate, public CCLayerAnimationDelegate {
 public:
     GraphicsLayerChromium(GraphicsLayerClient*);
     virtual ~GraphicsLayerChromium();
@@ -68,6 +72,7 @@ public:
     virtual void setPreserves3D(bool);
     virtual void setMasksToBounds(bool);
     virtual void setDrawsContent(bool);
+    virtual void setContentsVisible(bool);
     virtual void setMaskLayer(GraphicsLayer*);
 
     virtual void setBackgroundColor(const Color&);
@@ -80,6 +85,9 @@ public:
 
     virtual void setOpacity(float);
 
+    // Returns true if filter can be rendered by the compositor
+    virtual bool setFilters(const FilterOperations&);
+
     virtual void setNeedsDisplay();
     virtual void setNeedsDisplayInRect(const FloatRect&);
     virtual void setContentsNeedsDisplay();
@@ -90,19 +98,30 @@ public:
     virtual void setContentsToMedia(PlatformLayer*);
     virtual void setContentsToCanvas(PlatformLayer*);
 
+    virtual bool addAnimation(const KeyframeValueList&, const IntSize& boxSize, const Animation*, const String&, double timeOffset);
+    virtual void pauseAnimation(const String& animationName, double timeOffset);
+    virtual void removeAnimation(const String& animationName);
+    virtual void suspendAnimations(double time);
+    virtual void resumeAnimations();
+
     virtual PlatformLayer* platformLayer() const;
 
     virtual void setDebugBackgroundColor(const Color&);
     virtual void setDebugBorder(const Color&, float borderWidth);
-
-    // The following functions implement the CCLayerDelegate interface.
-    virtual bool drawsContent() const;
-    virtual void paintContents(GraphicsContext&, const IntRect& clip);
-    virtual void notifySyncRequired();
-
     virtual void deviceOrPageScaleFactorChanged();
+
+    // ContentLayerDelegate implementation.
+    virtual void paintContents(GraphicsContext&, const IntRect& clip);
+
+    // CCLayerAnimationDelegate implementation.
+    virtual void notifyAnimationStarted(double startTime);
+    virtual void notifyAnimationFinished(int animationId);
+
+    // Exposed for tests.
+    LayerChromium* contentsLayer() const { return m_contentsLayer.get(); }
+
 private:
-    void updateOpacityOnLayer();
+    typedef HashMap<String, int> AnimationIdMap;
 
     LayerChromium* primaryLayer() const  { return m_transformLayer.get() ? m_transformLayer.get() : m_layer.get(); }
     LayerChromium* hostLayerForChildren() const;
@@ -116,22 +135,23 @@ private:
     void updateTransform();
     void updateChildrenTransform();
     void updateMasksToBounds();
-    void updateContentsOpaque();
-    void updateBackfaceVisibility();
     void updateLayerPreserves3D();
-    void updateLayerDrawsContent();
+    void updateLayerIsDrawable();
     void updateLayerBackgroundColor();
 
     void updateContentsImage();
     void updateContentsVideo();
     void updateContentsRect();
+    void updateContentsScale();
 
     void setupContentsLayer(LayerChromium*);
-    LayerChromium* contentsLayer() const { return m_contentsLayer.get(); }
+    float contentsScale() const;
+
+    int mapAnimationNameToId(const String& animationName);
 
     String m_nameBase;
 
-    RefPtr<LayerChromium> m_layer;
+    RefPtr<ContentLayerChromium> m_layer;
     RefPtr<LayerChromium> m_transformLayer;
     RefPtr<LayerChromium> m_contentsLayer;
 
@@ -145,6 +165,9 @@ private:
     ContentsLayerPurpose m_contentsLayerPurpose;
     bool m_contentsLayerHasBackgroundColor : 1;
     bool m_inSetChildren;
+    bool m_pageScaleChanged;
+
+    AnimationIdMap m_animationIdMap;
 };
 
 } // namespace WebCore

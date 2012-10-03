@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,14 +20,13 @@
 #include "DeviceOrientationClientBlackBerry.h"
 
 #include "DeviceOrientationController.h"
-#include "Page.h"
-#include "WebPage.h"
 #include "WebPage_p.h"
+#include <BlackBerryPlatformDeviceOrientationTracker.h>
 
 using namespace WebCore;
 
-DeviceOrientationClientBlackBerry::DeviceOrientationClientBlackBerry(BlackBerry::WebKit::WebPage* webPage)
-    : m_webPage(webPage)
+DeviceOrientationClientBlackBerry::DeviceOrientationClientBlackBerry(BlackBerry::WebKit::WebPagePrivate* webPagePrivate)
+    : m_webPagePrivate(webPagePrivate)
     , m_tracker(0)
     , m_controller(0)
 {
@@ -76,4 +75,3 @@ void DeviceOrientationClientBlackBerry::onOrientation(const BlackBerry::Platform
 
     m_controller->didChangeDeviceOrientation(lastOrientation());
 }
-

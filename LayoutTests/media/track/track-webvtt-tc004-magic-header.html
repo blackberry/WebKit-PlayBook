@@ -40,7 +40,7 @@
                             values : [30.5, 1200.5],
                         },
                         {
-                            property : "getCueAsSource()",
+                            property : "text",
                             values : ["Bear is Coming!!!!!", "I said Bear is coming!!!!"],
                         },
                     ],
@@ -65,7 +65,7 @@
             }
         </script>
     </head>
-    <body>
+    <body onload="enableAllTextTracks()">
         <p>Tests that the magic file header "WEBVTT" leads to the file properly recognized as a WebVTT file.</p>
         <video>
             <track src="captions-webvtt/tc004-webvtt-file.vtt" onload="trackLoaded()">

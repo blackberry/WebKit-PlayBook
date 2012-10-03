@@ -30,27 +30,25 @@ class CSSInitialValue : public CSSValue {
 public:
     static PassRefPtr<CSSInitialValue> createExplicit()
     {
-        static CSSInitialValue* explicitValue = create(false).leakRef();
-        return explicitValue;
+        return adoptRef(new CSSInitialValue(/* implicit */ false));
     }
     static PassRefPtr<CSSInitialValue> createImplicit()
     {
-        static CSSInitialValue* explicitValue = create(true).leakRef();
-        return explicitValue;
+        return adoptRef(new CSSInitialValue(/* implicit */ true));
     }
 
     String customCssText() const;
 
+    bool isImplicit() const { return m_isImplicit; }
+
 private:
     CSSInitialValue(bool implicit)
-        : CSSValue(implicit ? ImplicitInitialClass : InitialClass)
+        : CSSValue(InitialClass)
+        , m_isImplicit(implicit)
     {
     }
 
-    static PassRefPtr<CSSInitialValue> create(bool implicit)
-    {
-        return adoptRef(new CSSInitialValue(implicit));
-    }
+    bool m_isImplicit;
 };
 
 } // namespace WebCore

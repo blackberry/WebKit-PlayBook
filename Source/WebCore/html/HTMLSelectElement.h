@@ -26,12 +26,9 @@
 #ifndef HTMLSelectElement_h
 #define HTMLSelectElement_h
 
-#include "CollectionCache.h"
 #include "Event.h"
-#include "HTMLFormControlElement.h"
-#if PLATFORM(QT)
-#include "RenderThemeQt.h"
-#endif
+#include "HTMLFormControlElementWithState.h"
+#include "HTMLOptionsCollection.h"
 #include <wtf/Vector.h>
 
 namespace WebCore {
@@ -65,7 +62,7 @@ public:
     String value() const;
     void setValue(const String&);
 
-    PassRefPtr<HTMLOptionsCollection> options();
+    HTMLOptionsCollection* options();
 
     void optionElementChildrenChanged();
 
@@ -74,7 +71,7 @@ public:
 
     const Vector<HTMLElement*>& listItems() const;
 
-    virtual void accessKeyAction(bool sendToAnyElement);
+    virtual void accessKeyAction(bool sendMouseEvents);
     void accessKeySetSelectedIndex(int);
 
     void setMultiple(bool);
@@ -87,13 +84,9 @@ public:
     Node* namedItem(const AtomicString& name);
     Node* item(unsigned index);
 
-    CollectionCache* collectionInfo() { m_collectionInfo.checkConsistency(); return &m_collectionInfo; }
-
     void scrollToSelection();
 
-#if ENABLE(NO_LISTBOX_RENDERING)
     void listBoxSelectItem(int listIndex, bool allowMultiplySelections, bool shift, bool fireOnChangeNow = true);
-#endif
 
     bool canSelectAll() const;
     void selectAll();
@@ -128,8 +121,10 @@ private:
     virtual bool saveFormControlState(String& value) const;
     virtual void restoreFormControlState(const String&);
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
+    virtual bool isPresentationAttribute(const QualifiedName&) const OVERRIDE;
 
+    virtual bool childShouldCreateRenderer(const NodeRenderingContext&) const OVERRIDE;
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle *);
     virtual bool appendFormData(FormDataList&, bool);
 
@@ -181,7 +176,8 @@ private:
 
     virtual void childrenChanged(bool changedByParser = false, Node* beforeChange = 0, Node* afterChange = 0, int childCountDelta = 0);
 
-    CollectionCache m_collectionInfo;
+    OwnPtr<HTMLOptionsCollection> m_optionsCollection;
+
     // m_listItems contains HTMLOptionElement, HTMLOptGroupElement, and HTMLHRElement objects.
     mutable Vector<HTMLElement*> m_listItems;
     Vector<bool> m_lastOnChangeSelection;
@@ -198,19 +194,6 @@ private:
     bool m_activeSelectionState;
     mutable bool m_shouldRecalcListItems;
 };
-
-inline bool HTMLSelectElement::usesMenuList() const
-{
-#if ENABLE(NO_LISTBOX_RENDERING)
-#if PLATFORM(QT)
-    if (RenderThemeQt::useMobileTheme())
-        return true;
-#else
-    return true;
-#endif
-#endif
-    return !m_multiple && m_size <= 1;
-}
 
 HTMLSelectElement* toHTMLSelectElement(Node*);
 const HTMLSelectElement* toHTMLSelectElement(const Node*);

@@ -78,26 +78,36 @@ PassRefPtr<HTMLImageElement> HTMLImageElement::createForJSConstructor(Document* 
     return image.release();
 }
 
-bool HTMLImageElement::mapToEntry(const QualifiedName& attrName, MappedAttributeEntry& result) const
+bool HTMLImageElement::isPresentationAttribute(const QualifiedName& name) const
 {
-    if (attrName == widthAttr ||
-        attrName == heightAttr ||
-        attrName == vspaceAttr ||
-        attrName == hspaceAttr ||
-        attrName == valignAttr) {
-        result = eUniversal;
-        return false;
-    }
-
-    if (attrName == borderAttr || attrName == alignAttr) {
-        result = eReplaced; // Shared with embed and iframe elements.
-        return false;
-    }
-
-    return HTMLElement::mapToEntry(attrName, result);
+    if (name == widthAttr || name == heightAttr || name == borderAttr || name == vspaceAttr || name == hspaceAttr || name == alignAttr || name == valignAttr)
+        return true;
+    return HTMLElement::isPresentationAttribute(name);
 }
 
-void HTMLImageElement::parseMappedAttribute(Attribute* attr)
+void HTMLImageElement::collectStyleForAttribute(Attribute* attr, StylePropertySet* style)
+{
+    if (attr->name() == widthAttr)
+        addHTMLLengthToStyle(style, CSSPropertyWidth, attr->value());
+    else if (attr->name() == heightAttr)
+        addHTMLLengthToStyle(style, CSSPropertyHeight, attr->value());
+    else if (attr->name() == borderAttr)
+        applyBorderAttributeToStyle(attr, style);
+    else if (attr->name() == vspaceAttr) {
+        addHTMLLengthToStyle(style, CSSPropertyMarginTop, attr->value());
+        addHTMLLengthToStyle(style, CSSPropertyMarginBottom, attr->value());
+    } else if (attr->name() == hspaceAttr) {
+        addHTMLLengthToStyle(style, CSSPropertyMarginLeft, attr->value());
+        addHTMLLengthToStyle(style, CSSPropertyMarginRight, attr->value());
+    } else if (attr->name() == alignAttr)
+        applyAlignmentAttributeToStyle(attr, style);
+    else if (attr->name() == valignAttr)
+        addPropertyToAttributeStyle(style, CSSPropertyVerticalAlign, attr->value());
+    else
+        HTMLElement::collectStyleForAttribute(attr, style);
+}
+
+void HTMLImageElement::parseAttribute(Attribute* attr)
 {
     const QualifiedName& attrName = attr->name();
     if (attrName == altAttr) {
@@ -105,23 +115,6 @@ void HTMLImageElement::parseMappedAttribute(Attribute* attr)
             toRenderImage(renderer())->updateAltText();
     } else if (attrName == srcAttr)
         m_imageLoader.updateFromElementIgnoringPreviousError();
-    else if (attrName == widthAttr)
-        addCSSLength(attr, CSSPropertyWidth, attr->value());
-    else if (attrName == heightAttr)
-        addCSSLength(attr, CSSPropertyHeight, attr->value());
-    else if (attrName == borderAttr) {
-        // border="noborder" -> border="0"
-        applyBorderAttribute(attr);
-    } else if (attrName == vspaceAttr) {
-        addCSSLength(attr, CSSPropertyMarginTop, attr->value());
-        addCSSLength(attr, CSSPropertyMarginBottom, attr->value());
-    } else if (attrName == hspaceAttr) {
-        addCSSLength(attr, CSSPropertyMarginLeft, attr->value());
-        addCSSLength(attr, CSSPropertyMarginRight, attr->value());
-    } else if (attrName == alignAttr)
-        addHTMLAlignment(attr);
-    else if (attrName == valignAttr)
-        addCSSProperty(attr, CSSPropertyVerticalAlign, attr->value());
     else if (attrName == usemapAttr)
         setIsLink(!attr->isNull());
     else if (attrName == onabortAttr)
@@ -133,26 +126,8 @@ void HTMLImageElement::parseMappedAttribute(Attribute* attr)
     else if (attrName == compositeAttr) {
         if (!parseCompositeOperator(attr->value(), m_compositeOperator))
             m_compositeOperator = CompositeSourceOver;
-    } else if (attrName == nameAttr) {
-        const AtomicString& newName = attr->value();
-        if (inDocument() && document()->isHTMLDocument()) {
-            HTMLDocument* document = static_cast<HTMLDocument*>(this->document());
-            document->removeNamedItem(m_name);
-            document->addNamedItem(newName);
-        }
-        m_name = newName;
-    } else if (isIdAttributeName(attr->name())) {
-        const AtomicString& newId = attr->value();
-        if (inDocument() && document()->isHTMLDocument()) {
-            HTMLDocument* document = static_cast<HTMLDocument*>(this->document());
-            document->removeExtraNamedItem(m_id);
-            document->addExtraNamedItem(newId);
-        }
-        m_id = newId;
-        // also call superclass
-        HTMLElement::parseMappedAttribute(attr);
     } else
-        HTMLElement::parseMappedAttribute(attr);
+        HTMLElement::parseAttribute(attr);
 }
 
 String HTMLImageElement::altText() const
@@ -197,29 +172,12 @@ void HTMLImageElement::attach()
 
 void HTMLImageElement::insertedIntoDocument()
 {
-    if (document()->isHTMLDocument()) {
-        HTMLDocument* document = static_cast<HTMLDocument*>(this->document());
-        document->addNamedItem(m_name);
-        document->addExtraNamedItem(m_id);
-    }
-
     // If we have been inserted from a renderer-less document,
     // our loader may have not fetched the image, so do it now.
     if (!m_imageLoader.image())
         m_imageLoader.updateFromElement();
 
     HTMLElement::insertedIntoDocument();
-}
-
-void HTMLImageElement::removedFromDocument()
-{
-    if (document()->isHTMLDocument()) {
-        HTMLDocument* document = static_cast<HTMLDocument*>(this->document());
-        document->removeNamedItem(m_name);
-        document->removeExtraNamedItem(m_id);
-    }
-
-    HTMLElement::removedFromDocument();
 }
 
 void HTMLImageElement::insertedIntoTree(bool deep)
@@ -384,10 +342,10 @@ void HTMLImageElement::addSubresourceAttributeURLs(ListHashSet<KURL>& urls) cons
     addSubresourceURL(urls, document()->completeURL(getAttribute(usemapAttr)));
 }
 
-void HTMLImageElement::willMoveToNewOwnerDocument()
+void HTMLImageElement::didMoveToNewDocument(Document* oldDocument)
 {
-    m_imageLoader.elementWillMoveToNewOwnerDocument();
-    HTMLElement::willMoveToNewOwnerDocument();
+    m_imageLoader.elementDidMoveToNewDocument();
+    HTMLElement::didMoveToNewDocument(oldDocument);
 }
 
 bool HTMLImageElement::isServerMap() const
@@ -410,9 +368,9 @@ String HTMLImageElement::itemValueText() const
     return getURLAttribute(srcAttr);
 }
 
-void HTMLImageElement::setItemValueText(const String& value, ExceptionCode& ec)
+void HTMLImageElement::setItemValueText(const String& value, ExceptionCode&)
 {
-    setAttribute(srcAttr, value, ec);
+    setAttribute(srcAttr, value);
 }
 #endif
 

@@ -26,6 +26,7 @@
 #define InspectorConsoleAgent_h
 
 #include "ConsoleTypes.h"
+#include "InspectorBaseAgent.h"
 #include "InspectorFrontend.h"
 #include <wtf/Forward.h>
 #include <wtf/HashMap.h>
@@ -39,8 +40,6 @@ namespace WebCore {
 
 class ConsoleMessage;
 class DOMWindow;
-class InspectorAgent;
-class InspectorDOMAgent;
 class InspectorFrontend;
 class InspectorState;
 class InjectedScriptManager;
@@ -53,22 +52,23 @@ class ScriptProfile;
 
 typedef String ErrorString;
 
-class InspectorConsoleAgent {
+class InspectorConsoleAgent : public InspectorBaseAgent<InspectorConsoleAgent>, public InspectorBackendDispatcher::ConsoleCommandHandler {
     WTF_MAKE_NONCOPYABLE(InspectorConsoleAgent);
 public:
-    InspectorConsoleAgent(InstrumentingAgents*, InspectorAgent*, InspectorState*, InjectedScriptManager*, InspectorDOMAgent*);
-    ~InspectorConsoleAgent();
+    InspectorConsoleAgent(InstrumentingAgents*, InspectorState*, InjectedScriptManager*);
+    virtual ~InspectorConsoleAgent();
 
-    void enable(ErrorString*);
-    void disable(ErrorString*);
-    void clearMessages(ErrorString*);
+    virtual void enable(ErrorString*);
+    virtual void disable(ErrorString*);
+    virtual void clearMessages(ErrorString*);
     void reset();
-    void restore();
-    void setFrontend(InspectorFrontend*);
-    void clearFrontend();
+
+    virtual void setFrontend(InspectorFrontend*);
+    virtual void clearFrontend();
+    virtual void restore();
 
     void addMessageToConsole(MessageSource, MessageType, MessageLevel, const String& message, PassRefPtr<ScriptArguments>, PassRefPtr<ScriptCallStack>);
-    void addMessageToConsole(MessageSource, MessageType, MessageLevel, const String& message, unsigned lineNumber, const String& scriptId);
+    void addMessageToConsole(MessageSource, MessageType, MessageLevel, const String& message, const String& scriptId, unsigned lineNumber);
 
     void startTiming(const String& title);
     void stopTiming(const String& title, PassRefPtr<ScriptCallStack>);
@@ -83,17 +83,16 @@ public:
     void addProfileFinishedMessageToConsole(PassRefPtr<ScriptProfile>, unsigned lineNumber, const String& sourceURL);
     void addStartProfilingMessageToConsole(const String& title, unsigned lineNumber, const String& sourceURL);
 #endif
-    void setMonitoringXHREnabled(ErrorString* error, bool enabled);
-    void addInspectedNode(ErrorString*, int nodeId);
+    virtual void setMonitoringXHREnabled(ErrorString*, bool enabled);
+    virtual void addInspectedNode(ErrorString*, int nodeId) = 0;
+    virtual void addInspectedHeapObject(ErrorString*, int inspectedHeapObjectId);
 
-private:
+protected:
     void addConsoleMessage(PassOwnPtr<ConsoleMessage>);
 
-    InstrumentingAgents* m_instrumentingAgents;
-    InspectorAgent* m_inspectorAgent;
-    InspectorState* m_inspectorState;
+    virtual bool developerExtrasEnabled() = 0;
+
     InjectedScriptManager* m_injectedScriptManager;
-    InspectorDOMAgent* m_inspectorDOMAgent;
     InspectorFrontend::Console* m_frontend;
     ConsoleMessage* m_previousMessage;
     Vector<OwnPtr<ConsoleMessage> > m_consoleMessages;

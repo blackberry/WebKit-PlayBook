@@ -126,8 +126,7 @@ inline bool MarkupTokenizerBase<HTMLToken, HTMLTokenizerState>::shouldSkipNullCh
     return !m_forceNullCharacterReplacement
         && (m_state == HTMLTokenizerState::DataState
             || m_state == HTMLTokenizerState::RCDATAState
-            || m_state == HTMLTokenizerState::RAWTEXTState
-            || m_state == HTMLTokenizerState::PLAINTEXTState);
+            || m_state == HTMLTokenizerState::RAWTEXTState);
 }
 
 
@@ -136,7 +135,6 @@ void HTMLTokenizer::reset()
     m_state = HTMLTokenizerState::DataState;
     m_token = 0;
     m_lineNumber = 0;
-    m_skipLeadingNewLineForListing = false;
     m_forceNullCharacterReplacement = false;
     m_shouldAllowCDATA = false;
     m_additionalAllowedCharacter = '\0';
@@ -167,6 +165,7 @@ bool HTMLTokenizer::flushBufferedEndTag(SegmentedString& source)
         return true;
     m_token->beginEndTag(m_bufferedEndTagName);
     m_bufferedEndTagName.clear();
+    m_temporaryBuffer.clear();
     return false;
 }
 
@@ -201,6 +200,7 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
         // We started an end tag during our last iteration.
         m_token->beginEndTag(m_bufferedEndTagName);
         m_bufferedEndTagName.clear();
+        m_temporaryBuffer.clear();
         if (m_state == HTMLTokenizerState::DataState) {
             // We're back in the data state, so we must be done with the tag.
             return true;
@@ -210,30 +210,6 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
     if (source.isEmpty() || !m_inputStreamPreprocessor.peek(source, m_lineNumber))
         return haveBufferedCharacterToken();
     UChar cc = m_inputStreamPreprocessor.nextInputCharacter();
-
-    // http://www.whatwg.org/specs/web-apps/current-work/multipage/tokenization.html#parsing-main-inbody
-    // Note that this logic is different than the generic \r\n collapsing
-    // handled in the input stream preprocessor. This logic is here as an
-    // "authoring convenience" so folks can write:
-    //
-    // <pre>
-    // lorem ipsum
-    // lorem ipsum
-    // </pre>
-    //
-    // without getting an extra newline at the start of their <pre> element.
-    if (m_skipLeadingNewLineForListing) {
-        m_skipLeadingNewLineForListing = false;
-        if (cc == '\n') {
-            if (m_state == HTMLTokenizerState::DataState)
-                HTML_ADVANCE_TO(DataState);
-            if (m_state == HTMLTokenizerState::RCDATAState)
-                HTML_ADVANCE_TO(RCDATAState);
-            // When parsing text/plain documents, we run the tokenizer in the
-            // PLAINTEXTState and ignore m_skipLeadingNewLineForListing.
-            ASSERT(m_state == HTMLTokenizerState::PLAINTEXTState);
-        }
-    }
 
     // Source: http://www.whatwg.org/specs/web-apps/current-work/#tokenisation0
     switch (m_state) {
@@ -426,19 +402,26 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
             HTML_ADVANCE_TO(RCDATAEndTagNameState);
         } else {
             if (isTokenizerWhitespace(cc)) {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(BeforeAttributeNameState);
+                }
             } else if (cc == '/') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(SelfClosingStartTagState);
+                }
             } else if (cc == '>') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     return flushEmitAndResumeIn(source, HTMLTokenizerState::DataState);
+                }
             }
             bufferCharacter('<');
             bufferCharacter('/');
             m_token->appendToCharacter(m_temporaryBuffer);
             m_bufferedEndTagName.clear();
+            m_temporaryBuffer.clear();
             HTML_RECONSUME_IN(RCDATAState);
         }
     }
@@ -484,19 +467,26 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
             HTML_ADVANCE_TO(RAWTEXTEndTagNameState);
         } else {
             if (isTokenizerWhitespace(cc)) {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(BeforeAttributeNameState);
+                }
             } else if (cc == '/') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(SelfClosingStartTagState);
+                }
             } else if (cc == '>') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     return flushEmitAndResumeIn(source, HTMLTokenizerState::DataState);
+                }
             }
             bufferCharacter('<');
             bufferCharacter('/');
             m_token->appendToCharacter(m_temporaryBuffer);
             m_bufferedEndTagName.clear();
+            m_temporaryBuffer.clear();
             HTML_RECONSUME_IN(RAWTEXTState);
         }
     }
@@ -546,19 +536,26 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
             HTML_ADVANCE_TO(ScriptDataEndTagNameState);
         } else {
             if (isTokenizerWhitespace(cc)) {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(BeforeAttributeNameState);
+                }
             } else if (cc == '/') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(SelfClosingStartTagState);
+                }
             } else if (cc == '>') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     return flushEmitAndResumeIn(source, HTMLTokenizerState::DataState);
+                }
             }
             bufferCharacter('<');
             bufferCharacter('/');
             m_token->appendToCharacter(m_temporaryBuffer);
             m_bufferedEndTagName.clear();
+            m_temporaryBuffer.clear();
             HTML_RECONSUME_IN(ScriptDataState);
         }
     }
@@ -685,19 +682,26 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
             HTML_ADVANCE_TO(ScriptDataEscapedEndTagNameState);
         } else {
             if (isTokenizerWhitespace(cc)) {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(BeforeAttributeNameState);
+                }
             } else if (cc == '/') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     FLUSH_AND_ADVANCE_TO(SelfClosingStartTagState);
+                }
             } else if (cc == '>') {
-                if (isAppropriateEndTag())
+                if (isAppropriateEndTag()) {
+                    m_temporaryBuffer.append(cc);
                     return flushEmitAndResumeIn(source, HTMLTokenizerState::DataState);
+                }
             }
             bufferCharacter('<');
             bufferCharacter('/');
             m_token->appendToCharacter(m_temporaryBuffer);
             m_bufferedEndTagName.clear();
+            m_temporaryBuffer.clear();
             HTML_RECONSUME_IN(ScriptDataEscapedState);
         }
     }
@@ -1576,6 +1580,17 @@ bool HTMLTokenizer::nextToken(SegmentedString& source, HTMLToken& token)
 
     ASSERT_NOT_REACHED();
     return false;
+}
+
+String HTMLTokenizer::bufferedCharacters() const
+{
+    // FIXME: Add an assert about m_state.
+    StringBuilder characters;
+    characters.reserveCapacity(numberOfBufferedCharacters());
+    characters.append('<');
+    characters.append('/');
+    characters.append(m_temporaryBuffer.data(), m_temporaryBuffer.size());
+    return characters.toString();
 }
 
 void HTMLTokenizer::updateStateFor(const AtomicString& tagName, Frame* frame)

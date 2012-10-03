@@ -28,8 +28,6 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import with_statement
-
 import atexit
 import base64
 import codecs
@@ -54,8 +52,8 @@ from webkitpy.common.system.executive import Executive, ScriptError
 from webkitpy.common.system.outputcapture import OutputCapture
 from webkitpy.common.system.executive_mock import MockExecutive
 
-from .detection import find_checkout_root, default_scm, detect_scm_system
 from .git import Git, AmbiguousCommitError
+from .detection import detect_scm_system
 from .scm import SCM, CheckoutNeedsUpdate, commit_error_handler, AuthenticationError
 from .svn import SVN
 
@@ -79,7 +77,6 @@ def delete_cached_mock_repo_at_exit():
 
 # Eventually we will want to write tests which work for both scms. (like update_webkit, changed_files, etc.)
 # Perhaps through some SCMTest base-class which both SVNTest and GitTest inherit from.
-
 
 def run_command(*args, **kwargs):
     # FIXME: This should not be a global static.
@@ -232,56 +229,6 @@ class SVNTestRepository:
             path = sys.path[0]
         os.chdir(detect_scm_system(path).checkout_root)
 
-
-class StandaloneFunctionsTest(unittest.TestCase):
-    """This class tests any standalone/top-level functions in the package."""
-    def setUp(self):
-        self.orig_cwd = os.path.abspath(os.getcwd())
-        self.orig_abspath = os.path.abspath
-
-        # We capture but ignore the output from stderr to reduce unwanted
-        # logging.
-        self.output = OutputCapture()
-        self.output.capture_output()
-
-    def tearDown(self):
-        os.chdir(self.orig_cwd)
-        os.path.abspath = self.orig_abspath
-        self.output.restore_output()
-
-    def test_find_checkout_root(self):
-        # Test from inside the tree.
-        os.chdir(sys.path[0])
-        dir = find_checkout_root()
-        self.assertNotEqual(dir, None)
-        self.assertTrue(os.path.exists(dir))
-
-        # Test from outside the tree.
-        os.chdir(os.path.expanduser("~"))
-        dir = find_checkout_root()
-        self.assertNotEqual(dir, None)
-        self.assertTrue(os.path.exists(dir))
-
-        # Mock out abspath() to test being not in a checkout at all.
-        os.path.abspath = lambda x: "/"
-        self.assertRaises(SystemExit, find_checkout_root)
-        os.path.abspath = self.orig_abspath
-
-    def test_default_scm(self):
-        # Test from inside the tree.
-        os.chdir(sys.path[0])
-        scm = default_scm()
-        self.assertNotEqual(scm, None)
-
-        # Test from outside the tree.
-        os.chdir(os.path.expanduser("~"))
-        dir = find_checkout_root()
-        self.assertNotEqual(dir, None)
-
-        # Mock out abspath() to test being not in a checkout at all.
-        os.path.abspath = lambda x: "/"
-        self.assertRaises(SystemExit, default_scm)
-        os.path.abspath = self.orig_abspath
 
 # For testing the SCM baseclass directly.
 class SCMClassTests(unittest.TestCase):
@@ -739,12 +686,6 @@ Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
         self._setup_webkittools_scripts_symlink(scm)
         Checkout(scm).apply_patch(patch)
 
-    def test_apply_svn_patch_force(self):
-        scm = detect_scm_system(self.svn_checkout_path)
-        patch = self._create_patch(_svn_diff("-r3:5"))
-        self._setup_webkittools_scripts_symlink(scm)
-        self.assertRaises(ScriptError, Checkout(scm).apply_patch, patch, force=True)
-
     def test_commit_logs(self):
         # Commits have dates and usernames in them, so we can't just direct compare.
         self.assertTrue(re.search('fourth commit', self.scm.last_svn_commit_log()))
@@ -754,11 +695,6 @@ Q1dTBx0AAAB42itg4GlgYJjGwMDDyODMxMDw34GBgQEAJPQDJA==
         write_into_file_at_path('test_file', 'more test content')
         commit_text = self.scm.commit_with_message("another test commit", username)
         self.assertEqual(self.scm.svn_revision_from_commit_text(commit_text), '6')
-
-        self.scm.dryrun = True
-        write_into_file_at_path('test_file', 'still more test content')
-        commit_text = self.scm.commit_with_message("yet another test commit", username)
-        self.assertEqual(self.scm.svn_revision_from_commit_text(commit_text), '0')
 
     def test_commit_in_subdir(self, username=None):
         write_into_file_at_path('test_dir/test_file3', 'more test content')
@@ -1203,21 +1139,10 @@ class GitSVNTest(SCMTest):
         self._setup_webkittools_scripts_symlink(scm)
         Checkout(scm).apply_patch(patch)
 
-    def test_apply_git_patch_force(self):
-        scm = detect_scm_system(self.git_checkout_path)
-        patch = self._create_patch(_git_diff('HEAD~2..HEAD'))
-        self._setup_webkittools_scripts_symlink(scm)
-        self.assertRaises(ScriptError, Checkout(scm).apply_patch, patch, force=True)
-
     def test_commit_text_parsing(self):
         write_into_file_at_path('test_file', 'more test content')
         commit_text = self.scm.commit_with_message("another test commit")
         self.assertEqual(self.scm.svn_revision_from_commit_text(commit_text), '6')
-
-        self.scm.dryrun = True
-        write_into_file_at_path('test_file', 'still more test content')
-        commit_text = self.scm.commit_with_message("yet another test commit")
-        self.assertEqual(self.scm.svn_revision_from_commit_text(commit_text), '0')
 
     def test_commit_with_message_working_copy_only(self):
         write_into_file_at_path('test_file_commit1', 'more test content')

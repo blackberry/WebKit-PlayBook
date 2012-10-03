@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -37,14 +37,11 @@
 
 #include "FloatQuad.h"
 #include "LayerData.h"
+#include "LayerRendererSurface.h"
 #include "LayerTiler.h"
-#include "RenderSurface.h"
 
 #include <BlackBerryPlatformGuardedPointer.h>
-#include <wtf/Deque.h>
-#include <wtf/ThreadSafeRefCounted.h>
-
-class SkBitmap;
+#include <GuardedPointerDeleter.h>
 
 namespace BlackBerry {
 namespace Platform {
@@ -56,16 +53,11 @@ class Buffer;
 
 namespace WebCore {
 
-class DestroyOnCompositingThread;
-class GLES2Context;
-class LayerMessage;
 class LayerRenderer;
 
 class LayerCompositingThread : public ThreadSafeRefCounted<LayerCompositingThread>, public LayerData, public BlackBerry::Platform::GuardedPointerBase {
 public:
     static PassRefPtr<LayerCompositingThread> create(LayerType, PassRefPtr<LayerTiler>);
-
-    ~LayerCompositingThread();
 
     // Thread safe
     void setPluginView(PluginView*);
@@ -78,7 +70,7 @@ public:
 
     // Returns true if we have an animation
     bool updateAnimations(double currentTime);
-    void updateTextureContentsIfNeeded(GLES2Context*);
+    void updateTextureContentsIfNeeded();
     void bindContentsTexture()
     {
         if (m_tiler)
@@ -89,7 +81,7 @@ public:
     void setSublayers(const Vector<RefPtr<LayerCompositingThread> >&);
     const Vector<RefPtr<LayerCompositingThread> >& getSublayers() const { return m_sublayers; }
     void setSuperlayer(LayerCompositingThread* superlayer) { m_superlayer = superlayer; }
-    LayerCompositingThread* superlayer() const;
+    LayerCompositingThread* superlayer() const { return m_superlayer; }
 
     // The layer renderer must be set if the layer has been rendered
     void setLayerRenderer(LayerRenderer*);
@@ -100,9 +92,9 @@ public:
     void setDrawOpacity(float opacity) { m_drawOpacity = opacity; }
     float drawOpacity() const { return m_drawOpacity; }
 
-    void createRenderSurface();
-    RenderSurface* renderSurface() const { return m_renderSurface.get(); }
-    void clearRenderSurface() { m_renderSurface.clear(); }
+    void createLayerRendererSurface();
+    LayerRendererSurface* layerRendererSurface() const { return m_layerRendererSurface.get(); }
+    void clearLayerRendererSurface() { m_layerRendererSurface.clear(); }
 
     void setMaskLayer(LayerCompositingThread* maskLayer) { m_maskLayer = maskLayer; }
     LayerCompositingThread* maskLayer() const { return m_maskLayer.get(); }
@@ -116,10 +108,10 @@ public:
 
     void deleteTextures();
 
-    void drawTextures(GLES2Context*, int positionLocation, int texCoordLocation, const FloatRect& visibleRect);
+    void drawTextures(int positionLocation, int texCoordLocation, const FloatRect& visibleRect);
     bool hasMissingTextures() const { return m_tiler ? m_tiler->hasMissingTextures() : false; }
-    void drawMissingTextures(GLES2Context*, int positionLocation, int texCoordLocation, const FloatRect& visibleRect);
-    void drawSurface(GLES2Context*, const TransformationMatrix&, LayerCompositingThread* mask, int positionLocation, int texCoordLocation);
+    void drawMissingTextures(int positionLocation, int texCoordLocation, const FloatRect& visibleRect);
+    void drawSurface(const TransformationMatrix&, LayerCompositingThread* mask, int positionLocation, int texCoordLocation);
     bool isDirty() const { return m_tiler ? m_tiler->hasDirtyTiles() : false; }
 
     void releaseTextureResources();
@@ -139,32 +131,31 @@ public:
     // this allows you to do it from the compositing thread.
     void scheduleCommit();
 
+    // These two functions are used to update animated properties in LayerAnimation.
+    void setOpacity(float opacity) { m_opacity = opacity; }
+    void setTransform(const TransformationMatrix& matrix) { m_transform = matrix; }
+
     bool hasRunningAnimations() const { return !m_runningAnimations.isEmpty(); }
 
     bool hasVisibleHolePunchRect() const;
 
+protected:
+    virtual ~LayerCompositingThread();
+
 private:
     LayerCompositingThread(LayerType, PassRefPtr<LayerTiler>);
-
-    friend class DestroyOnCompositingThread;
-    void destroyOnCompositingThread();
 
     void updateTileContents(const IntRect& tile);
 
     void removeFromSuperlayer();
 
-    size_t numSublayers() const
-    {
-        return m_sublayers.size();
-    }
+    size_t numSublayers() const { return m_sublayers.size(); }
 
     // Returns the index of the sublayer or -1 if not found.
     int indexOfSublayer(const LayerCompositingThread*);
 
     // This should only be called from removeFromSuperlayer.
     void removeSublayer(LayerCompositingThread*);
-
-    void updateAnimation(const LayerAnimation*, double elapsedTime);
 
     LayerRenderer* m_layerRenderer;
 
@@ -177,7 +168,7 @@ private:
     // The bounding rectangle of the transformed layer
     FloatRect m_drawRect;
 
-    OwnPtr<RenderSurface> m_renderSurface;
+    OwnPtr<LayerRendererSurface> m_layerRendererSurface;
 
     RefPtr<LayerCompositingThread> m_maskLayer;
     RefPtr<LayerCompositingThread> m_replicaLayer;
@@ -194,7 +185,28 @@ private:
     RefPtr<LayerTiler> m_tiler;
 };
 
+} // namespace WebCore
+
+namespace WTF {
+
+// LayerCompositingThread objects must be destroyed on the compositing thread.
+// But it's possible for the last reference to be held by the WebKit thread.
+// So we create a custom specialization of ThreadSafeRefCounted which calls a
+// function that ensures the destructor is called on the correct thread, rather
+// than calling delete directly.
+template<>
+inline void ThreadSafeRefCounted<WebCore::LayerCompositingThread>::deref()
+{
+    if (derefBase()) {
+        // Delete on the compositing thread.
+        BlackBerry::Platform::GuardedPointerDeleter::deleteOnThread(
+                BlackBerry::Platform::userInterfaceThreadMessageClient(),
+                static_cast<WebCore::LayerCompositingThread*>(this));
+    }
 }
+
+} // namespace WTF
+
 
 #endif // USE(ACCELERATED_COMPOSITING)
 

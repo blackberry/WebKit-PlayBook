@@ -83,11 +83,12 @@ public:
     // Done, close any open tags, etc.
     void finished();
 
+    void setShouldSkipLeadingNewline(bool shouldSkip) { m_shouldSkipLeadingNewline = shouldSkip; }
+
     static bool scriptEnabled(Frame*);
     static bool pluginsEnabled(Frame*);
 
 private:
-    class FakeInsertionMode;
     class ExternalCharacterTokenBuffer;
     // Represents HTML5 "insertion mode"
     // http://www.whatwg.org/specs/web-apps/current-work/multipage/parsing.html#insertion-mode
@@ -109,7 +110,6 @@ private:
         InCellMode,
         InSelectMode,
         InSelectInTableMode,
-        InForeignContentMode,
         AfterBodyMode,
         InFramesetMode,
         AfterFramesetMode,
@@ -149,8 +149,9 @@ private:
     void processAnyOtherEndTagForInBody(AtomicHTMLToken&);
 
     void processCharacterBuffer(ExternalCharacterTokenBuffer&);
+    inline void processCharacterBufferForInBody(ExternalCharacterTokenBuffer&);
 
-    void processFakeStartTag(const QualifiedName&, PassRefPtr<NamedNodeMap> attributes = 0);
+    void processFakeStartTag(const QualifiedName&, PassOwnPtr<AttributeVector> attributes = nullptr);
     void processFakeEndTag(const QualifiedName&);
     void processFakeCharacters(const String&);
     void processFakePEndTagIfPInButtonScope();
@@ -168,12 +169,10 @@ private:
     void defaultForAfterHead();
     void defaultForInTableText();
 
-    void prepareToReprocessToken();
+    inline bool shouldProcessTokenInForeignContent(AtomicHTMLToken&);
+    void processTokenInForeignContent(AtomicHTMLToken&);
 
-    void reprocessStartTag(AtomicHTMLToken&);
-    void reprocessEndTag(AtomicHTMLToken&);
-
-    PassRefPtr<NamedNodeMap> attributesForIsindexInput(AtomicHTMLToken&);
+    PassOwnPtr<AttributeVector> attributesForIsindexInput(AtomicHTMLToken&);
 
     HTMLElementStack::ElementRecord* furthestBlockForFormattingElement(Element*);
     void callTheAdoptionAgency(AtomicHTMLToken&);
@@ -188,23 +187,9 @@ private:
     void parseError(AtomicHTMLToken&);
 
     InsertionMode insertionMode() const { return m_insertionMode; }
-    void setInsertionMode(InsertionMode mode)
-    {
-        m_insertionMode = mode;
-        m_isFakeInsertionMode = false;
-    }
-
-    bool isFakeInsertionMode() { return m_isFakeInsertionMode; }
-    void setFakeInsertionMode(InsertionMode mode)
-    {
-        m_insertionMode = mode;
-        m_isFakeInsertionMode = true;
-    }
+    void setInsertionMode(InsertionMode mode) { m_insertionMode = mode; }
 
     void resetInsertionModeAppropriately();
-
-    void processForeignContentUsingInBodyModeAndResetMode(AtomicHTMLToken& token);
-    void resetForeignInsertionMode();
 
     class FragmentParsingContext {
         WTF_MAKE_NONCOPYABLE(FragmentParsingContext);
@@ -233,16 +218,17 @@ private:
 
     bool m_reportErrors;
     bool m_isPaused;
-    bool m_isFakeInsertionMode;
 
-    // FIXME: InsertionModes should be a separate object to prevent direct
-    // manipulation of these variables.  For now, be careful to always use
-    // setInsertionMode and never set m_insertionMode directly.
+    // http://www.whatwg.org/specs/web-apps/current-work/multipage/parsing.html#insertion-mode
     InsertionMode m_insertionMode;
+
+    // http://www.whatwg.org/specs/web-apps/current-work/multipage/parsing.html#original-insertion-mode
     InsertionMode m_originalInsertionMode;
 
     // http://www.whatwg.org/specs/web-apps/current-work/multipage/tokenization.html#pending-table-character-tokens
     StringBuilder m_pendingTableCharacters;
+
+    bool m_shouldSkipLeadingNewline;
 
     // We access parser because HTML5 spec requires that we be able to change the state of the tokenizer
     // from within parser actions. We also need it to track the current position.
@@ -257,8 +243,6 @@ private:
     TextPosition m_lastScriptElementStartPosition;
 
     bool m_usePreHTML5ParserQuirks;
-
-    bool m_hasPendingForeignInsertionModeSteps;
 };
 
 }

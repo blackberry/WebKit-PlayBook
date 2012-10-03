@@ -27,50 +27,58 @@
 
 #include "config.h"
 
-#if ENABLE(PARALLEL_JOBS) && ENABLE(THREADING_GENERIC)
+#if ENABLE(THREADING_GENERIC)
 
 #include "ParallelJobs.h"
-#include "UnusedParam.h"
-
-#if OS(DARWIN) || OS(OPENBSD) || OS(NETBSD)
-#include <sys/sysctl.h>
-#include <sys/types.h>
-#elif OS(LINUX) || OS(AIX) || OS(SOLARIS)
-#include <unistd.h>
-#elif OS(WINDOWS)
-#include <Windows.h>
-#endif
+#include <wtf/NumberOfCores.h>
 
 namespace WTF {
 
 Vector< RefPtr<ParallelEnvironment::ThreadPrivate> >* ParallelEnvironment::s_threadPool = 0;
 
-int ParallelEnvironment::s_maxNumberOfParallelThreads = -1;
-
-void ParallelEnvironment::determineMaxNumberOfParallelThreads()
+ParallelEnvironment::ParallelEnvironment(ThreadFunction threadFunction, size_t sizeOfParameter, int requestedJobNumber) :
+    m_threadFunction(threadFunction),
+    m_sizeOfParameter(sizeOfParameter)
 {
-    const int defaultIfUnavailable = 2;
-#if OS(DARWIN) || OS(OPENBSD) || OS(NETBSD)
-    unsigned result;
-    size_t length = sizeof(result);
-    int name[] = {
-        CTL_HW,
-        HW_NCPU
-    };
-    int sysctlResult = sysctl(name, sizeof(name) / sizeof(int), &result, &length, 0, 0);
-    s_maxNumberOfParallelThreads = sysctlResult < 0 ? defaultIfUnavailable : result;
-#elif OS(LINUX) || OS(AIX) || OS(SOLARIS)
-    long sysconfResult = sysconf(_SC_NPROCESSORS_ONLN);
-    s_maxNumberOfParallelThreads = sysconfResult < 0 ? defaultIfUnavailable : static_cast<int>(sysconfResult);
-#elif OS(WINDOWS)
-    UNUSED_PARAM(defaultIfUnavailable);
+    ASSERT_ARG(requestedJobNumber, requestedJobNumber >= 1);
 
-    SYSTEM_INFO sysInfo;
-    GetSystemInfo(&sysInfo);
-    s_maxNumberOfParallelThreads = sysInfo.dwNumberOfProcessors;
-#else
-    s_maxNumberOfParallelThreads = defaultIfUnavailable;
-#endif
+    int maxNumberOfCores = numberOfProcessorCores();
+
+    if (!requestedJobNumber || requestedJobNumber > maxNumberOfCores)
+        requestedJobNumber = static_cast<unsigned>(maxNumberOfCores);
+
+    if (!s_threadPool)
+        s_threadPool = new Vector< RefPtr<ThreadPrivate> >();
+
+    // The main thread should be also a worker.
+    int maxNumberOfNewThreads = requestedJobNumber - 1;
+
+    for (int i = 0; i < maxNumberOfCores && m_threads.size() < static_cast<unsigned>(maxNumberOfNewThreads); ++i) {
+        if (s_threadPool->size() < static_cast<unsigned>(i) + 1U)
+            s_threadPool->append(ThreadPrivate::create());
+
+        if ((*s_threadPool)[i]->tryLockFor(this))
+            m_threads.append((*s_threadPool)[i]);
+    }
+
+    m_numberOfJobs = m_threads.size() + 1;
+}
+
+void ParallelEnvironment::execute(void* parameters)
+{
+    unsigned char* currentParameter = static_cast<unsigned char*>(parameters);
+    size_t i;
+    for (i = 0; i < m_threads.size(); ++i) {
+        m_threads[i]->execute(m_threadFunction, currentParameter);
+        currentParameter += m_sizeOfParameter;
+    }
+
+    // The work for the main thread.
+    (*m_threadFunction)(currentParameter);
+
+    // Wait until all jobs are done.
+    for (i = 0; i < m_threads.size(); ++i)
+        m_threads[i]->waitForFinish();
 }
 
 bool ParallelEnvironment::ThreadPrivate::tryLockFor(ParallelEnvironment* parent)
@@ -113,7 +121,7 @@ void ParallelEnvironment::ThreadPrivate::waitForFinish()
         m_threadCondition.wait(m_mutex);
 }
 
-void* ParallelEnvironment::ThreadPrivate::workerThread(void* threadData)
+void ParallelEnvironment::ThreadPrivate::workerThread(void* threadData)
 {
     ThreadPrivate* sharedThread = reinterpret_cast<ThreadPrivate*>(threadData);
     MutexLocker lock(sharedThread->m_mutex);
@@ -128,9 +136,7 @@ void* ParallelEnvironment::ThreadPrivate::workerThread(void* threadData)
 
         sharedThread->m_threadCondition.wait(sharedThread->m_mutex);
     }
-    return 0;
 }
 
 } // namespace WTF
-
-#endif // ENABLE(PARALLEL_JOBS) && ENABLE(THREADING_GENERIC)
+#endif // ENABLE(THREADING_GENERIC)

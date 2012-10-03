@@ -22,16 +22,14 @@
 #ifndef NodeRareData_h
 #define NodeRareData_h
 
+#include "ChildNodeList.h"
 #include "ClassNodeList.h"
+#include "DOMSettableTokenList.h"
 #include "DynamicNodeList.h"
-
-#if ENABLE(MICRODATA)
-#include "MicroDataItemList.h"
-#endif
-
 #include "MutationObserverRegistration.h"
 #include "NameNodeList.h"
 #include "QualifiedName.h"
+#include "RegionNodeList.h"
 #include "TagNodeList.h"
 #include "WebKitMutationObserver.h"
 #include <wtf/HashSet.h>
@@ -39,6 +37,11 @@
 #include <wtf/PassOwnPtr.h>
 #include <wtf/text/AtomicString.h>
 #include <wtf/text/StringHash.h>
+
+#if ENABLE(MICRODATA)
+#include "HTMLPropertiesCollection.h"
+#include "MicroDataItemList.h"
+#endif
 
 namespace WebCore {
 
@@ -48,11 +51,9 @@ class TreeScope;
 struct NodeListsNodeData {
     WTF_MAKE_NONCOPYABLE(NodeListsNodeData); WTF_MAKE_FAST_ALLOCATED;
 public:
-    typedef HashSet<DynamicNodeList*> NodeListSet;
+    typedef HashSet<DynamicSubtreeNodeList*> NodeListSet;
     NodeListSet m_listsWithCaches;
-    
-    RefPtr<DynamicNodeList::Caches> m_childNodeListCaches;
-    
+
     typedef HashMap<String, ClassNodeList*> ClassNodeListCache;
     ClassNodeListCache m_classNodeListCache;
 
@@ -71,6 +72,9 @@ public:
 #endif
 
     LabelsNodeList* m_labelsNodeListCache;
+
+    typedef HashMap<AtomicString, RegionNodeList*> RegionNodeListCache;
+    RegionNodeListCache m_regionNodeListCache;
  
     static PassOwnPtr<NodeListsNodeData> create()
     {
@@ -95,10 +99,14 @@ class NodeRareData {
 public:    
     NodeRareData()
         : m_treeScope(0)
+        , m_childNodeList(0)
         , m_tabIndex(0)
         , m_tabIndexWasSetExplicitly(false)
         , m_isFocused(false)
         , m_needsFocusAppearanceUpdateSoonAfterAttach(false)
+#if ENABLE(STYLE_SCOPED)
+        , m_numberOfScopedHTMLStyleChildren(0)
+#endif
     {
     }
 
@@ -125,6 +133,16 @@ public:
     void clearNodeLists() { m_nodeLists.clear(); }
     void setNodeLists(PassOwnPtr<NodeListsNodeData> lists) { m_nodeLists = lists; }
     NodeListsNodeData* nodeLists() const { return m_nodeLists.get(); }
+    NodeListsNodeData* ensureNodeLists(Node* node)
+    {
+        if (!m_nodeLists)
+            createNodeLists(node);
+        return m_nodeLists.get();
+    }
+    void clearChildNodeListCache();
+
+    ChildNodeList* childNodeList() const { return m_childNodeList; }
+    void setChildNodeList(ChildNodeList* list) { m_childNodeList = list; }
 
     short tabIndex() const { return m_tabIndex; }
     void setTabIndexExplicitly(short index) { m_tabIndex = index; m_tabIndexWasSetExplicitly = true; }
@@ -157,6 +175,88 @@ public:
     }
 #endif
 
+#if ENABLE(MICRODATA)
+    DOMSettableTokenList* itemProp() const
+    {
+        if (!m_itemProp)
+            m_itemProp = DOMSettableTokenList::create();
+
+        return m_itemProp.get();
+    }
+
+    void setItemProp(const String& value)
+    {
+        if (!m_itemProp)
+            m_itemProp = DOMSettableTokenList::create();
+
+        m_itemProp->setValue(value);
+    }
+
+    DOMSettableTokenList* itemRef() const
+    {
+        if (!m_itemRef)
+            m_itemRef = DOMSettableTokenList::create();
+
+        return m_itemRef.get();
+    }
+
+    void setItemRef(const String& value)
+    {
+        if (!m_itemRef)
+            m_itemRef = DOMSettableTokenList::create();
+
+        m_itemRef->setValue(value);
+    }
+
+    DOMSettableTokenList* itemType() const
+    {
+        if (!m_itemType)
+            m_itemType = DOMSettableTokenList::create();
+
+        return m_itemType.get();
+    }
+
+    void setItemType(const String& value)
+    {
+        if (!m_itemType)
+            m_itemType = DOMSettableTokenList::create();
+
+        m_itemType->setValue(value);
+    }
+
+    HTMLPropertiesCollection* properties(Node* node)
+    {
+        if (!m_properties)
+            m_properties = HTMLPropertiesCollection::create(node);
+
+        return m_properties.get();
+    }
+#endif
+
+#if ENABLE(STYLE_SCOPED)
+    void registerScopedHTMLStyleChild()
+    {
+        ++m_numberOfScopedHTMLStyleChildren;
+    }
+
+    void unregisterScopedHTMLStyleChild()
+    {
+        ASSERT(m_numberOfScopedHTMLStyleChildren > 0);
+        if (m_numberOfScopedHTMLStyleChildren > 0)
+            --m_numberOfScopedHTMLStyleChildren;
+    }
+
+    bool hasScopedHTMLStyleChild() const
+    {
+        return m_numberOfScopedHTMLStyleChildren;
+    }
+
+    size_t numberOfScopedHTMLStyleChildren() const
+    {
+        return m_numberOfScopedHTMLStyleChildren;
+    }
+#endif
+
     bool isFocused() const { return m_isFocused; }
     void setFocused(bool focused) { m_isFocused = focused; }
 
@@ -166,8 +266,11 @@ protected:
     void setNeedsFocusAppearanceUpdateSoonAfterAttach(bool needs) { m_needsFocusAppearanceUpdateSoonAfterAttach = needs; }
 
 private:
+    void createNodeLists(Node*);
+
     TreeScope* m_treeScope;
     OwnPtr<NodeListsNodeData> m_nodeLists;
+    ChildNodeList* m_childNodeList;
     OwnPtr<EventTargetData> m_eventTargetData;
     short m_tabIndex;
     bool m_tabIndexWasSetExplicitly : 1;
@@ -177,6 +280,17 @@ private:
 #if ENABLE(MUTATION_OBSERVERS)
     OwnPtr<Vector<OwnPtr<MutationObserverRegistration> > > m_mutationObserverRegistry;
     OwnPtr<HashSet<MutationObserverRegistration*> > m_transientMutationObserverRegistry;
+#endif
+
+#if ENABLE(MICRODATA)
+    mutable RefPtr<DOMSettableTokenList> m_itemProp;
+    mutable RefPtr<DOMSettableTokenList> m_itemRef;
+    mutable RefPtr<DOMSettableTokenList> m_itemType;
+    mutable OwnPtr<HTMLPropertiesCollection> m_properties;
+#endif
+
+#if ENABLE(STYLE_SCOPED)
+    size_t m_numberOfScopedHTMLStyleChildren;
 #endif
 };
 

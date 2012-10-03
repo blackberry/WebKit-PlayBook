@@ -25,6 +25,7 @@
 #include "ewk_private.h"
 
 #include <Evas.h>
+#include <RefPtrCairo.h>
 #include <eina_safety_checks.h>
 #include <ewk_tiled_backing_store.h>
 
@@ -33,9 +34,45 @@ static Ewk_View_Smart_Class _parent_sc = EWK_VIEW_SMART_CLASS_INIT_NULL;
 static Eina_Bool _ewk_view_tiled_render_cb(void* data, Ewk_Tile* tile, const Eina_Rectangle* area)
 {
     Ewk_View_Private_Data* priv = static_cast<Ewk_View_Private_Data*>(data);
-    Eina_Rectangle rect = {area->x + tile->x, area->y + tile->y, area->w, area->h};
+    Eina_Rectangle rect = {area->x + tile->x, area->y + tile->y, area->w, area->h};    
+    int stride;
+    cairo_format_t format;
 
-    return ewk_view_paint_contents(priv, tile->cairo, &rect);
+    if (tile->cspace == EVAS_COLORSPACE_ARGB8888) {
+        stride = tile->width * 4;
+        format = CAIRO_FORMAT_ARGB32;
+    } else if (tile->cspace == EVAS_COLORSPACE_RGB565_A5P) {
+        stride = tile->width * 2;
+        format = CAIRO_FORMAT_RGB16_565;
+    } else {
+        ERR("unknown color space: %d", tile->cspace);
+        return false;
+    }
+
+    uint8_t* pixels = static_cast<uint8_t*>(evas_object_image_data_get(tile->image, true));
+    if (!pixels) {
+        ERR("fail to get the pixel data from the image object");
+        return false;
+    }
+    RefPtr<cairo_surface_t> surface = adoptRef(cairo_image_surface_create_for_data(pixels, format, tile->width, tile->height, stride));
+    cairo_status_t status = cairo_surface_status(surface.get());
+    if (status != CAIRO_STATUS_SUCCESS) {
+        ERR("failed to create cairo surface: %s", cairo_status_to_string(status));
+        return false;
+    }
+
+    RefPtr<cairo_t> cairo = adoptRef(cairo_create(surface.get()));
+    status = cairo_status(cairo.get());
+    if (status != CAIRO_STATUS_SUCCESS) {
+        ERR("failed to create cairo: %s", cairo_status_to_string(status));
+        return false;
+    }
+
+    cairo_translate(cairo.get(), -tile->x, -tile->y);
+
+    bool result = ewk_view_paint_contents(priv, cairo.get(), &rect);
+    evas_object_image_data_set(tile->image, pixels);
+    return result;
 }
 
 static void* _ewk_view_tiled_updates_process_pre(void* data, Evas_Object* ewkView)
@@ -47,12 +84,12 @@ static void* _ewk_view_tiled_updates_process_pre(void* data, Evas_Object* ewkVie
 
 static Evas_Object* _ewk_view_tiled_smart_backing_store_add(Ewk_View_Smart_Data* smartData)
 {
-    Evas_Object* bs = ewk_tiled_backing_store_add(smartData->base.evas);
+    Evas_Object* backingStore = ewk_tiled_backing_store_add(smartData->base.evas);
     ewk_tiled_backing_store_render_cb_set
-        (bs, _ewk_view_tiled_render_cb, smartData->_priv);
+        (backingStore, _ewk_view_tiled_render_cb, smartData->_priv);
     ewk_tiled_backing_store_updates_process_pre_set
-        (bs, _ewk_view_tiled_updates_process_pre, smartData->_priv);
-    return bs;
+        (backingStore, _ewk_view_tiled_updates_process_pre, smartData->_priv);
+    return backingStore;
 }
 
 static void
@@ -67,93 +104,53 @@ _ewk_view_tiled_contents_size_changed_cb(void* data, Evas_Object* ewkView, void*
 
 static void _ewk_view_tiled_smart_add(Evas_Object* ewkView)
 {
-    Ewk_View_Smart_Data* sd;
+    Ewk_View_Smart_Data* smartData;
 
     _parent_sc.sc.add(ewkView);
 
-    sd = static_cast<Ewk_View_Smart_Data*>(evas_object_smart_data_get(ewkView));
-    if (!sd)
+    smartData = static_cast<Ewk_View_Smart_Data*>(evas_object_smart_data_get(ewkView));
+    if (!smartData)
         return;
 
     evas_object_smart_callback_add(
-        sd->main_frame, "contents,size,changed",
-        _ewk_view_tiled_contents_size_changed_cb, sd);
-    ewk_frame_paint_full_set(sd->main_frame, true);
+        smartData->main_frame, "contents,size,changed",
+        _ewk_view_tiled_contents_size_changed_cb, smartData);
 }
 
 static Eina_Bool _ewk_view_tiled_smart_scrolls_process(Ewk_View_Smart_Data* smartData)
 {
-    const Ewk_Scroll_Request* sr;
-    const Ewk_Scroll_Request* sr_end;
+    const Ewk_Scroll_Request* scrollRequest;
+    const Ewk_Scroll_Request* endOfScrollRequest;
     size_t count;
-    Evas_Coord vw, vh;
+    Evas_Coord contentsWidth, contentsHeight;
 
-    ewk_frame_contents_size_get(smartData->main_frame, &vw, &vh);
+    ewk_frame_contents_size_get(smartData->main_frame, &contentsWidth, &contentsHeight);
 
-    sr = ewk_view_scroll_requests_get(smartData->_priv, &count);
-    sr_end = sr + count;
-    for (; sr < sr_end; sr++) {
-        if (sr->main_scroll)
-            ewk_tiled_backing_store_scroll_full_offset_add
-                (smartData->backing_store, sr->dx, sr->dy);
-        else {
-            Evas_Coord sx, sy, sw, sh;
-
-            sx = sr->x;
-            sy = sr->y;
-            sw = sr->w;
-            sh = sr->h;
-
-            if (abs(sr->dx) >= sw || abs(sr->dy) >= sh) {
-                /* doubt webkit would be so     stupid... */
-                DBG("full page scroll %+03d,%+03d. convert to repaint %d,%d + %dx%d",
-                    sr->dx, sr->dy, sx, sy, sw, sh);
-                ewk_view_repaint_add(smartData->_priv, sx, sy, sw, sh);
-                continue;
-            }
-
-            if (sx + sw > vw)
-                sw = vw - sx;
-            if (sy + sh > vh)
-                sh = vh - sy;
-
-            if (sw < 0)
-                sw = 0;
-            if (sh < 0)
-                sh = 0;
-
-            if (!sw || !sh)
-                continue;
-
-            sx -= abs(sr->dx);
-            sy -= abs(sr->dy);
-            sw += abs(sr->dx);
-            sh += abs(sr->dy);
-            ewk_view_repaint_add(smartData->_priv, sx, sy, sw, sh);
-            INF("using repaint for inner frame scolling!");
-        }
-    }
+    scrollRequest = ewk_view_scroll_requests_get(smartData->_priv, &count);
+    endOfScrollRequest = scrollRequest + count;
+    for (; scrollRequest < endOfScrollRequest; scrollRequest++)
+        ewk_tiled_backing_store_scroll_full_offset_add(smartData->backing_store, scrollRequest->dx, scrollRequest->dy);
 
     return true;
 }
 
 static Eina_Bool _ewk_view_tiled_smart_repaints_process(Ewk_View_Smart_Data* smartData)
 {
-    const Eina_Rectangle* pr, * pr_end;
+    const Eina_Rectangle* paintRect, * endOfpaintRect;
     size_t count;
-    int sx, sy;
+    int scrollX, scrollY;
 
-    ewk_frame_scroll_pos_get(smartData->main_frame, &sx, &sy);
+    ewk_frame_scroll_pos_get(smartData->main_frame, &scrollX, &scrollY);
 
-    pr = ewk_view_repaints_get(smartData->_priv, &count);
-    pr_end = pr + count;
-    for (; pr < pr_end; pr++) {
-        Eina_Rectangle r;
-        r.x = pr->x + sx;
-        r.y = pr->y + sy;
-        r.w = pr->w;
-        r.h = pr->h;
-        ewk_tiled_backing_store_update(smartData->backing_store, &r);
+    paintRect = ewk_view_repaints_pop(smartData->_priv, &count);
+    endOfpaintRect = paintRect + count;
+    for (; paintRect < endOfpaintRect; paintRect++) {
+        Eina_Rectangle rect;
+        rect.x = paintRect->x + scrollX;
+        rect.y = paintRect->y + scrollY;
+        rect.w = paintRect->w;
+        rect.h = paintRect->h;
+        ewk_tiled_backing_store_update(smartData->backing_store, &rect);
     }
     ewk_tiled_backing_store_updates_process(smartData->backing_store);
 
@@ -196,6 +193,11 @@ static void _ewk_view_tiled_smart_zoom_weak_smooth_scale_set(Ewk_View_Smart_Data
     ewk_tiled_backing_store_zoom_weak_smooth_scale_set(smartData->backing_store, smoothScale);
 }
 
+static void _ewk_view_tiled_smart_bg_color_set(Ewk_View_Smart_Data* smartData, unsigned char red, unsigned char green, unsigned char blue, unsigned char alpha)
+{
+    ewk_tiled_backing_store_alpha_set(smartData->backing_store, alpha < 255);
+}
+
 static void _ewk_view_tiled_smart_flush(Ewk_View_Smart_Data* smartData)
 {
     ewk_tiled_backing_store_flush(smartData->backing_store);
@@ -212,6 +214,123 @@ static Eina_Bool _ewk_view_tiled_smart_pre_render_relative_radius(Ewk_View_Smart
 {
     return ewk_tiled_backing_store_pre_render_relative_radius
                (smartData->backing_store, n, zoom);
+}
+
+static inline int _ewk_view_tiled_rect_collision_check(Eina_Rectangle destination, Eina_Rectangle source)
+{
+    int direction = 0;
+    if (destination.x < source.x)
+        direction = direction | (1 << 0); // 0 bit shift, left
+    if (destination.y < source.y)
+        direction = direction | (1 << 1); // 1 bit shift, top
+    if (destination.x + destination.w > source.x + source.w)
+        direction = direction | (1 << 2); // 2 bit shift, right
+    if (destination.y + destination.h > source.y + source.h)
+        direction = direction | (1 << 3); // 3 bit shift, bottom
+    DBG("check collision %d\r\n", direction);
+    return direction;
+}
+
+static inline void _ewk_view_tiled_rect_collision_resolve(int direction, Eina_Rectangle* destination, Eina_Rectangle source)
+{
+    if (direction & (1 << 0)) // 0 bit shift, left
+        destination->x = source.x;
+    if (direction & (1 << 1)) // 1 bit shift, top
+        destination->y = source.y;
+    if (direction & (1 << 2)) // 2 bit shift, right
+        destination->x = destination->x - ((destination->x + destination->w) - (source.x + source.w));
+    if (direction & (1 << 3)) // 3 bit shift, bottom
+        destination->y = destination->y - ((destination->y + destination->h) - (source.y + source.h));
+}
+
+static Eina_Bool _ewk_view_tiled_smart_pre_render_start(Ewk_View_Smart_Data* smartData)
+{
+    int contentWidth, contentHeight;
+    ewk_frame_contents_size_get(smartData->main_frame, &contentWidth, &contentHeight);
+
+    int viewX, viewY, viewWidth, viewHeight;
+    ewk_frame_visible_content_geometry_get(smartData->main_frame, false, &viewX, &viewY, &viewWidth, &viewHeight);
+
+    if (viewWidth <= 0 || viewHeight <= 0 || contentWidth <= 0 || contentHeight <= 0)
+        return false;
+
+    if (viewWidth >= contentWidth && viewHeight >= contentHeight)
+        return false;
+
+    int previousViewX, previousViewY;
+    previousViewX = smartData->previousView.x;
+    previousViewY = smartData->previousView.y;
+
+    if (previousViewX < 0 || previousViewX > contentWidth || previousViewY < 0 || previousViewY > contentHeight)
+        previousViewX = previousViewY = 0;
+
+    float currentViewZoom = ewk_view_zoom_get(smartData->self);
+
+    // pre-render works when two conditions are met.
+    // zoom has been changed.
+    // and the view has been moved more than tile size.
+    if (abs(previousViewX - viewX) < defaultTileWidth
+        && abs(previousViewY - viewY) < defaultTileHeigth
+        && smartData->previousView.zoom == currentViewZoom) {
+        return false;
+    }
+
+    // store previous view position and zoom.
+    smartData->previousView.x = viewX;
+    smartData->previousView.y = viewY;
+    smartData->previousView.zoom = currentViewZoom;
+
+    // cancelling previous pre-rendering list if exists.
+    ewk_view_pre_render_cancel(smartData->self);
+
+    Ewk_Tile_Unused_Cache* tileUnusedCache = ewk_view_tiled_unused_cache_get(smartData->self);
+    int maxMemory = ewk_tile_unused_cache_max_get(tileUnusedCache);
+    if (maxMemory <= viewWidth * viewHeight * EWK_ARGB_BYTES_SIZE)
+        return false;
+
+    Eina_Rectangle viewRect = {viewX, viewY, viewWidth, viewHeight};
+    Eina_Rectangle contentRect = {0, 0, contentWidth, contentHeight};
+
+    // get a base render rect.
+    const int contentMemory = contentWidth * contentHeight * EWK_ARGB_BYTES_SIZE;
+
+    // get render rect's width and height.
+    Eina_Rectangle renderRect;
+    if (maxMemory > contentMemory)
+        renderRect = contentRect;
+    else {
+        // Make a base rectangle as big as possible with using maxMemory.
+        // and then reshape the base rectangle to fit to contents.
+        const int baseSize = static_cast<int>(sqrt(maxMemory / 4.0f));
+        const float widthRate = (viewRect.w + (defaultTileWidth * 2)) / static_cast<float>(baseSize);
+        const float heightRate = baseSize / static_cast<float>(contentHeight);
+        const float rectRate = std::max(widthRate, heightRate);
+
+        renderRect.w = static_cast<int>(baseSize * rectRate);
+        renderRect.h = static_cast<int>(baseSize / rectRate);
+        renderRect.x = viewRect.x + (viewRect.w / 2) - (renderRect.w / 2);
+        renderRect.y = viewRect.y + (viewRect.h / 2) - (renderRect.h / 2);
+
+        // reposition of renderRect, if the renderRect overlapped the content rect, this code moves the renderRect inside the content rect.
+        int collisionSide = _ewk_view_tiled_rect_collision_check(renderRect, contentRect);
+        if (collisionSide > 0)
+            _ewk_view_tiled_rect_collision_resolve(collisionSide, &renderRect, contentRect);
+
+        // check abnormal render rect
+        if (renderRect.x < 0)
+            renderRect.x = 0;
+        if (renderRect.y < 0)
+            renderRect.y = 0;
+        if (renderRect.w > contentWidth)
+            renderRect.w = contentWidth;
+        if (renderRect.h > contentHeight)
+            renderRect.h = contentHeight;
+    }
+
+    // enqueue tiles into tiled backing store in spiral order.
+    ewk_tiled_backing_store_pre_render_spiral_queue(smartData->backing_store, &viewRect, &renderRect, maxMemory, currentViewZoom);
+
+    return true;
 }
 
 static void _ewk_view_tiled_smart_pre_render_cancel(Ewk_View_Smart_Data* smartData)
@@ -234,8 +353,11 @@ Eina_Bool ewk_view_tiled_smart_set(Ewk_View_Smart_Class* api)
     if (!ewk_view_base_smart_set(api))
         return false;
 
-    if (EINA_UNLIKELY(!_parent_sc.sc.add))
+    if (EINA_UNLIKELY(!_parent_sc.sc.add)) {
+        _parent_sc.sc.name = ewkViewTiledName;
         ewk_view_base_smart_set(&_parent_sc);
+        api->sc.parent = reinterpret_cast<Evas_Smart_Class*>(&_parent_sc);
+    }
 
     api->sc.add = _ewk_view_tiled_smart_add;
 
@@ -246,9 +368,11 @@ Eina_Bool ewk_view_tiled_smart_set(Ewk_View_Smart_Class* api)
     api->zoom_set = _ewk_view_tiled_smart_zoom_set;
     api->zoom_weak_set = _ewk_view_tiled_smart_zoom_weak_set;
     api->zoom_weak_smooth_scale_set = _ewk_view_tiled_smart_zoom_weak_smooth_scale_set;
+    api->bg_color_set = _ewk_view_tiled_smart_bg_color_set;
     api->flush = _ewk_view_tiled_smart_flush;
     api->pre_render_region = _ewk_view_tiled_smart_pre_render_region;
     api->pre_render_relative_radius = _ewk_view_tiled_smart_pre_render_relative_radius;
+    api->pre_render_start = _ewk_view_tiled_smart_pre_render_start;
     api->pre_render_cancel = _ewk_view_tiled_smart_pre_render_cancel;
     api->disable_render = _ewk_view_tiled_smart_disable_render;
     api->enable_render = _ewk_view_tiled_smart_enable_render;
@@ -257,7 +381,7 @@ Eina_Bool ewk_view_tiled_smart_set(Ewk_View_Smart_Class* api)
 
 static inline Evas_Smart* _ewk_view_tiled_smart_class_new(void)
 {
-    static Ewk_View_Smart_Class api = EWK_VIEW_SMART_CLASS_INIT_NAME_VERSION("EWK_View_Tiled");
+    static Ewk_View_Smart_Class api = EWK_VIEW_SMART_CLASS_INIT_NAME_VERSION(ewkViewTiledName);
     static Evas_Smart* smart = 0;
 
     if (EINA_UNLIKELY(!smart)) {
@@ -275,14 +399,16 @@ Evas_Object* ewk_view_tiled_add(Evas* canvas)
 
 Ewk_Tile_Unused_Cache* ewk_view_tiled_unused_cache_get(const Evas_Object* ewkView)
 {
-    Ewk_View_Smart_Data* sd = ewk_view_smart_data_get(ewkView);
-    EINA_SAFETY_ON_NULL_RETURN_VAL(sd, 0);
-    return ewk_tiled_backing_store_tile_unused_cache_get(sd->backing_store);
+    EWK_VIEW_TYPE_CHECK_OR_RETURN(ewkView, ewkViewTiledName, 0);
+    Ewk_View_Smart_Data* smartData = ewk_view_smart_data_get(ewkView);
+    EINA_SAFETY_ON_NULL_RETURN_VAL(smartData, 0);
+    return ewk_tiled_backing_store_tile_unused_cache_get(smartData->backing_store);
 }
 
 void ewk_view_tiled_unused_cache_set(Evas_Object* ewkView, Ewk_Tile_Unused_Cache* cache)
 {
-    Ewk_View_Smart_Data* sd = ewk_view_smart_data_get(ewkView);
-    EINA_SAFETY_ON_NULL_RETURN(sd);
-    ewk_tiled_backing_store_tile_unused_cache_set(sd->backing_store, cache);
+    EWK_VIEW_TYPE_CHECK_OR_RETURN(ewkView, ewkViewTiledName);
+    Ewk_View_Smart_Data* smartData = ewk_view_smart_data_get(ewkView);
+    EINA_SAFETY_ON_NULL_RETURN(smartData);
+    ewk_tiled_backing_store_tile_unused_cache_set(smartData->backing_store, cache);
 }

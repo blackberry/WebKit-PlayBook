@@ -82,7 +82,10 @@ private:
     virtual WebCore::FloatRect convertToUserSpace(const WebCore::FloatRect&);
     virtual WebCore::IntPoint screenToWindow(const WebCore::IntPoint&);
     virtual WebCore::IntRect windowToScreen(const WebCore::IntRect&);
-    
+
+#if ENABLE(GESTURE_EVENTS)
+    virtual void doneWithGestureEvent(const WebGestureEvent&, bool wasEventHandled);
+#endif
     virtual void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled);
 
     virtual PassRefPtr<WebPopupMenuProxy> createPopupMenuProxy(WebPageProxy*);
@@ -121,6 +124,8 @@ private:
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingCorrectionPanel);
     virtual String dismissCorrectionPanelSoon(WebCore::ReasonForDismissingCorrectionPanel);
     virtual void recordAutocorrectionResponse(WebCore::EditorClient::AutocorrectionResponseType, const String& replacedString, const String& replacementString);
+
+    virtual void recommendedScrollbarStyleDidChange(int32_t newStyle);
 
     virtual WKView* wkView() const { return m_wkView; }
 

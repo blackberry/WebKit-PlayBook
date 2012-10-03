@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,12 +21,14 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "Color.h"
+#include "IntRect.h"
 #include "TextureCacheCompositingThread.h"
 
 #include <GLES2/gl2.h>
+#include <SkBitmap.h>
 #include <wtf/CurrentTime.h>
 #include <wtf/OwnArrayPtr.h>
-#include <wtf/PassOwnArrayPtr.h>
 
 #define DEBUG_TEXTURE_UPLOADS 0
 
@@ -46,13 +48,13 @@ static void copyImageData(unsigned char* dst, int dstStride, int dstX, int dstY,
     }
 }
 
-Texture::Texture(GLES2Context* context, bool isColor)
+Texture::Texture(bool isColor)
     : m_protectionCount(0)
     , m_textureId(0)
     , m_isColor(isColor)
     , m_isOpaque(false)
 {
-    textureCacheCompositingThread()->install(this, context);
+    textureCacheCompositingThread()->install(this);
 }
 
 Texture::~Texture()
@@ -60,7 +62,7 @@ Texture::~Texture()
     textureCacheCompositingThread()->textureDestroyed(this);
 }
 
-void Texture::updateContents(GLES2Context* context, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tile, bool isOpaque)
+void Texture::updateContents(const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tile, bool isOpaque)
 {
     IntRect tileDirtyRect(dirtyRect);
 
@@ -79,35 +81,35 @@ void Texture::updateContents(GLES2Context* context, const SkBitmap& contents, co
     if (!pixels)
         return;
 
-    bool subImage = (tile.size() == m_size);
+    bool subImage = tile.size() == m_size;
     IntSize size = subImage ? tileDirtyRect.size() : tile.size();
     IntSize contentsSize(IntSize(contents.width(), contents.height()));
 
 #if DEBUG_TEXTURE_UPLOADS
     fprintf(stderr, "%s\n", subImage ? "SUBIMAGE" : "IMAGE");
-    fprintf(stderr, "  tile = %s, m_size = %s\n", tile.toString().latin1().data(), m_size.toString().latin1().data());
-    fprintf(stderr, "  tileDirtyRect = %s, contents.size() = %s\n", tileDirtyRect.toString().latin1().data(), contentsSize.toString().latin1().data());
-    IntSize yeOldeSize = size;
+    fprintf(stderr, "  tile = (x=%d,y=%d,width=%d,height=%d), m_size = (%dx%d)\n", tile.x(), tile.y(), tile.width(), tile.height(), m_size.width(), m_size.height());
+    fprintf(stderr, "  tileDirtyRect = (x=%d,y=%d,width=%d,height=%d), contents.size() = (%dx%d)\n", tileDirtyRect.x(), tileDirtyRect.y(), tileDirtyRect.width(), tileDirtyRect.height(), contentsSize.width(), contentsSize.height());
+    IntSize sizeBeforeShunk = size;
 #endif
 
     size = size.shrunkTo(contentsSize);
 
 #if DEBUG_TEXTURE_UPLOADS
-    if (size != yeOldeSize)
+    if (size != sizeBeforeShunk)
         fprintf(stderr, "  SHRUNK!!!!\n");
 #endif
 
     if (!hasTexture()) {
         // We may have been evicted by the TextureCacheCompositingThread,
         // attempt to install us again.
-        if (!textureCacheCompositingThread()->install(this, context))
+        if (!textureCacheCompositingThread()->install(this))
             return;
     }
 
     glBindTexture(GL_TEXTURE_2D, m_textureId);
 
     ASSERT(size.width() >= 0);
-    bool doesTileStrideEqualTextureStride = contents.width() == static_cast<unsigned>(size.width());
+    bool doesTileStrideEqualTextureStride = contents.width() == size.width();
 
     OwnArrayPtr<unsigned char> tmp;
     if (!doesTileStrideEqualTextureStride) {
@@ -128,7 +130,7 @@ void Texture::updateContents(GLES2Context* context, const SkBitmap& contents, co
                         size.width(), size.height());
         double t = currentTime();
 #endif
-        glTexSubImage2D(GL_TEXTURE_2D, 0 /*level*/,
+        glTexSubImage2D(GL_TEXTURE_2D, 0,
                         tileDirtyRect.x() - tile.x(), tileDirtyRect.y() - tile.y(),
                         size.width(), size.height(),
                         GL_RGBA, GL_UNSIGNED_BYTE, pixels);
@@ -141,9 +143,7 @@ void Texture::updateContents(GLES2Context* context, const SkBitmap& contents, co
         fprintf(stderr, "glTexImage2D(%d, %d)\n", size.width(), size.height());
         double t = currentTime();
 #endif
-        glTexImage2D(GL_TEXTURE_2D, 0 /*level*/, GL_RGBA /*internal*/,
-                     size.width(), size.height(),
-                     0 /*border*/, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
+        glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, size.width(), size.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, pixels);
 #if DEBUG_TEXTURE_UPLOADS
         t = currentTime() - t;
         fprintf(stderr, "    time = %f s (%d bytes)\n", t, size.width()*size.height()*4);
@@ -161,14 +161,12 @@ void Texture::updateContents(GLES2Context* context, const SkBitmap& contents, co
         textureCacheCompositingThread()->textureResized(this, oldSize);
 }
 
-void Texture::setContentsToColor(GLES2Context*, const Color& color)
+void Texture::setContentsToColor(const Color& color)
 {
     m_isOpaque = !color.hasAlpha();
     RGBA32 rgba = color.rgb();
     glBindTexture(GL_TEXTURE_2D, m_textureId);
-    glTexImage2D(GL_TEXTURE_2D, 0 /*level*/, GL_RGBA /*internal*/,
-                 1, 1,
-                 0 /*border*/, GL_RGBA, GL_UNSIGNED_BYTE, &rgba);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, 1, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, &rgba);
 
     IntSize oldSize = m_size;
     m_size = IntSize(1, 1);
@@ -181,7 +179,7 @@ bool Texture::protect(const IntSize& size)
     if (!hasTexture()) {
         // We may have been evicted by the TextureCacheCompositingThread,
         // attempt to install us again.
-        if (!textureCacheCompositingThread()->install(this, /*context*/ 0))
+        if (!textureCacheCompositingThread()->install(this))
             return false;
     }
 
@@ -195,9 +193,7 @@ bool Texture::protect(const IntSize& size)
     textureCacheCompositingThread()->textureResized(this, oldSize);
 
     glBindTexture(GL_TEXTURE_2D, m_textureId);
-    glTexImage2D(GL_TEXTURE_2D, 0 /*level*/, GL_RGBA /*internal*/,
-                 size.width(), size.height(),
-                 0 /*border*/, GL_RGBA, GL_UNSIGNED_BYTE, 0);
+    glTexImage2D(GL_TEXTURE_2D, 0 , GL_RGBA, size.width(), size.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
     return true;
 }
 

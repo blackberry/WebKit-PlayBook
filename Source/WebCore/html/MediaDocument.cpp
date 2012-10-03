@@ -32,7 +32,7 @@
 #include "EventNames.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
 #include "FrameLoaderClientBlackBerry.h"
 #include "FrameView.h"
 #endif
@@ -77,23 +77,22 @@ void MediaDocumentParser::createDocumentStructure()
     ExceptionCode ec;
     RefPtr<Element> rootElement = document()->createElement(htmlTag, false);
     document()->appendChild(rootElement, ec);
+    document()->setCSSTarget(rootElement.get());
     static_cast<HTMLHtmlElement*>(rootElement.get())->insertedByParser();
 
     if (document()->frame())
         document()->frame()->loader()->dispatchDocumentElementAvailable();
         
     RefPtr<Element> body = document()->createElement(bodyTag, false);
-    body->setAttribute(styleAttr, "background-color: rgb(38,38,38);");
-
     rootElement->appendChild(body, ec);
 
     RefPtr<Element> mediaElement = document()->createElement(videoTag, false);
-        
+
     m_mediaElement = static_cast<HTMLVideoElement*>(mediaElement.get());
     m_mediaElement->setAttribute(controlsAttr, "");
     m_mediaElement->setAttribute(autoplayAttr, "");
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     Frame* frameForWidth = document()->frame();
     if (!frameForWidth)
         return;
@@ -133,7 +132,7 @@ void MediaDocumentParser::appendBytes(DocumentWriter*, const char*, size_t)
     createDocumentStructure();
     finish();
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     Document* doc = document();
     if (!doc)
         return;
@@ -199,7 +198,7 @@ static inline HTMLVideoElement* ancestorVideoElement(Node* node)
 
 void MediaDocument::defaultEventHandler(Event* event)
 {
-#if !(PLATFORM(BLACKBERRY) && OS(QNX))
+#if !PLATFORM(BLACKBERRY)
     // Match the default Quicktime plugin behavior to allow 
     // clicking and double-clicking to pause and play the media.
     Node* targetNode = event->target()->toNode();

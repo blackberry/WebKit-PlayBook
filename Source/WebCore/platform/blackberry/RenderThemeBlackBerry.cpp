@@ -1,22 +1,32 @@
 /*
- * Copyright (C) Research In Motion Limited 2009-2010. All rights reserved.
  * Copyright (C) 2006, 2007 Apple Inc.
  * Copyright (C) 2009 Google Inc.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
+ *
+ * This library is free software; you can redistribute it and/or
+ * modify it under the terms of the GNU Lesser General Public
+ * License as published by the Free Software Foundation; either
+ * version 2 of the License, or (at your option) any later version.
+ *
+ * This library is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+ * Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public
+ * License along with this library; if not, write to the Free Software
+ * Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301  USA
  */
 
 #include "config.h"
 #include "RenderThemeBlackBerry.h"
 
 #include "CSSValueKeywords.h"
-#include "ColorSpace.h"
 #include "Frame.h"
-#include "Gradient.h"
-#include "GraphicsContext.h"
 #include "HTMLMediaElement.h"
 #include "MediaControlElements.h"
 #include "MediaPlayerPrivateBlackBerry.h"
 #include "PaintInfo.h"
-#include "Path.h"
 #include "RenderProgress.h"
 #include "RenderSlider.h"
 #include "RenderView.h"
@@ -24,7 +34,7 @@
 
 namespace WebCore {
 
-// Sizes (px)
+// Sizes (unit px)
 const unsigned smallRadius = 1;
 const unsigned largeRadius = 3;
 const unsigned lineWidth = 1;
@@ -94,6 +104,8 @@ const RGBA32 selection = 0xff2b8fff;
 const RGBA32 blackPen = Color::black;
 const RGBA32 focusRingPen = 0xffa3c8fe;
 
+float RenderThemeBlackBerry::defaultFontSize = 16;
+
 // We aim to match IE here.
 // -IE uses a font based on the encoding as the default font for form controls.
 // -Gecko uses MS Shell Dlg (actually calls GetStockObject(DEFAULT_GUI_FONT),
@@ -102,14 +114,12 @@ const RGBA32 focusRingPen = 0xffa3c8fe;
 //
 // FIXME: The only case where we know we don't match IE is for ANSI encodings.
 // IE uses MS Shell Dlg there, which we render incorrectly at certain pixel
-// sizes (e.g. 15px). So, for now we just use Arial.
+// sizes (e.g. 15px). So we just use Arial for now.
 const String& RenderThemeBlackBerry::defaultGUIFont()
 {
     DEFINE_STATIC_LOCAL(String, fontFace, ("Arial"));
     return fontFace;
 }
-
-float RenderThemeBlackBerry::defaultFontSize = 16.0;
 
 static PassRefPtr<Gradient> createLinearGradient(RGBA32 top, RGBA32 bottom, const IntPoint& a, const IntPoint& b)
 {
@@ -121,10 +131,11 @@ static PassRefPtr<Gradient> createLinearGradient(RGBA32 top, RGBA32 bottom, cons
 
 static Path roundedRectForBorder(RenderObject* object, const IntRect& rect)
 {
-    LengthSize topLeftRadius = object->style()->borderTopLeftRadius();
-    LengthSize topRightRadius = object->style()->borderTopRightRadius();
-    LengthSize bottomLeftRadius = object->style()->borderBottomLeftRadius();
-    LengthSize bottomRightRadius = object->style()->borderBottomRightRadius();
+    RenderStyle* style = object->style();
+    LengthSize topLeftRadius = style->borderTopLeftRadius();
+    LengthSize topRightRadius = style->borderTopRightRadius();
+    LengthSize bottomLeftRadius = style->borderBottomLeftRadius();
+    LengthSize bottomRightRadius = style->borderBottomRightRadius();
 
     Path roundedRect;
     roundedRect.addRoundedRect(rect, IntSize(topLeftRadius.width().value(), topLeftRadius.height().value()),
@@ -146,7 +157,6 @@ PassRefPtr<RenderTheme> RenderThemeBlackBerry::create()
 }
 
 RenderThemeBlackBerry::RenderThemeBlackBerry()
-    : RenderTheme()
 {
 }
 
@@ -164,28 +174,30 @@ String RenderThemeBlackBerry::extraMediaControlsStyleSheet()
 {
     return String(mediaControlsBlackBerryUserAgentStyleSheet, sizeof(mediaControlsBlackBerryUserAgentStyleSheet));
 }
+
+String RenderThemeBlackBerry::formatMediaControlsRemainingTime(float, float duration) const
+{
+    // This is a workaround to make the appearance of media time controller in
+    // in-page mode the same as in fullscreen mode.
+    return formatMediaControlsTime(duration);
+}
 #endif
 
 double RenderThemeBlackBerry::caretBlinkInterval() const
 {
-    return 0.0; // Turn off caret blinking.
+    return 0; // Turn off caret blinking.
 }
 
 void RenderThemeBlackBerry::systemFont(int propId, FontDescription& fontDescription) const
 {
     float fontSize = defaultFontSize;
 
-    switch (propId) {
-    case CSSValueWebkitMiniControl:
-    case CSSValueWebkitSmallControl:
-    case CSSValueWebkitControl:
+    if (propId == CSSValueWebkitMiniControl || propId ==  CSSValueWebkitSmallControl || propId == CSSValueWebkitControl) {
         // Why 2 points smaller? Because that's what Gecko does. Note that we
-        // are assuming a 96dpi screen, which is the default that we use on
-        // Windows.
+        // are assuming a 96dpi screen, which is the default value we use on Windows.
         static const float pointsPerInch = 72.0f;
         static const float pixelsPerInch = 96.0f;
         fontSize -= (2.0f / pointsPerInch) * pixelsPerInch;
-        break;
     }
 
     fontDescription.firstFamily().setFamily(defaultGUIFont());
@@ -219,7 +231,7 @@ bool RenderThemeBlackBerry::paintTextArea(RenderObject* object, const PaintInfo&
     return paintTextFieldOrTextAreaOrSearchField(object, info, rect);
 }
 
-void RenderThemeBlackBerry::adjustTextFieldStyle(CSSStyleSelector* css, RenderStyle* style, Element* e) const
+void RenderThemeBlackBerry::adjustTextFieldStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
 {
     setButtonStyle(style);
 }
@@ -245,7 +257,8 @@ bool RenderThemeBlackBerry::paintTextFieldOrTextAreaOrSearchField(RenderObject* 
     if (object->style()->appearance() == SearchFieldPart) {
         // We force the fill color to White so as to match the background color of the search cancel button graphic.
         context->setFillColor(Color::white, ColorSpaceDeviceRGB);
-        context->drawPath(textFieldRoundedRectangle);
+        context->fillPath(textFieldRoundedRectangle);
+        context->strokePath(textFieldRoundedRectangle);
     } else
         context->strokePath(textFieldRoundedRectangle);
     context->restore();
@@ -257,7 +270,7 @@ bool RenderThemeBlackBerry::paintTextField(RenderObject* object, const PaintInfo
     return paintTextFieldOrTextAreaOrSearchField(object, info, rect);
 }
 
-void RenderThemeBlackBerry::adjustSearchFieldStyle(CSSStyleSelector* css, RenderStyle* style, Element* e) const
+void RenderThemeBlackBerry::adjustSearchFieldStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
 {
     setButtonStyle(style);
 }
@@ -272,8 +285,9 @@ void RenderThemeBlackBerry::adjustSearchFieldCancelButtonStyle(CSSStyleSelector*
     // Scale the button size based on the font size
     float fontScale = style->fontSize() / defaultControlFontPixelSize;
     int cancelButtonSize = lroundf(std::min(std::max(minCancelButtonSize, defaultCancelButtonSize * fontScale), maxCancelButtonSize));
-    style->setWidth(Length(cancelButtonSize, Fixed));
-    style->setHeight(Length(cancelButtonSize, Fixed));
+    Length length(cancelButtonSize, Fixed);
+    style->setWidth(length);
+    style->setHeight(length);
 }
 
 bool RenderThemeBlackBerry::paintSearchField(RenderObject* object, const PaintInfo& info, const IntRect& rect)
@@ -283,7 +297,6 @@ bool RenderThemeBlackBerry::paintSearchField(RenderObject* object, const PaintIn
 
 bool RenderThemeBlackBerry::paintSearchFieldCancelButton(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
-    IntRect bounds = rect;
     ASSERT(object->parent());
     if (!object->parent() || !object->parent()->isBox())
         return false;
@@ -291,13 +304,14 @@ bool RenderThemeBlackBerry::paintSearchFieldCancelButton(RenderObject* object, c
     RenderBox* parentRenderBox = toRenderBox(object->parent());
 
     IntRect parentBox = parentRenderBox->absoluteContentBox();
-
-    // Make sure the scaled button stays square and will fit in its parent's box
+    IntRect bounds = rect;
+    // Make sure the scaled button stays square and fits in its parent's box.
     bounds.setHeight(std::min(parentBox.width(), std::min(parentBox.height(), bounds.height())));
     bounds.setWidth(bounds.height());
 
-    // Center the button vertically. Round up though, so if it has to be one pixel off-center, it will
-    // be one pixel closer to the bottom of the field. This tends to look better with the text.
+    // Put the button in the middle vertically, and round up the value.
+    // So if it has to be one pixel off-center, it would be one pixel closer
+    // to the bottom of the field. This would look better with the text.
     bounds.setY(parentBox.y() + (parentBox.height() - bounds.height() + 1) / 2);
 
     static Image* cancelImage = Image::loadPlatformResource("searchCancel").leakRef();
@@ -308,21 +322,16 @@ bool RenderThemeBlackBerry::paintSearchFieldCancelButton(RenderObject* object, c
 
 void RenderThemeBlackBerry::adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
 {
-    const int paddingLeft = 8; // From observation, seems to produce a reasonable result
-    const int paddingRight = 4; // From observation, seems to produce a reasonable result
-    int height = 0;
+    // These seem to be reasonable padding values from observation.
+    const int paddingLeft = 8;
+    const int paddingRight = 4;
+
     const int minHeight = style->fontSize() * 2;
 
     style->resetPadding();
-    style->setMinHeight(Length(minHeight, Fixed));
+    style->setHeight(Length(Auto));
 
-    if (style->height().isFixed() && (height = style->height().value()) > minHeight)
-        style->setPaddingRight(Length(height + paddingRight, Fixed)); 
-    else {
-        style->setMaxHeight(Length(minHeight, Fixed));
-        style->setPaddingRight(Length(minHeight + paddingRight, Fixed));
-    }
-
+    style->setPaddingRight(Length(minHeight + paddingRight, Fixed));
     style->setPaddingLeft(Length(paddingLeft, Fixed));
     style->setCursor(CURSOR_WEBKIT_GRAB);
 }
@@ -330,9 +339,10 @@ void RenderThemeBlackBerry::adjustMenuListButtonStyle(CSSStyleSelector*, RenderS
 void RenderThemeBlackBerry::calculateButtonSize(RenderStyle* style) const
 {
     int size = style->fontSize();
+    Length length(size, Fixed);
     if (style->appearance() == CheckboxPart || style->appearance() == RadioPart) {
-        style->setWidth(Length(size, Fixed));
-        style->setHeight(Length(size, Fixed));
+        style->setWidth(length);
+        style->setHeight(length);
         return;
     }
 
@@ -341,10 +351,10 @@ void RenderThemeBlackBerry::calculateButtonSize(RenderStyle* style) const
         return;
 
     if (style->width().isIntrinsicOrAuto())
-        style->setWidth(Length(size, Fixed));
+        style->setWidth(length);
 
     if (style->height().isAuto())
-        style->setHeight(Length(size, Fixed));
+        style->setHeight(length);
 }
 
 bool RenderThemeBlackBerry::paintCheckbox(RenderObject* object, const PaintInfo& info, const IntRect& rect)
@@ -370,19 +380,16 @@ void RenderThemeBlackBerry::setRadioSize(RenderStyle* style) const
 // If this function returns false, WebCore assumes the button is fully decorated
 bool RenderThemeBlackBerry::paintButton(RenderObject* object, const PaintInfo& info, const IntRect& rect)
 {
-    Path path;
-    Color check(blackPen);
-
     ASSERT(info.context);
     info.context->save();
 
     info.context->setStrokeStyle(SolidStroke);
     info.context->setStrokeThickness(lineWidth);
 
+    Color check(blackPen);
     if (!isEnabled(object)) {
         info.context->setFillGradient(createLinearGradient(disabledTop, disabledBottom, rect.maxXMinYCorner(), rect.maxXMaxYCorner()));
         info.context->setStrokeColor(disabledOutline, ColorSpaceDeviceRGB);
-        check = Color(blackPen);
     } else if (isPressed(object)) {
         info.context->setFillGradient(createLinearGradient(depressedTop, depressedBottom, rect.maxXMinYCorner(), rect.maxXMaxYCorner()));
         info.context->setStrokeGradient(createLinearGradient(depressedTopOutline, depressedBottomOutline, rect.maxXMinYCorner(), rect.maxXMaxYCorner()));
@@ -396,58 +403,57 @@ bool RenderThemeBlackBerry::paintButton(RenderObject* object, const PaintInfo& i
 
     ControlPart part = object->style()->appearance();
     switch (part) {
-    case CheckboxPart:
-            {
-                FloatSize smallCorner(smallRadius, smallRadius);
-                Path path;
-                path.addRoundedRect(rect, smallCorner);
-                info.context->drawPath(path);
+    case CheckboxPart: {
+        FloatSize smallCorner(smallRadius, smallRadius);
+        Path path;
+        path.addRoundedRect(rect, smallCorner);
+        info.context->fillPath(path);
+        info.context->strokePath(path);
 
-                if (isChecked(object)) {
-                    Path checkPath;
-                    IntRect rect2 = rect;
-                    rect2.inflate(-1);
-                    checkPath.moveTo(FloatPoint(rect2.x() + rect2.width() * checkboxLeftX, rect2.y() + rect2.height() * checkboxLeftY));
-                    checkPath.addLineTo(FloatPoint(rect2.x() + rect2.width() * checkboxMiddleX, rect2.maxY() - rect2.height() * checkboxMiddleY));
-                    checkPath.addLineTo(FloatPoint(rect2.x() + rect2.width() * checkboxRightX, rect2.y() + rect2.height() * checkboxRightY));
-                    info.context->setLineCap(RoundCap);
-                    info.context->setStrokeColor(blackPen, ColorSpaceDeviceRGB);
-                    info.context->setStrokeThickness(rect2.width() / checkboxStrokeThickness);
-                    info.context->drawPath(checkPath);
-                }
-            }
-            break;
+        if (isChecked(object)) {
+            Path checkPath;
+            IntRect rect2 = rect;
+            rect2.inflate(-1);
+            checkPath.moveTo(FloatPoint(rect2.x() + rect2.width() * checkboxLeftX, rect2.y() + rect2.height() * checkboxLeftY));
+            checkPath.addLineTo(FloatPoint(rect2.x() + rect2.width() * checkboxMiddleX, rect2.maxY() - rect2.height() * checkboxMiddleY));
+            checkPath.addLineTo(FloatPoint(rect2.x() + rect2.width() * checkboxRightX, rect2.y() + rect2.height() * checkboxRightY));
+            info.context->setLineCap(RoundCap);
+            info.context->setStrokeColor(blackPen, ColorSpaceDeviceRGB);
+            info.context->setStrokeThickness(rect2.width() / checkboxStrokeThickness);
+            info.context->fillPath(checkPath);
+            info.context->strokePath(checkPath);
+        }
+        break;
+    }
     case RadioPart:
-            info.context->drawEllipse(rect);
-            if (isChecked(object)) {
-                IntRect rect2 = rect;
-                rect2.inflate(-rect.width() * radioButtonCheckStateScaler);
-                info.context->setFillColor(check, ColorSpaceDeviceRGB);
-                info.context->setStrokeColor(check, ColorSpaceDeviceRGB);
-                info.context->drawEllipse(rect2);
-            }
-            break;
+        info.context->drawEllipse(rect);
+        if (isChecked(object)) {
+            IntRect rect2 = rect;
+            rect2.inflate(-rect.width() * radioButtonCheckStateScaler);
+            info.context->setFillColor(check, ColorSpaceDeviceRGB);
+            info.context->setStrokeColor(check, ColorSpaceDeviceRGB);
+            info.context->drawEllipse(rect2);
+        }
+        break;
     case ButtonPart:
-    case PushButtonPart:
-            {
-                FloatSize largeCorner(largeRadius, largeRadius);
-                Path path;
-                path.addRoundedRect(rect, largeCorner);
-                info.context->drawPath(path);
-
-                break;
-            }
-    case SquareButtonPart:
-            {
-                Path path;
-                path.addRect(rect);
-                info.context->drawPath(path);
-
-                break;
-            }
+    case PushButtonPart: {
+        FloatSize largeCorner(largeRadius, largeRadius);
+        Path path;
+        path.addRoundedRect(rect, largeCorner);
+        info.context->fillPath(path);
+        info.context->strokePath(path);
+        break;
+    }
+    case SquareButtonPart: {
+        Path path;
+        path.addRect(rect);
+        info.context->fillPath(path);
+        info.context->strokePath(path);
+        break;
+    }
     default:
-            info.context->restore();
-            return true;
+        info.context->restore();
+        return true;
     }
 
     info.context->restore();
@@ -492,7 +498,7 @@ void RenderThemeBlackBerry::paintMenuListButtonGradientAndArrow(GraphicsContext*
     else
         context->setFillGradient(createLinearGradient(regularTop, regularBottom, buttonRect.maxXMinYCorner(), buttonRect.maxXMaxYCorner()));
 
-    // 1. Paint the background of the button that will contain the arrow.
+    // 1. Paint the background of the button.
     context->clip(clipPath);
     context->drawRect(buttonRect);
     context->restore();
@@ -626,13 +632,13 @@ bool RenderThemeBlackBerry::paintSliderTrack(RenderObject* object, const PaintIn
     return paintSliderTrackRect(object, info, rect2);
 }
 
-bool RenderThemeBlackBerry::paintSliderTrackRect(RenderObject* object, const PaintInfo& info, const IntRect& rect2)
+bool RenderThemeBlackBerry::paintSliderTrackRect(RenderObject* object, const PaintInfo& info, const IntRect& rect)
 {
-    return paintSliderTrackRect(object, info, rect2, rangeSliderRegularTopOutline, rangeSliderRegularBottomOutline,
+    return paintSliderTrackRect(object, info, rect, rangeSliderRegularTopOutline, rangeSliderRegularBottomOutline,
                 rangeSliderRegularTop, rangeSliderRegularBottom);
 }
 
-bool RenderThemeBlackBerry::paintSliderTrackRect(RenderObject* object, const PaintInfo& info, const IntRect& rect2,
+bool RenderThemeBlackBerry::paintSliderTrackRect(RenderObject* object, const PaintInfo& info, const IntRect& rect,
         RGBA32 strokeColorStart, RGBA32 strokeColorEnd, RGBA32 fillColorStart, RGBA32 fillColorEnd)
 {
     FloatSize smallCorner(smallRadius, smallRadius);
@@ -641,11 +647,11 @@ bool RenderThemeBlackBerry::paintSliderTrackRect(RenderObject* object, const Pai
     info.context->setStrokeStyle(SolidStroke);
     info.context->setStrokeThickness(lineWidth);
 
-    info.context->setStrokeGradient(createLinearGradient(strokeColorStart, strokeColorEnd, rect2.maxXMinYCorner(), rect2. maxXMaxYCorner()));
-    info.context->setFillGradient(createLinearGradient(fillColorStart, fillColorEnd, rect2.maxXMinYCorner(), rect2.maxXMaxYCorner()));
+    info.context->setStrokeGradient(createLinearGradient(strokeColorStart, strokeColorEnd, rect.maxXMinYCorner(), rect. maxXMaxYCorner()));
+    info.context->setFillGradient(createLinearGradient(fillColorStart, fillColorEnd, rect.maxXMinYCorner(), rect.maxXMaxYCorner()));
 
     Path path;
-    path.addRoundedRect(rect2, smallCorner);
+    path.addRoundedRect(rect, smallCorner);
     info.context->fillPath(path);
 
     info.context->restore();
@@ -728,6 +734,9 @@ bool RenderThemeBlackBerry::paintMediaPlayButton(RenderObject* object, const Pai
 
     return paintMediaButton(paintInfo.context, rect, mediaElement->canPlay() ? mediaPlay : mediaPause);
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -745,6 +754,9 @@ bool RenderThemeBlackBerry::paintMediaMuteButton(RenderObject* object, const Pai
 
     return paintMediaButton(paintInfo.context, rect, mediaElement->muted() || !mediaElement->volume() ? mediaUnmute : mediaMute);
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -752,15 +764,16 @@ bool RenderThemeBlackBerry::paintMediaMuteButton(RenderObject* object, const Pai
 bool RenderThemeBlackBerry::paintMediaFullscreenButton(RenderObject* object, const PaintInfo& paintInfo, const IntRect& rect)
 {
 #if ENABLE(VIDEO)
-    HTMLMediaElement* mediaElement = toParentMediaElement(object);
-
-    if (!mediaElement)
+    if (!toParentMediaElement(object))
         return false;
 
     static Image* mediaFullscreen = Image::loadPlatformResource("fullscreen").leakRef();
 
     return paintMediaButton(paintInfo.context, rect, mediaFullscreen);
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -776,9 +789,9 @@ bool RenderThemeBlackBerry::paintMediaSliderTrack(RenderObject* object, const Pa
         return false;
 
     float loaded = 0;
-//  FIXME: replace loaded with commented out one when buffer bug is fixed (see comment in
-//  MediaPlayerPrivateMMrenderer::percentLoaded).
-//  loaded = mediaElement->percentLoaded();
+    // FIXME: replace loaded with commented out one when buffer bug is fixed (see comment in
+    // MediaPlayerPrivateMMrenderer::percentLoaded).
+    // loaded = mediaElement->percentLoaded();
     if (mediaElement->player())
         loaded = static_cast<MediaPlayerPrivate *>(mediaElement->player()->implementation())->percentLoaded();
     float position = mediaElement->duration() > 0 ? (mediaElement->currentTime() / mediaElement->duration()) : 0;
@@ -794,19 +807,22 @@ bool RenderThemeBlackBerry::paintMediaSliderTrack(RenderObject* object, const Pa
     IntRect played(x, y, wPlayed, h);
     IntRect buffered(x, y, wLoaded, h);
 
-    // paint main slider bar
+    // This is to paint main slider bar.
     bool result = paintSliderTrackRect(object, paintInfo, rect2);
 
     if (loaded > 0 || position > 0) {
-        // paint buffered bar
+        // This is to paint buffered bar.
         paintSliderTrackRect(object, paintInfo, buffered, Color::darkGray, Color::darkGray, Color::darkGray, Color::darkGray);
 
-        // paint played part of bar (left of slider thumb) using selection color
+        // This is to paint played part of bar (left of slider thumb) using selection color.
         paintSliderTrackRect(object, paintInfo, played, selection, selection, selection, selection);
     }
     return result;
 
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -840,6 +856,9 @@ bool RenderThemeBlackBerry::paintMediaSliderThumb(RenderObject* object, const Pa
 
     return true;
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -857,6 +876,9 @@ bool RenderThemeBlackBerry::paintMediaVolumeSliderTrack(RenderObject* object, co
 
     return paintSliderTrackRect(object, paintInfo, rect2);
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -868,6 +890,9 @@ bool RenderThemeBlackBerry::paintMediaVolumeSliderThumb(RenderObject* object, co
 
     return paintMediaButton(paintInfo.context, rect, mediaVolumeThumb);
 #else
+    UNUSED_PARAM(object);
+    UNUSED_PARAM(paintInfo);
+    UNUSED_PARAM(rect);
     return false;
 #endif
 }
@@ -900,12 +925,12 @@ double RenderThemeBlackBerry::animationDurationForProgressBar(RenderProgress* re
     return renderProgress->isDeterminate() ? 0.0 : 2.0;
 }
 
-bool RenderThemeBlackBerry::paintProgressBar(RenderObject* o, const PaintInfo& info, const IntRect& rect)
+bool RenderThemeBlackBerry::paintProgressBar(RenderObject* object, const PaintInfo& info, const IntRect& rect)
 {
-    if (!o->isProgress())
+    if (!object->isProgress())
         return true;
 
-    RenderProgress* renderProgress = toRenderProgress(o);
+    RenderProgress* renderProgress = toRenderProgress(object);
 
     FloatSize smallCorner(smallRadius, smallRadius);
 
@@ -946,4 +971,14 @@ bool RenderThemeBlackBerry::paintProgressBar(RenderObject* o, const PaintInfo& i
     return false;
 }
 
+Color RenderThemeBlackBerry::platformActiveTextSearchHighlightColor() const
+{
+    return Color(255, 150, 50); // Orange.
 }
+
+Color RenderThemeBlackBerry::platformInactiveTextSearchHighlightColor() const
+{
+    return Color(255, 255, 0); // Yellow.
+}
+
+} // namespace WebCore

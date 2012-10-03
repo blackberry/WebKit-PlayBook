@@ -65,6 +65,32 @@ Vector<IntRect> Region::rects() const
     return rects;
 }
 
+bool Region::contains(const Region& region) const
+{
+    return WebCore::intersect(region, *this) == region;
+}
+
+bool Region::contains(const IntPoint& point) const
+{
+    // FIXME: This is inefficient. We should be able to iterate over the spans and find
+    // out if the region contains the point.
+    return contains(IntRect(point, IntSize(1, 1)));
+}
+
+unsigned Region::totalArea() const
+{
+    Vector<IntRect> rects = this->rects();
+    size_t size = rects.size();
+    unsigned totalArea = 0;
+
+    for (size_t i = 0; i < size; ++i) {
+        IntRect rect = rects[i];
+        totalArea += (rect.width() * rect.height());
+    }
+
+    return totalArea;
+}
+
 Region::Shape::Shape()
 {
 }
@@ -279,7 +305,7 @@ Region::Shape Region::Shape::shapeOperation(const Shape& shape1, const Shape& sh
         SegmentIterator s1 = segments1;
         SegmentIterator s2 = segments2;
 
-        Vector<int> segments;
+        Vector<int, 32> segments;
 
         // Now iterate over the segments in each span and construct a new vector of segments.
         while (s1 != segments1End && s2 != segments2End) {
@@ -431,6 +457,9 @@ void Region::intersect(const Region& region)
 
 void Region::unite(const Region& region)
 {
+    if (region.isEmpty())
+        return;
+
     Shape unitedShape = Shape::unionShapes(m_shape, region.m_shape);
 
     m_shape.swap(unitedShape);

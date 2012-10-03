@@ -34,15 +34,18 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "FilterOperations.h"
 #include "FloatPoint.h"
 #include "GraphicsContext.h"
 #include "PlatformString.h"
 #include "ProgramBinding.h"
+#include "Region.h"
 #include "RenderSurfaceChromium.h"
 #include "ShaderChromium.h"
 #include "TransformationMatrix.h"
 
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefCounted.h>
 #include <wtf/Vector.h>
@@ -51,25 +54,19 @@
 
 namespace WebCore {
 
+class CCAnimationEvent;
+class CCLayerAnimationController;
+class CCLayerAnimationDelegate;
 class CCLayerImpl;
 class CCLayerTreeHost;
 class CCTextureUpdater;
 class GraphicsContext3D;
 
-class CCLayerDelegate {
-public:
-    virtual ~CCLayerDelegate() { }
-    virtual bool drawsContent() const = 0;
-    virtual void paintContents(GraphicsContext&, const IntRect& clip) = 0;
-    virtual void notifySyncRequired() = 0;
-};
-
 // Base class for composited layers. Special layer types are derived from
 // this class.
 class LayerChromium : public RefCounted<LayerChromium> {
-    friend class LayerTilerChromium;
 public:
-    static PassRefPtr<LayerChromium> create(CCLayerDelegate*);
+    static PassRefPtr<LayerChromium> create();
 
     virtual ~LayerChromium();
 
@@ -83,65 +80,67 @@ public:
     void setChildren(const Vector<RefPtr<LayerChromium> >&);
     const Vector<RefPtr<LayerChromium> >& children() const { return m_children; }
 
-    void setAnchorPoint(const FloatPoint& anchorPoint) { m_anchorPoint = anchorPoint; setNeedsCommit(); }
+    void setAnchorPoint(const FloatPoint&);
     FloatPoint anchorPoint() const { return m_anchorPoint; }
 
-    void setAnchorPointZ(float anchorPointZ) { m_anchorPointZ = anchorPointZ; setNeedsCommit(); }
+    void setAnchorPointZ(float);
     float anchorPointZ() const { return m_anchorPointZ; }
 
-    void setBackgroundColor(const Color& color) { m_backgroundColor = color; setNeedsCommit(); }
+    void setBackgroundColor(const Color&);
     Color backgroundColor() const { return m_backgroundColor; }
+
+    void setBackgroundCoversViewport(bool);
+    bool backgroundCoversViewport() const { return m_backgroundCoversViewport; }
 
     void setBounds(const IntSize&);
     const IntSize& bounds() const { return m_bounds; }
     virtual IntSize contentBounds() const { return bounds(); }
 
-    void setMasksToBounds(bool masksToBounds) { m_masksToBounds = masksToBounds; setNeedsCommit(); }
+    void setMasksToBounds(bool);
     bool masksToBounds() const { return m_masksToBounds; }
 
-    void setName(const String&);
-    const String& name() const { return m_name; }
-
-    void setMaskLayer(LayerChromium* maskLayer) { m_maskLayer = maskLayer; setNeedsCommit(); }
+    void setMaskLayer(LayerChromium*);
     LayerChromium* maskLayer() const { return m_maskLayer.get(); }
 
-    void setNeedsDisplay(const FloatRect& dirtyRect);
-    void setNeedsDisplay();
-    const FloatRect& dirtyRect() const { return m_dirtyRect; }
-    void resetNeedsDisplay();
+    virtual void setNeedsDisplayRect(const FloatRect& dirtyRect);
+    void setNeedsDisplay() { setNeedsDisplayRect(FloatRect(FloatPoint(), bounds())); }
+    virtual bool needsDisplay() const { return m_needsDisplay; }
 
-    void setOpacity(float opacity) { m_opacity = opacity; setNeedsCommit(); }
+    void setOpacity(float);
     float opacity() const { return m_opacity; }
 
-    void setOpaque(bool opaque) { m_opaque = opaque; setNeedsCommit(); }
+    void setFilters(const FilterOperations&);
+    const FilterOperations& filters() const { return m_filters; }
+
+    virtual void setOpaque(bool);
     bool opaque() const { return m_opaque; }
 
-    void setPosition(const FloatPoint& position) { m_position = position;  setNeedsCommit(); }
+    void setPosition(const FloatPoint&);
     FloatPoint position() const { return m_position; }
 
-    void setSublayerTransform(const TransformationMatrix& transform) { m_sublayerTransform = transform; setNeedsCommit(); }
+    void setSublayerTransform(const TransformationMatrix&);
     const TransformationMatrix& sublayerTransform() const { return m_sublayerTransform; }
 
-    TransformationMatrix zoomAnimatorTransform() const { return TransformationMatrix(); }
-
-    void setTransform(const TransformationMatrix& transform) { m_transform = transform; setNeedsCommit(); }
+    void setTransform(const TransformationMatrix&);
     const TransformationMatrix& transform() const { return m_transform; }
 
     const IntRect& visibleLayerRect() const { return m_visibleLayerRect; }
     void setVisibleLayerRect(const IntRect& visibleLayerRect) { m_visibleLayerRect = visibleLayerRect; }
 
+    void setScrollPosition(const IntPoint&);
     const IntPoint& scrollPosition() const { return m_scrollPosition; }
-    void setScrollPosition(const IntPoint& scrollPosition) { m_scrollPosition = scrollPosition; }
 
-    bool scrollable() const { return m_scrollable; }
-    void setScrollable(bool scrollable) { m_scrollable = true;  setNeedsCommit(); }
+    void setScrollable(bool);
+    void setShouldScrollOnMainThread(bool);
+    void setHaveWheelEventHandlers(bool);
+    void setNonFastScrollableRegion(const Region&);
 
     IntSize scrollDelta() const { return IntSize(); }
 
-    float scaleDelta() const { return 1; }
+    float pageScaleDelta() const { return 1; }
 
+    void setDoubleSided(bool);
     bool doubleSided() const { return m_doubleSided; }
-    void setDoubleSided(bool doubleSided) { m_doubleSided = doubleSided; setNeedsCommit(); }
 
     void setPreserves3D(bool preserve3D) { m_preserves3D = preserve3D; }
     bool preserves3D() const { return m_preserves3D; }
@@ -149,30 +148,30 @@ public:
     void setUsesLayerClipping(bool usesLayerClipping) { m_usesLayerClipping = usesLayerClipping; }
     bool usesLayerClipping() const { return m_usesLayerClipping; }
 
-    void setIsNonCompositedContent(bool isNonCompositedContent) { m_isNonCompositedContent = isNonCompositedContent; }
+    virtual void setIsNonCompositedContent(bool);
     bool isNonCompositedContent() const { return m_isNonCompositedContent; }
 
     virtual void setLayerTreeHost(CCLayerTreeHost*);
 
-    void setDelegate(CCLayerDelegate* delegate) { m_delegate = delegate; }
+    void setIsDrawable(bool);
 
-    void setReplicaLayer(LayerChromium* layer) { m_replicaLayer = layer; }
+    void setReplicaLayer(LayerChromium*);
     LayerChromium* replicaLayer() const { return m_replicaLayer.get(); }
 
     // These methods typically need to be overwritten by derived classes.
-    virtual bool drawsContent() const { return false; }
-    virtual void paintContentsIfDirty() { }
+    virtual bool drawsContent() const { return m_isDrawable; }
+    virtual void paintContentsIfDirty(const Region& /* occludedScreenSpace */) { }
+    virtual void idlePaintContentsIfDirty() { }
     virtual void updateCompositorResources(GraphicsContext3D*, CCTextureUpdater&) { }
     virtual void setIsMask(bool) { }
     virtual void unreserveContentsTexture() { }
     virtual void bindContentsTexture() { }
-    virtual void pageScaleChanged() { m_pageScaleDirty = true; }
     virtual void protectVisibleTileTextures() { }
+    virtual bool needsContentsScale() const { return false; }
 
-    // These exist just for debugging (via drawDebugBorder()).
     void setDebugBorderColor(const Color&);
     void setDebugBorderWidth(float);
-    void drawDebugBorder();
+    void setDebugName(const String&);
 
     virtual void pushPropertiesTo(CCLayerImpl*);
 
@@ -190,55 +189,80 @@ public:
     void setClipRect(const IntRect& clipRect) { m_clipRect = clipRect; }
     RenderSurfaceChromium* targetRenderSurface() const { return m_targetRenderSurface; }
     void setTargetRenderSurface(RenderSurfaceChromium* surface) { m_targetRenderSurface = surface; }
+    // This moves from layer space, with origin in the center to target space with origin in the top left
     const TransformationMatrix& drawTransform() const { return m_drawTransform; }
     void setDrawTransform(const TransformationMatrix& matrix) { m_drawTransform = matrix; }
+    // This moves from layer space, with origin the top left to screen space with origin in the top left
     const TransformationMatrix& screenSpaceTransform() const { return m_screenSpaceTransform; }
     void setScreenSpaceTransform(const TransformationMatrix& matrix) { m_screenSpaceTransform = matrix; }
     const IntRect& drawableContentRect() const { return m_drawableContentRect; }
     void setDrawableContentRect(const IntRect& rect) { m_drawableContentRect = rect; }
+    float contentsScale() const { return m_contentsScale; }
+    void setContentsScale(float);
+
+    TransformationMatrix contentToScreenSpaceTransform() const;
+
+    // Adds any opaque visible pixels to the occluded region.
+    virtual void addSelfToOccludedScreenSpace(Region& occludedScreenSpace);
 
     // Returns true if any of the layer's descendants has content to draw.
     bool descendantDrawsContent();
-    virtual void contentChanged() { }
 
     CCLayerTreeHost* layerTreeHost() const { return m_layerTreeHost.get(); }
-    void cleanupResourcesRecursive();
+
+    // Reserve any textures needed for this layer.
+    virtual void reserveTextures() { }
+
+    void setAlwaysReserveTextures(bool alwaysReserveTextures) { m_alwaysReserveTextures = alwaysReserveTextures; }
+    bool alwaysReserveTextures() const { return m_alwaysReserveTextures; }
+
+    bool addAnimation(const KeyframeValueList&, const IntSize& boxSize, const Animation*, int animationId, int groupId, double timeOffset);
+    void pauseAnimation(int animationId, double timeOffset);
+    void removeAnimation(int animationId);
+
+    void suspendAnimations(double time);
+    void resumeAnimations();
+
+    CCLayerAnimationController* layerAnimationController() { return m_layerAnimationController.get(); }
+    void setLayerAnimationController(PassOwnPtr<CCLayerAnimationController>);
+
+    void setLayerAnimationDelegate(CCLayerAnimationDelegate* layerAnimationDelegate) { m_layerAnimationDelegate = layerAnimationDelegate; }
+
+    bool hasActiveAnimation() const;
+
+    void setAnimationEvent(const CCAnimationEvent&);
 
 protected:
-    CCLayerDelegate* m_delegate;
-    explicit LayerChromium(CCLayerDelegate*);
+    friend class CCLayerImpl;
+    friend class LayerTilerChromium;
+    friend class TreeSynchronizer;
 
-    // This is called to clean up resources being held in the same context as
-    // layerRendererContext(). Subclasses should override this method if they
-    // hold context-dependent resources such as textures.
-    virtual void cleanupResources();
+    LayerChromium();
+
+    bool isPaintedAxisAlignedInScreen() const;
 
     void setNeedsCommit();
 
-    // The dirty rect is the union of damaged regions that need repainting/updating.
-    FloatRect m_dirtyRect;
+    // This flag is set when layer need repainting/updating.
+    bool m_needsDisplay;
 
     // The update rect is the region of the compositor resource that was actually updated by the compositor.
     // For layers that may do updating outside the compositor's control (i.e. plugin layers), this information
     // is not available and the update rect will remain empty.
+    // Note this rect is in layer space (not content space).
     FloatRect m_updateRect;
 
     RefPtr<LayerChromium> m_maskLayer;
 
-    friend class TreeSynchronizer;
-    friend class CCLayerImpl;
     // Constructs a CCLayerImpl of the correct runtime type for this LayerChromium type.
-    virtual PassRefPtr<CCLayerImpl> createCCLayerImpl();
+    virtual PassOwnPtr<CCLayerImpl> createCCLayerImpl();
     int m_layerId;
 
 private:
     void setParent(LayerChromium*);
     bool hasAncestor(LayerChromium*) const;
 
-    size_t numChildren() const
-    {
-        return m_children.size();
-    }
+    size_t numChildren() const { return m_children.size(); }
 
     // Returns the index of the child or -1 if not found.
     int indexOfChild(const LayerChromium*);
@@ -251,24 +275,35 @@ private:
 
     RefPtr<CCLayerTreeHost> m_layerTreeHost;
 
+    OwnPtr<CCLayerAnimationController> m_layerAnimationController;
+
     // Layer properties.
     IntSize m_bounds;
     IntRect m_visibleLayerRect;
     IntPoint m_scrollPosition;
     bool m_scrollable;
+    bool m_shouldScrollOnMainThread;
+    bool m_haveWheelEventHandlers;
+    Region m_nonFastScrollableRegion;
+    bool m_nonFastScrollableRegionChanged;
     FloatPoint m_position;
     FloatPoint m_anchorPoint;
     Color m_backgroundColor;
+    bool m_backgroundCoversViewport;
     Color m_debugBorderColor;
     float m_debugBorderWidth;
+    String m_debugName;
     float m_opacity;
+    FilterOperations m_filters;
     float m_anchorPointZ;
+    bool m_isDrawable;
     bool m_masksToBounds;
     bool m_opaque;
     bool m_doubleSided;
     bool m_usesLayerClipping;
     bool m_isNonCompositedContent;
     bool m_preserves3D;
+    bool m_alwaysReserveTextures;
 
     TransformationMatrix m_transform;
     TransformationMatrix m_sublayerTransform;
@@ -284,10 +319,11 @@ private:
     TransformationMatrix m_drawTransform;
     TransformationMatrix m_screenSpaceTransform;
     IntRect m_drawableContentRect;
-
-    String m_name;
+    float m_contentsScale;
 
     bool m_pageScaleDirty;
+
+    CCLayerAnimationDelegate* m_layerAnimationDelegate;
 };
 
 void sortLayers(Vector<RefPtr<LayerChromium> >::iterator, Vector<RefPtr<LayerChromium> >::iterator, void*);

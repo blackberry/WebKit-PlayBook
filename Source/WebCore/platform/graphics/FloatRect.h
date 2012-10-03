@@ -28,6 +28,7 @@
 #define FloatRect_h
 
 #include "FloatPoint.h"
+#include <wtf/Vector.h>
 
 #if USE(CG) || USE(SKIA_ON_MAC_CHROMIUM)
 typedef struct CGRect CGRect;
@@ -58,6 +59,7 @@ class FloatRect;
 }
 }
 #endif
+
 #if USE(SKIA)
 struct SkRect;
 #endif
@@ -72,17 +74,24 @@ namespace WebCore {
 class VGRect;
 #endif
 
+class FractionalLayoutRect;
 class IntRect;
 class IntPoint;
 
 class FloatRect {
 public:
+    enum ContainsMode {
+        InsideOrOnStroke,
+        InsideButNotOnStroke
+    };
+
     FloatRect() { }
     FloatRect(const FloatPoint& location, const FloatSize& size)
         : m_location(location), m_size(size) { }
     FloatRect(float x, float y, float width, float height)
         : m_location(FloatPoint(x, y)), m_size(FloatSize(width, height)) { }
     FloatRect(const IntRect&);
+    FloatRect(const FractionalLayoutRect&);
 
     static FloatRect narrowPrecision(double x, double y, double width, double height);
 
@@ -149,16 +158,17 @@ public:
 
     bool intersects(const FloatRect&) const;
     bool contains(const FloatRect&) const;
+    bool contains(const FloatPoint&, ContainsMode = InsideOrOnStroke) const;
 
     void intersect(const FloatRect&);
     void unite(const FloatRect&);
+    void uniteEvenIfEmpty(const FloatRect&);
     void uniteIfNonZero(const FloatRect&);
 
     // Note, this doesn't match what IntRect::contains(IntPoint&) does; the int version
     // is really checking for containment of 1x1 rect, but that doesn't make sense with floats.
     bool contains(float px, float py) const
         { return px >= x() && px <= maxX() && py >= y() && py <= maxY(); }
-    bool contains(const FloatPoint& point) const { return contains(point.x(), point.y()); }
 
     void inflateX(float dx) {
         m_location.setX(m_location.x() - dx);
@@ -182,11 +192,6 @@ public:
 #if PLATFORM(BLACKBERRY)
     FloatRect(const BlackBerry::Platform::FloatRect&);
     operator BlackBerry::Platform::FloatRect() const;
-
-    String toString() const
-    {
-        return String::format("[FloatRect %s %s]", m_location.toString().utf8().data(), m_size.toString().utf8().data());
-    }
 #endif
 
 #if USE(CG) || USE(SKIA_ON_MAC_CHROMIUM)
@@ -251,6 +256,8 @@ inline FloatRect unionRect(const FloatRect& a, const FloatRect& b)
     return c;
 }
 
+FloatRect unionRect(const Vector<FloatRect>&);
+
 inline FloatRect& operator+=(FloatRect& a, const FloatRect& b)
 {
     a.move(b.x(), b.y());
@@ -277,6 +284,9 @@ inline bool operator!=(const FloatRect& a, const FloatRect& b)
 }
 
 IntRect enclosingIntRect(const FloatRect&);
+
+// Returns a valid IntRect contained within the given FloatRect.
+IntRect enclosedIntRect(const FloatRect&);
 
 // Map rect r from srcRect to an equivalent rect in destRect.
 FloatRect mapRect(const FloatRect& r, const FloatRect& srcRect, const FloatRect& destRect);

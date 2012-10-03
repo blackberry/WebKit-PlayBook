@@ -39,6 +39,7 @@
 #include "ErrorEvent.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
+#include "InspectorInstrumentation.h"
 #include "MessageEvent.h"
 #include "MessagePort.h"
 #include "MessagePortChannel.h"
@@ -56,14 +57,12 @@
 #include "WebFrameClient.h"
 #include "WebFrameImpl.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
+#include "platform/WebKitPlatformSupport.h"
 #include "WebMessagePortChannel.h"
 #include "WebPermissionClient.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 #include "WebViewImpl.h"
-#include "WebWorker.h"
-#include "WebWorkerImpl.h"
 
 using namespace WebCore;
 
@@ -87,9 +86,12 @@ WorkerContextProxy* WebWorkerClientImpl::createWorkerContextProxy(Worker* worker
 
 void WebWorkerClientImpl::startWorkerContext(const KURL& scriptURL, const String& userAgent, const String& sourceCode, WorkerThreadStartMode startMode)
 {
-    RefPtr<DedicatedWorkerThread> thread = DedicatedWorkerThread::create(scriptURL, userAgent, sourceCode, *this, *this, startMode);
+    RefPtr<DedicatedWorkerThread> thread = DedicatedWorkerThread::create(scriptURL, userAgent, sourceCode, *this, *this, startMode,
+                                                                         m_scriptExecutionContext->contentSecurityPolicy()->policy(),
+                                                                         m_scriptExecutionContext->contentSecurityPolicy()->headerType());
     m_proxy->workerThreadCreated(thread);
     thread->start();
+    InspectorInstrumentation::didStartWorkerContext(m_scriptExecutionContext.get(), m_proxy, scriptURL);
 }
 
 void WebWorkerClientImpl::terminateWorkerContext()
@@ -187,8 +189,10 @@ void WebWorkerClientImpl::workerContextDestroyed()
     m_proxy->workerContextDestroyed();
 }
 
-bool WebWorkerClientImpl::allowFileSystem() 
+bool WebWorkerClientImpl::allowFileSystem()
 {
+    if (m_proxy->askedToTerminate())
+        return false;
     WebKit::WebViewImpl* webView = m_webFrame->viewImpl();
     if (!webView)
         return false;
@@ -203,6 +207,8 @@ void WebWorkerClientImpl::openFileSystem(WebFileSystem::Type type, long long siz
 
 bool WebWorkerClientImpl::allowDatabase(WebFrame*, const WebString& name, const WebString& displayName, unsigned long estimatedSize) 
 {
+    if (m_proxy->askedToTerminate())
+        return false;
     WebKit::WebViewImpl* webView = m_webFrame->viewImpl();
     if (!webView)
         return false;
@@ -210,7 +216,9 @@ bool WebWorkerClientImpl::allowDatabase(WebFrame*, const WebString& name, const 
 }
  
 WebView* WebWorkerClientImpl::view() const 
-{   
+{
+    if (m_proxy->askedToTerminate())
+        return 0;
     return m_webFrame->view(); 
 }
 

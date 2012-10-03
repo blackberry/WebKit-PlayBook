@@ -292,6 +292,12 @@ class CppStyleTestBase(unittest.TestCase):
                              '+readability/pass_ptr')
         return self.perform_lint(code, 'test.cpp', basic_error_rules)
 
+    # Only keep leaky pattern errors.
+    def perform_leaky_pattern_check(self, code):
+        basic_error_rules = ('-',
+                             '+runtime/leaky_pattern')
+        return self.perform_lint(code, 'test.cpp', basic_error_rules)
+
     # Only include what you use errors.
     def perform_include_what_you_use(self, code, filename='foo.h', io=codecs):
         basic_error_rules = ('-',
@@ -753,6 +759,14 @@ class CppStyleTest(CppStyleTestBase):
         self.assert_language_rules_check('foo.cpp', statement, error_message)
         self.assert_language_rules_check('foo.h', statement, error_message)
 
+    # Test for static_cast readability.
+    def test_static_cast_readability(self):
+        self.assert_lint(
+            'Text* x = static_cast<Text*>(foo);',
+            'Consider using toText helper function in WebCore/dom/Text.h '
+            'instead of static_cast<Text*>'
+            '  [readability/check] [4]')
+
     # We cannot test this functionality because of difference of
     # function definitions.  Anyway, we may never enable this.
     #
@@ -769,7 +783,7 @@ class CppStyleTest(CppStyleTestBase):
     #   self.assert_lint('void Method(char* /*x*/);', message)
     #   self.assert_lint('typedef void (*Method)(int32);', message)
     #   self.assert_lint('static void operator delete[](void*) throw();', message)
-    # 
+    #
     #   self.assert_lint('virtual void D(int* p);', '')
     #   self.assert_lint('void operator delete(void* x) throw();', '')
     #   self.assert_lint('void Method(char* x)\n{', '')
@@ -778,7 +792,7 @@ class CppStyleTest(CppStyleTestBase):
     #   self.assert_lint('typedef void (*Method)(int32 x);', '')
     #   self.assert_lint('static void operator delete[](void* x) throw();', '')
     #   self.assert_lint('static void operator delete[](void* /*x*/) throw();', '')
-    # 
+    #
     #   # This one should technically warn, but doesn't because the function
     #   # pointer is confusing.
     #   self.assert_lint('virtual void E(void (*fn)(int* p));', '')
@@ -1530,7 +1544,18 @@ class CppStyleTest(CppStyleTestBase):
             'int foo() const {',
             'Place brace on its own line for function definitions.  [whitespace/braces] [4]')
         self.assert_multi_line_lint(
+            'int foo() const OVERRIDE {',
+            'Place brace on its own line for function definitions.  [whitespace/braces] [4]')
+        self.assert_multi_line_lint(
+            'int foo() OVERRIDE {',
+            'Place brace on its own line for function definitions.  [whitespace/braces] [4]')
+        self.assert_multi_line_lint(
             'int foo() const\n'
+            '{\n'
+            '}\n',
+            '')
+        self.assert_multi_line_lint(
+            'int foo() OVERRIDE\n'
             '{\n'
             '}\n',
             '')
@@ -1698,6 +1723,7 @@ class CppStyleTest(CppStyleTestBase):
 
     def test_operator_methods(self):
         self.assert_lint('String operator+(const String&, const String&);', '')
+        self.assert_lint('String operator/(const String&, const String&);', '')
         self.assert_lint('bool operator==(const String&, const String&);', '')
         self.assert_lint('String& operator-=(const String&, const String&);', '')
         self.assert_lint('String& operator+=(const String&, const String&);', '')
@@ -2695,6 +2721,11 @@ class OrderOfIncludesTest(CppStyleTestBase):
                          classify_include('foo.cpp',
                                           'moc_foo.cpp',
                                           False, include_state))
+        # Qt private APIs use _p.h suffix.
+        self.assertEqual(cpp_style._PRIMARY_HEADER,
+                         classify_include('foo.cpp',
+                                          'foo_p.h',
+                                          False, include_state))
         # Tricky example where both includes might be classified as primary.
         self.assert_language_rules_check('ScrollbarThemeWince.cpp',
                                          '#include "config.h"\n'
@@ -3041,7 +3072,7 @@ class CheckForFunctionLengthsTest(CppStyleTestBase):
 
     def test_function_length_check_definition_huge_lines(self):
         # 5 is the limit
-        self.assert_function_length_check_definition(self.trigger_lines(10), 5)
+        self.assert_function_length_check_definition(self.trigger_lines(6), 5)
 
     def test_function_length_not_determinable(self):
         # Macro invocation without terminating semicolon.
@@ -3308,6 +3339,55 @@ class PassPtrTest(CppStyleTestBase):
             'class Foo {'
             '    RefPtr<Type1> m_other;\n'
             '};\n',
+            '')
+
+
+class LeakyPatternTest(CppStyleTestBase):
+
+    def assert_leaky_pattern_check(self, code, expected_message):
+        """Check warnings for leaky patterns are as expected.
+
+        Args:
+          code: C++ source code expected to generate a warning message.
+          expected_message: Message expected to be generated by the C++ code.
+        """
+        self.assertEquals(expected_message,
+                          self.perform_leaky_pattern_check(code))
+
+    def test_get_dc(self):
+        self.assert_leaky_pattern_check(
+            'HDC hdc = GetDC(hwnd);',
+            'Use the class HWndDC instead of calling GetDC to avoid potential '
+            'memory leaks.  [runtime/leaky_pattern] [5]')
+
+    def test_get_dc(self):
+        self.assert_leaky_pattern_check(
+            'HDC hdc = GetDCEx(hwnd, 0, 0);',
+            'Use the class HWndDC instead of calling GetDCEx to avoid potential '
+            'memory leaks.  [runtime/leaky_pattern] [5]')
+
+    def test_own_get_dc(self):
+        self.assert_leaky_pattern_check(
+            'HWndDC hdc(hwnd);',
+            '')
+
+    def test_create_dc(self):
+        self.assert_leaky_pattern_check(
+            'HDC dc2 = ::CreateDC();',
+            'Use adoptPtr and OwnPtr<HDC> when calling CreateDC to avoid potential '
+            'memory leaks.  [runtime/leaky_pattern] [5]')
+
+        self.assert_leaky_pattern_check(
+            'adoptPtr(CreateDC());',
+            '')
+
+    def test_create_compatible_dc(self):
+        self.assert_leaky_pattern_check(
+            'HDC dc2 = CreateCompatibleDC(dc);',
+            'Use adoptPtr and OwnPtr<HDC> when calling CreateCompatibleDC to avoid potential '
+            'memory leaks.  [runtime/leaky_pattern] [5]')
+        self.assert_leaky_pattern_check(
+            'adoptPtr(CreateCompatibleDC(dc));',
             '')
 
 
@@ -4266,6 +4346,13 @@ class WebKitStyleTest(CppStyleTestBase):
             'Use std::min() or std::min<type>() instead of the MIN() macro.'
             '  [runtime/max_min_macros] [4]',
             'foo.h')
+
+    def test_ctype_fucntion(self):
+        self.assert_lint(
+            'int i = isascii(8);',
+            'Use equivelent function in <wtf/ASCIICType.h> instead of the '
+            'isascii() function.  [runtime/ctype_function] [4]',
+            'foo.cpp')
 
     def test_names(self):
         name_underscore_error_message = " is incorrectly named. Don't use underscores in your identifier names.  [readability/naming] [4]"

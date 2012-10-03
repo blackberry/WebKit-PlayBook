@@ -31,8 +31,8 @@
 #ifndef WebInputEvent_h
 #define WebInputEvent_h
 
-#include "WebCommon.h"
 #include "WebTouchPoint.h"
+#include "platform/WebCommon.h"
 
 #include <string.h>
 
@@ -104,7 +104,14 @@ public:
         GestureScrollBegin,
         GestureScrollEnd,
         GestureScrollUpdate,
+        GestureFlingStart,
+        GestureFlingCancel,
         GestureTap,
+        GestureTapDown,
+        GestureDoubleTap,
+        GesturePinchBegin,
+        GesturePinchEnd,
+        GesturePinchUpdate,
 
         // WebTouchEvent
         TouchStart,
@@ -180,6 +187,17 @@ public:
             || type == MouseUp
             || type == TouchStart
             || type == TouchEnd;
+    }
+
+    // Returns true if the WebInputEvent |type| should be handled as scroll gesture.
+    static bool isScrollGestureEventType(int type)
+    {
+        return type == GestureScrollBegin
+            || type == GestureScrollEnd
+            || type == GestureScrollUpdate
+            || type == GestureFlingStart
+            || type == GestureFlingCancel
+            || type == GestureTap; // FIXME: Why is GestureTap on this list?
     }
 };
 
@@ -291,11 +309,12 @@ class WebMouseWheelEvent : public WebMouseEvent {
 public:
     enum Phase {
         PhaseNone        = 0,
-        PhaseBegan       = 1 << 1,
-        PhaseStationary  = 1 << 2,
-        PhaseChanged     = 1 << 3,
-        PhaseEnded       = 1 << 4,
-        PhaseCancelled   = 1 << 5,
+        PhaseBegan       = 1 << 0,
+        PhaseStationary  = 1 << 1,
+        PhaseChanged     = 1 << 2,
+        PhaseEnded       = 1 << 3,
+        PhaseCancelled   = 1 << 4,
+        PhaseMayBegin    = 1 << 5,
     };
 
     float deltaX;
@@ -335,11 +354,14 @@ public:
     int y;
     int globalX;
     int globalY;
+
+    // NOTE: |deltaX| and |deltaY| represents the amount to scroll for Scroll gesture events. For Pinch gesture events, |deltaX| represents the scaling/magnification factor.
     float deltaX;
     float deltaY;
 
     WebGestureEvent(unsigned sizeParam = sizeof(WebGestureEvent))
-        : x(0)
+        : WebInputEvent(sizeParam)
+        , x(0)
         , y(0)
         , globalX(0)
         , globalY(0)

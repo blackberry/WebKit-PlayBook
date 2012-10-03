@@ -26,7 +26,7 @@
 #ifndef WTF_UTF8_h
 #define WTF_UTF8_h
 
-#include "Unicode.h"
+#include <wtf/unicode/Unicode.h>
 
 namespace WTF {
 namespace Unicode {
@@ -62,11 +62,15 @@ namespace Unicode {
     // to the replacement character; otherwise (when the flag is set to strict)
     // they constitute an error.
 
-    ConversionResult convertUTF8ToUTF16(
+    WTF_EXPORT_PRIVATE ConversionResult convertUTF8ToUTF16(
                     const char** sourceStart, const char* sourceEnd, 
                     UChar** targetStart, UChar* targetEnd, bool strict = true);
 
-    ConversionResult convertUTF16ToUTF8(
+    ConversionResult convertLatin1ToUTF8(
+                    const LChar** sourceStart, const LChar* sourceEnd, 
+                    char** targetStart, char* targetEnd);
+
+    WTF_EXPORT_PRIVATE ConversionResult convertUTF16ToUTF8(
                     const UChar** sourceStart, const UChar* sourceEnd, 
                     char** targetStart, char* targetEnd, bool strict = true);
 

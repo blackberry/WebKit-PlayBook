@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Adobe Systems Incorporated. All Rights Reserved.
+ * Copyright (C) 2011 Adobe Systems Incorporated. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -32,19 +32,30 @@
 
 #if ENABLE(CSS_SHADERS)
 
-#include "CSSPrimitiveValue.h"
+#include "CSSValue.h"
 
 namespace WebCore {
 
-class WebKitCSSShaderValue : public CSSPrimitiveValue {
+class CachedResourceLoader;
+class StyleCachedShader;
+class StyleShader;
+
+class WebKitCSSShaderValue : public CSSValue {
 public:
     static PassRefPtr<WebKitCSSShaderValue> create(const String& url) { return adoptRef(new WebKitCSSShaderValue(url)); }
+    ~WebKitCSSShaderValue();
+
+    StyleCachedShader* cachedShader(CachedResourceLoader*);
+    StyleShader* cachedOrPendingShader();
+
+    String customCssText() const;
 
 private:
-    WebKitCSSShaderValue(const String& url)
-        : CSSPrimitiveValue(WebKitCSSShaderClass, url, CSS_URI)
-    {
-    }
+    WebKitCSSShaderValue(const String& url);
+
+    String m_url;
+    RefPtr<StyleShader> m_shader;
+    bool m_accessedShader;
 };
 
 } // namespace WebCore

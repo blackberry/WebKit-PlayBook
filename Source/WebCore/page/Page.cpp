@@ -29,8 +29,6 @@
 #include "ContextMenuClient.h"
 #include "ContextMenuController.h"
 #include "DOMWindow.h"
-#include "DeviceMotionController.h"
-#include "DeviceOrientationController.h"
 #include "DocumentMarkerController.h"
 #include "DragController.h"
 #include "EditorClient.h"
@@ -57,18 +55,20 @@
 #include "PluginData.h"
 #include "PluginView.h"
 #include "PluginViewBase.h"
+#include "PointerLockController.h"
 #include "ProgressTracker.h"
 #include "RenderTheme.h"
+#include "RenderView.h"
 #include "RenderWidget.h"
 #include "RuntimeEnabledFeatures.h"
 #include "SchemeRegistry.h"
+#include "ScrollingCoordinator.h"
 #include "Settings.h"
 #include "SharedBuffer.h"
-#include "SpeechInput.h"
-#include "SpeechInputClient.h"
 #include "StorageArea.h"
 #include "StorageNamespace.h"
 #include "TextResourceDecoder.h"
+#include "VoidCallback.h"
 #include "Widget.h"
 #include <wtf/HashMap.h>
 #include <wtf/RefCountedLeakCounter.h>
@@ -77,11 +77,6 @@
 
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
 #include "GeolocationController.h"
-#endif
-
-#if ENABLE(MEDIA_STREAM)
-#include "MediaStreamClient.h"
-#include "MediaStreamController.h"
 #endif
 
 namespace WebCore {
@@ -118,34 +113,27 @@ float deviceScaleFactor(Frame* frame)
 }
 
 Page::Page(PageClients& pageClients)
-    : m_chrome(adoptPtr(new Chrome(this, pageClients.chromeClient)))
-    , m_dragCaretController(adoptPtr(new DragCaretController))
+    : m_chrome(Chrome::create(this, pageClients.chromeClient))
+    , m_dragCaretController(DragCaretController::create())
 #if ENABLE(DRAG_SUPPORT)
-    , m_dragController(adoptPtr(new DragController(this, pageClients.dragClient)))
+    , m_dragController(DragController::create(this, pageClients.dragClient))
 #endif
-    , m_focusController(adoptPtr(new FocusController(this)))
+    , m_focusController(FocusController::create(this))
 #if ENABLE(CONTEXT_MENUS)
-    , m_contextMenuController(adoptPtr(new ContextMenuController(this, pageClients.contextMenuClient)))
+    , m_contextMenuController(ContextMenuController::create(this, pageClients.contextMenuClient))
 #endif
 #if ENABLE(INSPECTOR)
-    , m_inspectorController(adoptPtr(new InspectorController(this, pageClients.inspectorClient)))
+    , m_inspectorController(InspectorController::create(this, pageClients.inspectorClient))
 #endif
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
-    , m_geolocationController(adoptPtr(new GeolocationController(this, pageClients.geolocationClient)))
+    , m_geolocationController(GeolocationController::create(this, pageClients.geolocationClient))
 #endif
-#if ENABLE(DEVICE_ORIENTATION)
-    , m_deviceMotionController(RuntimeEnabledFeatures::deviceMotionEnabled() ? adoptPtr(new DeviceMotionController(pageClients.deviceMotionClient)) : nullptr)
-    , m_deviceOrientationController(RuntimeEnabledFeatures::deviceOrientationEnabled() ? adoptPtr(new DeviceOrientationController(this, pageClients.deviceOrientationClient)) : nullptr)
+#if ENABLE(POINTER_LOCK)
+    , m_pointerLockController(PointerLockController::create(this))
 #endif
-#if ENABLE(MEDIA_STREAM)
-    , m_mediaStreamController(RuntimeEnabledFeatures::mediaStreamEnabled() ? adoptPtr(new MediaStreamController(pageClients.mediaStreamClient)) : PassOwnPtr<MediaStreamController>())
-#endif
-#if ENABLE(INPUT_SPEECH)
-    , m_speechInputClient(pageClients.speechInputClient)
-#endif
-    , m_settings(adoptPtr(new Settings(this)))
-    , m_progress(adoptPtr(new ProgressTracker))
-    , m_backForwardController(adoptPtr(new BackForwardController(this, pageClients.backForwardClient)))
+    , m_settings(Settings::create(this))
+    , m_progress(ProgressTracker::create())
+    , m_backForwardController(BackForwardController::create(this, pageClients.backForwardClient))
     , m_theme(RenderTheme::themeForPage(this))
     , m_editorClient(pageClients.editorClient)
     , m_frameCount(0)
@@ -173,6 +161,7 @@ Page::Page(PageClients& pageClients)
     , m_visibilityState(PageVisibilityStateVisible)
 #endif
     , m_displayID(0)
+    , m_isCountingRelevantRepaintedObjects(false)
 {
     if (!allPages) {
         allPages = new HashSet<Page*>;
@@ -194,27 +183,39 @@ Page::~Page()
     setGroupName(String());
     allPages->remove(this);
     
-    for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext())
-        frame->pageDestroyed();
-
-    if (m_scrollableAreaSet) {
-        ScrollableAreaSet::const_iterator end = m_scrollableAreaSet->end(); 
-        for (ScrollableAreaSet::const_iterator it = m_scrollableAreaSet->begin(); it != end; ++it)
-            (*it)->disconnectFromPage();
+    for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext()) {
+        frame->willDetachPage();
+        frame->detachFromPage();
     }
 
     m_editorClient->pageDestroyed();
 
-    InspectorInstrumentation::inspectedPageDestroyed(this);
 #if ENABLE(INSPECTOR)
     m_inspectorController->inspectedPageDestroyed();
 #endif
+
+    if (m_scrollingCoordinator)
+        m_scrollingCoordinator->pageDestroyed();
 
     backForward()->close();
 
 #ifndef NDEBUG
     pageCounter.decrement();
 #endif
+
+}
+
+ViewportArguments Page::viewportArguments() const
+{
+    return mainFrame() && mainFrame()->document() ? mainFrame()->document()->viewportArguments() : ViewportArguments();
+}
+
+ScrollingCoordinator* Page::scrollingCoordinator()
+{
+    if (!m_scrollingCoordinator && m_settings->scrollingCoordinatorEnabled())
+        m_scrollingCoordinator = ScrollingCoordinator::create(this);
+
+    return m_scrollingCoordinator.get();
 }
 
 struct ViewModeInfo {
@@ -377,7 +378,7 @@ void Page::initGroup()
 {
     ASSERT(!m_singlePageGroup);
     ASSERT(!m_group);
-    m_singlePageGroup = adoptPtr(new PageGroup(this));
+    m_singlePageGroup = PageGroup::create(this);
     m_group = m_singlePageGroup.get();
 }
 
@@ -395,15 +396,6 @@ void Page::setNeedsRecalcStyleInAllFrames()
 {
     for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext())
         frame->document()->styleSelectorChanged(DeferRecalcStyle);
-}
-
-void Page::updateViewportArguments()
-{
-    if (!mainFrame() || !mainFrame()->document() || mainFrame()->document()->viewportArguments() == m_viewportArguments)
-        return;
-
-    m_viewportArguments = mainFrame()->document()->viewportArguments();
-    chrome()->dispatchViewportPropertiesDidChange(m_viewportArguments);
 }
 
 void Page::refreshPlugins(bool reload)
@@ -656,7 +648,8 @@ void Page::setDeviceScaleFactor(float scaleFactor)
     setNeedsRecalcStyleInAllFrames();
 
 #if USE(ACCELERATED_COMPOSITING)
-    m_mainFrame->deviceOrPageScaleFactorChanged();
+    if (mainFrame())
+        mainFrame()->deviceOrPageScaleFactorChanged();
 #endif
 
     for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext())
@@ -667,13 +660,28 @@ void Page::setDeviceScaleFactor(float scaleFactor)
 
 void Page::setPagination(const Pagination& pagination)
 {
-    if (m_pagination.mode == pagination.mode && m_pagination.gap == pagination.gap)
+    if (m_pagination == pagination)
         return;
 
     m_pagination = pagination;
 
     setNeedsRecalcStyleInAllFrames();
     backForward()->markPagesForFullStyleRecalc();
+}
+
+unsigned Page::pageCount() const
+{
+    if (m_pagination.mode == Pagination::Unpaginated)
+        return 0;
+
+    FrameView* frameView = mainFrame()->view();
+    if (!frameView->didFirstLayout())
+        return 0;
+
+    mainFrame()->view()->forceLayout();
+
+    RenderView* contentRenderer = mainFrame()->contentRenderer();
+    return contentRenderer->columnCount(contentRenderer->columnInfo());
 }
 
 void Page::didMoveOnscreen()
@@ -935,16 +943,6 @@ double Page::minimumTimerInterval() const
     return m_minimumTimerInterval;
 }
 
-#if ENABLE(INPUT_SPEECH)
-SpeechInput* Page::speechInput()
-{
-    ASSERT(m_speechInputClient);
-    if (!m_speechInput.get())
-        m_speechInput = adoptPtr(new SpeechInput(m_speechInputClient));
-    return m_speechInput.get();
-}
-#endif
-
 void Page::dnsPrefetchingStateChanged()
 {
     for (Frame* frame = mainFrame(); frame; frame = frame->tree()->traverseNext())
@@ -981,31 +979,6 @@ void Page::privateBrowsingStateChanged()
         pluginViewBases[i]->privateBrowsingStateChanged(privateBrowsingEnabled);
 }
 
-void Page::addScrollableArea(ScrollableArea* scrollableArea)
-{
-    if (!m_scrollableAreaSet)
-        m_scrollableAreaSet = adoptPtr(new ScrollableAreaSet);
-    m_scrollableAreaSet->add(scrollableArea);
-
-    chrome()->scrollableAreasDidChange();
-}
-
-void Page::removeScrollableArea(ScrollableArea* scrollableArea)
-{
-    if (!m_scrollableAreaSet)
-        return;
-    m_scrollableAreaSet->remove(scrollableArea);
-
-    chrome()->scrollableAreasDidChange();
-}
-
-bool Page::containsScrollableArea(ScrollableArea* scrollableArea) const
-{
-    if (!m_scrollableAreaSet)
-        return false;
-    return m_scrollableAreaSet->contains(scrollableArea);
-}
-
 #if !ASSERT_DISABLED
 void Page::checkFrameCountConsistency() const
 {
@@ -1036,6 +1009,93 @@ PageVisibilityState Page::visibilityState() const
 }
 #endif
 
+// FIXME: gPaintedObjectCounterThreshold is no longer used for calculating relevant repainted areas,
+// and it should be removed. For the time being, it is useful because it allows us to avoid doing
+// any of this work for ports that don't make sure of didNewFirstVisuallyNonEmptyLayout. We should
+// remove this when we resolve <rdar://problem/10791680> Need to merge didFirstVisuallyNonEmptyLayout 
+// and didNewFirstVisuallyNonEmptyLayout
+static uint64_t gPaintedObjectCounterThreshold = 0;
+
+// These are magical constants that might be tweaked over time.
+static double gMinimumPaintedAreaRatio = 0.1;
+static double gMaximumUnpaintedAreaRatio = 0.04;
+
+void Page::setRelevantRepaintedObjectsCounterThreshold(uint64_t threshold)
+{
+    gPaintedObjectCounterThreshold = threshold;
+}
+
+bool Page::isCountingRelevantRepaintedObjects() const
+{
+    return m_isCountingRelevantRepaintedObjects && gPaintedObjectCounterThreshold > 0;
+}
+
+void Page::startCountingRelevantRepaintedObjects()
+{
+    m_isCountingRelevantRepaintedObjects = true;
+
+    // Reset everything in case we didn't hit the threshold last time.
+    resetRelevantPaintedObjectCounter();
+}
+
+void Page::resetRelevantPaintedObjectCounter()
+{
+    m_relevantUnpaintedRenderObjects.clear();
+    m_relevantPaintedRegion = Region();
+    m_relevantUnpaintedRegion = Region();
+}
+
+void Page::addRelevantRepaintedObject(RenderObject* object, const IntRect& objectPaintRect)
+{
+    if (!isCountingRelevantRepaintedObjects())
+        return;
+
+    // The objects are only relevant if they are being painted within the viewRect().
+    if (RenderView* view = object->view()) {
+        if (!objectPaintRect.intersects(pixelSnappedIntRect(view->viewRect())))
+            return;
+    }
+
+    // If this object was previously counted as an unpainted object, remove it from that HashSet
+    // and corresponding Region. FIXME: This doesn't do the right thing if the objects overlap.
+    if (m_relevantUnpaintedRenderObjects.contains(object)) {
+        m_relevantUnpaintedRenderObjects.remove(object);
+        m_relevantUnpaintedRegion.subtract(objectPaintRect);
+    }
+
+    m_relevantPaintedRegion.unite(objectPaintRect);
+
+    RenderView* view = object->view();
+    if (!view)
+        return;
+    
+    float viewArea = view->viewRect().width() * view->viewRect().height();
+    float ratioOfViewThatIsPainted = m_relevantPaintedRegion.totalArea() / viewArea;
+    float ratioOfViewThatIsUnpainted = m_relevantUnpaintedRegion.totalArea() / viewArea;
+
+    if (ratioOfViewThatIsPainted > gMinimumPaintedAreaRatio && ratioOfViewThatIsUnpainted < gMaximumUnpaintedAreaRatio) {
+        m_isCountingRelevantRepaintedObjects = false;
+        resetRelevantPaintedObjectCounter();
+        if (Frame* frame = mainFrame())
+            frame->loader()->didNewFirstVisuallyNonEmptyLayout();
+    }
+}
+
+void Page::addRelevantUnpaintedObject(RenderObject* object, const IntRect& objectPaintRect)
+{
+    if (!isCountingRelevantRepaintedObjects())
+        return;
+
+    // The objects are only relevant if they are being painted within the viewRect().
+    if (RenderView* view = object->view()) {
+        if (!objectPaintRect.intersects(pixelSnappedIntRect(view->viewRect())))
+            return;
+    }
+
+    m_relevantUnpaintedRenderObjects.add(object);
+    m_relevantUnpaintedRegion.unite(objectPaintRect);
+}
+
 Page::PageClients::PageClients()
     : chromeClient(0)
     , contextMenuClient(0)
@@ -1043,10 +1103,6 @@ Page::PageClients::PageClients()
     , dragClient(0)
     , inspectorClient(0)
     , geolocationClient(0)
-    , deviceMotionClient(0)
-    , deviceOrientationClient(0)
-    , speechInputClient(0)
-    , mediaStreamClient(0)
 {
 }
 

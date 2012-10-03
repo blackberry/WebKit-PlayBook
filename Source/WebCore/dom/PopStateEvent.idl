@@ -28,10 +28,9 @@ module events {
 
 #if !defined(LANGUAGE_CPP) || !LANGUAGE_CPP
     interface [
-        V8ConstructorTemplate=Event,
-        JSCustomConstructor
+        ConstructorTemplate=Event
     ] PopStateEvent : Event {
-        readonly attribute [InitializedByConstructor, CustomGetter] DOMObject state;
+        readonly attribute [InitializedByEventConstructor, CachedAttribute, CustomGetter] DOMObject state;
     };
 #endif
 

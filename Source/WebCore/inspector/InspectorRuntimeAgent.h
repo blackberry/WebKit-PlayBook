@@ -33,6 +33,7 @@
 
 #if ENABLE(INSPECTOR)
 
+#include "InspectorBaseAgent.h"
 #include "ScriptState.h"
 #include <wtf/Forward.h>
 #include <wtf/Noncopyable.h>
@@ -50,32 +51,32 @@ class WorkerContext;
 
 typedef String ErrorString;
 
-class InspectorRuntimeAgent {
+class InspectorRuntimeAgent : public InspectorBaseAgent<InspectorRuntimeAgent>, public InspectorBackendDispatcher::RuntimeCommandHandler {
     WTF_MAKE_NONCOPYABLE(InspectorRuntimeAgent);
 public:
     virtual ~InspectorRuntimeAgent();
 
     // Part of the protocol.
-    void evaluate(ErrorString*,
+    virtual void evaluate(ErrorString*,
                   const String& expression,
-                  const String* const objectGroup,
-                  const bool* const includeCommandLineAPI,
-                  const bool* const doNotPauseOnExceptions,
-                  const String* const frameId,
-                  const bool* const returnByValue,
-                  RefPtr<InspectorObject>* result,
+                  const String* objectGroup,
+                  const bool* includeCommandLineAPI,
+                  const bool* doNotPauseOnExceptions,
+                  const String* frameId,
+                  const bool* returnByValue,
+                  RefPtr<InspectorObject>& result,
                   bool* wasThrown);
-    void callFunctionOn(ErrorString*,
+    virtual void callFunctionOn(ErrorString*,
                         const String& objectId,
                         const String& expression,
-                        const RefPtr<InspectorArray>* const optionalArguments,
-                        const bool* const returnByValue,
-                        RefPtr<InspectorObject>* result,
+                        const RefPtr<InspectorArray>* optionalArguments,
+                        const bool* returnByValue,
+                        RefPtr<InspectorObject>& result,
                         bool* wasThrown);
-    void releaseObject(ErrorString*, const String& objectId);
-    void getProperties(ErrorString*, const String& objectId, const bool* const ownProperties, RefPtr<InspectorArray>* result);
-    void releaseObjectGroup(ErrorString*, const String& objectGroup);
-    void run(ErrorString*);
+    virtual void releaseObject(ErrorString*, const String& objectId);
+    virtual void getProperties(ErrorString*, const String& objectId, const bool* ownProperties, RefPtr<InspectorArray>& result);
+    virtual void releaseObjectGroup(ErrorString*, const String& objectGroup);
+    virtual void run(ErrorString*);
 
 #if ENABLE(JAVASCRIPT_DEBUGGER)
     void setScriptDebugServer(ScriptDebugServer*);
@@ -85,7 +86,7 @@ public:
 #endif
 
 protected:
-    InspectorRuntimeAgent(InstrumentingAgents*, InjectedScriptManager*);
+    InspectorRuntimeAgent(InstrumentingAgents*, InspectorState*, InjectedScriptManager*);
     virtual ScriptState* scriptStateForFrameId(const String& frameId) = 0;
     virtual ScriptState* getDefaultInspectedState() = 0;
 
@@ -94,7 +95,6 @@ private:
 #if ENABLE(JAVASCRIPT_DEBUGGER)
     ScriptDebugServer* m_scriptDebugServer;
 #endif
-    InstrumentingAgents* m_instrumentingAgents;
     bool m_paused;
 };
 

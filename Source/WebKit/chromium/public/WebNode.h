@@ -31,9 +31,9 @@
 #ifndef WebNode_h
 #define WebNode_h
 
-#include "WebCommon.h"
-#include "WebPrivatePtr.h"
-#include "WebString.h"
+#include "platform/WebCommon.h"
+#include "platform/WebPrivatePtr.h"
+#include "platform/WebString.h"
 
 namespace WebCore { class Node; }
 
@@ -42,6 +42,7 @@ class WebDOMEvent;
 class WebDOMEventListener;
 class WebDOMEventListenerPrivate;
 class WebDocument;
+class WebElement;
 class WebFrame;
 class WebNodeList;
 
@@ -65,7 +66,7 @@ public:
     // Required for using WebNodes in std maps.  Note the order used is
     // arbitrary and should not be expected to have any specific meaning.
     WEBKIT_EXPORT bool lessThan(const WebNode&) const;
-    
+
     bool isNull() const { return m_private.isNull(); }
 
     enum NodeType {
@@ -84,6 +85,7 @@ public:
         XPathNamespaceNode,
         ShadowRootNode
     };
+
     WEBKIT_EXPORT NodeType nodeType() const;
     WEBKIT_EXPORT WebNode parentNode() const;
     WEBKIT_EXPORT WebString nodeName() const;
@@ -102,11 +104,13 @@ public:
     WEBKIT_EXPORT bool isFocusable() const;
     WEBKIT_EXPORT bool isContentEditable() const;
     WEBKIT_EXPORT bool isElementNode() const;
+    WEBKIT_EXPORT bool hasEventListeners(const WebString& eventType) const;
     WEBKIT_EXPORT void addEventListener(const WebString& eventType, WebDOMEventListener* listener, bool useCapture);
     WEBKIT_EXPORT void removeEventListener(const WebString& eventType, WebDOMEventListener* listener, bool useCapture);
     WEBKIT_EXPORT bool dispatchEvent(const WebDOMEvent&);
     WEBKIT_EXPORT void simulateClick();
     WEBKIT_EXPORT WebNodeList getElementsByTagName(const WebString&) const;
+    WEBKIT_EXPORT WebElement rootEditableElement() const;
 
     // Returns true if the node has a non-empty bounding box in layout.
     // This does not 100% guarantee the user can see it, but is pretty close.

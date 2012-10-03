@@ -29,7 +29,6 @@
 #if ENABLE(INSPECTOR)
 
 #include "WebInspector.h"
-#include "WebInspectorFrontendClient.h"
 #include "WebPage.h"
 #include <WebCore/InspectorController.h>
 #include <WebCore/Page.h>
@@ -40,17 +39,25 @@ namespace WebKit {
 
 void WebInspectorClient::inspectorDestroyed()
 {
+    closeInspectorFrontend();
     delete this;
 }
 
 void WebInspectorClient::openInspectorFrontend(InspectorController*)
 {
     WebPage* inspectorPage = m_page->inspector()->createInspectorPage();
-    ASSERT(inspectorPage);
-    if (!inspectorPage)
-        return;
+    ASSERT_UNUSED(inspectorPage, inspectorPage);
+}
 
-    inspectorPage->corePage()->inspectorController()->setInspectorFrontendClient(adoptPtr(new WebInspectorFrontendClient(m_page, inspectorPage)));
+void WebInspectorClient::closeInspectorFrontend()
+{
+    if (m_page->inspector())
+        m_page->inspector()->didClose();
+}
+
+void WebInspectorClient::bringFrontendToFront()
+{
+    m_page->inspector()->bringToFront();
 }
 
 void WebInspectorClient::highlight()

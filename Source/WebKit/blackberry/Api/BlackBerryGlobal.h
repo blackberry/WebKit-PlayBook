@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,34 +19,24 @@
 #ifndef BlackBerryGlobal_h
 #define BlackBerryGlobal_h
 
-#ifdef _MSC_VER
-    #ifdef BUILD_WEBKIT
-        #define BLACKBERRY_EXPORT __declspec(dllexport)
-    #else
-        #define BLACKBERRY_EXPORT __declspec(dllimport)
-    #endif
-#elif defined(__QNXNTO__) && defined(BUILD_WEBKIT)
+#if defined(__QNXNTO__) && defined(BUILD_WEBKIT)
         #define BLACKBERRY_EXPORT __attribute__ ((visibility("default")))
 #else
     #define BLACKBERRY_EXPORT
 #endif
-
-#include <string>
 
 namespace BlackBerry {
 namespace WebKit {
 
 class WebString;
 
-void globalInitialize();
+BLACKBERRY_EXPORT void globalInitialize();
 void collectJavascriptGarbageNow();
 void clearCookieCache();
 BLACKBERRY_EXPORT void clearMemoryCaches();
 void clearAppCache(const WebString& pageGroupName);
 void reopenAllAppCaches();
 void closeAllAppCaches();
-void clearLocalStorage(const WebString& pageGroupName);
-void closeAllLocalStorages();
 void clearDatabase(const WebString& pageGroupName);
 void reopenAllTrackerDatabases();
 void closeAllTrackerDatabases();

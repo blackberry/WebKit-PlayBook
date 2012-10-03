@@ -141,7 +141,7 @@ static int cssyylex(YYSTYPE* yylval, void* parser)
 %token WEBKIT_VALUE_SYM
 %token WEBKIT_MEDIAQUERY_SYM
 %token WEBKIT_SELECTOR_SYM
-%token WEBKIT_REGION_STYLE_RULE_SYM
+%token WEBKIT_REGION_RULE_SYM
 %token <marginBox> TOPLEFTCORNER_SYM
 %token <marginBox> TOPLEFT_SYM
 %token <marginBox> TOPCENTER_SYM
@@ -329,8 +329,7 @@ webkit_value:
             int oldParsedProperties = p->m_numParsedProperties;
             if (!p->parseValue(p->m_id, p->m_important))
                 p->rollbackLastProperties(p->m_numParsedProperties - oldParsedProperties);
-            delete p->m_valueList;
-            p->m_valueList = 0;
+            p->m_valueList = nullptr;
         }
     }
 ;
@@ -797,9 +796,9 @@ region_selector:
 ;
 
 region:
-    WEBKIT_REGION_STYLE_RULE_SYM WHITESPACE region_selector '{' maybe_space block_rule_list save_block {
+    WEBKIT_REGION_RULE_SYM WHITESPACE region_selector '{' maybe_space block_rule_list save_block {
         if ($3)
-            $$ = static_cast<CSSParser*>(parser)->createRegionStylingRule($3, $6);
+            $$ = static_cast<CSSParser*>(parser)->createRegionRule($3, $6);
         else
             $$ = 0;
     }
@@ -1307,8 +1306,7 @@ declaration:
                 p->rollbackLastProperties(p->m_numParsedProperties - oldParsedProperties);
             else
                 isPropertyParsed = true;
-            delete p->m_valueList;
-            p->m_valueList = 0;
+            p->m_valueList = nullptr;
         }
         p->markPropertyEnd($5, isPropertyParsed);
     }
@@ -1479,7 +1477,16 @@ function:
         CSSParser* p = static_cast<CSSParser*>(parser);
         CSSParserFunction* f = p->createFloatingFunction();
         f->name = $1;
-        f->args = adoptPtr(p->sinkFloatingValueList($3));
+        f->args = p->sinkFloatingValueList($3);
+        $$.id = 0;
+        $$.unit = CSSParserValue::Function;
+        $$.function = f;
+    } |
+    FUNCTION maybe_space expr TOKEN_EOF {
+        CSSParser* p = static_cast<CSSParser*>(parser);
+        CSSParserFunction* f = p->createFloatingFunction();
+        f->name = $1;
+        f->args = p->sinkFloatingValueList($3);
         $$.id = 0;
         $$.unit = CSSParserValue::Function;
         $$.function = f;
@@ -1489,7 +1496,7 @@ function:
         CSSParserFunction* f = p->createFloatingFunction();
         f->name = $1;
         CSSParserValueList* valueList = p->createFloatingValueList();
-        f->args = adoptPtr(p->sinkFloatingValueList(valueList));
+        f->args = p->sinkFloatingValueList(valueList);
         $$.id = 0;
         $$.unit = CSSParserValue::Function;
         $$.function = f;
@@ -1522,12 +1529,6 @@ calc_func_operator:
     }
     | '/' maybe_space {
         $$ = '/';
-    }
-    | IDENT maybe_space {
-        if (equalIgnoringCase("mod", $1.characters, $1.length))
-            $$ = '%';
-        else
-            $$ = 0;
     }
   ;
 
@@ -1607,7 +1608,7 @@ calc_function:
         CSSParser* p = static_cast<CSSParser*>(parser);
         CSSParserFunction* f = p->createFloatingFunction();
         f->name = $1;
-        f->args = adoptPtr(p->sinkFloatingValueList($3));
+        f->args = p->sinkFloatingValueList($3);
         $$.id = 0;
         $$.unit = CSSParserValue::Function;
         $$.function = f;
@@ -1632,7 +1633,7 @@ min_or_max_function:
         CSSParser* p = static_cast<CSSParser*>(parser);
         CSSParserFunction* f = p->createFloatingFunction();
         f->name = $1;
-        f->args = adoptPtr(p->sinkFloatingValueList($3));
+        f->args = p->sinkFloatingValueList($3);
         $$.id = 0;
         $$.unit = CSSParserValue::Function;
         $$.function = f;

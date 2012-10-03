@@ -24,7 +24,7 @@
 
 #include "APICast.h"
 #include "AXObjectCache.h"
-#include "AccessibilityObjectWrapperAtk.h"
+#include "AccessibilityObject.h"
 #include "AnimationController.h"
 #include "DOMWrapperWorld.h"
 #include "Document.h"
@@ -59,7 +59,9 @@
 #include "SecurityPolicy.h"
 #include "Settings.h"
 #include "TextIterator.h"
+#include "WebKitAccessibleWrapperAtk.h"
 #include "WebKitDOMRangePrivate.h"
+#include "WebKitMutationObserver.h"
 #include "WorkerThread.h"
 #include "webkitglobalsprivate.h"
 #include "webkitwebframe.h"
@@ -67,11 +69,6 @@
 #include "webkitwebview.h"
 #include "webkitwebviewprivate.h"
 #include <JavaScriptCore/APICast.h>
-
-#if ENABLE(SVG)
-#include "SVGDocumentExtensions.h"
-#include "SVGSMILElement.h"
-#endif
 
 using namespace JSC;
 using namespace WebCore;
@@ -116,22 +113,6 @@ void DumpRenderTreeSupportGtk::setSelectTrailingWhitespaceEnabled(bool enabled)
 bool DumpRenderTreeSupportGtk::selectTrailingWhitespaceEnabled()
 {
     return s_selectTrailingWhitespaceEnabled;
-}
-
-JSValueRef DumpRenderTreeSupportGtk::nodesFromRect(JSContextRef context, JSValueRef value, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping)
-{
-    JSLock lock(SilenceAssertionsOnly);
-    ExecState* exec = toJS(context);
-    if (!value)
-        return JSValueMakeUndefined(context);
-    JSValue jsValue = toJS(exec, value);
-    if (!jsValue.inherits(&JSDocument::s_info))
-       return JSValueMakeUndefined(context);
-
-    JSDocument* jsDocument = static_cast<JSDocument*>(asObject(jsValue));
-    Document* document = jsDocument->impl();
-    RefPtr<NodeList> nodes = document->nodesFromRect(x, y, top, right, bottom, left, ignoreClipping);
-    return toRef(exec, toJS(exec, jsDocument->globalObject(), nodes.get()));
 }
 
 WebKitDOMRange* DumpRenderTreeSupportGtk::jsValueToDOMRange(JSContextRef context, JSValueRef value)
@@ -394,22 +375,6 @@ bool DumpRenderTreeSupportGtk::pauseTransition(WebKitWebFrame* frame, const char
     return core(frame)->animation()->pauseTransitionAtTime(coreElement->renderer(), AtomicString(name), time);
 }
 
-bool DumpRenderTreeSupportGtk::pauseSVGAnimation(WebKitWebFrame* frame, const char* animationId, double time, const char* elementId)
-{
-    ASSERT(core(frame));
-#if ENABLE(SVG)
-    Document* document = core(frame)->document();
-    if (!document || !document->svgExtensions())
-        return false;
-    Element* coreElement = document->getElementById(AtomicString(animationId));
-    if (!coreElement || !SVGSMILElement::isSMILElement(coreElement))
-        return false;
-    return document->accessSVGExtensions()->sampleAnimationAtTime(elementId, static_cast<SVGSMILElement*>(coreElement), time);
-#else
-    return false;
-#endif
-}
-
 CString DumpRenderTreeSupportGtk::markerTextForListItem(WebKitWebFrame* frame, JSContextRef context, JSValueRef nodeObject)
 {
     JSC::ExecState* exec = toJS(context);
@@ -483,7 +448,7 @@ AtkObject* DumpRenderTreeSupportGtk::getFocusedAccessibleElement(WebKitWebFrame*
     if (!wrapper)
         return 0;
 
-    return webkit_accessible_get_focused_element(WEBKIT_ACCESSIBLE(wrapper));
+    return webkitAccessibleGetFocusedElement(WEBKIT_ACCESSIBLE(wrapper));
 #else
     return 0;
 #endif
@@ -760,7 +725,7 @@ static void modifyAccessibilityValue(AtkObject* axObject, bool increment)
     if (!axObject || !WEBKIT_IS_ACCESSIBLE(axObject))
         return;
 
-    AccessibilityObject* coreObject = webkit_accessible_get_accessibility_object(WEBKIT_ACCESSIBLE(axObject));
+    AccessibilityObject* coreObject = webkitAccessibleGetAccessibilityObject(WEBKIT_ACCESSIBLE(axObject));
     if (!coreObject)
         return;
 
@@ -778,6 +743,18 @@ void DumpRenderTreeSupportGtk::incrementAccessibilityValue(AtkObject* axObject)
 void DumpRenderTreeSupportGtk::decrementAccessibilityValue(AtkObject* axObject)
 {
     modifyAccessibilityValue(axObject, false);
+}
+
+CString DumpRenderTreeSupportGtk::accessibilityHelpText(AtkObject* axObject)
+{
+    if (!axObject || !WEBKIT_IS_ACCESSIBLE(axObject))
+        return CString();
+
+    AccessibilityObject* coreObject = webkitAccessibleGetAccessibilityObject(WEBKIT_ACCESSIBLE(axObject));
+    if (!coreObject)
+        return CString();
+
+    return coreObject->helpText().utf8();
 }
 
 void DumpRenderTreeSupportGtk::setAutofilled(JSContextRef context, JSValueRef nodeObject, bool autofilled)
@@ -888,5 +865,45 @@ int DumpRenderTreeSupportGtk::numberOfPendingGeolocationPermissionRequests(WebKi
     return mock->numberOfPendingPermissionRequests();
 #else
     return 0;
+#endif
+}
+
+void DumpRenderTreeSupportGtk::setHixie76WebSocketProtocolEnabled(WebKitWebView* webView, bool enabled)
+{
+#if ENABLE(WEB_SOCKETS)
+    core(webView)->settings()->setUseHixie76WebSocketProtocol(enabled);
+#else
+    UNUSED_PARAM(webView);
+    UNUSED_PARAM(enabled);
+#endif
+}
+
+bool DumpRenderTreeSupportGtk::elementDoesAutoCompleteForElementWithId(WebKitWebFrame* frame, JSStringRef id)
+{
+    Frame* coreFrame = core(frame);
+    if (!coreFrame)
+        return false;
+
+    Document* document = coreFrame->document();
+    ASSERT(document);
+
+    size_t bufferSize = JSStringGetMaximumUTF8CStringSize(id);
+    GOwnPtr<gchar> idBuffer(static_cast<gchar*>(g_malloc(bufferSize)));
+    JSStringGetUTF8CString(id, idBuffer.get(), bufferSize);
+    Node* coreNode = document->getElementById(String::fromUTF8(idBuffer.get()));
+    if (!coreNode || !coreNode->renderer())
+        return false;
+
+    HTMLInputElement* inputElement = static_cast<HTMLInputElement*>(coreNode);
+    if (!inputElement)
+        return false;
+
+    return inputElement->isTextField() && !inputElement->isPasswordField() && inputElement->shouldAutocomplete();
+}
+
+void DumpRenderTreeSupportGtk::deliverAllMutationsIfNecessary()
+{
+#if ENABLE(MUTATION_OBSERVERS)
+    WebKitMutationObserver::deliverAllMutations();
 #endif
 }

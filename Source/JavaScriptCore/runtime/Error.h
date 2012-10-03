@@ -24,6 +24,7 @@
 #define Error_h
 
 #include "InternalFunction.h"
+#include "Interpreter.h"
 #include "JSObject.h"
 #include <stdint.h>
 
@@ -46,34 +47,32 @@ namespace JSC {
     JSObject* createTypeError(JSGlobalObject*, const UString&);
     JSObject* createURIError(JSGlobalObject*, const UString&);
     // ExecState wrappers.
-    JSObject* createError(ExecState*, const UString&);
+    JS_EXPORT_PRIVATE JSObject* createError(ExecState*, const UString&);
     JSObject* createEvalError(ExecState*, const UString&);
-    JSObject* createRangeError(ExecState*, const UString&);
-    JSObject* createReferenceError(ExecState*, const UString&);
-    JSObject* createSyntaxError(ExecState*, const UString&);
-    JSObject* createTypeError(ExecState*, const UString&);
+    JS_EXPORT_PRIVATE JSObject* createRangeError(ExecState*, const UString&);
+    JS_EXPORT_PRIVATE JSObject* createReferenceError(ExecState*, const UString&);
+    JS_EXPORT_PRIVATE JSObject* createSyntaxError(ExecState*, const UString&);
+    JS_EXPORT_PRIVATE JSObject* createTypeError(ExecState*, const UString&);
     JSObject* createURIError(ExecState*, const UString&);
 
     // Methods to add 
     bool hasErrorInfo(ExecState*, JSObject* error);
-    JSObject* addErrorInfo(JSGlobalData*, JSObject* error, int line, const SourceCode&);
+    JSObject* addErrorInfo(JSGlobalData*, JSObject* error, int line, const SourceCode&, const Vector<StackFrame>&);
     // ExecState wrappers.
-    JSObject* addErrorInfo(ExecState*, JSObject* error, int line, const SourceCode&);
+    JSObject* addErrorInfo(ExecState*, JSObject* error, int line, const SourceCode&, const Vector<StackFrame>&);
 
     // Methods to throw Errors.
-    JSValue throwError(ExecState*, JSValue);
-    JSObject* throwError(ExecState*, JSObject*);
+    JS_EXPORT_PRIVATE JSValue throwError(ExecState*, JSValue);
+    JS_EXPORT_PRIVATE JSObject* throwError(ExecState*, JSObject*);
 
     // Convenience wrappers, create an throw an exception with a default message.
-    JSObject* throwTypeError(ExecState*);
-    JSObject* throwSyntaxError(ExecState*);
+    JS_EXPORT_PRIVATE JSObject* throwTypeError(ExecState*);
+    JS_EXPORT_PRIVATE JSObject* throwSyntaxError(ExecState*);
 
     // Convenience wrappers, wrap result as an EncodedJSValue.
     inline EncodedJSValue throwVMError(ExecState* exec, JSValue error) { return JSValue::encode(throwError(exec, error)); }
     inline EncodedJSValue throwVMTypeError(ExecState* exec) { return JSValue::encode(throwTypeError(exec)); }
 
-    JSValue createTypeErrorFunction(ExecState* exec, const UString& message);
-    
     class StrictModeTypeErrorFunction : public InternalFunction {
     private:
         StrictModeTypeErrorFunction(JSGlobalObject* globalObject, Structure* structure, const UString& message)
@@ -82,12 +81,14 @@ namespace JSC {
         {
         }
 
+        static void destroy(JSCell*);
+
     public:
         typedef InternalFunction Base;
 
         static StrictModeTypeErrorFunction* create(ExecState* exec, JSGlobalObject* globalObject, Structure* structure, const UString& message)
         {
-            StrictModeTypeErrorFunction* function = new (allocateCell<StrictModeTypeErrorFunction>(*exec->heap())) StrictModeTypeErrorFunction(globalObject, structure, message);
+            StrictModeTypeErrorFunction* function = new (NotNull, allocateCell<StrictModeTypeErrorFunction>(*exec->heap())) StrictModeTypeErrorFunction(globalObject, structure, message);
             function->finishCreation(exec->globalData(), exec->globalData().propertyNames->emptyIdentifier);
             return function;
         }

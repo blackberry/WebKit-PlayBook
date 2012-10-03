@@ -46,13 +46,6 @@ public:
     double z() const { return m_z; }
     double angle() const { return m_angle; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s (%f, %f, %f) %f]", TransformOperation::toString().latin1().data(), x(), y(), z(), angle());
-    }
-#endif
-
 private:
     virtual bool isIdentity() const { return m_angle == 0; }
 

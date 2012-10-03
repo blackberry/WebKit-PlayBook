@@ -68,6 +68,13 @@ NSString *filenameByFixingIllegalCharacters(NSString *string)
     return filename;
 }
 
+#if !PLATFORM(IOS)
+
+#if COMPILER(CLANG)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+
 CFStringEncoding stringEncodingForResource(Handle resource)
 {
     short resRef = HomeResFile(resource);
@@ -110,3 +117,8 @@ CFStringEncoding stringEncodingForResource(Handle resource)
     return encoding;
 }
 
+#if COMPILER(CLANG)
+#pragma clang diagnostic pop
+#endif
+
+#endif // !PLATFORM(IOS)

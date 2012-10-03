@@ -26,10 +26,10 @@
 #ifndef WebIDBKey_h
 #define WebIDBKey_h
 
-#include "WebCommon.h"
-#include "WebPrivatePtr.h"
-#include "WebString.h"
-#include "WebVector.h"
+#include "platform/WebCommon.h"
+#include "platform/WebPrivatePtr.h"
+#include "platform/WebString.h"
+#include "platform/WebVector.h"
 
 namespace WebCore { class IDBKey; }
 
@@ -49,6 +49,7 @@ public:
     WEBKIT_EXPORT static WebIDBKey createDate(double);
     WEBKIT_EXPORT static WebIDBKey createNumber(double);
     WEBKIT_EXPORT static WebIDBKey createInvalid();
+    WEBKIT_EXPORT static WebIDBKey createNull();
     WEBKIT_EXPORT static WebIDBKey createFromValueAndKeyPath(const WebSerializedScriptValue&, const WebIDBKeyPath&);
     WEBKIT_EXPORT static WebSerializedScriptValue injectIDBKeyIntoSerializedValue(const WebIDBKey&, const WebSerializedScriptValue&, const WebIDBKeyPath&);
 
@@ -65,6 +66,7 @@ public:
     WEBKIT_EXPORT void assignDate(double);
     WEBKIT_EXPORT void assignNumber(double);
     WEBKIT_EXPORT void assignInvalid();
+    WEBKIT_EXPORT void assignNull();
     WEBKIT_EXPORT void reset();
 
     enum Type {
@@ -72,7 +74,8 @@ public:
         ArrayType,
         StringType,
         DateType,
-        NumberType
+        NumberType,
+        NullType,
     };
 
     WEBKIT_EXPORT Type type() const;

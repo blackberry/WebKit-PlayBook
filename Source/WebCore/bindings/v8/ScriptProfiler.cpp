@@ -31,10 +31,11 @@
 #include "config.h"
 #include "ScriptProfiler.h"
 
-#include "InjectedScript.h"
-#include "InspectorValues.h"
+#include "DOMWrapperVisitor.h"
 #include "RetainedDOMInfo.h"
+#include "ScriptObject.h"
 #include "V8Binding.h"
+#include "V8DOMMap.h"
 #include "V8Node.h"
 
 #include <v8-profiler.h>
@@ -48,6 +49,18 @@ void ScriptProfiler::start(ScriptState* state, const String& title)
     v8::CpuProfiler::StartProfiling(v8String(title));
 }
 
+void ScriptProfiler::startForPage(Page*, const String& title)
+{
+    return start(0, title);
+}
+
+#if ENABLE(WORKERS)
+void ScriptProfiler::startForWorkerContext(WorkerContext*, const String& title)
+{
+    return start(0, title);
+}
+#endif
+
 PassRefPtr<ScriptProfile> ScriptProfiler::stop(ScriptState* state, const String& title)
 {
     v8::HandleScope hs;
@@ -57,16 +70,26 @@ PassRefPtr<ScriptProfile> ScriptProfiler::stop(ScriptState* state, const String&
     return profile ? ScriptProfile::create(profile) : 0;
 }
 
-void ScriptProfiler::collectGarbage()
+PassRefPtr<ScriptProfile> ScriptProfiler::stopForPage(Page*, const String& title)
 {
-    // Repeatedly call the V8 idle notification until it returns true ("nothing
-    // more to free"). Note that it makes more sense to do this than to implement
-    // a new "delete everything" pass because object references make it difficult
-    // to free everything possible in just one pass.
-    while (!v8::V8::IdleNotification()) { }
+    // Use null script state to avoid filtering by context security token.
+    // All functions from all iframes should be visible from Inspector UI.
+    return stop(0, title);
 }
 
-PassRefPtr<InspectorValue> ScriptProfiler::objectByHeapObjectId(unsigned id, InjectedScriptManager* injectedScriptManager)
+#if ENABLE(WORKERS)
+PassRefPtr<ScriptProfile> ScriptProfiler::stopForWorkerContext(WorkerContext*, const String& title)
+{
+    return stop(0, title);
+}
+#endif
+
+void ScriptProfiler::collectGarbage()
+{
+    v8::V8::LowMemoryNotification();
+}
+
+ScriptObject ScriptProfiler::objectByHeapObjectId(unsigned id)
 {
     // As ids are unique, it doesn't matter which HeapSnapshot owns HeapGraphNode.
     // We need to find first HeapSnapshot containing a node with the specified id.
@@ -78,20 +101,16 @@ PassRefPtr<InspectorValue> ScriptProfiler::objectByHeapObjectId(unsigned id, Inj
             break;
     }
     if (!node)
-        return InspectorValue::null();
+        return ScriptObject();
 
     v8::HandleScope scope;
     v8::Handle<v8::Value> value = node->GetHeapValue();
     if (!value->IsObject())
-        return InspectorValue::null();
+        return ScriptObject();
 
-    v8::Handle<v8::Object> object(value.As<v8::Object>());
-    v8::Local<v8::Context> creationContext = object->CreationContext();
-    v8::Context::Scope creationScope(creationContext);
-    ScriptState* scriptState = ScriptState::forContext(creationContext);
-    InjectedScript injectedScript = injectedScriptManager->injectedScriptFor(scriptState);
-    return !injectedScript.hasNoValue() ?
-            RefPtr<InspectorValue>(injectedScript.wrapObject(value, "")).release() : InspectorValue::null();
+    v8::Handle<v8::Object> object = value.As<v8::Object>();
+    ScriptState* scriptState = ScriptState::forContext(object->CreationContext());
+    return ScriptObject(scriptState, object);
 }
 
 namespace {
@@ -145,5 +164,25 @@ void ScriptProfiler::initialize()
 #endif // ENABLE(INSPECTOR)
 }
 
+void ScriptProfiler::visitJSDOMWrappers(DOMWrapperVisitor* visitor)
+{
+    class VisitorAdapter : public DOMWrapperMap<Node>::Visitor {
+    public:
+        VisitorAdapter(DOMWrapperVisitor* visitor) : m_visitor(visitor) { }
+
+        virtual void visitDOMWrapper(DOMDataStore*, Node* node, v8::Persistent<v8::Object>)
+        {
+            m_visitor->visitNode(node);
+        }
+    private:
+        DOMWrapperVisitor* m_visitor;
+    } adapter(visitor);
+    visitDOMNodes(&adapter);
+}
+
+void ScriptProfiler::visitExternalJSStrings(DOMWrapperVisitor* visitor)
+{
+    V8BindingPerIsolateData::current()->visitJSExternalStrings(visitor);
+}
 
 } // namespace WebCore

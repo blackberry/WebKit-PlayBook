@@ -31,8 +31,10 @@
 
 #include "CurrentTime.h"
 #include "Deque.h"
+#include "Functional.h"
 #include "StdLibExtras.h"
 #include "Threading.h"
+#include <wtf/ThreadSpecific.h>
 
 #if PLATFORM(CHROMIUM)
 #error Chromium uses a different main thread implementation
@@ -70,7 +72,7 @@ public:
 typedef Deque<FunctionWithContext> FunctionQueue;
 
 static bool callbacksPaused; // This global variable is only accessed from main thread.
-#if !PLATFORM(MAC) && !PLATFORM(QT)
+#if !PLATFORM(MAC)
 static ThreadIdentifier mainThreadIdentifier;
 #endif
 
@@ -96,12 +98,11 @@ void initializeMainThread()
         return;
     initializedMainThread = true;
 
-#if !PLATFORM(QT)
     mainThreadIdentifier = currentThread();
-#endif
 
     mainThreadFunctionQueueMutex();
     initializeMainThreadPlatform();
+    initializeGCThreads();
 }
 
 #else
@@ -218,6 +219,18 @@ void cancelCallOnMainThread(MainThreadFunction* function, void* context)
     }
 }
 
+static void callFunctionObject(void* context)
+{
+    Function<void ()>* function = static_cast<Function<void ()>*>(context);
+    (*function)();
+    delete function;
+}
+
+void callOnMainThread(const Function<void ()>& function)
+{
+    callOnMainThread(callFunctionObject, new Function<void ()>(function));
+}
+
 void setMainThreadCallbacksPaused(bool paused)
 {
     ASSERT(isMainThread());
@@ -231,10 +244,48 @@ void setMainThreadCallbacksPaused(bool paused)
         scheduleDispatchFunctionsOnMainThread();
 }
 
-#if !PLATFORM(MAC) && !PLATFORM(QT)
+#if !PLATFORM(MAC)
 bool isMainThread()
 {
     return currentThread() == mainThreadIdentifier;
+}
+#endif
+
+#if ENABLE(PARALLEL_GC)
+static ThreadSpecific<bool>* isGCThread;
+#endif
+
+void initializeGCThreads()
+{
+#if ENABLE(PARALLEL_GC)
+    isGCThread = new ThreadSpecific<bool>();
+#endif
+}
+
+#if ENABLE(PARALLEL_GC)
+void registerGCThread()
+{
+    if (!isGCThread) {
+        // This happens if we're running in a process that doesn't care about
+        // MainThread.
+        return;
+    }
+
+    **isGCThread = true;
+}
+
+bool isMainThreadOrGCThread()
+{
+    if (isGCThread->isSet() && **isGCThread)
+        return true;
+
+    return isMainThread();
+}
+#elif PLATFORM(MAC)
+// This is necessary because JavaScriptCore.exp doesn't support preprocessor macros.
+bool isMainThreadOrGCThread()
+{
+    return isMainThread();
 }
 #endif
 

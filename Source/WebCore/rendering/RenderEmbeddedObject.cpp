@@ -53,10 +53,6 @@
 #include "Text.h"
 #include "TextRun.h"
 
-#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
-#include "HTMLVideoElement.h"
-#endif
-
 namespace WebCore {
 
 using namespace HTMLNames;
@@ -83,10 +79,6 @@ RenderEmbeddedObject::RenderEmbeddedObject(Element* element)
     , m_mouseDownWasInMissingPluginIndicator(false)
 {
     view()->frameView()->setIsVisuallyNonEmpty();
-#if ENABLE(PLUGIN_PROXY_FOR_VIDEO)
-    if (element->hasTagName(videoTag) || element->hasTagName(audioTag))
-        setHasIntrinsicSize();
-#endif
 }
 
 RenderEmbeddedObject::~RenderEmbeddedObject()
@@ -139,11 +131,20 @@ void RenderEmbeddedObject::setMissingPluginIndicatorIsPressed(bool pressed)
 
 void RenderEmbeddedObject::paint(PaintInfo& paintInfo, const LayoutPoint& paintOffset)
 {
+    Page* page = 0;
+    if (Frame* frame = this->frame())
+        page = frame->page();
+
     if (pluginCrashedOrWasMissing()) {
+        if (page && paintInfo.phase == PaintPhaseForeground)
+            page->addRelevantUnpaintedObject(this, visualOverflowRect());
         RenderReplaced::paint(paintInfo, paintOffset);
         return;
     }
-    
+
+    if (page && paintInfo.phase == PaintPhaseForeground)
+        page->addRelevantRepaintedObject(this, visualOverflowRect());
+
     RenderPart::paint(paintInfo, paintOffset);
 }
 
@@ -185,7 +186,7 @@ void RenderEmbeddedObject::paintReplaced(PaintInfo& paintInfo, const LayoutPoint
 bool RenderEmbeddedObject::getReplacementTextGeometry(const LayoutPoint& accumulatedOffset, FloatRect& contentRect, Path& path, FloatRect& replacementTextRect, Font& font, TextRun& run, float& textWidth) const
 {
     contentRect = contentBoxRect();
-    contentRect.moveBy(accumulatedOffset);
+    contentRect.moveBy(roundedIntPoint(accumulatedOffset));
     
     FontDescription fontDescription;
     RenderTheme::defaultTheme()->systemFont(CSSValueWebkitSmallControl, fontDescription);
@@ -222,7 +223,7 @@ void RenderEmbeddedObject::layout()
     RenderPart::layout();
 
     m_overflow.clear();
-    addBoxShadowAndBorderOverflow();
+    addVisualEffectOverflow();
 
     updateLayerTransform();
 
@@ -262,14 +263,14 @@ bool RenderEmbeddedObject::nodeAtPoint(const HitTestRequest& request, HitTestRes
     PluginViewBase* view = static_cast<PluginViewBase*>(widget());
 
     if (Scrollbar* horizontalScrollbar = view->horizontalScrollbar()) {
-        if (horizontalScrollbar->frameRect().contains(pointInContainer)) {
+        if (horizontalScrollbar->shouldParticipateInHitTesting() && horizontalScrollbar->frameRect().contains(pointInContainer)) {
             result.setScrollbar(horizontalScrollbar);
             return true;
         }
     }
 
     if (Scrollbar* verticalScrollbar = view->verticalScrollbar()) {
-        if (verticalScrollbar->frameRect().contains(pointInContainer)) {
+        if (verticalScrollbar->shouldParticipateInHitTesting() && verticalScrollbar->frameRect().contains(pointInContainer)) {
             result.setScrollbar(verticalScrollbar);
             return true;
         }

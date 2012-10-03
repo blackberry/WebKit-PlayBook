@@ -45,9 +45,10 @@ void JSString::RopeBuilder::expand()
     append(jsString);
 }
 
-JSString::~JSString()
+void JSString::destroy(JSCell* cell)
 {
-    ASSERT(vptr() == JSGlobalData::jsStringVPtr);
+    JSString* thisObject = jsCast<JSString*>(cell);
+    thisObject->JSString::~JSString();
 }
 
 void JSString::visitChildren(JSCell* cell, SlotVisitor& visitor)
@@ -64,9 +65,10 @@ void JSString::resolveRope(ExecState* exec) const
 
     if (is8Bit()) {
         LChar* buffer;
-        if (RefPtr<StringImpl> newImpl = StringImpl::tryCreateUninitialized(m_length, buffer))
+        if (RefPtr<StringImpl> newImpl = StringImpl::tryCreateUninitialized(m_length, buffer)) {
+            Heap::heap(this)->reportExtraMemoryCost(newImpl->cost());
             m_value = newImpl.release();
-        else {
+        } else {
             outOfMemory(exec);
             return;
         }
@@ -91,9 +93,10 @@ void JSString::resolveRope(ExecState* exec) const
     }
 
     UChar* buffer;
-    if (RefPtr<StringImpl> newImpl = StringImpl::tryCreateUninitialized(m_length, buffer))
+    if (RefPtr<StringImpl> newImpl = StringImpl::tryCreateUninitialized(m_length, buffer)) {
+        Heap::heap(this)->reportExtraMemoryCost(newImpl->cost());
         m_value = newImpl.release();
-    else {
+    } else {
         outOfMemory(exec);
         return;
     }
@@ -188,18 +191,10 @@ void JSString::outOfMemory(ExecState* exec) const
 {
     for (size_t i = 0; i < s_maxInternalRopeLength && m_fibers[i]; ++i)
         m_fibers[i].clear();
-    ASSERT(!isRope());
+    ASSERT(isRope());
     ASSERT(m_value == UString());
     if (exec)
         throwOutOfMemoryError(exec);
-}
-
-JSValue JSString::replaceCharacter(ExecState* exec, UChar character, const UString& replacement)
-{
-    size_t matchPosition = value(exec).find(character);
-    if (matchPosition == notFound)
-        return JSValue(this);
-    return jsString(exec, m_value.substringSharingImpl(0, matchPosition), replacement, value(exec).substringSharingImpl(matchPosition + 1));
 }
 
 JSString* JSString::getIndexSlowCase(ExecState* exec, unsigned i)
@@ -236,14 +231,9 @@ double JSString::toNumber(ExecState* exec) const
     return jsToNumber(value(exec));
 }
 
-UString JSString::toString(ExecState* exec) const
-{
-    return value(exec);
-}
-
 inline StringObject* StringObject::create(ExecState* exec, JSGlobalObject* globalObject, JSString* string)
 {
-    StringObject* object = new (allocateCell<StringObject>(*exec->heap())) StringObject(exec->globalData(), globalObject->stringObjectStructure());
+    StringObject* object = new (NotNull, allocateCell<StringObject>(*exec->heap())) StringObject(exec->globalData(), globalObject->stringObjectStructure());
     object->finishCreation(exec->globalData(), string);
     return object;
 }
@@ -265,10 +255,6 @@ bool JSString::getOwnPropertySlot(JSCell* cell, ExecState* exec, const Identifie
     // This function should only be called by JSValue::get.
     if (thisObject->getStringPropertySlot(exec, propertyName, slot))
         return true;
-    if (propertyName == exec->propertyNames().underscoreProto) {
-        slot.setValue(exec->lexicalGlobalObject()->stringPrototype());
-        return true;
-    }
     slot.setBase(thisObject);
     JSObject* object;
     for (JSValue prototype = exec->lexicalGlobalObject()->stringPrototype(); !prototype.isNull(); prototype = object->prototype()) {

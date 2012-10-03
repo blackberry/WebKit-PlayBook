@@ -78,6 +78,8 @@ struct _WebKitWebSettingsPrivate {
     gboolean enableFullscreen;
     gboolean enableDNSPrefetching;
     gboolean enableWebgl;
+    gboolean enableWebAudio;
+    gboolean enableAcceleratedCompositing;
 };
 
 WEBKIT_API void webkit_web_settings_add_extra_plugin_directory(WebKitWebView*, const gchar* directory);

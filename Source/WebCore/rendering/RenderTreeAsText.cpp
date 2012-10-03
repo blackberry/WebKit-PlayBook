@@ -26,7 +26,6 @@
 #include "config.h"
 #include "RenderTreeAsText.h"
 
-#include "CSSMutableStyleDeclaration.h"
 #include "Document.h"
 #include "Frame.h"
 #include "FrameSelection.h"
@@ -48,6 +47,7 @@
 #include "RenderTableCell.h"
 #include "RenderView.h"
 #include "RenderWidget.h"
+#include "StylePropertySet.h"
 #include <wtf/HexNumber.h>
 #include <wtf/UnusedParam.h>
 #include <wtf/Vector.h>
@@ -69,7 +69,7 @@
 #endif
 
 #if PLATFORM(QT)
-#include <QWidget>
+#include <QVariant>
 #endif
 
 namespace WebCore {
@@ -78,12 +78,19 @@ using namespace HTMLNames;
 
 static void writeLayers(TextStream&, const RenderLayer* rootLayer, RenderLayer*, const IntRect& paintDirtyRect, int indent = 0, RenderAsTextBehavior behavior = RenderAsTextBehaviorNormal);
 
-bool hasFractions(double val)
+static inline bool hasFractions(double val)
 {
     static const double s_epsilon = 0.0001;
     int ival = static_cast<int>(val);
     double dval = static_cast<double>(ival);
     return fabs(val - dval) > s_epsilon;
+}
+
+String formatNumberRespectingIntegers(double value)
+{
+    if (!hasFractions(value))
+        return String::number(static_cast<int>(value));
+    return String::number(value, ShouldRoundDecimalPlaces, 2);
 }
 
 TextStream& operator<<(TextStream& ts, const IntRect& r)
@@ -98,31 +105,16 @@ TextStream& operator<<(TextStream& ts, const IntPoint& p)
 
 TextStream& operator<<(TextStream& ts, const FloatPoint& p)
 {
-    ts << "(";    
-    if (hasFractions(p.x()))
-        ts << p.x();
-    else 
-        ts << int(p.x());    
-    ts << ",";
-    if (hasFractions(p.y())) 
-        ts << p.y();
-    else 
-        ts << int(p.y());    
-    return ts << ")";
+    ts << "(" << formatNumberRespectingIntegers(p.x());
+    ts << "," << formatNumberRespectingIntegers(p.y());
+    ts << ")";
+    return ts;
 }
 
 TextStream& operator<<(TextStream& ts, const FloatSize& s)
 {
-    ts << "width=";
-    if (hasFractions(s.width()))
-        ts << s.width();
-    else
-        ts << int(s.width());
-    ts << " height=";
-    if (hasFractions(s.height())) 
-        ts << s.height();
-    else
-        ts << int(s.height());
+    ts << "width=" << formatNumberRespectingIntegers(s.width());
+    ts << " height=" << formatNumberRespectingIntegers(s.height());
     return ts;
 }
 
@@ -191,8 +183,8 @@ static bool isEmptyOrUnstyledAppleStyleSpan(const Node* node)
     if (!node->hasChildNodes())
         return true;
 
-    CSSMutableStyleDeclaration* inlineStyleDecl = elem->inlineStyleDecl();
-    return (!inlineStyleDecl || inlineStyleDecl->length() == 0);
+    StylePropertySet* inlineStyleDecl = elem->inlineStyleDecl();
+    return (!inlineStyleDecl || inlineStyleDecl->isEmpty());
 }
 
 String quoteAndEscapeNonPrintables(const String& s)
@@ -483,14 +475,13 @@ void RenderTreeAsText::writeRenderObject(TextStream& ts, const RenderObject& o, 
     if (o.isRenderPart()) {
         const RenderPart* part = toRenderPart(const_cast<RenderObject*>(&o));
         if (part->widget() && part->widget()->platformWidget()) {
-            QWidget* wid = part->widget()->platformWidget();
+            QObject* wid = part->widget()->platformWidget();
 
             ts << " [QT: ";
-            ts << "geometry: {" << wid->geometry() << "} ";
-            ts << "isHidden: " << wid->isHidden() << " ";
+            ts << "geometry: {" << wid->property("geometry").toRect() << "} ";
+            ts << "isHidden: " << !wid->property("isVisible").toBool() << " ";
             ts << "isSelfVisible: " << part->widget()->isSelfVisible() << " ";
-            ts << "isParentVisible: " << part->widget()->isParentVisible() << " ";
-            ts << "mask: {" << wid->mask().boundingRect() << "} ] ";
+            ts << "isParentVisible: " << part->widget()->isParentVisible() << " ] ";
         }
     }
 #endif
@@ -524,8 +515,8 @@ static void writeTextRun(TextStream& ts, const RenderText& o, const InlineTextBo
 void write(TextStream& ts, const RenderObject& o, int indent, RenderAsTextBehavior behavior)
 {
 #if ENABLE(SVG)
-    if (o.isSVGPath()) {
-        write(ts, *toRenderSVGPath(&o), indent);
+    if (o.isSVGShape()) {
+        write(ts, *toRenderSVGShape(&o), indent);
         return;
     }
     if (o.isSVGGradientStop()) {
@@ -545,11 +536,11 @@ void write(TextStream& ts, const RenderObject& o, int indent, RenderAsTextBehavi
         return;
     }
     if (o.isSVGText()) {
-        writeSVGText(ts, *toRenderBlock(&o), indent);
+        writeSVGText(ts, *toRenderSVGText(&o), indent);
         return;
     }
     if (o.isSVGInlineText()) {
-        writeSVGInlineText(ts, *toRenderText(&o), indent);
+        writeSVGInlineText(ts, *toRenderSVGInlineText(&o), indent);
         return;
     }
     if (o.isSVGImage()) {
@@ -625,10 +616,10 @@ static void write(TextStream& ts, RenderLayer& l,
             ts << " scrollX " << l.scrollXOffset();
         if (l.scrollYOffset())
             ts << " scrollY " << l.scrollYOffset();
-        if (l.renderBox() && l.renderBox()->clientWidth() != l.scrollWidth())
-            ts << " scrollWidth " << l.scrollWidth();
-        if (l.renderBox() && l.renderBox()->clientHeight() != l.scrollHeight())
-            ts << " scrollHeight " << l.scrollHeight();
+        if (l.renderBox() && l.renderBox()->pixelSnappedClientWidth() != l.pixelSnappedScrollWidth())
+            ts << " scrollWidth " << l.pixelSnappedScrollWidth();
+        if (l.renderBox() && l.renderBox()->pixelSnappedClientHeight() != l.pixelSnappedScrollHeight())
+            ts << " scrollHeight " << l.pixelSnappedScrollHeight();
     }
 
     if (paintPhase == LayerPaintPhaseBackground)

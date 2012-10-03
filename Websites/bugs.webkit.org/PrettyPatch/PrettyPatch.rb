@@ -141,6 +141,7 @@ private
     border: 1px solid #ddd;
     font-family: monospace;
     margin: 1em 0;
+    position: relative;
 }
 
 h1 {
@@ -187,16 +188,26 @@ h1 :hover {
     float: right;
 }
 
-.LineSide:last-child {
-    float: right;
-}
-
 .LineSide,
 .sidebyside .DiffBlockPart.remove,
 .sidebyside .DiffBlockPart.add {
     display:inline-block;
-    width:50%;
+    width: 50%;
     vertical-align: top;
+}
+
+.sidebyside .resizeHandle {
+    width: 5px;
+    height: 100%;
+    cursor: move;
+    position: absolute;
+    top: 0;
+    left: 50%;
+}
+
+.sidebyside .resizeHandle:hover {
+    background-color: grey;
+    opacity: 0.5;
 }
 
 .sidebyside .DiffBlockPart.remove .to,
@@ -272,6 +283,7 @@ h1 :hover {
 
 .overallComments textarea {
   height: 2em;
+  max-width: 100%;
 }
 
 .comment textarea, .overallComments textarea {
@@ -468,7 +480,7 @@ div:focus {
 }
 </style>
 <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.4.2/jquery.min.js"></script> 
-<script src="code-review.js?version=42"></script>
+<script src="code-review.js?version=43"></script>
 EOF
 
     def self.revisionOrDescription(string)

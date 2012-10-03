@@ -161,7 +161,7 @@ bool RenderThemeGtk::controlSupportsTints(const RenderObject* o) const
     return isEnabled(o);
 }
 
-int RenderThemeGtk::baselinePosition(const RenderObject* o) const
+LayoutUnit RenderThemeGtk::baselinePosition(const RenderObject* o) const
 {
     if (!o->isBox())
         return 0;
@@ -481,7 +481,7 @@ String RenderThemeGtk::extraMediaControlsStyleSheet()
 #if ENABLE(FULLSCREEN_API)
 String RenderThemeGtk::extraFullScreenStyleSheet()
 {
-    return String(fullscreenQuickTimeUserAgentStyleSheet, sizeof(fullscreenQuickTimeUserAgentStyleSheet));
+    return String();
 }
 #endif
 
@@ -525,9 +525,10 @@ bool RenderThemeGtk::paintMediaPlayButton(RenderObject* renderObject, const Pain
     Node* node = renderObject->node();
     if (!node)
         return false;
+    if (!node->isMediaControlElement())
+        return false;
 
-    MediaControlPlayButtonElement* button = static_cast<MediaControlPlayButtonElement*>(node);
-    return paintMediaButton(renderObject, paintInfo.context, rect, button->displayType() == MediaPlayButton ? GTK_STOCK_MEDIA_PLAY : GTK_STOCK_MEDIA_PAUSE);
+    return paintMediaButton(renderObject, paintInfo.context, rect, mediaControlElementType(node) == MediaPlayButton ? GTK_STOCK_MEDIA_PLAY : GTK_STOCK_MEDIA_PAUSE);
 }
 
 bool RenderThemeGtk::paintMediaSeekBackButton(RenderObject* renderObject, const PaintInfo& paintInfo, const IntRect& rect)
@@ -700,7 +701,7 @@ static bool stringByAdoptingFileSystemRepresentation(gchar* systemFilename, Stri
     return true;
 }
 
-String RenderThemeGtk::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width, bool multipleFilesAllowed)
+String RenderThemeGtk::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width, bool multipleFilesAllowed) const
 {
     if (width <= 0)
         return String();

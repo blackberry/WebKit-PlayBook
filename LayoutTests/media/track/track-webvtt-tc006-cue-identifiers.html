@@ -40,7 +40,7 @@
                             values : [30.5, 60.5, 120.5, 180.5],
                         },
                         {
-                            property : "getCueAsSource()",
+                            property : "text",
                             values : ["Bear is Coming!!!!!", "I said Bear is coming!!!!", "I said Bear is coming now!!!!", "Duplicate identifier"],
                         },
                     ],
@@ -65,7 +65,7 @@
             }
         </script>
     </head>
-    <body>
+    <body onload="enableAllTextTracks()">
         <p>Tests that any text other than "-->" is recognized as optional cue identifier.</p>
         <video>
             <track src="captions-webvtt/tc006-cue-id.vtt" onload="trackLoaded()">

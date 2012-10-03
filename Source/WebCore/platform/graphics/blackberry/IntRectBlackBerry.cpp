@@ -33,6 +33,4 @@ IntRect::operator BlackBerry::Platform::IntRect() const
     return BlackBerry::Platform::IntRect(x(), y(), width(), height());
 }
 
-}
-
-// vim: ts=4 sw=4 et
+} // namespace WebCore

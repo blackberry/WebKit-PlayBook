@@ -12,7 +12,7 @@ layer at (0,0) size 480x360
           RenderSVGInlineText {#text} at (0,0) size 226x35
             chunk 1 (end anchor) text run 1 at (-1.00,110.00) startOffset 0 endOffset 17 width 226.00: "Begin with \"end\","
           RenderSVGTSpan {tspan} at (0,0) size 396x35
-            RenderSVGInlineText {#text} at (28,50) size 396x35
+            RenderSVGInlineText {#text} at (28,50) size 395x35
               chunk 1 (middle anchor) text run 1 at (27.50,160.00) startOffset 0 endOffset 32 width 395.00: " switch to \"middle\" in a tspan, "
           RenderSVGTSpan {tspan} at (0,0) size 241x35
             RenderSVGInlineText {#text} at (226,100) size 241x35
@@ -20,4 +20,4 @@ layer at (0,0) size 480x360
     RenderSVGText {text} at (10,304) size 261x46 contains 1 chunk(s)
       RenderSVGInlineText {#text} at (0,0) size 261x46
         chunk 1 text run 1 at (10.00,340.00) startOffset 0 endOffset 16 width 261.00: "$Revision: 1.5 $"
-    RenderSVGPath {rect} at (0,0) size 480x360 [stroke={[type=SOLID] [color=#000000]}] [x=1.00] [y=1.00] [width=478.00] [height=358.00]
+    RenderSVGRect {rect} at (0,0) size 480x360 [stroke={[type=SOLID] [color=#000000]}] [x=1.00] [y=1.00] [width=478.00] [height=358.00]

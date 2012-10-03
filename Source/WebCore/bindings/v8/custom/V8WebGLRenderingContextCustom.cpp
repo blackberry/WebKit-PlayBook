@@ -39,7 +39,6 @@
 #include "V8ArrayBufferView.h"
 #include "V8Binding.h"
 #include "V8BindingMacros.h"
-#include "V8WebKitLoseContext.h"
 #include "V8Float32Array.h"
 #include "V8HTMLCanvasElement.h"
 #include "V8HTMLImageElement.h"
@@ -56,9 +55,11 @@
 #include "V8Uint32Array.h"
 #include "V8Uint8Array.h"
 #include "V8WebGLBuffer.h"
+#include "V8WebGLCompressedTextureS3TC.h"
 #include "V8WebGLDebugRendererInfo.h"
 #include "V8WebGLDebugShaders.h"
 #include "V8WebGLFramebuffer.h"
+#include "V8WebGLLoseContext.h"
 #include "V8WebGLProgram.h"
 #include "V8WebGLRenderbuffer.h"
 #include "V8WebGLShader.h"
@@ -153,6 +154,8 @@ static v8::Handle<v8::Value> toV8Object(const WebGLGetInfo& info)
         return toV8(info.getWebGLTexture());
     case WebGLGetInfo::kTypeWebGLUnsignedByteArray:
         return toV8(info.getWebGLUnsignedByteArray());
+    case WebGLGetInfo::kTypeWebGLUnsignedIntArray:
+        return toV8(info.getWebGLUnsignedIntArray());
     case WebGLGetInfo::kTypeWebGLVertexArrayObjectOES:
         return toV8(info.getWebGLVertexArrayObjectOES());
     default:
@@ -168,9 +171,9 @@ static v8::Handle<v8::Value> toV8Object(WebGLExtension* extension, v8::Handle<v8
     v8::Handle<v8::Value> extensionObject;
     const char* referenceName = 0;
     switch (extension->getName()) {
-    case WebGLExtension::WebKitLoseContextName:
-        extensionObject = toV8(static_cast<WebKitLoseContext*>(extension));
-        referenceName = "webKitLoseContextName";
+    case WebGLExtension::WebKitWebGLLoseContextName:
+        extensionObject = toV8(static_cast<WebGLLoseContext*>(extension));
+        referenceName = "webKitWebGLLoseContextName";
         break;
     case WebGLExtension::OESStandardDerivativesName:
         extensionObject = toV8(static_cast<OESStandardDerivatives*>(extension));
@@ -191,6 +194,10 @@ static v8::Handle<v8::Value> toV8Object(WebGLExtension* extension, v8::Handle<v8
     case WebGLExtension::WebGLDebugShadersName:
         extensionObject = toV8(static_cast<WebGLDebugShaders*>(extension));
         referenceName = "webGLDebugShadersName";
+        break;
+    case WebGLExtension::WebKitWebGLCompressedTextureS3TCName:
+        extensionObject = toV8(static_cast<WebGLCompressedTextureS3TC*>(extension));
+        referenceName = "webKitWebGLCompressedTextureS3TCName";
         break;
     }
     ASSERT(!extensionObject.IsEmpty());

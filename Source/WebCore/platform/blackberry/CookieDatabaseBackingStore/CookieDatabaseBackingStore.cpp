@@ -33,7 +33,6 @@
 #include "ParsedCookie.h"
 #include "SQLiteStatement.h"
 #include "SQLiteTransaction.h"
-#include <wtf/text/CString.h>
 #include <wtf/text/StringBuilder.h>
 #include <wtf/text/WTFString.h>
 
@@ -42,7 +41,7 @@
 #define CookieLog(format, ...) BlackBerry::Platform::logAlways(BlackBerry::Platform::LogLevelInfo, format, ## __VA_ARGS__)
 #else
 #define CookieLog(format, ...)
-#endif // ENABLE_COOKIE_DEBUG
+#endif
 
 #include <BlackBerryPlatformExecutableMessage.h>
 
@@ -50,7 +49,7 @@ using BlackBerry::Platform::MessageClient;
 using BlackBerry::Platform::TypedReplyBuffer;
 using BlackBerry::Platform::createMethodCallMessage;
 
-static double const s_databaseTimerInterval = 2;
+static const double s_databaseTimerInterval = 2;
 
 namespace WebCore {
 
@@ -72,7 +71,7 @@ CookieDatabaseBackingStore::CookieDatabaseBackingStore()
 
 CookieDatabaseBackingStore::~CookieDatabaseBackingStore()
 {
-    delete m_dbTimerClient;
+    deleteGuardedObject(m_dbTimerClient);
     m_dbTimerClient = 0;
     // FIXME: This object will never be deleted due to the set up of CookieManager (it's a singleton)
     CookieLog("CookieBackingStore - Destructing");
@@ -96,7 +95,7 @@ void CookieDatabaseBackingStore::upgradeTableIfNeeded(const String& databaseFiel
 
     // Check if the existing table has the required database fields
     {
-        String query("PRAGMA table_info(" + m_tableName + ");");
+        String query = "PRAGMA table_info(" + m_tableName + ");";
 
         SQLiteStatement statement(m_db, query);
         if (statement.prepare()) {
@@ -106,10 +105,12 @@ void CookieDatabaseBackingStore::upgradeTableIfNeeded(const String& databaseFiel
         }
 
         while (statement.step() == SQLResultRow) {
+            DEFINE_STATIC_LOCAL(String, creationTime, ("creationTime"));
+            DEFINE_STATIC_LOCAL(String, protocol, ("protocol"));
             String name = statement.getColumnText(1);
-            if (name == "creationTime")
+            if (name == creationTime)
                 creationTimeExists = true;
-            if (name == "protocol")
+            if (name == protocol)
                 protocolExists = true;
             if (creationTimeExists && protocolExists)
                 return;
@@ -117,12 +118,12 @@ void CookieDatabaseBackingStore::upgradeTableIfNeeded(const String& databaseFiel
         LOG(Network, "Need to update cookie table schema.");
     }
 
-    // Drop and Recreate the cookie table to update to the newest database fields
-    // We do not use alter table - add column because that method cannot add primary keys
+    // Drop and recreate the cookie table to update to the latest database fields.
+    // We do not use alter table - add column because that method cannot add primary keys.
     Vector<String> commands;
 
     // Backup existing table
-    String renameQuery("ALTER TABLE " + m_tableName + " RENAME TO Backup_" + m_tableName + ";");
+    String renameQuery = "ALTER TABLE " + m_tableName + " RENAME TO Backup_" + m_tableName + ";";
     commands.append(renameQuery);
 
     // Recreate the cookie table using the new database and primary key fields
@@ -146,35 +147,35 @@ void CookieDatabaseBackingStore::upgradeTableIfNeeded(const String& databaseFiel
 
     // The new columns will be blank, set the new values.
     if (!creationTimeExists) {
-        String setCreationTimeQuery("UPDATE " + m_tableName + " SET creationTime = lastAccessed;");
+        String setCreationTimeQuery = "UPDATE " + m_tableName + " SET creationTime = lastAccessed;";
         commands.append(setCreationTimeQuery);
     }
 
     if (!protocolExists) {
-        String setProtocolQuery("UPDATE " + m_tableName + " SET protocol = 'http' WHERE isSecure = '0';");
-        String setProtocolQuery2("UPDATE " + m_tableName + " SET protocol = 'https' WHERE isSecure = '1';");
+        String setProtocolQuery = "UPDATE " + m_tableName + " SET protocol = 'http' WHERE isSecure = '0';";
+        String setProtocolQuery2 = "UPDATE " + m_tableName + " SET protocol = 'https' WHERE isSecure = '1';";
         commands.append(setProtocolQuery);
         commands.append(setProtocolQuery2);
     }
 
     // Drop the backup table
-    String dropBackupQuery("DROP TABLE IF EXISTS Backup_" + m_tableName + ";");
+    String dropBackupQuery = "DROP TABLE IF EXISTS Backup_" + m_tableName + ";";
     commands.append(dropBackupQuery);
 
     SQLiteTransaction transaction(m_db, false);
     transaction.begin();
-    for (size_t i = 0; i < commands.size(); ++i) {
+    size_t commandSize = commands.size();
+    for (size_t i = 0; i < commandSize; ++i) {
         if (!m_db.executeCommand(commands[i])) {
             LOG_ERROR("Failed to alter cookie table when executing sql:%s", commands[i].utf8().data());
             LOG_ERROR("SQLite Error Message: %s", m_db.lastErrorMsg());
             transaction.rollback();
 
-            // finally it will try to keep a backup of the current cookie table for the future restoration.
-            // NOTICE: this will essentially DELETE the current table, but that's better
-            // than continually hitting this case and never being able to use the cookie table.
-            // if this is ever hit, it's definitely a bug.
+            // We should never get here, but if we do, rename the current cookie table for future restoration. This has the side effect of
+            // clearing the current cookie table, but that's better than continually hitting this case and hence never being able to use the
+            // cookie table.
             ASSERT_NOT_REACHED();
-            String renameQuery("ALTER TABLE " + m_tableName + " RENAME TO Backup2_" + m_tableName + ";");
+            String renameQuery = "ALTER TABLE " + m_tableName + " RENAME TO Backup2_" + m_tableName + ";";
             if (!m_db.executeCommand(renameQuery)) {
                 LOG_ERROR("Failed to backup existing cookie table.");
                 LOG_ERROR("SQLite Error Message: %s", m_db.lastErrorMsg());
@@ -208,10 +209,10 @@ void CookieDatabaseBackingStore::invokeOpen(const String& cookieJar)
 
     const String primaryKeyFields("PRIMARY KEY (protocol, host, path, name)");
     const String databaseFields("name TEXT, value TEXT, host TEXT, path TEXT, expiry DOUBLE, lastAccessed DOUBLE, isSecure INTEGER, isHttpOnly INTEGER, creationTime DOUBLE, protocol TEXT");
-    // Upgrade table to add the new column creationTime and protocol for backward compliance.
+    // Update table to add the new column creationTime and protocol for backwards compatability.
     upgradeTableIfNeeded(databaseFields, primaryKeyFields);
 
-    // Create table if not exsist in case that the alterTableIfNeeded() failed accidentally.
+    // Create table if not exsist in case that the upgradeTableIfNeeded() failed accidentally.
     String createTableQuery("CREATE TABLE IF NOT EXISTS ");
     createTableQuery += m_tableName;
     // This table schema is compliant with Mozilla's.
@@ -237,7 +238,7 @@ void CookieDatabaseBackingStore::invokeOpen(const String& cookieJar)
     String updateQuery("UPDATE ");
     updateQuery += m_tableName;
     // The where statement is chosen to match CookieMap key.
-    updateQuery += " SET name = ?1, value = ?2, host = ?3, path = ?4, expiry = ?5, lastAccessed = ?6, isSecure = ?7, isHttpOnly = ?8, creationTime = ?9, protocol = ?10 where protocol = ?10 and name = ?1 and host = ?3 and path = ?4;";
+    updateQuery += " SET name = ?1, value = ?2, host = ?3, path = ?4, expiry = ?5, lastAccessed = ?6, isSecure = ?7, isHttpOnly = ?8, creationTime = ?9, protocol = ?10 where name = ?1 and host = ?3 and path = ?4;";
     m_updateStatement = new SQLiteStatement(m_db, updateQuery);
 
     if (m_updateStatement->prepare()) {
@@ -415,7 +416,7 @@ void CookieDatabaseBackingStore::sendChangesToDatabase(int nextInterval)
         CookieLog("CookieBackingStore - Starting one shot send to database");
         m_dbTimer.start(nextInterval);
     } else {
-#if !NDEBUG
+#ifndef NDEBUG
         CookieLog("CookieBackingStore - Timer already running, skipping this request");
 #endif
     }

@@ -43,6 +43,9 @@ WheelEvent::WheelEvent(const FloatPoint& wheelTicks, const FloatPoint& rawDelta,
                        bool directionInvertedFromDevice)
     : MouseRelatedEvent(eventNames().mousewheelEvent,
                         true, true, view, 0, screenLocation, pageLocation,
+#if ENABLE(POINTER_LOCK)
+                        IntPoint(0, 0),
+#endif
                         ctrlKey, altKey, shiftKey, metaKey)
     , m_wheelDelta(IntPoint(static_cast<int>(wheelTicks.x() * tickMultiplier), static_cast<int>(wheelTicks.y() * tickMultiplier)))
     , m_rawDelta(roundedIntPoint(rawDelta))
@@ -105,8 +108,8 @@ WheelEventDispatchMediator::WheelEventDispatchMediator(const PlatformWheelEvent&
         return;
 
     setEvent(WheelEvent::create(FloatPoint(event.wheelTicksX(), event.wheelTicksY()), FloatPoint(event.deltaX(), event.deltaY()),
-                                granularity(event), view, IntPoint(event.globalX(), event.globalY()), IntPoint(event.x(), event.y()),
-                                event.ctrlKey(), event.altKey(), event.shiftKey(), event.metaKey(), event.webkitDirectionInvertedFromDevice()));
+                                granularity(event), view, event.globalPosition(), event.position(),
+                                event.ctrlKey(), event.altKey(), event.shiftKey(), event.metaKey(), event.directionInvertedFromDevice()));
 }
 
 WheelEvent* WheelEventDispatchMediator::event() const

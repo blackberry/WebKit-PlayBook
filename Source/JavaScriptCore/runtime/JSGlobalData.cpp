@@ -35,6 +35,7 @@
 #include "DebuggerActivation.h"
 #include "FunctionConstructor.h"
 #include "GetterSetter.h"
+#include "HostCallReturnValue.h"
 #include "Interpreter.h"
 #include "JSActivation.h"
 #include "JSAPIValueWrapper.h"
@@ -50,15 +51,17 @@
 #include "Lookup.h"
 #include "Nodes.h"
 #include "ParserArena.h"
-#if ENABLE(REGEXP_TRACING)
-#include "RegExp.h"
-#endif
 #include "RegExpCache.h"
 #include "RegExpObject.h"
 #include "StrictEvalActivation.h"
 #include "StrongInlines.h"
 #include <wtf/Threading.h>
 #include <wtf/WTFThreadData.h>
+
+#if ENABLE(REGEXP_TRACING)
+#include "RegExp.h"
+#endif
+
 #if PLATFORM(MAC)
 #include <CoreFoundation/CoreFoundation.h>
 #endif
@@ -99,60 +102,13 @@ extern const HashTable globalObjectTable;
 extern const HashTable mathTable;
 extern const HashTable numberConstructorTable;
 extern const HashTable numberPrototypeTable;
-extern const HashTable objectConstructorTable;
+JS_EXPORTDATA extern const HashTable objectConstructorTable;
 extern const HashTable objectPrototypeTable;
 extern const HashTable regExpTable;
 extern const HashTable regExpConstructorTable;
 extern const HashTable regExpPrototypeTable;
 extern const HashTable stringTable;
 extern const HashTable stringConstructorTable;
-
-void* JSGlobalData::jsFinalObjectVPtr;
-void* JSGlobalData::jsArrayVPtr;
-void* JSGlobalData::jsByteArrayVPtr;
-void* JSGlobalData::jsStringVPtr;
-void* JSGlobalData::jsFunctionVPtr;
-
-#if COMPILER(GCC)
-// Work around for gcc trying to coalesce our reads of the various cell vptrs
-#define CLOBBER_MEMORY() do { \
-    asm volatile ("" : : : "memory"); \
-} while (false)
-#else
-#define CLOBBER_MEMORY() do { } while (false)
-#endif
-
-void JSGlobalData::storeVPtrs()
-{
-    // Enough storage to fit a JSArray, JSByteArray, JSString, or JSFunction.
-    // COMPILE_ASSERTS below check that this is true.
-    char storage[64];
-
-    COMPILE_ASSERT(sizeof(JSFinalObject) <= sizeof(storage), sizeof_JSFinalObject_must_be_less_than_storage);
-    JSCell* jsFinalObject = new (storage) JSFinalObject(JSFinalObject::VPtrStealingHack);
-    CLOBBER_MEMORY();
-    JSGlobalData::jsFinalObjectVPtr = jsFinalObject->vptr();
-
-    COMPILE_ASSERT(sizeof(JSArray) <= sizeof(storage), sizeof_JSArray_must_be_less_than_storage);
-    JSCell* jsArray = new (storage) JSArray(JSArray::VPtrStealingHack);
-    CLOBBER_MEMORY();
-    JSGlobalData::jsArrayVPtr = jsArray->vptr();
-
-    COMPILE_ASSERT(sizeof(JSByteArray) <= sizeof(storage), sizeof_JSByteArray_must_be_less_than_storage);
-    JSCell* jsByteArray = new (storage) JSByteArray(JSByteArray::VPtrStealingHack);
-    CLOBBER_MEMORY();
-    JSGlobalData::jsByteArrayVPtr = jsByteArray->vptr();
-
-    COMPILE_ASSERT(sizeof(JSString) <= sizeof(storage), sizeof_JSString_must_be_less_than_storage);
-    JSCell* jsString = new (storage) JSString(JSString::VPtrStealingHack);
-    CLOBBER_MEMORY();
-    JSGlobalData::jsStringVPtr = jsString->vptr();
-
-    COMPILE_ASSERT(sizeof(JSFunction) <= sizeof(storage), sizeof_JSFunction_must_be_less_than_storage);
-    JSCell* jsFunction = new (storage) JSFunction(JSCell::VPtrStealingHack);
-    CLOBBER_MEMORY();
-    JSGlobalData::jsFunctionVPtr = jsFunction->vptr();
-}
 
 JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType threadStackType, HeapSize heapSize)
     : globalDataType(globalDataType)
@@ -181,12 +137,13 @@ JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType thread
     , emptyList(new MarkedArgumentBuffer)
 #if ENABLE(ASSEMBLER)
     , executableAllocator(*this)
-    , regexAllocator(*this)
 #endif
-    , parserArena(new ParserArena)
-    , keywords(new Keywords(this))
+    , parserArena(adoptPtr(new ParserArena))
+    , keywords(adoptPtr(new Keywords(this)))
     , interpreter(0)
     , heap(this, heapSize)
+    , jsArrayClassInfo(&JSArray::s_info)
+    , jsFinalObjectClassInfo(&JSFinalObject::s_info)
 #if ENABLE(DFG_JIT)
     , sizeOfLastScratchBuffer(0)
 #endif
@@ -206,10 +163,9 @@ JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType thread
 #if ENABLE(GC_VALIDATION)
     , m_isInitializingObject(false)
 #endif
+    , m_inDefineOwnProperty(false)
 {
     interpreter = new Interpreter;
-    if (globalDataType == Default)
-        m_stack = wtfThreadData().stack();
 
     // Need to be careful to keep everything consistent here
     IdentifierTable* existingEntryIdentifierTable = wtfThreadData().setCurrentIdentifierTable(identifierTable);
@@ -237,7 +193,7 @@ JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType thread
 
     wtfThreadData().setCurrentIdentifierTable(existingEntryIdentifierTable);
 
-#if ENABLE(JIT) && ENABLE(INTERPRETER)
+#if ENABLE(JIT) && ENABLE(CLASSIC_INTERPRETER)
 #if USE(CF)
     CFStringRef canUseJITKey = CFStringCreateWithCString(0 , "JavaScriptCoreUseJIT", kCFStringEncodingMacRoman);
     CFBooleanRef canUseJIT = (CFBooleanRef)CFPreferencesCopyAppValue(canUseJITKey, kCFPreferencesCurrentApplication);
@@ -257,14 +213,20 @@ JSGlobalData::JSGlobalData(GlobalDataType globalDataType, ThreadStackType thread
 #endif
 #endif
 #if ENABLE(JIT)
-#if ENABLE(INTERPRETER)
+#if ENABLE(CLASSIC_INTERPRETER)
     if (m_canUseJIT)
         m_canUseJIT = executableAllocator.isValid();
 #endif
     jitStubs = adoptPtr(new JITThunks(this));
 #endif
 
+    interpreter->initialize(&llintData, this->canUseJIT());
+    
+    initializeHostCallReturnValue(); // This is needed to convince the linker not to drop host call return support.
+
     heap.notifyIsSafeToCollect();
+    
+    llintData.performAssertions(*this);
 }
 
 void JSGlobalData::clearBuiltinStructures()
@@ -339,7 +301,7 @@ JSGlobalData::~JSGlobalData()
     fastDelete(const_cast<HashTable*>(stringTable));
     fastDelete(const_cast<HashTable*>(stringConstructorTable));
 
-    deleteAllValues(opaqueJSClassData);
+    opaqueJSClassData.clear();
 
     delete emptyList;
 
@@ -397,13 +359,48 @@ JSGlobalData*& JSGlobalData::sharedInstanceInternal()
 }
 
 #if ENABLE(JIT)
+static ThunkGenerator thunkGeneratorForIntrinsic(Intrinsic intrinsic)
+{
+    switch (intrinsic) {
+    case CharCodeAtIntrinsic:
+        return charCodeAtThunkGenerator;
+    case CharAtIntrinsic:
+        return charAtThunkGenerator;
+    case FromCharCodeIntrinsic:
+        return fromCharCodeThunkGenerator;
+    case SqrtIntrinsic:
+        return sqrtThunkGenerator;
+    case PowIntrinsic:
+        return powThunkGenerator;
+    case AbsIntrinsic:
+        return absThunkGenerator;
+    case FloorIntrinsic:
+        return floorThunkGenerator;
+    case CeilIntrinsic:
+        return ceilThunkGenerator;
+    case RoundIntrinsic:
+        return roundThunkGenerator;
+    case ExpIntrinsic:
+        return expThunkGenerator;
+    case LogIntrinsic:
+        return logThunkGenerator;
+    default:
+        return 0;
+    }
+}
+
 NativeExecutable* JSGlobalData::getHostFunction(NativeFunction function, NativeFunction constructor)
 {
+#if ENABLE(CLASSIC_INTERPRETER)
+    if (!canUseJIT())
+        return NativeExecutable::create(*this, function, constructor);
+#endif
     return jitStubs->hostFunctionStub(this, function, constructor);
 }
-NativeExecutable* JSGlobalData::getHostFunction(NativeFunction function, ThunkGenerator generator, DFG::Intrinsic intrinsic)
+NativeExecutable* JSGlobalData::getHostFunction(NativeFunction function, Intrinsic intrinsic)
 {
-    return jitStubs->hostFunctionStub(this, function, generator, intrinsic);
+    ASSERT(canUseJIT());
+    return jitStubs->hostFunctionStub(this, function, intrinsic != NoIntrinsic ? thunkGeneratorForIntrinsic(intrinsic) : 0, intrinsic);
 }
 #else
 NativeExecutable* JSGlobalData::getHostFunction(NativeFunction function, NativeFunction constructor)
@@ -438,6 +435,9 @@ void JSGlobalData::stopSampling()
 void JSGlobalData::dumpSampleData(ExecState* exec)
 {
     interpreter->dumpSampleData(exec);
+#if ENABLE(ASSEMBLER)
+    ExecutableAllocator::dumpProfile();
+#endif
 }
 
 void JSGlobalData::recompileAllJSFunctions()
@@ -510,17 +510,17 @@ void JSGlobalData::dumpRegExpTrace()
     RTTraceList::iterator iter = ++m_rtTraceList->begin();
     
     if (iter != m_rtTraceList->end()) {
-        printf("\nRegExp Tracing\n");
-        printf("                                                            match()    matches\n");
-        printf("Regular Expression                          JIT Address      calls      found\n");
-        printf("----------------------------------------+----------------+----------+----------\n");
+        dataLog("\nRegExp Tracing\n");
+        dataLog("                                                            match()    matches\n");
+        dataLog("Regular Expression                          JIT Address      calls      found\n");
+        dataLog("----------------------------------------+----------------+----------+----------\n");
     
         unsigned reCount = 0;
     
         for (; iter != m_rtTraceList->end(); ++iter, ++reCount)
             (*iter)->printTraceData();
 
-        printf("%d Regular Expressions\n", reCount);
+        dataLog("%d Regular Expressions\n", reCount);
     }
     
     m_rtTraceList->clear();

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,19 +19,12 @@
 #include "config.h"
 #include "SurfacePool.h"
 
-#if USE(OPENVG)
-#include "EGLDisplayOpenVG.h"
-#include "EGLUtils.h"
-#include "SurfaceOpenVG.h"
-#elif USE(SKIA)
 #include "PlatformContextSkia.h"
-#endif
 
 #if USE(ACCELERATED_COMPOSITING)
 #include "BackingStoreCompositingSurface.h"
 #endif
 
-#include <BlackBerryPlatformGraphics.h>
 #include <BlackBerryPlatformLog.h>
 #include <BlackBerryPlatformMisc.h>
 #include <BlackBerryPlatformScreen.h>
@@ -45,7 +38,7 @@ namespace WebKit {
 #if USE(ACCELERATED_COMPOSITING) && ENABLE_COMPOSITING_SURFACE
 static PassRefPtr<BackingStoreCompositingSurface> createCompositingSurface()
 {
-    BlackBerry::Platform::IntSize screenSize = BlackBerry::Platform::Graphics::Screen::size();
+    BlackBerry::Platform::IntSize screenSize = BlackBerry::Platform::Graphics::Screen::primaryScreen()->size();
     return BackingStoreCompositingSurface::create(screenSize, false /*doubleBuffered*/);
 }
 #endif
@@ -79,7 +72,7 @@ void SurfacePool::initialize(const BlackBerry::Platform::IntSize& tileSize)
     const unsigned numberOfTiles = BlackBerry::Platform::Settings::get()->numberOfBackingStoreTiles();
     const unsigned maxNumberOfTiles = BlackBerry::Platform::Settings::get()->maximumNumberOfBackingStoreTilesAcrossProcesses();
 
-    if (numberOfTiles) { // only allocate if we actually use a backingstore
+    if (numberOfTiles) { // Only allocate if we actually use a backingstore.
         unsigned byteLimit = (maxNumberOfTiles /*pool*/ + 2 /*visible tile buffer, backbuffer*/) * tileSize.width() * tileSize.height() * 4;
         bool success = BlackBerry::Platform::Graphics::createPixmapGroup(SHARED_PIXMAP_GROUP, byteLimit);
         if (!success) {
@@ -88,20 +81,16 @@ void SurfacePool::initialize(const BlackBerry::Platform::IntSize& tileSize)
         }
     }
 
-#if USE(OPENVG)
-    m_tileRenderingSurface = createPlatformGraphicsContext(BlackBerry::Platform::Graphics::drawingSurface());
-#elif USE(SKIA)
     m_tileRenderingSurface = BlackBerry::Platform::Graphics::drawingSurface();
-#endif
 
 #if USE(ACCELERATED_COMPOSITING) && ENABLE_COMPOSITING_SURFACE
     m_compositingSurface = createCompositingSurface();
 #endif
 
     if (!numberOfTiles)
-        return; // we only use direct rendering when 0 tiles are specified
+        return; // we only use direct rendering when 0 tiles are specified.
 
-    // Create the shared backbuffer
+    // Create the shared backbuffer.
     m_backBuffer = reinterpret_cast<unsigned>(new TileBuffer(tileSize));
 
     for (size_t i = 0; i < numberOfTiles; ++i)
@@ -110,38 +99,24 @@ void SurfacePool::initialize(const BlackBerry::Platform::IntSize& tileSize)
 
 PlatformGraphicsContext* SurfacePool::createPlatformGraphicsContext(BlackBerry::Platform::Graphics::Drawable* drawable) const
 {
-#if USE(OPENVG)
-    SurfaceOpenVG* platformGraphicsContext = SurfaceOpenVG::adoptExistingSurface(
-        BlackBerry::Platform::Graphics::eglDisplay(), drawable->surface(),
-        SurfaceOpenVG::DontTakeSurfaceOwnership, drawable->surfaceType());
-
-    platformGraphicsContext->setApplyFlipTransformationOnPainterCreation(drawable->isFlipTransformationRequired());
-#elif USE(SKIA)
-    WebCore::PlatformContextSkia* platformGraphicsContext = new WebCore::PlatformContextSkia(drawable);
-#endif
-    return platformGraphicsContext;
+    return new WebCore::PlatformContextSkia(drawable);
 }
 
 PlatformGraphicsContext* SurfacePool::lockTileRenderingSurface() const
 {
-#if USE(OPENVG)
-    return m_tileRenderingSurface;
-#elif USE(SKIA)
     if (!m_tileRenderingSurface)
         return 0;
+
     return createPlatformGraphicsContext(BlackBerry::Platform::Graphics::lockBufferDrawable(m_tileRenderingSurface));
-#endif
 }
 
 void SurfacePool::releaseTileRenderingSurface(PlatformGraphicsContext* context) const
 {
-#if USE(SKIA)
     if (!m_tileRenderingSurface)
         return;
 
     delete context;
     BlackBerry::Platform::Graphics::releaseBufferDrawable(m_tileRenderingSurface);
-#endif
 }
 
 void SurfacePool::initializeVisibleTileBuffer(const BlackBerry::Platform::IntSize& visibleSize)
@@ -168,7 +143,7 @@ BackingStoreCompositingSurface* SurfacePool::compositingSurface() const
 void SurfacePool::notifyScreenRotated()
 {
 #if USE(ACCELERATED_COMPOSITING) && ENABLE_COMPOSITING_SURFACE
-    // Recreate compositing surface at new screen resolution
+    // Recreate compositing surface at new screen resolution.
     m_compositingSurface = createCompositingSurface();
 #endif
 }
@@ -183,15 +158,13 @@ void SurfacePool::createBuffers()
     if (!m_initialized || m_tilePool.isEmpty() || !m_buffersSuspended)
         return;
 
-    // Create the tile pool
+    // Create the tile pool.
     for (size_t i = 0; i < m_tilePool.size(); ++i)
         BlackBerry::Platform::Graphics::createPixmapBuffer(m_tilePool[i]->frontBuffer()->nativeBuffer());
 
-    // Create the m_visibleTileBuffer
     if (m_visibleTileBuffer)
         BlackBerry::Platform::Graphics::createPixmapBuffer(m_visibleTileBuffer->frontBuffer()->nativeBuffer());
 
-    // Create the backbuffer
     if (backBuffer())
         BlackBerry::Platform::Graphics::createPixmapBuffer(backBuffer()->nativeBuffer());
 
@@ -205,7 +178,7 @@ void SurfacePool::releaseBuffers()
 
     m_buffersSuspended = true;
 
-    // Release the tile pool
+    // Release the tile pool.
     for (size_t i = 0; i < m_tilePool.size(); ++i) {
         m_tilePool[i]->frontBuffer()->clearRenderedRegion();
         // Clear the buffer to prevent accidental leakage of (possibly sensitive) pixel data.
@@ -213,14 +186,12 @@ void SurfacePool::releaseBuffers()
         BlackBerry::Platform::Graphics::destroyPixmapBuffer(m_tilePool[i]->frontBuffer()->nativeBuffer());
     }
 
-    // Release the m_visibleTileBuffer
     if (m_visibleTileBuffer) {
         m_visibleTileBuffer->frontBuffer()->clearRenderedRegion();
         BlackBerry::Platform::Graphics::clearBuffer(m_visibleTileBuffer->frontBuffer()->nativeBuffer(), 0, 0, 0, 0);
         BlackBerry::Platform::Graphics::destroyPixmapBuffer(m_visibleTileBuffer->frontBuffer()->nativeBuffer());
     }
 
-    // Release the backbuffer
     if (backBuffer()) {
         backBuffer()->clearRenderedRegion();
         BlackBerry::Platform::Graphics::clearBuffer(backBuffer()->nativeBuffer(), 0, 0, 0, 0);

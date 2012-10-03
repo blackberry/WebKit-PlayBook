@@ -31,6 +31,7 @@
 #if ENABLE(ICONDATABASE)
 #include "IconDatabaseClientQt.h"
 #endif
+#include "InitWebCoreQt.h"
 #include "Page.h"
 #include "PageCache.h"
 #include "Settings.h"
@@ -88,36 +89,6 @@ public:
     WebCore::Settings* settings;
 };
 
-typedef QHash<int, QPixmap> WebGraphicHash;
-Q_GLOBAL_STATIC(WebGraphicHash, _graphics)
-
-static void earlyClearGraphics()
-{
-    _graphics()->clear();
-}
-
-static WebGraphicHash* graphics()
-{
-    WebGraphicHash* hash = _graphics();
-
-    if (hash->isEmpty()) {
-
-        // prevent ~QPixmap running after ~QApplication (leaks native pixmaps)
-        qAddPostRoutine(earlyClearGraphics);
-
-        hash->insert(QWebSettings::MissingImageGraphic, QPixmap(QLatin1String(":webkit/resources/missingImage.png")));
-        hash->insert(QWebSettings::MissingPluginGraphic, QPixmap(QLatin1String(":webkit/resources/nullPlugin.png")));
-        hash->insert(QWebSettings::DefaultFrameIconGraphic, QPixmap(QLatin1String(":webkit/resources/urlIcon.png")));
-        hash->insert(QWebSettings::TextAreaSizeGripCornerGraphic, QPixmap(QLatin1String(":webkit/resources/textAreaResizeCorner.png")));
-        hash->insert(QWebSettings::DeleteButtonGraphic, QPixmap(QLatin1String(":webkit/resources/deleteButton.png")));
-        hash->insert(QWebSettings::InputSpeechButtonGraphic, QPixmap(QLatin1String(":webkit/resources/inputSpeech.png")));
-        hash->insert(QWebSettings::SearchCancelButtonGraphic, QApplication::style()->standardPixmap(QStyle::SP_DialogCloseButton));
-        hash->insert(QWebSettings::SearchCancelButtonPressedGraphic, QApplication::style()->standardPixmap(QStyle::SP_DialogCloseButton));
-    }
-
-    return hash;
-}
-
 Q_GLOBAL_STATIC(QList<QWebSettingsPrivate*>, allSettings);
 
 void QWebSettingsPrivate::apply()
@@ -171,6 +142,10 @@ void QWebSettingsPrivate::apply()
                                       global->attributes.value(QWebSettings::AutoLoadImages));
         settings->setLoadsImagesAutomatically(value);
 
+        value = attributes.value(QWebSettings::DnsPrefetchEnabled,
+                                 global->attributes.value(QWebSettings::DnsPrefetchEnabled));
+        settings->setDNSPrefetchingEnabled(value);
+
         value = attributes.value(QWebSettings::JavascriptEnabled,
                                       global->attributes.value(QWebSettings::JavascriptEnabled));
         settings->setScriptEnabled(value);
@@ -195,6 +170,10 @@ void QWebSettingsPrivate::apply()
         settings->setAcceleratedCompositingForCanvasEnabled(value);
 #endif
 #endif
+
+        value = attributes.value(QWebSettings::CSSRegionsEnabled,
+                                 global->attributes.value(QWebSettings::CSSRegionsEnabled));
+        settings->setCSSRegionsEnabled(value);
 
         value = attributes.value(QWebSettings::HyperlinkAuditingEnabled,
                                  global->attributes.value(QWebSettings::HyperlinkAuditingEnabled));
@@ -309,8 +288,10 @@ void QWebSettingsPrivate::apply()
 QWebSettings* QWebSettings::globalSettings()
 {
     static QWebSettings* global = 0;
-    if (!global)
+    if (!global) {
+        WebCore::initializeWebCoreQt();
         global = new QWebSettings;
+    }
     return global;
 }
 
@@ -543,6 +524,7 @@ QWebSettings::QWebSettings()
     d->attributes.insert(QWebSettings::LocalContentCanAccessFileUrls, true);
     d->attributes.insert(QWebSettings::AcceleratedCompositingEnabled, true);
     d->attributes.insert(QWebSettings::WebGLEnabled, false);
+    d->attributes.insert(QWebSettings::CSSRegionsEnabled, false);
     d->attributes.insert(QWebSettings::HyperlinkAuditingEnabled, false);
     d->attributes.insert(QWebSettings::TiledBackingStoreEnabled, false);
     d->attributes.insert(QWebSettings::FrameFlatteningEnabled, false);
@@ -679,6 +661,7 @@ QString QWebSettings::defaultTextEncoding() const
 */
 void QWebSettings::setIconDatabasePath(const QString& path)
 {
+    WebCore::initializeWebCoreQt();
 #if ENABLE(ICONDATABASE)
     // Make sure that IconDatabaseClientQt is instantiated.
     WebCore::IconDatabaseClientQt::instance();
@@ -705,6 +688,7 @@ void QWebSettings::setIconDatabasePath(const QString& path)
 */
 QString QWebSettings::iconDatabasePath()
 {
+    WebCore::initializeWebCoreQt();
     if (WebCore::iconDatabase().isEnabled() && WebCore::iconDatabase().isOpen())
         return WebCore::iconDatabase().databasePath();
     else
@@ -716,6 +700,7 @@ QString QWebSettings::iconDatabasePath()
 */
 void QWebSettings::clearIconDatabase()
 {
+    WebCore::initializeWebCoreQt();
     if (WebCore::iconDatabase().isEnabled() && WebCore::iconDatabase().isOpen())
         WebCore::iconDatabase().removeAllIcons();
 }
@@ -732,12 +717,9 @@ void QWebSettings::clearIconDatabase()
 */
 QIcon QWebSettings::iconForUrl(const QUrl& url)
 {
-    WebCore::Image* image = WebCore::iconDatabase().synchronousIconForPageURL(WebCore::KURL(url).string(),
+    WebCore::initializeWebCoreQt();
+    QPixmap* icon = WebCore::iconDatabase().synchronousNativeIconForPageURL(WebCore::KURL(url).string(),
                                 WebCore::IntSize(16, 16));
-    if (!image)
-        return QPixmap();
-
-    QPixmap* icon = image->nativeImageForCurrentFrame();
     if (!icon)
         return QPixmap();
 
@@ -749,12 +731,28 @@ QIcon QWebSettings::iconForUrl(const QUrl& url)
 
 QWebPluginDatabase *QWebSettings::pluginDatabase()
 {
+    WebCore::initializeWebCoreQt();
     static QWebPluginDatabase* database = 0;
     if (!database)
         database = new QWebPluginDatabase();
     return database;
 }
 */
+
+static const char* resourceNameForWebGraphic(QWebSettings::WebGraphic type)
+{
+    switch (type) {
+    case QWebSettings::MissingImageGraphic: return "missingImage";
+    case QWebSettings::MissingPluginGraphic: return "nullPlugin";
+    case QWebSettings::DefaultFrameIconGraphic: return "urlIcon";
+    case QWebSettings::TextAreaSizeGripCornerGraphic: return "textAreaResizeCorner";
+    case QWebSettings::DeleteButtonGraphic: return "deleteButton";
+    case QWebSettings::InputSpeechButtonGraphic: return "inputSpeech";
+    case QWebSettings::SearchCancelButtonGraphic: return "searchCancelButton";
+    case QWebSettings::SearchCancelButtonPressedGraphic: return "searchCancelButtonPressed";
+    }
+    return 0;
+}
 
 /*!
     Sets \a graphic to be drawn when QtWebKit needs to draw an image of the
@@ -767,11 +765,8 @@ QWebPluginDatabase *QWebSettings::pluginDatabase()
 */
 void QWebSettings::setWebGraphic(WebGraphic type, const QPixmap& graphic)
 {
-    WebGraphicHash* h = graphics();
-    if (graphic.isNull())
-        h->remove(type);
-    else
-        h->insert(type, graphic);
+    WebCore::initializeWebCoreQt();
+    WebCore::Image::setPlatformResource(resourceNameForWebGraphic(type), graphic);
 }
 
 /*!
@@ -782,7 +777,14 @@ void QWebSettings::setWebGraphic(WebGraphic type, const QPixmap& graphic)
 */
 QPixmap QWebSettings::webGraphic(WebGraphic type)
 {
-    return graphics()->value(type);
+    WebCore::initializeWebCoreQt();
+    RefPtr<WebCore::Image> img = WebCore::Image::loadPlatformResource(resourceNameForWebGraphic(type));
+    if (!img)
+        return QPixmap();
+    QPixmap* pixmap = img->nativeImageForCurrentFrame();
+    if (!pixmap)
+        return QPixmap();
+    return *pixmap;
 }
 
 /*!
@@ -793,6 +795,7 @@ QPixmap QWebSettings::webGraphic(WebGraphic type)
  */
 void QWebSettings::clearMemoryCaches()
 {
+    WebCore::initializeWebCoreQt();
     // Turn the cache on and off.  Disabling the object cache will remove all
     // resources from the cache.  They may still live on if they are referenced
     // by some Web page though.
@@ -836,6 +839,7 @@ void QWebSettings::setMaximumPagesInCache(int pages)
 */
 int QWebSettings::maximumPagesInCache()
 {
+    WebCore::initializeWebCoreQt();
     return WebCore::pageCache()->capacity();
 }
 
@@ -857,6 +861,7 @@ int QWebSettings::maximumPagesInCache()
 */
 void QWebSettings::setObjectCacheCapacities(int cacheMinDeadCapacity, int cacheMaxDead, int totalCapacity)
 {
+    WebCore::initializeWebCoreQt();
     bool disableCache = !cacheMinDeadCapacity && !cacheMaxDead && !totalCapacity;
     WebCore::memoryCache()->setDisabled(disableCache);
 
@@ -982,6 +987,7 @@ void QWebSettings::resetAttribute(WebAttribute attr)
 */
 void QWebSettings::setOfflineStoragePath(const QString& path)
 {
+    WebCore::initializeWebCoreQt();
 #if ENABLE(SQL_DATABASE)
     WebCore::DatabaseTracker::tracker().setDatabaseDirectoryPath(path);
 #endif
@@ -997,6 +1003,7 @@ void QWebSettings::setOfflineStoragePath(const QString& path)
 */
 QString QWebSettings::offlineStoragePath()
 {
+    WebCore::initializeWebCoreQt();
 #if ENABLE(SQL_DATABASE)
     return WebCore::DatabaseTracker::tracker().databaseDirectoryPath();
 #else
@@ -1049,6 +1056,7 @@ qint64 QWebSettings::offlineStorageDefaultQuota()
 */
 void QWebSettings::setOfflineWebApplicationCachePath(const QString& path)
 {
+    WebCore::initializeWebCoreQt();
     WebCore::cacheStorage().setCacheDirectory(path);
 }
 
@@ -1062,6 +1070,7 @@ void QWebSettings::setOfflineWebApplicationCachePath(const QString& path)
 */
 QString QWebSettings::offlineWebApplicationCachePath()
 {
+    WebCore::initializeWebCoreQt();
     return WebCore::cacheStorage().cacheDirectory();
 }
 
@@ -1073,6 +1082,7 @@ QString QWebSettings::offlineWebApplicationCachePath()
 */
 void QWebSettings::setOfflineWebApplicationCacheQuota(qint64 maximumSize)
 {
+    WebCore::initializeWebCoreQt();
     WebCore::cacheStorage().empty();
     WebCore::cacheStorage().vacuumDatabaseFile();
     WebCore::cacheStorage().setMaximumSize(maximumSize);
@@ -1085,6 +1095,7 @@ void QWebSettings::setOfflineWebApplicationCacheQuota(qint64 maximumSize)
 */
 qint64 QWebSettings::offlineWebApplicationCacheQuota()
 {
+    WebCore::initializeWebCoreQt();
     return WebCore::cacheStorage().maximumSize();
 }
 
@@ -1133,6 +1144,7 @@ QString QWebSettings::localStoragePath() const
 */
 void QWebSettings::enablePersistentStorage(const QString& path)
 {
+    WebCore::initializeWebCoreQt();
 #ifndef QT_NO_DESKTOPSERVICES
     QString storagePath;
 

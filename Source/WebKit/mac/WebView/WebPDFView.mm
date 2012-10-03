@@ -58,7 +58,7 @@
 #import <WebCore/KURL.h>
 #import <WebCore/KeyboardEvent.h>
 #import <WebCore/MouseEvent.h>
-#import <WebCore/PlatformKeyboardEvent.h>
+#import <WebCore/PlatformEventFactoryMac.h>
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/WebNSAttributedStringExtras.h>
 #import <wtf/Assertions.h>
@@ -959,8 +959,8 @@ static BOOL isFrameInRange(WebFrame *frame, DOMRange *range)
             button = [nsEvent buttonNumber];
             break;
         case NSKeyDown: {
-            PlatformKeyboardEvent pe(nsEvent);
-            pe.disambiguateKeyDownEvent(PlatformKeyboardEvent::RawKeyDown);
+            PlatformKeyboardEvent pe = PlatformEventFactory::createPlatformKeyboardEvent(nsEvent);
+            pe.disambiguateKeyDownEvent(PlatformEvent::RawKeyDown);
             event = KeyboardEvent::create(eventNames().keydownEvent, true, true, 0,
                 pe.keyIdentifier(), pe.windowsVirtualKeyCode(),
                 pe.ctrlKey(), pe.altKey(), pe.shiftKey(), pe.metaKey(), false);
@@ -979,7 +979,7 @@ static BOOL isFrameInRange(WebFrame *frame, DOMRange *range)
 
     // Call to the frame loader because this is where our security checks are made.
     Frame* frame = core([dataSource webFrame]);
-    frame->loader()->loadFrameRequest(FrameLoadRequest(frame->document()->securityOrigin(), ResourceRequest(URL)), false, false, event.get(), 0, SendReferrer);
+    frame->loader()->loadFrameRequest(FrameLoadRequest(frame->document()->securityOrigin(), ResourceRequest(URL)), false, false, event.get(), 0, MaybeSendReferrer);
 }
 
 - (void)PDFViewOpenPDFInNativeApplication:(PDFView *)sender

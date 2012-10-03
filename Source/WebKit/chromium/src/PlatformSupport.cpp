@@ -36,49 +36,50 @@
 #include "Chrome.h"
 #include "ChromeClientImpl.h"
 #include "Page.h"
-#include "WebAudioBus.h"
-#include "WebClipboard.h"
-#include "WebCookie.h"
-#include "WebCookieJar.h"
-#include "WebData.h"
-#include "WebDragData.h"
 #include "WebFileUtilities.h"
 #include "WebFrameClient.h"
 #include "WebFrameImpl.h"
 #include "WebIDBKey.h"
-#include "WebImage.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
-#include "WebMimeRegistry.h"
 #include "WebPluginContainerImpl.h"
 #include "WebPluginListBuilderImpl.h"
 #include "WebSandboxSupport.h"
-#include "WebSerializedScriptValue.h"
 #include "WebScreenInfo.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebVector.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 #include "WebWorkerClientImpl.h"
+#include "WebWorkerRunLoop.h"
+#include "platform/WebAudioBus.h"
+#include "platform/WebClipboard.h"
+#include "platform/WebCookie.h"
+#include "platform/WebCookieJar.h"
+#include "platform/WebData.h"
+#include "platform/WebDragData.h"
+#include "platform/WebImage.h"
+#include "platform/WebKitPlatformSupport.h"
+#include "platform/WebSerializedScriptValue.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebVector.h"
+#include <public/WebMimeRegistry.h>
 
 #if USE(CG)
 #include <CoreGraphics/CGContext.h>
 #endif
 
 #if OS(WINDOWS)
-#include "WebRect.h"
-#include "win/WebThemeEngine.h"
+#include "platform/WebRect.h"
+#include "platform/win/WebThemeEngine.h"
 #endif
 
 #if OS(DARWIN)
-#include "mac/WebThemeEngine.h"
+#include "platform/mac/WebThemeEngine.h"
 #elif OS(UNIX) && !OS(ANDROID)
-#include "linux/WebThemeEngine.h"
+#include "platform/linux/WebThemeEngine.h"
 #include "WebFontInfo.h"
 #include "WebFontRenderStyle.h"
 #elif OS(ANDROID)
-#include "android/WebThemeEngine.h"
+#include "platform/android/WebThemeEngine.h"
 #endif
 
 #if WEBKIT_USING_SKIA
@@ -90,6 +91,7 @@
 #include "Cookie.h"
 #include "Document.h"
 #include "FrameView.h"
+#include "GamepadList.h"
 #include "GraphicsContext.h"
 #include "IDBFactoryBackendProxy.h"
 #include "KURL.h"
@@ -151,9 +153,10 @@ void PlatformSupport::cacheMetadata(const KURL& url, double responseTime, const 
 
 // Clipboard ------------------------------------------------------------------
 
-uint64_t PlatformSupport::clipboardGetSequenceNumber()
+uint64_t PlatformSupport::clipboardSequenceNumber(PasteboardPrivate::ClipboardBuffer buffer)
 {
-    return webKitPlatformSupport()->clipboard()->getSequenceNumber();
+    return webKitPlatformSupport()->clipboard()->sequenceNumber(
+        static_cast<WebClipboard::Buffer>(buffer));
 }
 
 bool PlatformSupport::clipboardIsFormatAvailable(
@@ -197,6 +200,12 @@ PassRefPtr<SharedBuffer> PlatformSupport::clipboardReadImage(
     PasteboardPrivate::ClipboardBuffer buffer)
 {
     return webKitPlatformSupport()->clipboard()->readImage(static_cast<WebClipboard::Buffer>(buffer));
+}
+
+String PlatformSupport::clipboardReadCustomData(
+    PasteboardPrivate::ClipboardBuffer buffer, const String& type)
+{
+    return webKitPlatformSupport()->clipboard()->readCustomData(static_cast<WebClipboard::Buffer>(buffer), type);
 }
 
 void PlatformSupport::clipboardWriteSelection(const String& htmlText,
@@ -523,6 +532,31 @@ void PlatformSupport::createIDBKeysFromSerializedValuesAndKeyPath(const Vector<R
 PassRefPtr<SerializedScriptValue> PlatformSupport::injectIDBKeyIntoSerializedValue(PassRefPtr<IDBKey> key, PassRefPtr<SerializedScriptValue> value, const String& keyPath)
 {
     return webKitPlatformSupport()->injectIDBKeyIntoSerializedValue(key, value, keyPath);
+}
+
+// Gamepad --------------------------------------------------------------------
+
+void PlatformSupport::sampleGamepads(GamepadList* into)
+{
+    WebGamepads gamepads;
+
+    webKitPlatformSupport()->sampleGamepads(gamepads);
+
+    for (unsigned i = 0; i < WebKit::WebGamepads::itemsLengthCap; ++i) {
+        WebGamepad& webGamepad = gamepads.items[i];
+        if (i < gamepads.length && webGamepad.connected) {
+            RefPtr<Gamepad> gamepad = into->item(i);
+            if (!gamepad)
+                gamepad = Gamepad::create();
+            gamepad->id(webGamepad.id);
+            gamepad->index(i);
+            gamepad->timestamp(webGamepad.timestamp);
+            gamepad->axes(webGamepad.axesLength, webGamepad.axes);
+            gamepad->buttons(webGamepad.buttonsLength, webGamepad.buttons);
+            into->set(i, gamepad);
+        } else
+            into->set(i, 0);
+    }
 }
 
 // Keygen ---------------------------------------------------------------------
@@ -913,19 +947,24 @@ void PlatformSupport::paintThemePart(
 
 // Trace Event ----------------------------------------------------------------
 
-bool PlatformSupport::isTraceEventEnabled()
+const unsigned char* PlatformSupport::getTraceCategoryEnabledFlag(const char* categoryName)
 {
-    return webKitPlatformSupport()->isTraceEventEnabled();
+    return webKitPlatformSupport()->getTraceCategoryEnabledFlag(categoryName);
 }
-
-void PlatformSupport::traceEventBegin(const char* name, void* id, const char* extra)
+int PlatformSupport::addTraceEvent(char phase,
+                                   const unsigned char* categoryEnabledFlag,
+                                   const char* name,
+                                   unsigned long long id,
+                                   int numArgs,
+                                   const char** argNames,
+                                   const unsigned char* argTypes,
+                                   const unsigned long long* argValues,
+                                   int thresholdBeginId,
+                                   long long threshold,
+                                   unsigned char flags)
 {
-    webKitPlatformSupport()->traceEventBegin(name, id, extra);
-}
-
-void PlatformSupport::traceEventEnd(const char* name, void* id, const char* extra)
-{
-    webKitPlatformSupport()->traceEventEnd(name, id, extra);
+    return webKitPlatformSupport()->addTraceEvent(
+        phase, categoryEnabledFlag, name, id, numArgs, argNames, argTypes, argValues,  thresholdBeginId, threshold, flags);
 }
 
 // Visited Links --------------------------------------------------------------
@@ -1018,6 +1057,22 @@ int PlatformSupport::highUsageDeltaMB()
     return static_cast<int>(webKitPlatformSupport()->highUsageDeltaMB());
 }
 
+int PlatformSupport::screenHorizontalDPI(Widget* widget)
+{
+    WebWidgetClient* client = toWebWidgetClient(widget);
+    if (!client)
+        return 0;
+    return client->screenInfo().horizontalDPI;
+}
+
+int PlatformSupport::screenVerticalDPI(Widget* widget)
+{
+    WebWidgetClient* client = toWebWidgetClient(widget);
+    if (!client)
+        return 0;
+    return client->screenInfo().verticalDPI;
+}
+
 int PlatformSupport::screenDepth(Widget* widget)
 {
     WebWidgetClient* client = toWebWidgetClient(widget);
@@ -1065,6 +1120,16 @@ bool PlatformSupport::popupsAllowed(NPP npp)
 }
 
 #if ENABLE(WORKERS)
+void PlatformSupport::didStartWorkerRunLoop(WorkerRunLoop* loop)
+{
+    webKitPlatformSupport()->didStartWorkerRunLoop(WebWorkerRunLoop(loop));
+}
+
+void PlatformSupport::didStopWorkerRunLoop(WorkerRunLoop* loop)
+{
+    webKitPlatformSupport()->didStopWorkerRunLoop(WebWorkerRunLoop(loop));
+}
+
 WorkerContextProxy* WorkerContextProxy::create(Worker* worker)
 {
     return WebWorkerClientImpl::createWorkerContextProxy(worker);

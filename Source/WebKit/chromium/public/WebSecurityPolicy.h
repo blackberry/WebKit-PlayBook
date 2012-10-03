@@ -31,7 +31,8 @@
 #ifndef WebSecurityPolicy_h
 #define WebSecurityPolicy_h
 
-#include "WebCommon.h"
+#include "WebReferrerPolicy.h"
+#include "platform/WebCommon.h"
 
 namespace WebKit {
 
@@ -60,6 +61,9 @@ public:
     // included by an HTTPS page.
     WEBKIT_EXPORT static void registerURLSchemeAsSecure(const WebString&);
 
+    // Registers a non-HTTP URL scheme which can be sent CORS requests. 
+    WEBKIT_EXPORT static void registerURLSchemeAsCORSEnabled(const WebString&);
+
     // Support for whitelisting access to origins beyond the same-origin policy.
     WEBKIT_EXPORT static void addOriginAccessWhitelistEntry(
         const WebURL& sourceOrigin, const WebString& destinationProtocol,
@@ -71,7 +75,13 @@ public:
 
     // Returns whether the url should be allowed to see the referrer
     // based on their respective protocols.
-    WEBKIT_EXPORT static bool shouldHideReferrer(const WebURL& url, const WebString& referrer);
+    // FIXME: remove this function once the chromium side has landed.
+    WEBKIT_EXPORT static bool shouldHideReferrer(const WebURL&, const WebString& referrer);
+
+    // Returns the referrer modified according to the referrer policy for a
+    // navigation to a given URL. If the referrer returned is empty, the
+    // referrer header should be omitted.
+    WEBKIT_EXPORT static WebString generateReferrerHeader(WebReferrerPolicy, const WebURL&, const WebString& referrer);
 
     // Registers an URL scheme to not allow manipulation of the loaded page
     // by bookmarklets or javascript: URLs typed in the omnibox.

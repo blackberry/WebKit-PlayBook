@@ -93,12 +93,6 @@ public:
         m_assembler.addsd_mr(address.m_ptr, dest);
     }
 
-    void loadDouble(const void* address, FPRegisterID dest)
-    {
-        ASSERT(isSSE2Present());
-        m_assembler.movsd_mr(address, dest);
-    }
-
     void storeDouble(FPRegisterID src, const void* address)
     {
         ASSERT(isSSE2Present());
@@ -108,14 +102,6 @@ public:
     void convertInt32ToDouble(AbsoluteAddress src, FPRegisterID dest)
     {
         m_assembler.cvtsi2sd_mr(src.m_ptr, dest);
-    }
-
-    void absDouble(FPRegisterID src, FPRegisterID dst)
-    {
-        ASSERT(src != dst);
-        static const double negativeZeroConstant = -0.0;
-        loadDouble(&negativeZeroConstant, dst);
-        m_assembler.andnpd_rr(src, dst);
     }
 
     void store32(TrustedImm32 imm, void* address)
@@ -205,6 +191,12 @@ public:
     static bool supportsFloatingPointTruncate() { return isSSE2Present(); }
     static bool supportsFloatingPointSqrt() { return isSSE2Present(); }
     static bool supportsFloatingPointAbs() { return isSSE2Present(); }
+    
+    static FunctionPtr readCallTarget(CodeLocationCall call)
+    {
+        intptr_t offset = reinterpret_cast<int32_t*>(call.dataLocation())[-1];
+        return FunctionPtr(reinterpret_cast<void*>(reinterpret_cast<uintptr_t>(call.dataLocation()) + offset));
+    }
 
 private:
     friend class LinkBuffer;

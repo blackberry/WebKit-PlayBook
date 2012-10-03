@@ -41,6 +41,7 @@ public:
 
     virtual void paint(PaintInfo&, const LayoutPoint&);
     virtual void setNeedsBoundariesUpdate() { m_needsBoundariesUpdate = true; }
+    virtual bool didTransformToRootUpdate() { return false; }
 
 protected:
     virtual RenderObjectChildList* virtualChildren() { return children(); }
@@ -66,6 +67,8 @@ protected:
     virtual void calcViewport() { }
     virtual void applyViewportClip(PaintInfo&) { }
     virtual bool pointIsInsideViewportClip(const FloatPoint& /*pointInParent*/) { return true; }
+
+    virtual void determineIfLayoutSizeChanged() { }
 
     bool selfWillPaint();
     void updateCachedBoundaries();

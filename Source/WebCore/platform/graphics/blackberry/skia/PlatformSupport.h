@@ -38,8 +38,7 @@ namespace WebCore {
 
 struct FontRenderStyle;
 
-// This is a minimal version of the Chromium PlatformSupport/WebFontInfo classes used for font support
-
+// This is a minimal version of the Chromium PlatformSupport/WebFontInfo classes used for font support.
 class PlatformSupport {
 public:
     static void getRenderStyleForStrike(const char* family, int sizeAndStyle, FontRenderStyle* result);

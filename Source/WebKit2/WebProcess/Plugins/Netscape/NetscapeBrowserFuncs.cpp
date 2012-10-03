@@ -36,6 +36,10 @@
 #include <WebCore/SharedBuffer.h>
 #include <utility>
 
+#if PLATFORM(MAC) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+#include "NetscapeSandboxFunctions.h"
+#endif
+
 using namespace WebCore;
 using namespace std;
 
@@ -408,6 +412,11 @@ static const unsigned WKNVSupportsCompositingCoreAnimationPluginsBool = 74656;
 // Whether the browser expects a non-retained Core Animation layer.
 static const unsigned WKNVExpectsNonretainedLayer = 74657;
 
+// Whether plug-in code is allowed to enter (arbitrary) sandbox for the process.
+static const unsigned WKNVAllowedToEnterSandbox = 74658;
+
+// WKNVSandboxFunctions = 74659 is defined in NetscapeSandboxFunctions.h
+
 // The Core Animation render server port.
 static const unsigned WKNVCALayerRenderServerPort = 71879;
 
@@ -494,6 +503,18 @@ static NPError NPN_GetValue(NPP npp, NPNVariable variable, void *value)
             *(NPBool*)value = true;
             break;
         }
+
+        case WKNVAllowedToEnterSandbox:
+            *(NPBool*)value = true;
+            break;
+
+#if PLATFORM(MAC) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+        case WKNVSandboxFunctions:
+        {
+            *(WKNSandboxFunctions **)value = netscapeSandboxFunctions();
+            break;
+        }
+#endif
 
 #ifndef NP_NO_QUICKDRAW
         case NPNVsupportsQuickDrawBool:

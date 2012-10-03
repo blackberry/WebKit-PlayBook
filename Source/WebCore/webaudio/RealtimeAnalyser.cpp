@@ -31,22 +31,22 @@
 #include "AudioBus.h"
 #include "AudioUtilities.h"
 #include "FFTFrame.h"
-#include "Float32Array.h"
-#include "Uint8Array.h"
 
 #include <algorithm>
 #include <limits.h>
 #include <wtf/Complex.h>
+#include <wtf/Float32Array.h>
 #include <wtf/MainThread.h>
 #include <wtf/MathExtras.h>
+#include <wtf/Uint8Array.h>
 
 using namespace std;
 
 namespace WebCore {
 
 const double RealtimeAnalyser::DefaultSmoothingTimeConstant  = 0.8;
-const double RealtimeAnalyser::DefaultMinDecibels = -100.0;
-const double RealtimeAnalyser::DefaultMaxDecibels = -30.0;
+const double RealtimeAnalyser::DefaultMinDecibels = -100;
+const double RealtimeAnalyser::DefaultMaxDecibels = -30;
 
 const unsigned RealtimeAnalyser::DefaultFFTSize = 2048;
 // All FFT implementations are expected to handle power-of-two sizes MinFFTSize <= size <= MaxFFTSize.
@@ -113,7 +113,7 @@ void RealtimeAnalyser::writeInput(AudioBus* bus, size_t framesToProcess)
     
     // Perform real-time analysis
     // FIXME : for now just use left channel (must mix if stereo source)
-    float* source = bus->channel(0)->data();
+    const float* source = bus->channel(0)->data();
 
     // The source has already been sanity checked with isBusGood above.
     
@@ -132,13 +132,13 @@ void applyWindow(float* p, size_t n)
     
     // Blackman window
     double alpha = 0.16;
-    double a0 = 0.5 * (1.0 - alpha);
+    double a0 = 0.5 * (1 - alpha);
     double a1 = 0.5;
     double a2 = 0.5 * alpha;
     
     for (unsigned i = 0; i < n; ++i) {
         double x = static_cast<double>(i) / static_cast<double>(n);
-        double window = a0 - a1 * cos(2.0 * piDouble * x) + a2 * cos(4.0 * piDouble * x);
+        double window = a0 - a1 * cos(2 * piDouble * x) + a2 * cos(4 * piDouble * x);
         p[i] *= float(window);
     }
 }
@@ -157,10 +157,13 @@ void RealtimeAnalyser::doFFTAnalysis()
     float* tempP = temporaryBuffer.data();
 
     // Take the previous fftSize values from the input buffer and copy into the temporary buffer.
-    // FIXME : optimize with memcpy().
     unsigned writeIndex = m_writeIndex;
-    for (unsigned i = 0; i < fftSize; ++i)
-        tempP[i] = inputBuffer[(i + writeIndex - fftSize + InputBufferSize) % InputBufferSize];
+    if (writeIndex < fftSize) {
+        memcpy(tempP, inputBuffer + writeIndex - fftSize + InputBufferSize, sizeof(*tempP) * (fftSize - writeIndex));
+        memcpy(tempP + fftSize - writeIndex, inputBuffer, sizeof(*tempP) * writeIndex);
+    } else 
+        memcpy(tempP, inputBuffer + writeIndex - fftSize, sizeof(*tempP) * fftSize);
+
     
     // Window the input samples.
     applyWindow(tempP, fftSize);
@@ -172,10 +175,10 @@ void RealtimeAnalyser::doFFTAnalysis()
     float* imagP = m_analysisFrame->imagData();
 
     // Blow away the packed nyquist component.
-    imagP[0] = 0.0f;
+    imagP[0] = 0;
     
     // Normalize so than an input sine wave at 0dBfs registers as 0dBfs (undo FFT scaling factor).
-    const double MagnitudeScale = 1.0 / DefaultFFTSize;
+    const double magnitudeScale = 1.0 / DefaultFFTSize;
 
     // A value of 0 does no averaging with the previous result.  Larger values produce slower, but smoother changes.
     double k = m_smoothingTimeConstant;
@@ -187,8 +190,8 @@ void RealtimeAnalyser::doFFTAnalysis()
     size_t n = magnitudeBuffer().size();
     for (size_t i = 0; i < n; ++i) {
         Complex c(realP[i], imagP[i]);
-        double scalarMagnitude = abs(c) * MagnitudeScale;        
-        destination[i] = float(k * destination[i] + (1.0 - k) * scalarMagnitude);
+        double scalarMagnitude = abs(c) * magnitudeScale;        
+        destination[i] = float(k * destination[i] + (1 - k) * scalarMagnitude);
     }
 }
 
@@ -202,7 +205,7 @@ void RealtimeAnalyser::getFloatFrequencyData(Float32Array* destinationArray)
     doFFTAnalysis();
     
     // Convert from linear magnitude to floating-point decibels.
-    const double MinDecibels = m_minDecibels;
+    const double minDecibels = m_minDecibels;
     unsigned sourceLength = magnitudeBuffer().size();
     size_t len = min(sourceLength, destinationArray->length());
     if (len > 0) {
@@ -211,7 +214,7 @@ void RealtimeAnalyser::getFloatFrequencyData(Float32Array* destinationArray)
         
         for (unsigned i = 0; i < len; ++i) {
             float linearValue = source[i];
-            double dbMag = !linearValue ? MinDecibels : AudioUtilities::linearToDecibels(linearValue);
+            double dbMag = !linearValue ? minDecibels : AudioUtilities::linearToDecibels(linearValue);
             destination[i] = float(dbMag);
         }
     }
@@ -230,21 +233,22 @@ void RealtimeAnalyser::getByteFrequencyData(Uint8Array* destinationArray)
     unsigned sourceLength = magnitudeBuffer().size();
     size_t len = min(sourceLength, destinationArray->length());
     if (len > 0) {
-        const double RangeScaleFactor = m_maxDecibels == m_minDecibels ? 1.0 : 1.0 / (m_maxDecibels - m_minDecibels);
+        const double rangeScaleFactor = m_maxDecibels == m_minDecibels ? 1 : 1 / (m_maxDecibels - m_minDecibels);
+        const double minDecibels = m_minDecibels;
 
         const float* source = magnitudeBuffer().data();
         unsigned char* destination = destinationArray->data();        
         
         for (unsigned i = 0; i < len; ++i) {
             float linearValue = source[i];
-            double dbMag = !linearValue ? m_minDecibels : AudioUtilities::linearToDecibels(linearValue);
+            double dbMag = !linearValue ? minDecibels : AudioUtilities::linearToDecibels(linearValue);
             
             // The range m_minDecibels to m_maxDecibels will be scaled to byte values from 0 to UCHAR_MAX.
-            double scaledValue = UCHAR_MAX * (dbMag - m_minDecibels) * RangeScaleFactor;
+            double scaledValue = UCHAR_MAX * (dbMag - minDecibels) * rangeScaleFactor;
 
             // Clip to valid range.
-            if (scaledValue < 0.0)
-                scaledValue = 0.0;
+            if (scaledValue < 0)
+                scaledValue = 0;
             if (scaledValue > UCHAR_MAX)
                 scaledValue = UCHAR_MAX;
             
@@ -277,12 +281,12 @@ void RealtimeAnalyser::getByteTimeDomainData(Uint8Array* destinationArray)
             // Buffer access is protected due to modulo operation.
             float value = inputBuffer[(i + writeIndex - fftSize + InputBufferSize) % InputBufferSize];
 
-            // Scale from nominal -1.0 -> +1.0 to unsigned byte.
-            double scaledValue = 128.0 * (value + 1.0);
+            // Scale from nominal -1 -> +1 to unsigned byte.
+            double scaledValue = 128 * (value + 1);
 
             // Clip to valid range.
-            if (scaledValue < 0.0)
-                scaledValue = 0.0;
+            if (scaledValue < 0)
+                scaledValue = 0;
             if (scaledValue > UCHAR_MAX)
                 scaledValue = UCHAR_MAX;
             

@@ -186,6 +186,12 @@ extern NSString *WebPreferencesChangedInternalNotification;
 - (BOOL)acceleratedCompositingEnabled;
 - (void)setAcceleratedCompositingEnabled:(BOOL)enabled;
 
+- (BOOL)cssCustomFilterEnabled;
+- (void)setCSSCustomFilterEnabled:(BOOL)enabled;
+
+- (BOOL)cssRegionsEnabled;
+- (void)setCSSRegionsEnabled:(BOOL)enabled;
+
 - (BOOL)showDebugBorders;
 - (void)setShowDebugBorders:(BOOL)show;
 
@@ -218,6 +224,9 @@ extern NSString *WebPreferencesChangedInternalNotification;
 
 - (NSString *)pictographFontFamily;
 - (void)setPictographFontFamily:(NSString *)family;
+
+- (BOOL)pageCacheSupportsPlugins;
+- (void)setPageCacheSupportsPlugins:(BOOL)flag;
 
 // This is a global setting.
 - (BOOL)mockScrollbarsEnabled;
@@ -265,10 +274,23 @@ extern NSString *WebPreferencesChangedInternalNotification;
 - (void)setHixie76WebSocketProtocolEnabled:(BOOL)flag;
 - (BOOL)isHixie76WebSocketProtocolEnabled;
 
+// Deprecated. You should use [setS|s]uppressesIncrementalRendering in WebPreferences.h instead.
 - (void)setSuppressIncrementalRendering:(BOOL)flag;
 - (BOOL)suppressIncrementalRendering;
 
 - (void)setBackspaceKeyNavigationEnabled:(BOOL)flag;
 - (BOOL)backspaceKeyNavigationEnabled;
+
+- (void)setShouldDisplaySubtitles:(BOOL)flag;
+- (BOOL)shouldDisplaySubtitles;
+
+- (void)setShouldDisplayCaptions:(BOOL)flag;
+- (BOOL)shouldDisplayCaptions;
+
+- (void)setShouldDisplayTextDescriptions:(BOOL)flag;
+- (BOOL)shouldDisplayTextDescriptions;
+
+- (void)setNotificationsEnabled:(BOOL)flag;
+- (BOOL)notificationsEnabled;
 
 @end

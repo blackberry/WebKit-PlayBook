@@ -57,16 +57,12 @@ namespace WebCore {
     class DOMWindow;
     class Frame;
     class Node;
-    class Page;
     class ScriptExecutionContext;
     class ScriptSourceCode;
     class SecurityOrigin;
     class V8EventListener;
     class V8IsolatedContext;
     class WorldContextHandle;
-
-    // FIXME: use standard logging facilities in WebCore.
-    void logInfo(Frame*, const String& message, const String& url);
 
     // The following Batch structs and methods are used for setting multiple
     // properties on an ObjectTemplate, used from the generated bindings
@@ -143,10 +139,6 @@ namespace WebCore {
         void clearForNavigation();
         void clearForClose();
 
-        // FIXME: Need comment. User Gesture related.
-        bool inlineCode() const { return m_inlineCode; }
-        void setInlineCode(bool value) { m_inlineCode = value; }
-
         void finishedWithEvent(Event*) { }
 
         // Evaluate JavaScript in a new isolated world. The script gets its own
@@ -163,22 +155,22 @@ namespace WebCore {
         v8::Local<v8::Value> evaluate(const ScriptSourceCode&, Node*);
 
         // Run an already compiled script.
-        v8::Local<v8::Value> runScript(v8::Handle<v8::Script>, bool isInlineCode);
+        v8::Local<v8::Value> runScript(v8::Handle<v8::Script>);
 
         // Call the function with the given receiver and arguments.
         v8::Local<v8::Value> callFunction(v8::Handle<v8::Function>, v8::Handle<v8::Object>, int argc, v8::Handle<v8::Value> argv[]);
 
-        // Call the function with the given receiver and arguments.
-        static v8::Local<v8::Value> callFunctionWithoutFrame(v8::Handle<v8::Function>, v8::Handle<v8::Object>, int argc, v8::Handle<v8::Value> argv[]);
-
         // call the function with the given receiver and arguments and report times to DevTools.
-        static v8::Local<v8::Value> instrumentedCallFunction(Page*, v8::Handle<v8::Function>, v8::Handle<v8::Object> receiver, int argc, v8::Handle<v8::Value> args[]);
+        static v8::Local<v8::Value> instrumentedCallFunction(Frame*, v8::Handle<v8::Function>, v8::Handle<v8::Object> receiver, int argc, v8::Handle<v8::Value> args[]);
 
         // Call the function as constructor with the given arguments.
         v8::Local<v8::Value> newInstance(v8::Handle<v8::Function>, int argc, v8::Handle<v8::Value> argv[]);
 
         // Returns the window object associated with a context.
         static DOMWindow* retrieveWindow(v8::Handle<v8::Context>);
+
+        static DOMWindow* retriveWindowForCallingCOntext();
+
         // Returns V8Proxy object of the currently executing context.
         static V8Proxy* retrieve();
         // Returns V8Proxy object associated with a frame.
@@ -221,6 +213,7 @@ namespace WebCore {
         // linking time.
         static Frame* retrieveFrameForEnteredContext();
         static Frame* retrieveFrameForCurrentContext();
+        static DOMWindow* retrieveWindowForCallingContext();
         static Frame* retrieveFrameForCallingContext();
 
         // Returns V8 Context of a frame. If none exists, creates
@@ -271,8 +264,6 @@ namespace WebCore {
         static void reportUnsafeAccessTo(Frame* target);
 
     private:
-        void didLeaveScriptContext();
-
         void resetIsolatedWorlds();
 
         PassOwnPtr<v8::ScriptData> precompileScript(v8::Handle<v8::String>, CachedScript*);
@@ -298,15 +289,6 @@ namespace WebCore {
 
         // For the moment, we have one of these.  Soon we will have one per DOMWrapperWorld.
         RefPtr<V8DOMWindowShell> m_windowShell;
-
-        // True for <a href="javascript:foo()"> and false for <script>foo()</script>.
-        // Only valid during execution.
-        bool m_inlineCode;
-
-        // Track the recursion depth to be able to avoid too deep recursion. The V8
-        // engine allows much more recursion than KJS does so we need to guard against
-        // excessive recursion in the binding layer.
-        int m_recursion;
 
         // All of the extensions registered with the context.
         static V8Extensions m_extensions;

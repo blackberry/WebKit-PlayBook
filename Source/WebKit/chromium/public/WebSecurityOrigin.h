@@ -31,7 +31,7 @@
 #ifndef WebSecurityOrigin_h
 #define WebSecurityOrigin_h
 
-#include "WebCommon.h"
+#include "platform/WebCommon.h"
 
 #if WEBKIT_IMPLEMENTATION
 namespace WebCore { class SecurityOrigin; }
@@ -69,8 +69,8 @@ public:
     WEBKIT_EXPORT WebString host() const;
     WEBKIT_EXPORT unsigned short port() const;
 
-    // The empty WebSecurityOrigin is the least privileged WebSecurityOrigin.
-    WEBKIT_EXPORT bool isEmpty() const;
+    // A unique WebSecurityOrigin is the least privileged WebSecurityOrigin.
+    WEBKIT_EXPORT bool isUnique() const;
 
     // Returns true if this WebSecurityOrigin can script objects in the given
     // SecurityOrigin. For example, call this function before allowing

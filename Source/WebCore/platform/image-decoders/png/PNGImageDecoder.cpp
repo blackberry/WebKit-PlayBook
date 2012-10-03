@@ -43,6 +43,10 @@
 #include "png.h"
 #include <wtf/PassOwnPtr.h>
 
+#if PLATFORM(CHROMIUM)
+#include "TraceEvent.h"
+#endif
+
 #if defined(PNG_LIBPNG_VER_MAJOR) && defined(PNG_LIBPNG_VER_MINOR) && (PNG_LIBPNG_VER_MAJOR > 1 || (PNG_LIBPNG_VER_MAJOR == 1 && PNG_LIBPNG_VER_MINOR >= 4))
 #define JMPBUF(png_ptr) png_jmpbuf(png_ptr)
 #else
@@ -60,6 +64,9 @@ const double cInverseGamma = 0.45455;
 const unsigned long cMaxPNGSize = 1000000UL;
 
 // Called if the decoding of the image fails.
+#if PLATFORM(QT)
+static void PNGAPI decodingFailed(png_structp, png_const_charp) NO_RETURN;
+#endif
 static void PNGAPI decodingFailed(png_structp png, png_const_charp)
 {
     longjmp(JMPBUF(png), 1);
@@ -223,8 +230,10 @@ bool PNGImageDecoder::setFailed()
     return ImageDecoder::setFailed();
 }
 
-static ColorProfile readColorProfile(png_structp png, png_infop info)
+static void readColorProfile(png_structp png, png_infop info, ColorProfile& colorProfile)
 {
+    ASSERT(colorProfile.isEmpty());
+
 #ifdef PNG_iCCP_SUPPORTED
     char* profileName;
     int compressionType;
@@ -234,13 +243,22 @@ static ColorProfile readColorProfile(png_structp png, png_infop info)
     png_bytep profile;
 #endif
     png_uint_32 profileLength;
-    if (png_get_iCCP(png, info, &profileName, &compressionType, &profile, &profileLength)) {
-        ColorProfile colorProfile;
-        colorProfile.append(profile, profileLength);
-        return colorProfile;
-    }
+    if (!png_get_iCCP(png, info, &profileName, &compressionType, &profile, &profileLength))
+        return;
+
+    // Only accept RGB color profiles from input class devices.
+    bool ignoreProfile = false;
+    char* profileData = reinterpret_cast<char*>(profile);
+    if (profileLength < ImageDecoder::iccColorProfileHeaderLength)
+        ignoreProfile = true;
+    else if (!ImageDecoder::rgbColorProfile(profileData, profileLength))
+        ignoreProfile = true;
+    else if (!ImageDecoder::inputDeviceColorProfile(profileData, profileLength))
+        ignoreProfile = true;
+
+    if (!ignoreProfile)
+        colorProfile.append(profileData, profileLength);
 #endif
-    return ColorProfile();
 }
 
 void PNGImageDecoder::headerAvailable()
@@ -249,13 +267,13 @@ void PNGImageDecoder::headerAvailable()
     png_infop info = m_reader->infoPtr();
     png_uint_32 width = png_get_image_width(png, info);
     png_uint_32 height = png_get_image_height(png, info);
-    
+
     // Protect against large images.
     if (width > cMaxPNGSize || height > cMaxPNGSize) {
         longjmp(JMPBUF(png), 1);
         return;
     }
-    
+
     // We can fill in the size now that the header is available.  Avoid memory
     // corruption issues by neutering setFailed() during this call; if we don't
     // do this, failures will cause |m_reader| to be deleted, and our jmpbuf
@@ -279,7 +297,7 @@ void PNGImageDecoder::headerAvailable()
         // don't similarly transform the color profile.  We'd either need to transform
         // the color profile or we'd need to decode into a gray-scale image buffer and
         // hand that to CoreGraphics.
-        m_colorProfile = readColorProfile(png, info);
+        readColorProfile(png, info, m_colorProfile);
     }
 
     // The options we set here match what Mozilla does.
@@ -287,7 +305,7 @@ void PNGImageDecoder::headerAvailable()
     // Expand to ensure we use 24-bit for RGB and 32-bit for RGBA.
     if (colorType == PNG_COLOR_TYPE_PALETTE || (colorType == PNG_COLOR_TYPE_GRAY && bitDepth < 8))
         png_set_expand(png);
-    
+
     png_bytep trns = 0;
     int trnsCount = 0;
     if (png_get_valid(png, info, PNG_INFO_tRNS)) {
@@ -426,6 +444,9 @@ void PNGImageDecoder::pngComplete()
 
 void PNGImageDecoder::decode(bool onlySize)
 {
+#if PLATFORM(CHROMIUM)
+    TRACE_EVENT("PNGImageDecoder::decode", this, 0);
+#endif
     if (failed())
         return;
 

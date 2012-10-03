@@ -145,17 +145,50 @@ private:
     int m_vertexTexTransformLocation;
 };
 
+class VertexShaderVideoTransform {
+public:
+    VertexShaderVideoTransform();
+
+    bool init(GraphicsContext3D*, unsigned program);
+    String getShaderString() const;
+
+    int matrixLocation() const { return m_matrixLocation; }
+    int texTransformLocation() const { return m_texTransformLocation; }
+    int texMatrixLocation() const { return m_texMatrixLocation; }
+
+private:
+    int m_matrixLocation;
+    int m_texTransformLocation;
+    int m_texMatrixLocation;
+};
+
 class FragmentTexAlphaBinding {
 public:
     FragmentTexAlphaBinding();
 
     void init(GraphicsContext3D*, unsigned program);
     int alphaLocation() const { return m_alphaLocation; }
+    int edgeLocation() const { return -1; }
+    int fragmentTexTransformLocation() const { return -1; }
     int samplerLocation() const { return m_samplerLocation; }
 
 private:
     int m_samplerLocation;
     int m_alphaLocation;
+};
+
+class FragmentTexOpaqueBinding {
+public:
+    FragmentTexOpaqueBinding();
+
+    void init(GraphicsContext3D*, unsigned program);
+    int alphaLocation() const { return -1; }
+    int edgeLocation() const { return -1; }
+    int fragmentTexTransformLocation() const { return -1; }
+    int samplerLocation() const { return m_samplerLocation; }
+
+private:
+    int m_samplerLocation;
 };
 
 class FragmentShaderRGBATexFlipAlpha : public FragmentTexAlphaBinding {
@@ -168,10 +201,40 @@ public:
     String getShaderString() const;
 };
 
-// Swizzles the red and blue component of sampled texel.
+class FragmentShaderRGBATexRectFlipAlpha : public FragmentTexAlphaBinding {
+public:
+    String getShaderString() const;
+};
+
+class FragmentShaderRGBATexRectAlpha : public FragmentTexAlphaBinding {
+public:
+    String getShaderString() const;
+};
+
+class FragmentShaderRGBATexOpaque : public FragmentTexOpaqueBinding {
+public:
+    String getShaderString() const;
+};
+
+// Swizzles the red and blue component of sampled texel with alpha.
 class FragmentShaderRGBATexSwizzleAlpha : public FragmentTexAlphaBinding {
 public:
     String getShaderString() const;
+};
+
+// Swizzles the red and blue component of sampled texel without alpha.
+class FragmentShaderRGBATexSwizzleOpaque : public FragmentTexOpaqueBinding {
+public:
+    String getShaderString() const;
+};
+
+// Fragment shader for external textures.
+class FragmentShaderOESImageExternal : public FragmentTexAlphaBinding {
+public:
+    String getShaderString() const;
+    bool init(GraphicsContext3D*, unsigned program);
+private:
+    int m_samplerLocation;
 };
 
 class FragmentShaderRGBATexAlphaAA {

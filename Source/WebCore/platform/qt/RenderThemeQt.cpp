@@ -33,7 +33,7 @@
 #include "CSSStyleSelector.h"
 #include "CSSValueKeywords.h"
 #include "Chrome.h"
-#include "ChromeClientQt.h"
+#include "ChromeClient.h"
 #include "Color.h"
 #include "Font.h"
 #include "FontSelector.h"
@@ -57,6 +57,7 @@
 #include "ScrollbarTheme.h"
 #include "TimeRanges.h"
 #include "UserAgentStyleSheets.h"
+#include <wtf/text/StringBuilder.h>
 
 #include <QGuiApplication>
 #include <QColor>
@@ -113,10 +114,13 @@ bool RenderThemeQt::isControlStyled(const RenderStyle* style, const BorderData& 
 
 String RenderThemeQt::extraDefaultStyleSheet()
 {
-    String result = RenderTheme::extraDefaultStyleSheet();
-    if (useMobileTheme())
-        result += String(themeQtNoListboxesUserAgentStyleSheet, sizeof(themeQtNoListboxesUserAgentStyleSheet));
-    return result;
+    StringBuilder result;
+    result.append(RenderTheme::extraDefaultStyleSheet());
+    if (useMobileTheme()) {
+        result.append(String(themeQtNoListboxesUserAgentStyleSheet, sizeof(themeQtNoListboxesUserAgentStyleSheet)));
+        result.append(String(mobileThemeQtUserAgentStyleSheet, sizeof(mobileThemeQtUserAgentStyleSheet)));
+    }
+    return result.toString();
 }
 
 bool RenderThemeQt::supportsHover(const RenderStyle*) const
@@ -152,7 +156,7 @@ bool RenderThemeQt::supportsFocusRing(const RenderStyle* style) const
     }
 }
 
-int RenderThemeQt::baselinePosition(const RenderObject* o) const
+LayoutUnit RenderThemeQt::baselinePosition(const RenderObject* o) const
 {
     if (!o->isBox())
         return 0;
@@ -332,10 +336,6 @@ void RenderThemeQt::adjustMenuListStyle(CSSStyleSelector*, RenderStyle* style, E
 
 void RenderThemeQt::adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
 {
-    // WORKAROUND because html.css specifies -webkit-border-radius for <select> so we override it here
-    // see also http://bugs.webkit.org/show_bug.cgi?id=18399
-    style->resetBorderRadius();
-
     // Height is locked to auto.
     style->setHeight(Length(Auto));
 
@@ -845,7 +845,7 @@ double RenderThemeQt::caretBlinkInterval() const
     return static_cast<QGuiApplication*>(qApp)->styleHints()->cursorFlashTime() / 1000.0 / 2.0;
 }
 
-String RenderThemeQt::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width)
+String RenderThemeQt::fileListNameForWidth(const Vector<String>& filenames, const Font& font, int width) const
 {
     if (width <= 0)
         return String();
@@ -871,7 +871,8 @@ StylePainter::StylePainter(RenderThemeQt* theme, const PaintInfo& paintInfo)
     : painter(0)
 {
     Q_UNUSED(theme);
-    init(paintInfo.context ? paintInfo.context : 0);
+    ASSERT(paintInfo.context);
+    init(paintInfo.context);
 }
 
 StylePainter::StylePainter()
@@ -886,12 +887,12 @@ void StylePainter::init(GraphicsContext* context)
     if (painter) {
         // the styles often assume being called with a pristine painter where no brush is set,
         // so reset it manually
-        oldBrush = painter->brush();
+        m_previousBrush = painter->brush();
         painter->setBrush(Qt::NoBrush);
 
         // painting the widget with anti-aliasing will make it blurry
         // disable it here and restore it later
-        oldAntialiasing = painter->testRenderHint(QPainter::Antialiasing);
+        m_previousAntialiasing = painter->testRenderHint(QPainter::Antialiasing);
         painter->setRenderHint(QPainter::Antialiasing, false);
     }
 }
@@ -899,8 +900,8 @@ void StylePainter::init(GraphicsContext* context)
 StylePainter::~StylePainter()
 {
     if (painter) {
-        painter->setBrush(oldBrush);
-        painter->setRenderHints(QPainter::Antialiasing, oldAntialiasing);
+        painter->setBrush(m_previousBrush);
+        painter->setRenderHints(QPainter::Antialiasing, m_previousAntialiasing);
     }
 }
 

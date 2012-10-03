@@ -71,14 +71,19 @@ Chrome::~Chrome()
     m_client->chromeDestroyed();
 }
 
-void Chrome::invalidateWindow(const IntRect& updateRect, bool immediate)
+PassOwnPtr<Chrome> Chrome::create(Page* page, ChromeClient* client)
 {
-    m_client->invalidateWindow(updateRect, immediate);
+    return adoptPtr(new Chrome(page, client));
 }
 
-void Chrome::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
+void Chrome::invalidateRootView(const IntRect& updateRect, bool immediate)
 {
-    m_client->invalidateContentsAndWindow(updateRect, immediate);
+    m_client->invalidateRootView(updateRect, immediate);
+}
+
+void Chrome::invalidateContentsAndRootView(const IntRect& updateRect, bool immediate)
+{
+    m_client->invalidateContentsAndRootView(updateRect, immediate);
 }
 
 #if PLATFORM(BLACKBERRY)
@@ -110,14 +115,14 @@ void Chrome::scrollableAreasDidChange()
     m_client->scrollableAreasDidChange();
 }
 
-IntPoint Chrome::screenToWindow(const IntPoint& point) const
+IntPoint Chrome::screenToRootView(const IntPoint& point) const
 {
-    return m_client->screenToWindow(point);
+    return m_client->screenToRootView(point);
 }
 
-IntRect Chrome::windowToScreen(const IntRect& rect) const
+IntRect Chrome::rootViewToScreen(const IntRect& rect) const
 {
-    return m_client->windowToScreen(rect);
+    return m_client->rootViewToScreen(rect);
 }
 
 PlatformPageClient Chrome::platformPageClient() const
@@ -452,16 +457,6 @@ void Chrome::print(Frame* frame)
     m_client->print(frame);
 }
 
-void Chrome::requestGeolocationPermissionForFrame(Frame* frame, Geolocation* geolocation)
-{
-    m_client->requestGeolocationPermissionForFrame(frame, geolocation);
-}
-
-void Chrome::cancelGeolocationPermissionRequestForFrame(Frame* frame, Geolocation* geolocation)
-{
-    m_client->cancelGeolocationPermissionRequestForFrame(frame, geolocation);
-}
-
 #if ENABLE(DIRECTORY_UPLOAD)
 void Chrome::enumerateChosenDirectory(FileChooser* fileChooser)
 {
@@ -470,19 +465,9 @@ void Chrome::enumerateChosenDirectory(FileChooser* fileChooser)
 #endif
 
 #if ENABLE(INPUT_COLOR)
-void Chrome::openColorChooser(ColorChooser* colorChooser, const Color& initialColor)
+PassOwnPtr<ColorChooser> Chrome::createColorChooser(ColorChooserClient* client, const Color& initialColor)
 {
-    m_client->openColorChooser(colorChooser, initialColor);
-}
-
-void Chrome::cleanupColorChooser(ColorChooser* colorChooser)
-{
-    m_client->cleanupColorChooser(colorChooser);
-}
-
-void Chrome::setSelectedColorInColorChooser(ColorChooser* colorChooser, const Color& color)
-{
-    m_client->setSelectedColorInColorChooser(colorChooser, color);
+    return m_client->createColorChooser(client, initialColor);
 }
 #endif
 
@@ -517,13 +502,6 @@ void Chrome::scheduleAnimation()
 #if !USE(REQUEST_ANIMATION_FRAME_TIMER)
     m_client->scheduleAnimation();
 #endif
-}
-#endif
-
-#if ENABLE(NOTIFICATIONS)
-NotificationPresenter* Chrome::notificationPresenter() const
-{
-    return m_client->notificationPresenter();
 }
 #endif
 
@@ -574,6 +552,11 @@ bool Chrome::selectItemAlignmentFollowsMenuWritingDirection()
     return m_client->selectItemAlignmentFollowsMenuWritingDirection();
 }
 
+bool Chrome::hasOpenedPopup() const
+{
+    return m_client->hasOpenedPopup();
+}
+
 PassRefPtr<PopupMenu> Chrome::createPopupMenu(PopupMenuClient* client) const
 {
     return m_client->createPopupMenu(client);
@@ -583,13 +566,6 @@ PassRefPtr<SearchPopupMenu> Chrome::createSearchPopupMenu(PopupMenuClient* clien
 {
     return m_client->createSearchPopupMenu(client);
 }
-
-#if ENABLE(CONTEXT_MENUS)
-void Chrome::showContextMenu()
-{
-    m_client->showContextMenu();
-}
-#endif
 
 bool Chrome::requiresFullscreenForVideoPlayback()
 {

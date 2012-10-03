@@ -41,6 +41,7 @@
 #include "MutationRecord.h"
 #include "Node.h"
 #include <wtf/ListHashSet.h>
+#include <wtf/MainThread.h>
 
 namespace WebCore {
 
@@ -83,12 +84,12 @@ void WebKitMutationObserver::observe(Node* node, MutationObserverOptions options
     MutationObserverRegistration* registration = node->registerMutationObserver(this);
     registration->resetObservation(options, attributeFilter);
 
-    if (registration->isSubtree())
-        node->document()->addSubtreeMutationObserverTypes(registration->mutationTypes());
+    node->document()->addMutationObserverTypes(registration->mutationTypes());
 }
 
 void WebKitMutationObserver::disconnect()
 {
+    m_records.clear();
     HashSet<MutationObserverRegistration*> registrations(m_registrations);
     for (HashSet<MutationObserverRegistration*>::iterator iter = registrations.begin(); iter != registrations.end(); ++iter)
         (*iter)->unregister();
@@ -116,12 +117,16 @@ static MutationObserverSet& activeMutationObservers()
 
 void WebKitMutationObserver::enqueueMutationRecord(PassRefPtr<MutationRecord> mutation)
 {
+    ASSERT(isMainThread());
     m_records.append(mutation);
     activeMutationObservers().add(this);
 }
 
 void WebKitMutationObserver::deliver()
 {
+    if (m_records.isEmpty())
+        return;
+
     MutationRecordArray records;
     records.swap(m_records);
 
@@ -133,12 +138,20 @@ void WebKitMutationObserver::deliver()
 
 void WebKitMutationObserver::deliverAllMutations()
 {
+    ASSERT(isMainThread());
+    static bool deliveryInProgress = false;
+    if (deliveryInProgress)
+        return;
+    deliveryInProgress = true;
+
     while (!activeMutationObservers().isEmpty()) {
         MutationObserverSet::iterator iter = activeMutationObservers().begin();
         RefPtr<WebKitMutationObserver> observer = *iter;
         activeMutationObservers().remove(iter);
         observer->deliver();
     }
+
+    deliveryInProgress = false;
 }
 
 } // namespace WebCore

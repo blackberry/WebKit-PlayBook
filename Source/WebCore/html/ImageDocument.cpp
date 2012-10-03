@@ -106,7 +106,7 @@ private:
     }
 
     virtual ~ImageDocumentElement();
-    virtual void willMoveToNewOwnerDocument();
+    virtual void didMoveToNewDocument(Document* oldDocument) OVERRIDE;
 
     ImageDocument* m_imageDocument;
 };
@@ -117,12 +117,6 @@ inline PassRefPtr<ImageDocumentElement> ImageDocumentElement::create(ImageDocume
 }
 
 // --------
-
-static float pageZoomFactor(const Document* document)
-{
-    Frame* frame = document->frame();
-    return frame ? frame->pageZoomFactor() : 1;
-}
 
 void ImageDocumentParser::appendBytes(DocumentWriter*, const char*, size_t)
 {
@@ -263,6 +257,12 @@ bool ImageDocument::shouldShrinkToFit() const
 
 #else
 
+static float pageZoomFactor(const Document* document)
+{
+    Frame* frame = document->frame();
+    return frame ? frame->pageZoomFactor() : 1;
+}
+
 float ImageDocument::scale() const
 {
     if (!m_imageElement)
@@ -292,8 +292,7 @@ void ImageDocument::resizeImageToFit()
     m_imageElement->setWidth(static_cast<int>(imageSize.width() * scale));
     m_imageElement->setHeight(static_cast<int>(imageSize.height() * scale));
     
-    ExceptionCode ec;
-    m_imageElement->style()->setProperty("cursor", "-webkit-zoom-in", ec);
+    m_imageElement->setInlineStyleProperty(CSSPropertyCursor, "-webkit-zoom-in", false);
 }
 
 void ImageDocument::imageClicked(int x, int y)
@@ -346,11 +345,10 @@ void ImageDocument::restoreImageSize()
     m_imageElement->setWidth(imageSize.width());
     m_imageElement->setHeight(imageSize.height());
     
-    ExceptionCode ec;
     if (imageFitsInWindow())
-        m_imageElement->style()->removeProperty("cursor", ec);
+        m_imageElement->removeInlineStyleProperty(CSSPropertyCursor);
     else
-        m_imageElement->style()->setProperty("cursor", "-webkit-zoom-out", ec);
+        m_imageElement->setInlineStyleProperty(CSSPropertyCursor, "-webkit-zoom-out", false);
         
     m_didShrinkImage = false;
 }
@@ -380,12 +378,10 @@ void ImageDocument::windowSizeChanged()
     // If the image has been explicitly zoomed in, restore the cursor if the image fits
     // and set it to a zoom out cursor if the image doesn't fit
     if (!m_shouldShrinkImage) {
-        ExceptionCode ec;
-        
         if (fitsInWindow)
-            m_imageElement->style()->removeProperty("cursor", ec);
+            m_imageElement->removeInlineStyleProperty(CSSPropertyCursor);
         else
-            m_imageElement->style()->setProperty("cursor", "-webkit-zoom-out", ec);
+            m_imageElement->setInlineStyleProperty(CSSPropertyCursor, "-webkit-zoom-out", false);
         return;
     }
     
@@ -448,13 +444,13 @@ ImageDocumentElement::~ImageDocumentElement()
         m_imageDocument->disconnectImageElement();
 }
 
-void ImageDocumentElement::willMoveToNewOwnerDocument()
+void ImageDocumentElement::didMoveToNewDocument(Document* oldDocument)
 {
     if (m_imageDocument) {
         m_imageDocument->disconnectImageElement();
         m_imageDocument = 0;
     }
-    HTMLImageElement::willMoveToNewOwnerDocument();
+    HTMLImageElement::didMoveToNewDocument(oldDocument);
 }
 
 }

@@ -77,13 +77,20 @@ private:
 #if defined(WTF_USE_V8) && WTF_USE_V8
     friend class V8::Bindings::QtDRTNodeRuntime;
 #else
-    friend class JSC::Bindings::QtDRTNodeRuntime;
+    friend class QtDRTNodeRuntime;
 #endif
 
     WebCore::Node* m_node;
 };
 
 Q_DECLARE_METATYPE(QDRTNode)
+
+class QtDRTNodeRuntime {
+public:
+    static QDRTNode create(WebCore::Node*);
+    static WebCore::Node* get(const QDRTNode&);
+    static void initialize();
+};
 
 class QWEBKIT_EXPORT DumpRenderTreeSupportQt {
 
@@ -92,6 +99,7 @@ public:
     DumpRenderTreeSupportQt();
     ~DumpRenderTreeSupportQt();
 
+    static void initialize();
 
     static void executeCoreCommandByName(QWebPage* page, const QString& name, const QString& value);
     static bool isCommandEnabled(QWebPage* page, const QString& name);
@@ -104,7 +112,6 @@ public:
 
     static bool pauseAnimation(QWebFrame*, const QString& name, double time, const QString& elementId);
     static bool pauseTransitionOfProperty(QWebFrame*, const QString& name, double time, const QString& elementId);
-    static bool pauseSVGAnimation(QWebFrame*, const QString& animationId, double time, const QString& elementId);
     static void suspendActiveDOMObjects(QWebFrame* frame);
     static void resumeActiveDOMObjects(QWebFrame* frame);
 
@@ -148,9 +155,7 @@ public:
     static void removeWhiteListAccessFromOrigin(const QString& sourceOrigin, const QString& destinationProtocol, const QString& destinationHost, bool allowDestinationSubdomains);
     static void resetOriginAccessWhiteLists();
 
-    static void activeMockDeviceOrientationClient(bool b);
-    static void removeMockDeviceOrientation();
-    static void setMockDeviceOrientation(bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma);
+    static void setMockDeviceOrientation(QWebPage*, bool canProvideAlpha, double alpha, bool canProvideBeta, double beta, bool canProvideGamma, double gamma);
 
     static void resetGeolocationMock(QWebPage*);
     static void setMockGeolocationPermission(QWebPage*, bool allowed);
@@ -170,6 +175,7 @@ public:
     static void dumpResourceLoadCallbacks(bool b);
     static void dumpResourceResponseMIMETypes(bool b);
     static void dumpResourceLoadCallbacksPath(const QString& path);
+    static void dumpWillCacheResponseCallbacks(bool);
     static void setWillSendRequestReturnsNullOnRedirect(bool b);
     static void setWillSendRequestReturnsNull(bool b);
     static void setWillSendRequestClearHeaders(const QStringList& headers);
@@ -201,7 +207,6 @@ public:
 
     static void scalePageBy(QWebFrame*, float scale, const QPoint& origin);
 
-    static QVariantList nodesFromRect(const QWebElement& document, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping);
     static QString responseMimeType(QWebFrame*);
     static void clearOpener(QWebFrame*);
     static void addURLToRedirect(const QString& origin, const QString& destination);
@@ -225,8 +230,11 @@ public:
     static void goBack(QWebPage*);
 
 #if QT_VERSION >= QT_VERSION_CHECK(4, 8, 0)
-    static bool thirdPartyCookiePolicyAllows(QNetworkCookieJar*, const QUrl&, const QUrl& firstPartyUrl);
+    static bool thirdPartyCookiePolicyAllows(QWebPage*, const QUrl&, const QUrl& firstPartyUrl);
 #endif
+
+    static bool defaultHixie76WebSocketProtocolEnabled();
+    static void setHixie76WebSocketProtocolEnabled(QWebPage*, bool);
 };
 
 #endif

@@ -46,9 +46,12 @@ class InjectedScriptManager;
 class InspectorDebuggerAgent;
 #endif
 class InspectorBackendDispatcher;
+class InspectorConsoleAgent;
 class InspectorFrontend;
 class InspectorFrontendChannel;
+class InspectorConsoleAgent;
 class InspectorInstrumentation;
+class InspectorProfilerAgent;
 class InspectorRuntimeAgent;
 class InspectorState;
 class InspectorStateClient;
@@ -62,6 +65,7 @@ public:
     WorkerInspectorController(WorkerContext*);
     ~WorkerInspectorController();
 
+    bool hasFrontend() const { return m_frontend; }
     void connectFrontend();
     void disconnectFrontend();
     void restoreInspectorStateFromCookie(const String& inspectorCookie);
@@ -80,8 +84,10 @@ private:
     OwnPtr<InjectedScriptManager> m_injectedScriptManager;
 #if ENABLE(JAVASCRIPT_DEBUGGER)
     OwnPtr<InspectorDebuggerAgent> m_debuggerAgent;
+    OwnPtr<InspectorProfilerAgent> m_profilerAgent;
 #endif
     OwnPtr<InspectorRuntimeAgent> m_runtimeAgent;
+    OwnPtr<InspectorConsoleAgent> m_consoleAgent;
 
     OwnPtr<InspectorFrontendChannel> m_frontendChannel;
     OwnPtr<InspectorFrontend> m_frontend;

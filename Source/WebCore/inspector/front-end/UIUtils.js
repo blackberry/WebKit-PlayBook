@@ -34,6 +34,18 @@ WebInspector.elementDragStart = function(element, dividerDrag, elementDragEnd, e
     if (WebInspector._elementDraggingEventListener || WebInspector._elementEndDraggingEventListener)
         WebInspector.elementDragEnd(event);
 
+    if (element) {
+        // Install glass pane
+        if (WebInspector._elementDraggingGlassPane)
+            WebInspector._elementDraggingGlassPane.parentElement.removeChild(WebInspector._elementDraggingGlassPane);
+
+        var glassPane = document.createElement("div");
+        glassPane.style.cssText = "position:absolute;top:0;bottom:0;left:0;right:0;opacity:0;z-index:1";
+        glassPane.id = "glass-pane-for-drag";
+        element.ownerDocument.body.appendChild(glassPane);
+        WebInspector._elementDraggingGlassPane = glassPane;
+    }
+
     WebInspector._elementDraggingEventListener = dividerDrag;
     WebInspector._elementEndDraggingEventListener = elementDragEnd;
 
@@ -54,6 +66,10 @@ WebInspector.elementDragEnd = function(event)
 
     targetDocument.body.style.removeProperty("cursor");
 
+    if (WebInspector._elementDraggingGlassPane)
+        WebInspector._elementDraggingGlassPane.parentElement.removeChild(WebInspector._elementDraggingGlassPane);
+
+    delete WebInspector._elementDraggingGlassPane;
     delete WebInspector._elementDraggingEventListener;
     delete WebInspector._elementEndDraggingEventListener;
 
@@ -186,9 +202,15 @@ WebInspector.markBeingEdited = function(element, value)
     return true;
 }
 
-WebInspector.isEditingAnyField = function()
+WebInspector.isInEditMode = function(event)
 {
-    return !!WebInspector.__editingCount;
+    if (WebInspector.__editingCount > 0)
+        return true;
+    if (event.target.nodeName === "INPUT")
+        return true;
+    if (event.target.enclosingNodeOrSelfWithClass("text-prompt"))
+        return true;
+    return false;
 }
 
 /**
@@ -246,7 +268,7 @@ WebInspector.EditingConfig.prototype = {
 WebInspector.startEditing = function(element, config)
 {
     if (!WebInspector.markBeingEdited(element, true))
-        return;
+        return null;
 
     config = config || new WebInspector.EditingConfig(function() {}, function() {});
     var committedCallback = config.commitHandler;
@@ -288,8 +310,7 @@ WebInspector.startEditing = function(element, config)
         if (pasteCallback)
             element.removeEventListener("paste", pasteEventListener, true);
 
-        if (element === WebInspector.currentFocusElement() || element.isAncestor(WebInspector.currentFocusElement()))
-            WebInspector.setCurrentFocusElement(WebInspector.previousFocusElement());
+        WebInspector.restoreFocusFromElement(element);
     }
 
     /** @this {Element} */
@@ -419,6 +440,15 @@ Number.bytesToString = function(bytes, higherResolution)
         return WebInspector.UIString("%.2fMB", megabytes);
     else
         return WebInspector.UIString("%.0fMB", megabytes);
+}
+
+Number.withThousandsSeparator = function(num)
+{
+    var str = num + "";
+    var re = /(\d+)(\d{3})/;
+    while (str.match(re))
+        str = str.replace(re, "$1\u2009$2"); // \u2009 is a thin space.
+    return str;
 }
 
 WebInspector._missingLocalizedStrings = {};
@@ -571,6 +601,18 @@ WebInspector._focusChanged = function(event)
     WebInspector.setCurrentFocusElement(event.target);
 }
 
+WebInspector._textInputTypes = ["text", "search", "tel", "url", "email", "password"].keySet(); 
+WebInspector._isTextEditingElement = function(element)
+{
+    if (element instanceof HTMLInputElement)
+        return element.type in WebInspector._textInputTypes;
+
+    if (element instanceof HTMLTextAreaElement)
+        return true;
+
+    return false;
+}
+
 WebInspector.setCurrentFocusElement = function(x)
 {
     if (WebInspector._currentFocusElement !== x)
@@ -580,10 +622,11 @@ WebInspector.setCurrentFocusElement = function(x)
     if (WebInspector._currentFocusElement) {
         WebInspector._currentFocusElement.focus();
 
-        // Make a caret selection inside the new element if there isn't a range selection and
-        // there isn't already a caret selection inside.
+        // Make a caret selection inside the new element if there isn't a range selection and there isn't already a caret selection inside.
+        // This is needed (at least) to remove caret from console when focus is moved to some element in the panel.
+        // The code below should not be applied to text fields and text areas, hence _isTextEditingElement check.
         var selection = window.getSelection();
-        if (selection.isCollapsed && !WebInspector._currentFocusElement.isInsertionCaretInside()) {
+        if (!WebInspector._isTextEditingElement(WebInspector._currentFocusElement) && selection.isCollapsed && !WebInspector._currentFocusElement.isInsertionCaretInside()) {
             var selectionRange = WebInspector._currentFocusElement.ownerDocument.createRange();
             selectionRange.setStart(WebInspector._currentFocusElement, 0);
             selectionRange.setEnd(WebInspector._currentFocusElement, 0);
@@ -593,6 +636,59 @@ WebInspector.setCurrentFocusElement = function(x)
         }
     } else if (WebInspector._previousFocusElement)
         WebInspector._previousFocusElement.blur();
+}
+
+WebInspector.restoreFocusFromElement = function(element)
+{
+    if (element && element.isSelfOrAncestor(WebInspector.currentFocusElement()))
+        WebInspector.setCurrentFocusElement(WebInspector.previousFocusElement());
+}
+
+WebInspector.setToolbarColors = function(backgroundColor, color)
+{
+    if (!WebInspector._themeStyleElement) {
+        WebInspector._themeStyleElement = document.createElement("style");
+        document.head.appendChild(WebInspector._themeStyleElement);
+    }
+    WebInspector._themeStyleElement.textContent =
+        "#toolbar {\
+             background-image: none !important;\
+             background-color: " + backgroundColor + " !important;\
+         }\
+         \
+         .toolbar-label {\
+             color: " + color + " !important;\
+             text-shadow: none;\
+         }";
+}
+
+WebInspector.resetToolbarColors = function()
+{
+    if (WebInspector._themeStyleElement)
+        WebInspector._themeStyleElement.textContent = "";
+}
+
+/**
+ * @param {WebInspector.ContextMenu} contextMenu
+ * @param {Node} contextNode
+ * @param {Event} event
+ */
+WebInspector.populateHrefContextMenu = function(contextMenu, contextNode, event)
+{
+    var anchorElement = event.target.enclosingNodeOrSelfWithClass("webkit-html-resource-link") || event.target.enclosingNodeOrSelfWithClass("webkit-html-external-link");
+    if (!anchorElement)
+        return false;
+
+    var resourceURL = WebInspector.resourceURLForRelatedNode(contextNode, anchorElement.href);
+    if (!resourceURL)
+        return false;
+
+    // Add resource-related actions.
+    contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resourceURL, false));
+    if (WebInspector.resourceForURL(resourceURL))
+        contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in Resources panel" : "Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
+    contextMenu.appendItem(WebInspector.copyLinkAddressLabel(), InspectorFrontendHost.copyText.bind(InspectorFrontendHost, resourceURL));
+    return true;
 }
 
 ;(function() {

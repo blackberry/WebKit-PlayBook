@@ -23,19 +23,26 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "LayoutTestController.h"
 
 #include "InjectedBundle.h"
 #include "InjectedBundlePage.h"
 #include "JSLayoutTestController.h"
+#include "PlatformWebView.h"
 #include "StringFunctions.h"
+#include "TestController.h"
+#include <WebKit2/WKBundleBackForwardList.h>
 #include <WebKit2/WKBundleFrame.h>
 #include <WebKit2/WKBundleFramePrivate.h>
+#include <WebKit2/WKBundleInspector.h>
+#include <WebKit2/WKBundleNodeHandlePrivate.h>
 #include <WebKit2/WKBundlePagePrivate.h>
-#include <WebKit2/WKBundleScriptWorld.h>
 #include <WebKit2/WKBundlePrivate.h>
+#include <WebKit2/WKBundleScriptWorld.h>
 #include <WebKit2/WKRetainPtr.h>
 #include <WebKit2/WebKit2.h>
+#include <wtf/HashMap.h>
 
 namespace WTR {
 
@@ -85,11 +92,14 @@ PassRefPtr<LayoutTestController> LayoutTestController::create()
 LayoutTestController::LayoutTestController()
     : m_whatToDump(RenderTree)
     , m_shouldDumpAllFrameScrollPositions(false)
+    , m_shouldDumpBackForwardListsForAllWindows(false)
     , m_shouldAllowEditing(true)
     , m_shouldCloseExtraWindows(false)
     , m_dumpEditingCallbacks(false)
     , m_dumpStatusCallbacks(false)
     , m_dumpTitleChanges(false)
+    , m_dumpPixels(true)
+    , m_dumpFullScreenCallbacks(false)
     , m_waitToDump(false)
     , m_testRepaint(false)
     , m_testRepaintSweepHorizontally(false)
@@ -153,8 +163,12 @@ void LayoutTestController::waitToDumpWatchdogTimerFired()
 
 void LayoutTestController::notifyDone()
 {
-    if (m_waitToDump && !InjectedBundle::shared().page()->isLoading())
+    if (!InjectedBundle::shared().isTestRunning())
+        return;
+
+    if (m_waitToDump && !InjectedBundle::shared().topLoadingFrame())
         InjectedBundle::shared().page()->dump();
+
     m_waitToDump = false;
 }
 
@@ -174,12 +188,39 @@ bool LayoutTestController::pauseAnimationAtTimeOnElementWithId(JSStringRef anima
     return WKBundleFramePauseAnimationOnElementWithId(mainFrame, toWK(animationName).get(), toWK(elementId).get(), time);
 }
 
+bool LayoutTestController::pauseTransitionAtTimeOnElementWithId(JSStringRef propertyName, double time, JSStringRef elementId)
+{
+    // FIXME: Is it OK this works only for the main frame?
+    // FIXME: If this is needed only for the main frame, then why is the function on WKBundleFrame instead of WKBundlePage?
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    return WKBundleFramePauseTransitionOnElementWithId(mainFrame, toWK(propertyName).get(), toWK(elementId).get(), time);
+}
+
+void LayoutTestController::suspendAnimations()
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    WKBundleFrameSuspendAnimations(mainFrame);
+}
+
+void LayoutTestController::resumeAnimations()
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    WKBundleFrameResumeAnimations(mainFrame);
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    WKRetainPtr<WKStringRef> text(AdoptWK, WKBundleFrameCopyLayerTreeAsText(mainFrame));
+    return toJS(text);
+}
+
 void LayoutTestController::addUserScript(JSStringRef source, bool runAtStart, bool allFrames)
 {
     WKRetainPtr<WKStringRef> sourceWK = toWK(source);
     WKRetainPtr<WKBundleScriptWorldRef> scriptWorld(AdoptWK, WKBundleScriptWorldCreateWorld());
 
-    WKBundleAddUserScript(InjectedBundle::shared().bundle(), scriptWorld.get(), sourceWK.get(), 0, 0, 0,
+    WKBundleAddUserScript(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), scriptWorld.get(), sourceWK.get(), 0, 0, 0,
         (runAtStart ? kWKInjectAtDocumentStart : kWKInjectAtDocumentEnd),
         (allFrames ? kWKInjectInAllFrames : kWKInjectInTopFrameOnly));
 }
@@ -189,7 +230,7 @@ void LayoutTestController::addUserStyleSheet(JSStringRef source, bool allFrames)
     WKRetainPtr<WKStringRef> sourceWK = toWK(source);
     WKRetainPtr<WKBundleScriptWorldRef> scriptWorld(AdoptWK, WKBundleScriptWorldCreateWorld());
 
-    WKBundleAddUserStyleSheet(InjectedBundle::shared().bundle(), scriptWorld.get(), sourceWK.get(), 0, 0, 0,
+    WKBundleAddUserStyleSheet(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), scriptWorld.get(), sourceWK.get(), 0, 0, 0,
         (allFrames ? kWKInjectInAllFrames : kWKInjectInTopFrameOnly));
 }
 
@@ -309,12 +350,92 @@ void LayoutTestController::setCanOpenWindows(bool)
 
 void LayoutTestController::setXSSAuditorEnabled(bool enabled)
 {
-    WKBundleOverrideXSSAuditorEnabledForTestRunner(InjectedBundle::shared().bundle(), true);
+    WKRetainPtr<WKStringRef> key(AdoptWK, WKStringCreateWithUTF8CString("WebKitXSSAuditorEnabled"));
+    WKBundleOverrideBoolPreferenceForTestRunner(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), key.get(), enabled);
+}
+
+void LayoutTestController::setAllowUniversalAccessFromFileURLs(bool enabled)
+{
+    WKBundleSetAllowUniversalAccessFromFileURLs(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setAllowFileAccessFromFileURLs(bool enabled)
+{
+    WKBundleSetAllowFileAccessFromFileURLs(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setFrameFlatteningEnabled(bool enabled)
+{
+    WKBundleSetFrameFlatteningEnabled(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setGeolocationPermission(bool enabled)
+{
+    WKBundleSetGeolocationPermission(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setJavaScriptCanAccessClipboard(bool enabled)
+{
+     WKBundleSetJavaScriptCanAccessClipboard(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setPrivateBrowsingEnabled(bool enabled)
+{
+     WKBundleSetPrivateBrowsingEnabled(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setPopupBlockingEnabled(bool enabled)
+{
+     WKBundleSetPopupBlockingEnabled(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::setAuthorAndUserStylesEnabled(bool enabled)
+{
+     WKBundleSetAuthorAndUserStylesEnabled(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), enabled);
+}
+
+void LayoutTestController::addOriginAccessWhitelistEntry(JSStringRef sourceOrigin, JSStringRef destinationProtocol, JSStringRef destinationHost, bool allowDestinationSubdomains)
+{
+    WKBundleAddOriginAccessWhitelistEntry(InjectedBundle::shared().bundle(), toWK(sourceOrigin).get(), toWK(destinationProtocol).get(), toWK(destinationHost).get(), allowDestinationSubdomains);
+}
+
+void LayoutTestController::removeOriginAccessWhitelistEntry(JSStringRef sourceOrigin, JSStringRef destinationProtocol, JSStringRef destinationHost, bool allowDestinationSubdomains)
+{
+    WKBundleRemoveOriginAccessWhitelistEntry(InjectedBundle::shared().bundle(), toWK(sourceOrigin).get(), toWK(destinationProtocol).get(), toWK(destinationHost).get(), allowDestinationSubdomains);
+}
+
+int LayoutTestController::numberOfPages(double pageWidthInPixels, double pageHeightInPixels)
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    return WKBundleNumberOfPages(InjectedBundle::shared().bundle(), mainFrame, pageWidthInPixels, pageHeightInPixels);
+}
+
+int LayoutTestController::pageNumberForElementById(JSStringRef id, double pageWidthInPixels, double pageHeightInPixels)
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    return WKBundlePageNumberForElementById(InjectedBundle::shared().bundle(), mainFrame, toWK(id).get(), pageWidthInPixels, pageHeightInPixels);
+}
+
+JSRetainPtr<JSStringRef> LayoutTestController::pageSizeAndMarginsInPixels(int pageIndex, int width, int height, int marginTop, int marginRight, int marginBottom, int marginLeft)
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    return toJS(WKBundlePageSizeAndMarginsInPixels(InjectedBundle::shared().bundle(), mainFrame, pageIndex, width, height, marginTop, marginRight, marginBottom, marginLeft));
+}
+
+bool LayoutTestController::isPageBoxVisible(int pageIndex)
+{
+    WKBundleFrameRef mainFrame = WKBundlePageGetMainFrame(InjectedBundle::shared().page()->page());
+    return WKBundleIsPageBoxVisible(InjectedBundle::shared().bundle(), mainFrame, pageIndex);
 }
 
 unsigned LayoutTestController::windowCount()
 {
     return InjectedBundle::shared().pageCount();
+}
+
+void LayoutTestController::clearBackForwardList()
+{
+    WKBundleBackForwardListClear(WKBundlePageGetBackForwardList(InjectedBundle::shared().page()->page()));
 }
 
 // Object Creation
@@ -491,6 +612,11 @@ void LayoutTestController::callFocusWebViewCallback()
 void LayoutTestController::callSetBackingScaleFactorCallback()
 {
     callLayoutTestControllerCallback(SetBackingScaleFactorCallbackID);
+}
+
+void LayoutTestController::overridePreference(JSStringRef preference, bool value)
+{
+    WKBundleOverrideBoolPreferenceForTestRunner(InjectedBundle::shared().bundle(), InjectedBundle::shared().pageGroup(), toWK(preference).get(), value);
 }
 
 } // namespace WTR

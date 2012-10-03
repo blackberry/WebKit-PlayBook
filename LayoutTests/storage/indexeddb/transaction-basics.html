@@ -9,15 +9,18 @@
 <script>
 
 description("Test IndexedDB transaction basics.");
-if (window.layoutTestController)
-    layoutTestController.waitUntilDone();
 
 function test()
 {
-    shouldBeTrue("'webkitIndexedDB' in window");
-    shouldBeFalse("webkitIndexedDB == null");
+    evalAndLog("indexedDB = window.indexedDB || window.webkitIndexedDB");
+    shouldBeTrue("indexedDB != null");
+    evalAndLog("IDBTransaction = window.IDBTransaction || window.webkitIDBTransaction");
+    shouldBeTrue("IDBTransaction != null");
+    evalAndLog("IDBDatabaseException = window.IDBDatabaseException || window.webkitIDBDatabaseException");
+    shouldBeTrue("IDBDatabaseException != null");
+    debug("");
 
-    request = evalAndLog("webkitIndexedDB.open('transaction-basics')");
+    request = evalAndLog("indexedDB.open('transaction-basics')");
     request.onsuccess = openSuccess;
     request.onerror = unexpectedErrorCallback;
 }
@@ -34,7 +37,7 @@ function openSuccess()
 function cleanDatabase()
 {
     deleteAllObjectStores(db, checkMetadataEmpty);
-    commitAndContinue(testSetVersionAbort1);
+    event.target.result.oncomplete = testSetVersionAbort1;
 }
 
 function testSetVersionAbort1()
@@ -53,7 +56,7 @@ function addRemoveIDBObjects()
     trans.oncomplete = unexpectedCompleteCallback;
 
     var store = evalAndLog("store = db.createObjectStore('storeFail', null)");
-    var index = evalAndLog("index = store.createIndex('indexFail', 'x', false)");
+    var index = evalAndLog("index = store.createIndex('indexFail', 'x')");
 
     evalAndLog("db.deleteObjectStore('storeFail')");
     evalAndLog("store.deleteIndex('indexFail')");
@@ -63,6 +66,8 @@ function addRemoveIDBObjects()
 
 function testSetVersionAbort2()
 {
+    debug("");
+    debug("testSetVersionAbort2():");
     checkMetadataEmpty();
     request = evalAndLog("request = startSetVersion('version fail')");
     request.onsuccess = addRemoveAddIDBObjects;
@@ -77,19 +82,21 @@ function addRemoveAddIDBObjects()
     trans.oncomplete = unexpectedCompleteCallback;
 
     var store = evalAndLog("store = db.createObjectStore('storeFail', null)");
-    var index = evalAndLog("index = store.createIndex('indexFail', 'x', false)");
+    var index = evalAndLog("index = store.createIndex('indexFail', 'x')");
 
     evalAndLog("db.deleteObjectStore('storeFail')");
     evalAndLog("store.deleteIndex('indexFail')");
 
     var store = evalAndLog("store = db.createObjectStore('storeFail', null)");
-    var index = evalAndLog("index = store.createIndex('indexFail', 'x', false)");
+    var index = evalAndLog("index = store.createIndex('indexFail', 'x')");
 
     trans.abort();
 }
 
 function testSetVersionAbort3()
 {
+    debug("");
+    debug("testSetVersionAbort3():");
     shouldBeFalse("event.cancelable");
     checkMetadataEmpty();
     request = evalAndLog("request = startSetVersion('version fail')");
@@ -98,46 +105,85 @@ function testSetVersionAbort3()
 
 function addIDBObjects()
 {
-    shouldBeFalse("event.cancelable");
     debug("addIDBObjects():");
+    shouldBeFalse("event.cancelable");
     var trans = evalAndLog("trans = event.target.result");
     shouldBeTrue("trans !== null");
-    trans.onabort = testSetVersionAbort4;
+    trans.onabort = testInactiveAbortedTransaction;
     trans.oncomplete = unexpectedCompleteCallback;
 
-    var store = evalAndLog("store = db.createObjectStore('storeFail', null)");
-    var index = evalAndLog("index = store.createIndex('indexFail', 'x', false)");
+    store = evalAndLog("store = db.createObjectStore('storeFail', null)");
+    index = evalAndLog("index = store.createIndex('indexFail', 'x')");
 
     trans.abort();
 }
 
+function testInactiveAbortedTransaction()
+{
+    debug("");
+    debug("testInactiveAbortedTransaction():");
+    evalAndExpectException("index.openCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.openKeyCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.get(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.getKey(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.count()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+
+    evalAndExpectException("store.put(0, 0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.add(0, 0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.delete(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.clear()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.get(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.openCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+
+    testSetVersionAbort4();
+}
+
 function testSetVersionAbort4()
 {
+    debug("");
+    debug("testSetVersionAbort4():");
     checkMetadataEmpty();
     request = evalAndLog("request = startSetVersion('version fail')");
     request.onsuccess = addIDBObjectsAndCommit;
 }
 
-function addIDBObjects()
+function addIDBObjectsAndCommit()
 {
-    debug("addIDBObjects():");
+    debug("addIDBObjectsAndCommit():");
     var trans = evalAndLog("trans = event.target.result");
     shouldBeTrue("trans !== null");
     trans.onabort = unexpectedAbortCallback;
 
-    var store = evalAndLog("store = db.createObjectStore('storeFail', null)");
-    var index = evalAndLog("index = store.createIndex('indexFail', 'x', false)");
+    store = evalAndLog("store = db.createObjectStore('storeFail', null)");
+    index = evalAndLog("index = store.createIndex('indexFail', 'x')");
 
-    commitAndContinue(testSetVersionAbort5);
+    trans.oncomplete = testInactiveCompletedTransaction;
 }
 
-function commitAndContinue(continueFunction)
+function testInactiveCompletedTransaction()
 {
-    window.setTimeout(continueFunction, 0);
+    debug("");
+    debug("testInactiveCompletedTransaction():");
+    evalAndExpectException("index.openCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.openKeyCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.get(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.getKey(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("index.count()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+
+    evalAndExpectException("store.put(0, 0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.add(0, 0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.delete(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.clear()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.get(0)", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+    evalAndExpectException("store.openCursor()", "IDBDatabaseException.TRANSACTION_INACTIVE_ERR");
+
+    testSetVersionAbort5();
 }
 
 function testSetVersionAbort5()
 {
+    debug("");
+    debug("testSetVersionAbort5():");
     checkMetadataExistingObjectStore();
     request = evalAndLog("request = startSetVersion('version fail')");
     request.onsuccess = removeIDBObjects;
@@ -160,6 +206,8 @@ function removeIDBObjects()
 
 function testSetVersionAbort6()
 {
+    debug("");
+    debug("testSetVersionAbort6():");
     checkMetadataExistingObjectStore();
     setNewVersion();
 }
@@ -194,6 +242,7 @@ function setNewVersion()
 
 function setVersionSuccess()
 {
+    debug("");
     debug("setVersionSuccess():");
     window.trans = evalAndLog("trans = event.target.result");
     shouldBeTrue("trans !== null");
@@ -204,37 +253,51 @@ function setVersionSuccess()
     deleteAllObjectStores(db);
 
     evalAndLog("db.createObjectStore('storeName', null)");
-    transaction = evalAndLog("db.transaction(['storeName'])");
-    transaction.onabort = abortCallback;
-    var store = evalAndLog("store = transaction.objectStore('storeName')");
-    shouldBeEqualToString("store.name", "storeName");
 }
 
 function completeCallback()
 {
     shouldBeFalse("event.cancelable");
     testPassed("complete event fired");
-    window.completeEventFired = true;
+    transaction = evalAndLog("db.transaction(['storeName'])");
+    transaction.onabort = abortCallback;
+    var store = evalAndLog("store = transaction.objectStore('storeName')");
+    shouldBeEqualToString("store.name", "storeName");
 }
 
 function abortCallback()
 {
-    testPassed("complete event fired");
-    checkForCompleteEvent();
+    testPassed("abort event fired");
+    testDOMStringList();
 }
 
-function checkForCompleteEvent()
+function testDOMStringList()
 {
-    if (completeEventFired) {
-        testPassed("oncomplete event had fired");
-        done();
-    } else
-        setTimeout(checkForCompleteEvent, 1);
+    debug("");
+    debug("Verifying DOMStringList works as argument for IDBDatabase.transaction()");
+    debug("db.objectStoreNames is " + db.objectStoreNames);
+    debug("... which contains: " + JSON.stringify(Array.prototype.slice.call(db.objectStoreNames)));
+    evalAndLog("transaction = db.transaction(db.objectStoreNames)");
+    testPassed("no exception thrown");
+    for (var i = 0; i < db.objectStoreNames.length; ++i) {
+      shouldBeTrue("transaction.objectStore(" + JSON.stringify(db.objectStoreNames[i]) + ") != null");
+    }
+    testPassed("all stores present in transaction");
+    testInvalidMode();
 }
 
+function testInvalidMode()
+{
+    debug("");
+    debug("Verify that specifying an invalid mode raises an exception");
+    evalAndExpectException("db.transaction(['storeName'], 3)", "IDBDatabaseException.NON_TRANSIENT_ERR");
+    finishJSTest();
+}
 
+var jsTestIsAsync = true;
 test();
 
 </script>
+<script src="../../fast/js/resources/js-test-post.js"></script>
 </body>
 </html>

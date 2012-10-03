@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Google Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -33,6 +33,7 @@
 
 #include "AccessibilityController.h"
 #include "EventSender.h"
+#include "GamepadController.h"
 #include "LayoutTestController.h"
 #include "NotificationPresenter.h"
 #include "PlainTextController.h"
@@ -51,6 +52,7 @@ namespace WebKit {
 class WebDevToolsAgentClient;
 class WebFrame;
 class WebNotificationPresenter;
+class WebThread;
 class WebView;
 class WebURL;
 }
@@ -91,6 +93,7 @@ public:
     LayoutTestController* layoutTestController() const { return m_layoutTestController.get(); }
     EventSender* eventSender() const { return m_eventSender.get(); }
     AccessibilityController* accessibilityController() const { return m_accessibilityController.get(); }
+    GamepadController* gamepadController() const { return m_gamepadController.get(); }
     NotificationPresenter* notificationPresenter() const { return m_notificationPresenter.get(); }
     TestEventPrinter* printer() const { return m_printer.get(); }
 
@@ -128,13 +131,14 @@ public:
     bool allowExternalPages() const { return m_allowExternalPages; }
     void setAllowExternalPages(bool allowExternalPages) { m_allowExternalPages = allowExternalPages; }
 
-    void setAcceleratedCompositingEnabled(bool enabled) { m_acceleratedCompositingEnabled = enabled; }
+    void setAcceleratedCompositingForVideoEnabled(bool enabled) { m_acceleratedCompositingForVideoEnabled = enabled; }
     void setThreadedCompositingEnabled(bool enabled) { m_threadedCompositingEnabled = enabled; }
     void setCompositeToTexture(bool enabled) { m_compositeToTexture = enabled; }
     void setForceCompositingMode(bool enabled) { m_forceCompositingMode = enabled; }
     void setAccelerated2dCanvasEnabled(bool enabled) { m_accelerated2dCanvasEnabled = enabled; }
-    void setLegacyAccelerated2dCanvasEnabled(bool enabled) { m_legacyAccelerated2dCanvasEnabled = enabled; }
-    void setAcceleratedDrawingEnabled(bool enabled) { m_acceleratedDrawingEnabled = enabled; }
+    void setDeferred2dCanvasEnabled(bool enabled) { m_deferred2dCanvasEnabled = enabled; }
+    void setAcceleratedPaintingEnabled(bool enabled) { m_acceleratedPaintingEnabled = enabled; }
+    void setPerTilePaintingEnabled(bool enabled) { m_perTilePaintingEnabled = enabled; }
 #if defined(OS_WIN)
     // Access to the finished event. Used by the static WatchDog thread.
     HANDLE finishedEvent() { return m_finishedEvent; }
@@ -158,6 +162,9 @@ public:
     // Set whether to dump when the loaded page has finished processing. This is used with multiple load
     // testing where we only want to have the output from the last load.
     void setDumpWhenFinished(bool dumpWhenFinished) { m_dumpWhenFinished = dumpWhenFinished; }
+
+    void setIsDisplayingModalDialog(bool isDisplayingModalDialog) { m_isDisplayingModalDialog = isDisplayingModalDialog; }
+    bool isDisplayingModalDialog() const { return m_isDisplayingModalDialog; }
 
     WebViewHost* createNewWindow(const WebKit::WebURL&);
     void closeWindow(WebViewHost*);
@@ -205,28 +212,32 @@ private:
     OwnPtr<DRTDevToolsAgent> m_drtDevToolsAgent;
     OwnPtr<DRTDevToolsClient> m_drtDevToolsClient;
     OwnPtr<AccessibilityController> m_accessibilityController;
+    OwnPtr<GamepadController> m_gamepadController;
     OwnPtr<EventSender> m_eventSender;
     OwnPtr<LayoutTestController> m_layoutTestController;
     OwnPtr<PlainTextController> m_plainTextController;
     OwnPtr<TextInputController> m_textInputController;
     OwnPtr<NotificationPresenter> m_notificationPresenter;
     OwnPtr<WebViewHost> m_webViewHost;
+    OwnPtr<WebKit::WebThread> m_webCompositorThread;
 
     TestParams m_params;
     int m_timeout; // timeout value in millisecond
     bool m_allowExternalPages;
-    bool m_acceleratedCompositingEnabled;
+    bool m_acceleratedCompositingForVideoEnabled;
     bool m_threadedCompositingEnabled;
     bool m_compositeToTexture;
     bool m_forceCompositingMode;
     bool m_accelerated2dCanvasEnabled;
-    bool m_legacyAccelerated2dCanvasEnabled;
-    bool m_acceleratedDrawingEnabled;
+    bool m_deferred2dCanvasEnabled;
+    bool m_acceleratedPaintingEnabled;
+    bool m_perTilePaintingEnabled;
     WebPreferences m_prefs;
     bool m_stressOpt;
     bool m_stressDeopt;
     std::string m_javaScriptFlags;
     bool m_dumpWhenFinished;
+    bool m_isDisplayingModalDialog;
 
 
     // List of all windows in this process.

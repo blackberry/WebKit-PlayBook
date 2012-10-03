@@ -22,16 +22,14 @@
 #include "BlackBerryGlobal.h"
 
 #include "PlatformString.h"
-#include "Timer.h"
 #include <JavaScriptCore/JSObjectRef.h>
-#include <wtf/Vector.h>
 
 namespace WebCore {
+class Credential;
 class Frame;
 class DOMWrapperWorld;
 class NavigationAction;
 class Node;
-class Page;
 class Range;
 class ResourceRequest;
 class ResourceResponse;
@@ -84,6 +82,7 @@ public:
     virtual bool shouldInsertNode(WebCore::Node*, WebCore::Range*, int insertAction) = 0;
     virtual bool shouldInsertText(const WTF::String&, WebCore::Range*, int insertAction) = 0;
     virtual bool isSelectTrailingWhitespaceEnabled() const = 0;
+    virtual bool didReceiveAuthenticationChallenge(WebCore::Credential&) = 0;
 
 };
 }

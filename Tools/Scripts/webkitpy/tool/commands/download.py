@@ -27,13 +27,10 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-import os
+from webkitpy.tool import steps
 
-from optparse import make_option
-
-import webkitpy.tool.steps as steps
-
-from webkitpy.common.checkout.changelog import ChangeLog, view_source_url
+from webkitpy.common.checkout.changelog import ChangeLog
+from webkitpy.common.config import urls
 from webkitpy.common.system.executive import ScriptError
 from webkitpy.tool.commands.abstractsequencedcommand import AbstractSequencedCommand
 from webkitpy.tool.commands.stepsequence import StepSequence
@@ -95,6 +92,7 @@ class Land(AbstractSequencedCommand):
     steps = [
         steps.UpdateChangeLogsWithReviewer,
         steps.ValidateReviewer,
+        steps.ValidateChangeLogs, # We do this after UpdateChangeLogsWithReviewer to avoid not having to cache the diff twice.
         steps.Build,
         steps.RunTests,
         steps.Commit,
@@ -105,8 +103,10 @@ land will NOT build and run the tests before committing, but you can use the --b
 If a bug id is provided, or one can be found in the ChangeLog land will update the bug after committing."""
 
     def _prepare_state(self, options, args, tool):
+        changed_files = self._tool.scm().changed_files(options.git_commit)
         return {
-            "bug_id": (args and args[0]) or tool.checkout().bug_id_for_this_commit(options.git_commit),
+            "changed_files": changed_files,
+            "bug_id": (args and args[0]) or tool.checkout().bug_id_for_this_commit(options.git_commit, changed_files),
         }
 
 
@@ -121,10 +121,19 @@ class LandCowboy(AbstractSequencedCommand):
         steps.Build,
         steps.RunTests,
         steps.Commit,
+        steps.CloseBugForLandDiff,
     ]
 
     def _prepare_state(self, options, args, tool):
         options.check_style_filter = "-changelog"
+
+
+class CheckStyleLocal(AbstractSequencedCommand):
+    name = "check-style-local"
+    help_text = "Run check-webkit-style on the current working directory diff"
+    steps = [
+        steps.CheckStyle,
+    ]
 
 
 class AbstractPatchProcessingCommand(AbstractDeclarativeCommand):
@@ -184,6 +193,12 @@ class ProcessBugsMixin(object):
             patches = tool.bugs.fetch_bug(bug_id).reviewed_patches()
             log("%s found on bug %s." % (pluralize("reviewed patch", len(patches)), bug_id))
             all_patches += patches
+        if not all_patches:
+            log("No reviewed patches found, looking for unreviewed patches.")
+            for bug_id in args:
+                patches = tool.bugs.fetch_bug(bug_id).patches()
+                log("%s found on bug %s." % (pluralize("patch", len(patches)), bug_id))
+                all_patches += patches
         return all_patches
 
 
@@ -221,18 +236,6 @@ class BuildAndTestAttachment(AbstractPatchSequencingCommand, ProcessAttachmentsM
         steps.ApplyPatch,
         steps.Build,
         steps.RunTests,
-    ]
-
-
-class PostAttachmentToRietveld(AbstractPatchSequencingCommand, ProcessAttachmentsMixin):
-    name = "post-attachment-to-rietveld"
-    help_text = "Uploads a bugzilla attachment to rietveld"
-    arguments_names = "ATTACHMENTID"
-    main_steps = [
-        steps.CleanWorkingDirectory,
-        steps.Update,
-        steps.ApplyPatch,
-        steps.PostCodeReview,
     ]
 
 
@@ -282,6 +285,7 @@ class AbstractPatchLandingCommand(AbstractPatchSequencingCommand):
         steps.CleanWorkingDirectory,
         steps.Update,
         steps.ApplyPatch,
+        steps.ValidateChangeLogs,
         steps.ValidateReviewer,
         steps.Build,
         steps.RunTests,
@@ -326,7 +330,7 @@ and the reviewers listed in the ChangeLogs look reasonable.
 
 
 class AbstractRolloutPrepCommand(AbstractSequencedCommand):
-    argument_names = "REVISION REASON"
+    argument_names = "REVISION [REVISIONS] REASON"
 
     def _commit_info(self, revision):
         commit_info = self._tool.checkout().commit_info_for_revision(revision)
@@ -341,25 +345,37 @@ class AbstractRolloutPrepCommand(AbstractSequencedCommand):
         return commit_info
 
     def _prepare_state(self, options, args, tool):
-        revision = args[0]
-        commit_info = self._commit_info(revision)
-        cc_list = sorted([party.bugzilla_email()
-                          for party in commit_info.responsible_parties()
-                          if party.bugzilla_email()])
-        return {
-            "revision": revision,
-            "bug_id": commit_info.bug_id(),
-            # FIXME: We should used the list as the canonical representation.
-            "bug_cc": ",".join(cc_list),
+        revision_list = []
+        for revision in str(args[0]).split():
+            if revision.isdigit():
+                revision_list.append(int(revision))
+            else:
+                raise ScriptError(message="Invalid svn revision number: " + revision)
+        revision_list.sort()
+
+        # We use the earliest revision for the bug info
+        earliest_revision = revision_list[0]
+        state = {
+            "revision": earliest_revision,
+            "revision_list": revision_list,
             "reason": args[1],
         }
+        commit_info = self._commit_info(earliest_revision)
+        if commit_info:
+            state["bug_id"] = commit_info.bug_id()
+            cc_list = sorted([party.bugzilla_email()
+                            for party in commit_info.responsible_parties()
+                            if party.bugzilla_email()])
+            # FIXME: We should used the list as the canonical representation.
+            state["bug_cc"] = ",".join(cc_list)
+        return state
 
 
 class PrepareRollout(AbstractRolloutPrepCommand):
     name = "prepare-rollout"
-    help_text = "Revert the given revision in the working copy and prepare ChangeLogs with revert reason"
+    help_text = "Revert the given revision(s) in the working copy and prepare ChangeLogs with revert reason"
     long_help = """Updates the working copy.
-Applies the inverse diff for the provided revision.
+Applies the inverse diff for the provided revision(s).
 Creates an appropriate rollout ChangeLog, including a trac link and bug link.
 """
     steps = [
@@ -372,7 +388,7 @@ Creates an appropriate rollout ChangeLog, including a trac link and bug link.
 
 class CreateRollout(AbstractRolloutPrepCommand):
     name = "create-rollout"
-    help_text = "Creates a bug to track a broken SVN revision and uploads a rollout patch."
+    help_text = "Creates a bug to track the broken SVN revision(s) and uploads a rollout patch."
     steps = [
         steps.CleanWorkingDirectory,
         steps.Update,
@@ -393,7 +409,7 @@ class CreateRollout(AbstractRolloutPrepCommand):
         state["bug_blocked"] = state["bug_id"]
         del state["bug_id"]
         state["bug_title"] = "REGRESSION(r%s): %s" % (state["revision"], state["reason"])
-        state["bug_description"] = "%s broke the build:\n%s" % (view_source_url(state["revision"]), state["reason"])
+        state["bug_description"] = "%s broke the build:\n%s" % (urls.view_revision_url(state["revision"]), state["reason"])
         # FIXME: If we had more context here, we could link to other open bugs
         #        that mention the test that regressed.
         if options.parent_command == "sheriff-bot":
@@ -412,7 +428,7 @@ so that we can track how often these flaky tests case pain.
 class Rollout(AbstractRolloutPrepCommand):
     name = "rollout"
     show_in_main_help = True
-    help_text = "Revert the given revision in the working copy and optionally commit the revert and re-open the original bug"
+    help_text = "Revert the given revision(s) in the working copy and optionally commit the revert and re-open the original bug"
     long_help = """Updates the working copy.
 Applies the inverse diff for the provided revision.
 Creates an appropriate rollout ChangeLog, including a trac link and bug link.

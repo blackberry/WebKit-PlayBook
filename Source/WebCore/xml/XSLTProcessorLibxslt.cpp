@@ -101,7 +101,7 @@ void XSLTProcessor::parseErrorFunc(void* userData, xmlError* error)
         break;
     }
 
-    console->addMessage(XMLMessageSource, LogMessageType, level, error->message, error->line, error->file);
+    console->addMessage(XMLMessageSource, LogMessageType, level, error->message, error->file, error->line);
 }
 
 // FIXME: There seems to be no way to control the ctxt pointer for loading here, thus we have globals.
@@ -175,7 +175,7 @@ static int writeToStringBuilder(void* context, const char* buffer, int len)
     if (!len)
         return 0;
 
-    StringBuffer stringBuffer(len);
+    StringBuffer<UChar> stringBuffer(len);
     UChar* bufferUChar = stringBuffer.characters();
     UChar* bufferUCharEnd = bufferUChar + len;
 
@@ -307,6 +307,7 @@ bool XSLTProcessor::transformToString(Node* sourceNode, String& mimeType, String
     xsltStylesheetPtr sheet = xsltStylesheetPointer(m_stylesheet, m_stylesheetRootNode.get());
     if (!sheet) {
         setXSLTLoadCallBack(0, 0, 0);
+        m_stylesheet = 0;
         return false;
     }
     m_stylesheet->clearDocuments();

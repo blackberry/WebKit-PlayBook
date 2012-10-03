@@ -31,13 +31,8 @@
 #include <wtf/RefPtr.h>
 
 #if PLATFORM(MAC)
-#ifdef __OBJC__
-    @class NSScreen;
-    @class NSWindow;
-#else
-    class NSScreen;
-    class NSWindow;
-#endif
+OBJC_CLASS NSScreen;
+OBJC_CLASS NSWindow;
 #endif
 
 typedef uint32_t PlatformDisplayID;
@@ -47,6 +42,8 @@ namespace WebCore {
     class FloatRect;
     class Widget;
 
+    int screenHorizontalDPI(Widget*);
+    int screenVerticalDPI(Widget*);
     int screenDepth(Widget*);
     int screenDepthPerComponent(Widget*);
     bool screenIsMonochrome(Widget*);

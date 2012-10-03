@@ -37,9 +37,9 @@
 #include "Notification.h"
 #include "UserGestureIndicator.h"
 
-#include "WebString.h"
+#include "platform/WebString.h"
 #include "WebTextDirection.h"
-#include "WebURL.h"
+#include "platform/WebURL.h"
 
 #include <wtf/PassRefPtr.h>
 
@@ -88,13 +88,13 @@ WebURL WebNotification::iconURL() const
 WebString WebNotification::title() const
 {
     ASSERT(!isHTML());
-    return m_private->contents().title();
+    return m_private->contents().title;
 }
 
 WebString WebNotification::body() const
 {
     ASSERT(!isHTML());
-    return m_private->contents().body();
+    return m_private->contents().body;
 }
 
 WebTextDirection WebNotification::direction() const

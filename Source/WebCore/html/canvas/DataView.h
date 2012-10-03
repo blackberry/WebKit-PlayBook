@@ -26,7 +26,7 @@
 #ifndef DataView_h
 #define DataView_h
 
-#include "ArrayBufferView.h"
+#include <wtf/ArrayBufferView.h>
 #include <wtf/PassRefPtr.h>
 
 namespace WebCore {
@@ -74,8 +74,7 @@ public:
     void setFloat64(unsigned byteOffset, double value, bool littleEndian, ExceptionCode&);
 
 protected:
-    virtual void neuter(ScriptExecutionContext*);
-    void neuterBinding(ScriptExecutionContext*);
+    virtual void neuter();
 
 private:
     DataView(PassRefPtr<ArrayBuffer>, unsigned byteOffset, unsigned byteLength);

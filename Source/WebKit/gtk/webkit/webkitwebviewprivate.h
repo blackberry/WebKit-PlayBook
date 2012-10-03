@@ -23,6 +23,7 @@
 #ifndef webkitwebviewprivate_h
 #define webkitwebviewprivate_h
 
+#include "AcceleratedCompositingContext.h"
 #include "FullscreenVideoController.h"
 #include "GtkClickCounter.h"
 #include "GtkDragAndDropHelper.h"
@@ -43,6 +44,7 @@ extern "C" {
 typedef struct _WebKitWebViewPrivate WebKitWebViewPrivate;
 struct _WebKitWebViewPrivate {
     WebCore::Page* corePage;
+    bool hasNativeWindow;
     OwnPtr<WebCore::WidgetBackingStore> backingStore;
     GRefPtr<WebKitWebSettings> webSettings;
     GRefPtr<WebKitWebInspector> webInspector;
@@ -60,6 +62,7 @@ struct _WebKitWebViewPrivate {
     GRefPtr<GtkIMContext> imContext;
 
     gboolean transparent;
+    bool needsResizeOnMap;
 
 #ifndef GTK_API_VERSION_2
     // GtkScrollablePolicy needs to be checked when
@@ -92,6 +95,10 @@ struct _WebKitWebViewPrivate {
     WebCore::GtkClickCounter clickCounter;
     WebCore::GtkDragAndDropHelper dragAndDropHelper;
     bool selfScrolling;
+
+#if USE(ACCELERATED_COMPOSITING)
+    OwnPtr<WebKit::AcceleratedCompositingContext> acceleratedCompositingContext;
+#endif
 };
 
 void webkit_web_view_notify_ready(WebKitWebView*);
@@ -111,7 +118,6 @@ GtkMenu* webkit_web_view_get_context_menu(WebKitWebView*);
 
 void webViewEnterFullscreen(WebKitWebView* webView, WebCore::Node*);
 void webViewExitFullscreen(WebKitWebView* webView);
-
 }
 
 #endif

@@ -54,6 +54,7 @@
 #include "ScrollAnimator.h"
 #include "Settings.h"
 #include "ShadowRoot.h"
+#include "ShadowTree.h"
 #include "SpatialNavigation.h"
 #include "Widget.h"
 #include "htmlediting.h" // For firstPositionInOrBeforeNode
@@ -88,7 +89,13 @@ FocusController::FocusController(Page* page)
     , m_isActive(false)
     , m_isFocused(false)
     , m_isChangingFocusedFrame(false)
+    , m_containingWindowIsVisible(false)
 {
+}
+
+PassOwnPtr<FocusController> FocusController::create(Page* page)
+{
+    return adoptPtr(new FocusController(page));
 }
 
 void FocusController::setFocusedFrame(PassRefPtr<Frame> frame)
@@ -148,7 +155,7 @@ void FocusController::setFocused(bool focused)
 
 static inline ShadowRoot* shadowRoot(Node* node)
 {
-    return node->isElementNode() ? toElement(node)->shadowRoot() : 0;
+    return node->isElementNode() && toElement(node)->hasShadowRoot() ? toElement(node)->shadowTree()->youngestShadowRoot() : 0;
 }
 
 static inline bool isTreeScopeOwner(Node* node)
@@ -239,7 +246,7 @@ bool FocusController::advanceFocusInDocumentOrder(FocusDirection direction, Keyb
 
     Node* currentNode = document->focusedNode();
     // FIXME: Not quite correct when it comes to focus transitions leaving/entering the WebView itself
-    bool caretBrowsing = focusedOrMainFrame()->settings()->caretBrowsingEnabled();
+    bool caretBrowsing = frame->settings() && frame->settings()->caretBrowsingEnabled();
 
     if (caretBrowsing && !currentNode)
         currentNode = frame->selection()->start().deprecatedNode();
@@ -314,10 +321,10 @@ bool FocusController::advanceFocusInDocumentOrder(FocusDirection direction, Keyb
 static inline Node* ownerOfTreeScope(TreeScope* scope)
 {
     ASSERT(scope);
-    if (scope->isShadowRoot())
-        return scope->shadowHost();
-    if (scope->document()->frame())
-        return scope->document()->frame()->ownerElement();
+    if (scope->rootNode()->isShadowRoot())
+        return scope->rootNode()->shadowHost();
+    if (scope->rootNode()->document()->frame())
+        return scope->rootNode()->document()->frame()->ownerElement();
     return 0;
 }
 
@@ -414,18 +421,18 @@ Node* FocusController::nextFocusableNode(TreeScope* scope, Node* start, Keyboard
     // Look for the first node in the scope that:
     // 1) has the lowest tabindex that is higher than start's tabindex (or 0, if start is null), and
     // 2) comes first in the scope, if there's a tie.
-    if (Node* winner = nextNodeWithGreaterTabIndex(scope, start ? start->tabIndex() : 0, event))
+    if (Node* winner = nextNodeWithGreaterTabIndex(scope->rootNode(), start ? start->tabIndex() : 0, event))
         return winner;
 
     // There are no nodes with a tabindex greater than start's tabindex,
     // so find the first node with a tabindex of 0.
-    return nextNodeWithExactTabIndex(scope, 0, event);
+    return nextNodeWithExactTabIndex(scope->rootNode(), 0, event);
 }
 
 Node* FocusController::previousFocusableNode(TreeScope* scope, Node* start, KeyboardEvent* event)
 {
     Node* last;
-    for (last = scope; last->lastChild(); last = last->lastChild()) { }
+    for (last = scope->rootNode(); last->lastChild(); last = last->lastChild()) { }
 
     // First try to find the last node in the scope that comes before start and has the same tabindex as start.
     // If start is null, find the last node in the scope with a tabindex of 0.
@@ -568,22 +575,51 @@ void FocusController::setActive(bool active)
             view->updateLayoutAndStyleIfNeededRecursive();
             view->updateControlTints();
         }
-
-        if (const HashSet<ScrollableArea*>* scrollableAreas = m_page->scrollableAreaSet()) {
-            HashSet<ScrollableArea*>::const_iterator end = scrollableAreas->end(); 
-            for (HashSet<ScrollableArea*>::const_iterator it = scrollableAreas->begin(); it != end; ++it) {
-                if (!active)
-                    (*it)->scrollAnimator()->contentAreaDidHide();
-                else
-                    (*it)->scrollAnimator()->contentAreaDidShow();
-            }
-        }
     }
 
     focusedOrMainFrame()->selection()->pageActivationChanged();
     
     if (m_focusedFrame && isFocused())
         dispatchEventsOnWindowAndFocusedNode(m_focusedFrame->document(), active);
+}
+
+static void contentAreaDidShowOrHide(ScrollableArea* scrollableArea, bool didShow)
+{
+    if (didShow)
+        scrollableArea->contentAreaDidShow();
+    else
+        scrollableArea->contentAreaDidHide();
+}
+
+void FocusController::setContainingWindowIsVisible(bool containingWindowIsVisible)
+{
+    if (m_containingWindowIsVisible == containingWindowIsVisible)
+        return;
+
+    m_containingWindowIsVisible = containingWindowIsVisible;
+
+    FrameView* view = m_page->mainFrame()->view();
+    if (!view)
+        return;
+
+    contentAreaDidShowOrHide(view, containingWindowIsVisible);
+
+    for (Frame* frame = m_page->mainFrame(); frame; frame = frame->tree()->traverseNext()) {
+        FrameView* frameView = frame->view();
+        if (!frameView)
+            continue;
+
+        const HashSet<ScrollableArea*>* scrollableAreas = frameView->scrollableAreas();
+        if (!scrollableAreas)
+            continue;
+
+        for (HashSet<ScrollableArea*>::const_iterator it = scrollableAreas->begin(), end = scrollableAreas->end(); it != end; ++it) {
+            ScrollableArea* scrollableArea = *it;
+            ASSERT(scrollableArea->isOnActivePage());
+
+            contentAreaDidShowOrHide(scrollableArea, containingWindowIsVisible);
+        }
+    }
 }
 
 static void updateFocusCandidateIfNeeded(FocusDirection direction, const FocusCandidate& current, FocusCandidate& candidate, FocusCandidate& closest)

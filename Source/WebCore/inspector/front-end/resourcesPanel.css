@@ -27,20 +27,8 @@
  * THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-.resources .outline-disclosure li {
-    text-indent: -1px;
-}
-
-.resources .sidebar-resizer-vertical {
+.resources.panel .sidebar-resizer-vertical {
     top: 23px;
-}
-
-#storage-views {
-    position: absolute;
-    top: 0;
-    right: 0;
-    left: 200px;
-    bottom: 0;
 }
 
 .resources.panel .sidebar {
@@ -51,13 +39,6 @@
 .resources.panel .sidebar li {
     height: 17px;
     white-space: nowrap;
-    text-indent: 0;
-    margin-left: -2px;
-}
-
-.resources.panel .sidebar li.parent {
-    text-indent: 0;
-    margin-left: -12px;
 }
 
 .resources.panel .sidebar li.selected {
@@ -315,6 +296,18 @@ li.selected .base-storage-tree-element-subtitle {
 
 .database-table-storage-tree-item .icon {
     content: url(Images/databaseTable.png);
+}
+
+.indexed-db-storage-tree-item .icon {
+    content: url(Images/indexedDB.png);
+}
+
+.indexed-db-object-store-storage-tree-item .icon {
+    content: url(Images/indexedDBObjectStore.png);
+}
+
+.indexed-db-index-storage-tree-item .icon {
+    content: url(Images/indexedDBIndex.png);
 }
 
 .domstorage-storage-tree-item.local-storage .icon {

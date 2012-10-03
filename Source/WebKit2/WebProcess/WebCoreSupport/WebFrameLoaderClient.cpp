@@ -64,6 +64,7 @@
 #include <WebCore/PluginData.h>
 #include <WebCore/ProgressTracker.h>
 #include <WebCore/ResourceError.h>
+#include <WebCore/Settings.h>
 #include <WebCore/UIEventWithKeyState.h>
 #include <WebCore/Widget.h>
 #include <WebCore/WindowFeatures.h>
@@ -174,7 +175,11 @@ void WebFrameLoaderClient::dispatchWillSendRequest(DocumentLoader*, unsigned lon
 
 bool WebFrameLoaderClient::shouldUseCredentialStorage(DocumentLoader*, unsigned long identifier)
 {
-    return true;
+    WebPage* webPage = m_frame->page();
+    if (!webPage)
+        return true;
+
+    return webPage->injectedBundleResourceLoadClient().shouldUseCredentialStorage(webPage, m_frame, identifier);
 }
 
 void WebFrameLoaderClient::dispatchDidReceiveAuthenticationChallenge(DocumentLoader*, unsigned long, const AuthenticationChallenge& challenge)
@@ -532,7 +537,7 @@ void WebFrameLoaderClient::dispatchDidFirstLayout()
     // Notify the UIProcess.
     webPage->send(Messages::WebPageProxy::DidFirstLayoutForFrame(m_frame->frameID(), InjectedBundleUserMessageEncoder(userData.get())));
 
-    if (m_frame == m_frame->page()->mainWebFrame())
+    if (m_frame == m_frame->page()->mainWebFrame() && !webPage->corePage()->settings()->suppressesIncrementalRendering())
         webPage->drawingArea()->setLayerTreeStateIsFrozen(false);
 }
 
@@ -551,6 +556,21 @@ void WebFrameLoaderClient::dispatchDidFirstVisuallyNonEmptyLayout()
     webPage->send(Messages::WebPageProxy::DidFirstVisuallyNonEmptyLayoutForFrame(m_frame->frameID(), InjectedBundleUserMessageEncoder(userData.get())));
 }
 
+void WebFrameLoaderClient::dispatchDidNewFirstVisuallyNonEmptyLayout()
+{
+    WebPage* webPage = m_frame->page();
+    if (!webPage)
+        return;
+
+    RefPtr<APIObject> userData;
+
+    // Notify the bundle client.
+    webPage->injectedBundleLoaderClient().didNewFirstVisuallyNonEmptyLayout(webPage, userData);
+    
+    // Notify the UIProcess.
+    webPage->send(Messages::WebPageProxy::DidNewFirstVisuallyNonEmptyLayout(InjectedBundleUserMessageEncoder(userData.get())));
+}
+
 void WebFrameLoaderClient::dispatchDidLayout()
 {
     WebPage* webPage = m_frame->page();
@@ -560,12 +580,16 @@ void WebFrameLoaderClient::dispatchDidLayout()
     // Notify the bundle client.
     webPage->injectedBundleLoaderClient().didLayoutForFrame(webPage, m_frame);
 
+    webPage->recomputeShortCircuitHorizontalWheelEventsState();
+
     // NOTE: Unlike the other layout notifications, this does not notify the
     // the UIProcess for every call.
 
-    // FIXME: Remove at the soonest possible time.
-    if (m_frame == m_frame->page()->mainWebFrame())
+    if (m_frame == m_frame->page()->mainWebFrame()) {
+        // FIXME: Remove at the soonest possible time.
         webPage->send(Messages::WebPageProxy::SetRenderTreeSize(webPage->renderTreeSize()));
+        webPage->mainFrameDidLayout();
+    }
 }
 
 Frame* WebFrameLoaderClient::dispatchCreatePage(const NavigationAction& navigationAction)
@@ -911,6 +935,11 @@ bool WebFrameLoaderClient::shouldGoToHistoryItem(HistoryItem* item) const
         return false;
     }
     
+    if (webPage->willGoToBackForwardItemCallbackEnabled()) {
+        webPage->send(Messages::WebPageProxy::WillGoToBackForwardListItem(itemID));
+        return true;
+    }
+    
     bool shouldGoToBackForwardListItem;
     if (!webPage->sendSync(Messages::WebPageProxy::ShouldGoToBackForwardListItem(itemID), Messages::WebPageProxy::ShouldGoToBackForwardListItem::Reply(shouldGoToBackForwardListItem)))
         return false;
@@ -1137,35 +1166,17 @@ void WebFrameLoaderClient::transitionToCommittedFromCachedFrame(CachedFrame*)
 void WebFrameLoaderClient::transitionToCommittedForNewPage()
 {
     WebPage* webPage = m_frame->page();
+
     Color backgroundColor = webPage->drawsTransparentBackground() ? Color::transparent : Color::white;
-
     bool isMainFrame = webPage->mainWebFrame() == m_frame;
+    bool shouldUseFixedLayout = isMainFrame && webPage->useFixedLayout();
 
-#if USE(TILED_BACKING_STORE)
-    IntSize currentVisibleContentSize;
-    IntSize fixedLayoutSize;
-
-    if (FrameView* view = m_frame->coreFrame()->view()) {
-        currentVisibleContentSize = view->visibleContentRect().size();
-        fixedLayoutSize = view->fixedLayoutSize();
-    }
-
-    m_frame->coreFrame()->createView(webPage->size(), backgroundColor, false, fixedLayoutSize, !fixedLayoutSize.isEmpty());
-
-    if (isMainFrame && !fixedLayoutSize.isEmpty()) {
-        m_frame->coreFrame()->view()->setDelegatesScrolling(true);
-        m_frame->coreFrame()->view()->setPaintsEntireContents(true);
-        // The HistoryController will update the scroll position later if needed.
-        m_frame->coreFrame()->view()->setFixedVisibleContentRect(IntRect(IntPoint::zero(), currentVisibleContentSize));
-    }
-
-#else
+#if !USE(TILED_BACKING_STORE)
     const ResourceResponse& response = m_frame->coreFrame()->loader()->documentLoader()->response();
     m_frameHasCustomRepresentation = isMainFrame && WebProcess::shared().shouldUseCustomRepresentationForResponse(response);
-
-    m_frame->coreFrame()->createView(webPage->size(), backgroundColor, false, IntSize(), false);
 #endif
 
+    m_frame->coreFrame()->createView(webPage->size(), backgroundColor, /* transparent */ false, IntSize(), shouldUseFixedLayout);
     m_frame->coreFrame()->view()->setTransparent(!webPage->drawsBackground());
 }
 
@@ -1210,9 +1221,9 @@ bool WebFrameLoaderClient::canCachePage() const
     return !m_frameHasCustomRepresentation;
 }
 
-void WebFrameLoaderClient::download(ResourceHandle* handle, const ResourceRequest& request, const ResourceRequest& initialRequest, const ResourceResponse& response)
+void WebFrameLoaderClient::download(ResourceHandle* handle, const ResourceRequest& request, const ResourceResponse& response)
 {
-    m_frame->convertHandleToDownload(handle, request, initialRequest, response);
+    m_frame->convertHandleToDownload(handle, request, response);
 }
 
 PassRefPtr<Frame> WebFrameLoaderClient::createFrame(const KURL& url, const String& name, HTMLFrameOwnerElement* ownerElement,
@@ -1289,7 +1300,7 @@ PassRefPtr<Widget> WebFrameLoaderClient::createPlugin(const IntSize&, HTMLPlugIn
     }
 #endif
 
-    RefPtr<Plugin> plugin = webPage->createPlugin(parameters);
+    RefPtr<Plugin> plugin = webPage->createPlugin(m_frame, parameters);
     if (!plugin)
         return 0;
     
@@ -1387,6 +1398,11 @@ void WebFrameLoaderClient::dispatchDidClearWindowObjectInWorld(DOMWrapperWorld* 
         return;
 
     webPage->injectedBundleLoaderClient().didClearWindowObjectForFrame(webPage, m_frame, world);
+
+#if PLATFORM(GTK)
+    // Ensure the accessibility hierarchy is updated.
+    webPage->updateAccessibilityTree();
+#endif
 }
 
 void WebFrameLoaderClient::documentElementAvailable()
@@ -1414,19 +1430,28 @@ RemoteAXObjectRef WebFrameLoaderClient::accessibilityRemoteObject()
 #if ENABLE(MAC_JAVA_BRIDGE)
 jobject WebFrameLoaderClient::javaApplet(NSView*) { return 0; }
 #endif
+
 NSCachedURLResponse* WebFrameLoaderClient::willCacheResponse(DocumentLoader*, unsigned long identifier, NSCachedURLResponse* response) const
 {
-    return response;
+    WebPage* webPage = m_frame->page();
+    if (!webPage)
+        return response;
+
+    return webPage->injectedBundleResourceLoadClient().shouldCacheResponse(webPage, m_frame, identifier) ? response : nil;
 }
 
-#endif
+#endif // PLATFORM(MAC)
+
 #if PLATFORM(WIN) && USE(CFNETWORK)
 bool WebFrameLoaderClient::shouldCacheResponse(DocumentLoader*, unsigned long identifier, const ResourceResponse&, const unsigned char* data, unsigned long long length)
 {
-    return true;
-}
+    WebPage* webPage = m_frame->page();
+    if (!webPage)
+        return true;
 
-#endif
+    return webPage->injectedBundleResourceLoadClient().shouldCacheResponse(webPage, m_frame, identifier);
+}
+#endif // PLATFORM(WIN) && USE(CFNETWORK)
 
 bool WebFrameLoaderClient::shouldUsePluginDocument(const String& /*mimeType*/) const
 {
@@ -1453,7 +1478,8 @@ void WebFrameLoaderClient::didChangeScrollOffset()
 
 PassRefPtr<FrameNetworkingContext> WebFrameLoaderClient::createNetworkingContext()
 {
-    return WebFrameNetworkingContext::create(m_frame->coreFrame());
+    RefPtr<WebFrameNetworkingContext> context = WebFrameNetworkingContext::create(m_frame);
+    return context.release();
 }
 
 } // namespace WebKit

@@ -31,6 +31,7 @@
 #ifndef SerializedScriptValue_h
 #define SerializedScriptValue_h
 
+#include "ArrayBuffer.h"
 #include "ScriptValue.h"
 #include <v8.h>
 #include <wtf/Threading.h>
@@ -40,6 +41,7 @@ namespace WebCore {
 class MessagePort;
 
 typedef Vector<RefPtr<MessagePort>, 1> MessagePortArray;
+typedef Vector<RefPtr<WTF::ArrayBuffer>, 1> ArrayBufferArray;
 
 class SerializedScriptValue : public ThreadSafeRefCounted<SerializedScriptValue> {
 public:
@@ -53,7 +55,9 @@ public:
     // be thrown using v8::ThrowException(), and sets |didThrow|. In this case
     // the caller must not invoke any V8 operations until control returns to
     // V8. When serialization is successful, |didThrow| is false.
-    static PassRefPtr<SerializedScriptValue> create(v8::Handle<v8::Value>, MessagePortArray*, bool& didThrow);
+    static PassRefPtr<SerializedScriptValue> create(v8::Handle<v8::Value>,
+                                                    MessagePortArray*, ArrayBufferArray*,
+                                                    bool& didThrow);
     static PassRefPtr<SerializedScriptValue> create(v8::Handle<v8::Value>);
     static PassRefPtr<SerializedScriptValue> createFromWire(const String& data);
     static PassRefPtr<SerializedScriptValue> create(const String& data);
@@ -62,6 +66,7 @@ public:
     static SerializedScriptValue* nullValue();
     static PassRefPtr<SerializedScriptValue> undefinedValue();
     static PassRefPtr<SerializedScriptValue> booleanValue(bool value);
+    static PassRefPtr<SerializedScriptValue> numberValue(double value);
 
     PassRefPtr<SerializedScriptValue> release();
 
@@ -71,17 +76,25 @@ public:
     // case of failure.
     v8::Handle<v8::Value> deserialize(MessagePortArray* = 0);
 
+#if ENABLE(INSPECTOR)
+    ScriptValue deserializeForInspector(ScriptState*);
+#endif
+
 private:
     enum StringDataMode {
         StringValue,
         WireData
     };
+    typedef Vector<WTF::ArrayBufferContents, 1> ArrayBufferContentsArray;
 
     SerializedScriptValue();
-    SerializedScriptValue(v8::Handle<v8::Value>, MessagePortArray*, bool& didThrow);
+    SerializedScriptValue(v8::Handle<v8::Value>, MessagePortArray*, ArrayBufferArray*, bool& didThrow);
     explicit SerializedScriptValue(const String& wireData);
 
+    static PassOwnPtr<ArrayBufferContentsArray> transferArrayBuffers(ArrayBufferArray&, bool& didThrow);
+
     String m_data;
+    OwnPtr<ArrayBufferContentsArray> m_arrayBufferContentsArray;
 };
 
 } // namespace WebCore

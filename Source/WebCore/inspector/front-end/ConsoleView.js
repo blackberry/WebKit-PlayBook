@@ -277,8 +277,8 @@ WebInspector.ConsoleView.prototype = {
 
         function scrollIntoView()
         {
-            this.promptElement.scrollIntoView(true);
             delete this._scrollIntoViewTimer;
+            this.promptElement.scrollIntoView(true);
         }
         this._scrollIntoViewTimer = setTimeout(scrollIntoView.bind(this), 20);
     },
@@ -534,6 +534,9 @@ WebInspector.ConsoleView.prototype = {
         var shortcutL = shortcut.makeDescriptor("l", WebInspector.KeyboardShortcut.Modifiers.Ctrl);
         this._shortcuts[shortcutL.key] = this._requestClearMessages.bind(this);
 
+        var shortcutM = shortcut.makeDescriptor("m", WebInspector.KeyboardShortcut.Modifiers.CtrlOrMeta | WebInspector.KeyboardShortcut.Modifiers.Shift);
+        this._shortcuts[shortcutM.key] = this._dumpMemory.bind(this);
+
         var section = WebInspector.shortcutsScreen.section(WebInspector.UIString("Console"));
         var keys = WebInspector.isMac() ? [ shortcutK.name, shortcutL.name ] : [ shortcutL.name ];
         section.addAlternateKeys(keys, WebInspector.UIString("Clear Console"));
@@ -662,6 +665,44 @@ WebInspector.ConsoleView.prototype = {
     elementsToRestoreScrollPositionsFor: function()
     {
         return [this.messagesElement];
+    },
+
+    _dumpMemory: function()
+    {
+        function comparator(a, b)
+        {
+            if (a.size < b.size)
+                return 1;
+            if (a.size > b.size)
+                return -1;
+            return a.title.localeCompare(b.title);
+        }
+
+        function callback(error, groups)
+        {
+            var titles = [];
+            groups.sort(comparator);
+            for (var i = 0; i < groups.length; ++i) {
+                var suffix = groups[i].size > 0 ? " [" + groups[i].size + "]" : "";
+                titles.push(groups[i].title + suffix + (groups[i].documentURI ? " (" + groups[i].documentURI + ")" : ""));
+            }
+
+            var counter = 1;
+            var previousTitle = null;
+            for (var i = 0; i < titles.length; ++i) {
+                 var title = titles[i];
+                 if (title === previousTitle) {
+                     counter++;
+                     continue;
+                 }
+                 if (previousTitle)
+                     WebInspector.log(counter > 1 ? counter + " x " + previousTitle : previousTitle);
+                 previousTitle = title;
+                 counter = 1;
+            }
+            WebInspector.log(counter > 1 ? counter + " x " + previousTitle : previousTitle);
+        }
+        MemoryAgent.getDOMNodeCount(callback);
     }
 }
 

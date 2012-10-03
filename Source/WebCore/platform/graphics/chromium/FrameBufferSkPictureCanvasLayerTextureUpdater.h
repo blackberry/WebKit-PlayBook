@@ -34,6 +34,9 @@
 
 namespace WebCore {
 
+// This class records the contentRect into an SkPicture, then uses accelerated
+// drawing to update the texture. The accelerated drawing goes to an
+// intermediate framebuffer and then is copied to the destination texture once done.
 class FrameBufferSkPictureCanvasLayerTextureUpdater : public SkPictureCanvasLayerTextureUpdater {
 public:
     class Texture : public LayerTextureUpdater::Texture {
@@ -52,8 +55,7 @@ public:
     static PassRefPtr<FrameBufferSkPictureCanvasLayerTextureUpdater> create(PassOwnPtr<LayerPainterChromium>);
     virtual ~FrameBufferSkPictureCanvasLayerTextureUpdater();
 
-    virtual PassRefPtr<LayerTextureUpdater::Texture> createTexture(TextureManager*);
-    virtual Orientation orientation() { return LayerTextureUpdater::TopDownOrientation; }
+    virtual PassOwnPtr<LayerTextureUpdater::Texture> createTexture(TextureManager*);
     virtual SampledTexelFormat sampledTexelFormat(GC3Denum textureFormat);
     void updateTextureRect(GraphicsContext3D*, TextureAllocator*, ManagedTexture*, const IntRect& sourceRect, const IntRect& destRect);
 

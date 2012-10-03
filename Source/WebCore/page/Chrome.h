@@ -38,6 +38,7 @@ namespace WebCore {
     class ChromeClient;
 #if ENABLE(INPUT_COLOR)
     class ColorChooser;
+    class ColorChooserClient;
 #endif
     class FileChooser;
     class FileIconLoader;
@@ -51,9 +52,6 @@ namespace WebCore {
     class Page;
     class PopupMenu;
     class PopupMenuClient;
-#if ENABLE(NOTIFICATIONS)
-    class NotificationPresenter;
-#endif
     class SearchPopupMenu;
 
     struct FrameLoadRequest;
@@ -62,15 +60,16 @@ namespace WebCore {
     
     class Chrome : public HostWindow {
     public:
-        Chrome(Page*, ChromeClient*);
         ~Chrome();
+
+        static PassOwnPtr<Chrome> create(Page*, ChromeClient*);
 
         ChromeClient* client() { return m_client; }
 
         // HostWindow methods.
 
-        virtual void invalidateWindow(const IntRect&, bool);
-        virtual void invalidateContentsAndWindow(const IntRect&, bool);
+        virtual void invalidateRootView(const IntRect&, bool) OVERRIDE;
+        virtual void invalidateContentsAndRootView(const IntRect&, bool) OVERRIDE;
 #if PLATFORM(BLACKBERRY)
         virtual void invalidateContentsForSlowScroll(const IntSize&, const IntRect&, bool, const ScrollView*);
 #else
@@ -80,11 +79,11 @@ namespace WebCore {
 #if USE(TILED_BACKING_STORE)
         virtual void delegatedScrollRequested(const IntPoint& scrollPoint);
 #endif
-
         virtual void scrollableAreasDidChange();
 
-        virtual IntPoint screenToWindow(const IntPoint&) const;
-        virtual IntRect windowToScreen(const IntRect&) const;
+        virtual IntPoint screenToRootView(const IntPoint&) const OVERRIDE;
+        virtual IntRect rootViewToScreen(const IntRect&) const OVERRIDE;
+
         virtual PlatformPageClient platformPageClient() const;
         virtual void scrollbarsModeDidChange() const;
         virtual void setCursor(const Cursor&);
@@ -157,15 +156,8 @@ namespace WebCore {
 
         void print(Frame*);
 
-        // FIXME: Remove once all ports are using client-based geolocation. https://bugs.webkit.org/show_bug.cgi?id=40373
-        // For client-based geolocation, these two methods have moved to GeolocationClient. https://bugs.webkit.org/show_bug.cgi?id=50061
-        void requestGeolocationPermissionForFrame(Frame*, Geolocation*);
-        void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*);
-
 #if ENABLE(INPUT_COLOR)
-        void openColorChooser(ColorChooser*, const Color&);
-        void cleanupColorChooser(ColorChooser*);
-        void setSelectedColorInColorChooser(ColorChooser*, const Color&);
+        PassOwnPtr<ColorChooser> createColorChooser(ColorChooserClient*, const Color& initialColor);
 #endif
 
         void runOpenPanel(Frame*, PassRefPtr<FileChooser>);
@@ -182,12 +174,9 @@ namespace WebCore {
         void focusNSView(NSView*);
 #endif
 
-#if ENABLE(NOTIFICATIONS)
-        NotificationPresenter* notificationPresenter() const; 
-#endif
-
         bool selectItemWritingDirectionIsNatural();
         bool selectItemAlignmentFollowsMenuWritingDirection();
+        bool hasOpenedPopup() const;
         PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
         PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 
@@ -204,6 +193,8 @@ namespace WebCore {
 #endif
 
     private:
+        Chrome(Page*, ChromeClient*);
+
         Page* m_page;
         ChromeClient* m_client;
     };

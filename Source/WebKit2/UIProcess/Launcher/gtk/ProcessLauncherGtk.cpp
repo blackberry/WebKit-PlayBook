@@ -28,16 +28,19 @@
 #include "ProcessLauncher.h"
 
 #include "Connection.h"
-#include "RunLoop.h"
 #include <WebCore/FileSystem.h>
 #include <WebCore/ResourceHandle.h>
+#include <WebCore/RunLoop.h>
 #include <errno.h>
-#if OS(LINUX)
-#include <sys/prctl.h>
-#endif
+#include <locale.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/WTFString.h>
 #include <wtf/gobject/GOwnPtr.h>
+#include <wtf/gobject/GlibUtilities.h>
+
+#if OS(LINUX)
+#include <sys/prctl.h>
+#endif
 
 #ifdef SOCK_SEQPACKET
 #define SOCKET_TYPE SOCK_SEQPACKET
@@ -57,6 +60,9 @@ static void childSetupFunction(gpointer userData)
     int socket = GPOINTER_TO_INT(userData);
     close(socket);
 
+    // Make child process inherit parent's locale.
+    g_setenv("LC_ALL", setlocale(LC_ALL, 0), TRUE);
+
 #if OS(LINUX)
     // Kill child process when parent dies.
     prctl(PR_SET_PDEATHSIG, SIGKILL);
@@ -71,6 +77,34 @@ static void childFinishedFunction(GPid, gint status, gpointer userData)
     close(GPOINTER_TO_INT(userData));
 }
 
+static CString findWebKitProcess(const char* processName)
+{
+    const char* execDirectory = g_getenv("WEBKIT_EXEC_PATH");
+    if (execDirectory) {
+        String processPath = pathByAppendingComponent(filenameToString(execDirectory), processName);
+        if (fileExists(processPath))
+            return fileSystemRepresentation(processPath);
+    }
+
+    static bool gotExecutablePath = false;
+    static String executablePath;
+    if (!gotExecutablePath) {
+        gotExecutablePath = true;
+
+        CString executableFile = getCurrentExecutablePath();
+        if (!executableFile.isNull())
+            executablePath = directoryName(filenameToString(executableFile.data()));
+    }
+
+    if (!executablePath.isNull()) {
+        String processPath = pathByAppendingComponent(executablePath, processName);
+        if (fileExists(processPath))
+            return fileSystemRepresentation(processPath);
+    }
+
+    return fileSystemRepresentation(pathByAppendingComponent(filenameToString(LIBEXECDIR), processName));
+}
+
 void ProcessLauncher::launchProcess()
 {
     GPid pid = 0;
@@ -82,12 +116,10 @@ void ProcessLauncher::launchProcess()
         return;
     }
 
-    const gchar* execDirectory = g_getenv("WEBKIT_EXEC_PATH");
-    GOwnPtr<gchar> binaryPath(g_build_filename(execDirectory ? execDirectory : LIBEXECDIR,
-                                               m_launchOptions.processType == ProcessLauncher::WebProcess ? gWebKitWebProcessName : gWebKitPluginProcessName, NULL));
+    CString binaryPath = findWebKitProcess(m_launchOptions.processType == ProcessLauncher::WebProcess ? gWebKitWebProcessName : gWebKitPluginProcessName);
     GOwnPtr<gchar> socket(g_strdup_printf("%d", sockets[0]));
     char* argv[3];
-    argv[0] = binaryPath.get();
+    argv[0] = const_cast<char*>(binaryPath.data());
     argv[1] = socket.get();
     argv[2] = 0;
 
@@ -106,7 +138,7 @@ void ProcessLauncher::launchProcess()
     g_child_watch_add(m_processIdentifier, childFinishedFunction, GINT_TO_POINTER(sockets[1]));
 
     // We've finished launching the process, message back to the main run loop.
-    RunLoop::main()->scheduleWork(WorkItem::create(this, &ProcessLauncher::didFinishLaunchingProcess, m_processIdentifier, sockets[1]));
+    RunLoop::main()->dispatch(bind(&ProcessLauncher::didFinishLaunchingProcess, this, m_processIdentifier, sockets[1]));
 }
 
 void ProcessLauncher::terminateProcess()

@@ -29,10 +29,12 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
+#include "FilterOperations.h"
 #include "FloatRect.h"
 #include "IntRect.h"
 #include "ProgramBinding.h"
 #include "ShaderChromium.h"
+#include "SkBitmap.h"
 #include "TextureManager.h"
 #include "TransformationMatrix.h"
 #include "cc/CCLayerQuad.h"
@@ -40,6 +42,7 @@
 
 namespace WebCore {
 
+class CCDamageTracker;
 class CCLayerImpl;
 class LayerRendererChromium;
 class ManagedTexture;
@@ -53,7 +56,7 @@ public:
     bool prepareContentsTexture(LayerRendererChromium*);
     void releaseContentsTexture();
     void cleanupResources();
-    void draw(LayerRendererChromium*, const IntRect& targetSurfaceRect);
+    void draw(LayerRendererChromium*, const FloatRect& surfaceDamageRect);
 
     String name() const;
     void dumpSurface(TextStream&, int indent) const;
@@ -69,23 +72,30 @@ public:
     void setDrawTransform(const TransformationMatrix& drawTransform) { m_drawTransform = drawTransform; }
     const TransformationMatrix& drawTransform() const { return m_drawTransform; }
 
+    void setFilters(const FilterOperations& filters) { m_filters = filters; }
+    const FilterOperations& filters() const { return m_filters; }
+    SkBitmap applyFilters(LayerRendererChromium*);
+
+    void setNearestAncestorThatMovesPixels(CCRenderSurface* surface) { m_nearestAncestorThatMovesPixels = surface; }
+    const CCRenderSurface* nearestAncestorThatMovesPixels() const { return m_nearestAncestorThatMovesPixels; }
+
     void setReplicaDrawTransform(const TransformationMatrix& replicaDrawTransform) { m_replicaDrawTransform = replicaDrawTransform; }
     const TransformationMatrix& replicaDrawTransform() const { return m_replicaDrawTransform; }
 
     void setOriginTransform(const TransformationMatrix& originTransform) { m_originTransform = originTransform; }
     const TransformationMatrix& originTransform() const { return m_originTransform; }
 
-    void setClipRect(const IntRect& clipRect) { m_clipRect = clipRect; }
+    void setClipRect(const IntRect&);
     const IntRect& clipRect() const { return m_clipRect; }
 
-    void setContentRect(const IntRect& contentRect) { m_contentRect = contentRect; }
+    void setContentRect(const IntRect&);
     const IntRect& contentRect() const { return m_contentRect; }
 
     void setSkipsDraw(bool skipsDraw) { m_skipsDraw = skipsDraw; }
     bool skipsDraw() const { return m_skipsDraw; }
 
     void clearLayerList() { m_layerList.clear(); }
-    Vector<RefPtr<CCLayerImpl> >& layerList() { return m_layerList; }
+    Vector<CCLayerImpl*>& layerList() { return m_layerList; }
 
     void setMaskLayer(CCLayerImpl* maskLayer) { m_maskLayer = maskLayer; }
 
@@ -97,24 +107,47 @@ public:
     ManagedTexture* contentsTexture() const { return m_contentsTexture.get(); }
 
     int owningLayerId() const;
+
+    void resetPropertyChangedFlag() { m_surfacePropertyChanged = false; }
+    bool surfacePropertyChanged() const;
+    bool surfacePropertyChangedOnlyFromDescendant() const;
+
+    CCDamageTracker* damageTracker() const { return m_damageTracker.get(); }
+
 private:
-    void drawLayer(LayerRendererChromium*, CCLayerImpl*, const TransformationMatrix&);
+    void drawLayer(LayerRendererChromium*, CCLayerImpl*, const TransformationMatrix&, const SkBitmap& filterBitmap);
     template <class T>
-    void drawSurface(LayerRendererChromium*, CCLayerImpl*, const TransformationMatrix& drawTransform, const TransformationMatrix& deviceTransform, const CCLayerQuad& deviceRect, const CCLayerQuad&, const T* program, int shaderMaskSamplerLocation, int shaderQuadLocation, int shaderEdgeLocation);
+    void drawSurface(LayerRendererChromium*, CCLayerImpl*, const TransformationMatrix& drawTransform, const TransformationMatrix& deviceTransform, const CCLayerQuad& deviceRect, const CCLayerQuad&, const T* program, int shaderMaskSamplerLocation, int shaderQuadLocation, int shaderEdgeLocation, const SkBitmap& filterBitmap);
 
     CCLayerImpl* m_owningLayer;
     CCLayerImpl* m_maskLayer;
 
     IntRect m_contentRect;
     bool m_skipsDraw;
+    bool m_surfacePropertyChanged;
 
     OwnPtr<ManagedTexture> m_contentsTexture;
     float m_drawOpacity;
     TransformationMatrix m_drawTransform;
     TransformationMatrix m_replicaDrawTransform;
     TransformationMatrix m_originTransform;
+    FilterOperations m_filters;
     IntRect m_clipRect;
-    Vector<RefPtr<CCLayerImpl> > m_layerList;
+    Vector<CCLayerImpl*> m_layerList;
+
+    // The nearest ancestor target surface that will contain the contents of this surface, and that is going
+    // to move pixels within the surface (such as with a blur). This can point to itself.
+    CCRenderSurface* m_nearestAncestorThatMovesPixels;
+
+    OwnPtr<CCDamageTracker> m_damageTracker;
+
+    // Stored in the "surface space" where this damage can be used for scissoring.
+    FloatRect m_damageRect;
+
+    // For CCLayerIteratorActions
+    int m_targetRenderSurfaceLayerIndexHistory;
+    int m_currentLayerIndexHistory;
+    friend struct CCLayerIteratorActions;
 };
 
 }

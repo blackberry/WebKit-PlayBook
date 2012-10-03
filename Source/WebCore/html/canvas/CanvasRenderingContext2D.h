@@ -67,7 +67,6 @@ public:
 
     virtual bool is2d() const { return true; }
     virtual bool isAccelerated() const;
-    virtual bool paintsIntoCanvasBuffer() const;
 
     CanvasStyle* strokeStyle() const;
     void setStrokeStyle(PassRefPtr<CanvasStyle>);
@@ -221,7 +220,7 @@ public:
     LineCap getLineCap() const { return state().m_lineCap; }
     LineJoin getLineJoin() const { return state().m_lineJoin; }
 
-#if (ENABLE(ACCELERATED_2D_CANVAS) || ENABLE(SKIA_GPU_CANVAS)) && USE(ACCELERATED_COMPOSITING)
+#if ENABLE(ACCELERATED_2D_CANVAS) && USE(ACCELERATED_COMPOSITING)
     virtual PlatformLayer* platformLayer() const;
 #endif
 
@@ -278,6 +277,7 @@ private:
     const State& state() const { return m_stateStack.last(); }
 
     void applyShadow();
+    bool shouldDrawShadows() const;
 
     void didDraw(const FloatRect&, unsigned options = CanvasDidDrawApplyAll);
     void didDrawEntireCanvas();
@@ -315,10 +315,6 @@ private:
     bool m_usesCSSCompatibilityParseMode;
 #if ENABLE(DASHBOARD_SUPPORT)
     bool m_usesDashboardCompatibilityMode;
-#endif
-
-#if ENABLE(SKIA_GPU_CANVAS)
-    RefPtr<PlatformLayer> m_platformLayer;
 #endif
 
 };

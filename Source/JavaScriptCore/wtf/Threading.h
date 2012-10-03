@@ -59,7 +59,7 @@
 #ifndef Threading_h
 #define Threading_h
 
-#include "Platform.h"
+#include <wtf/Platform.h>
 
 #include <stdint.h>
 #include <wtf/Assertions.h>
@@ -78,16 +78,16 @@
 namespace WTF {
 
 typedef uint32_t ThreadIdentifier;
-typedef void* (*ThreadFunction)(void* argument);
+typedef void (*ThreadFunction)(void* argument);
 
 // This function must be called from the main thread. It is safe to call it repeatedly.
 // Darwin is an exception to this rule: it is OK to call it from any thread, the only 
 // requirement is that the calls are not reentrant.
-void initializeThreading();
+WTF_EXPORT_PRIVATE void initializeThreading();
 
 // Returns 0 if thread creation failed.
 // The thread name must be a literal since on some platforms it's passed in to the thread.
-ThreadIdentifier createThread(ThreadFunction, void*, const char* threadName);
+WTF_EXPORT_PRIVATE ThreadIdentifier createThread(ThreadFunction, void*, const char* threadName);
 
 // Internal platform-specific createThread implementation.
 ThreadIdentifier createThreadInternal(ThreadFunction, void*, const char* threadName);
@@ -96,14 +96,14 @@ ThreadIdentifier createThreadInternal(ThreadFunction, void*, const char* threadN
 // Helpful for platforms where the thread name must be set from within the thread.
 void initializeCurrentThreadInternal(const char* threadName);
 
-ThreadIdentifier currentThread();
-int waitForThreadCompletion(ThreadIdentifier, void**);
-void detachThread(ThreadIdentifier);
+WTF_EXPORT_PRIVATE ThreadIdentifier currentThread();
+WTF_EXPORT_PRIVATE int waitForThreadCompletion(ThreadIdentifier);
+WTF_EXPORT_PRIVATE void detachThread(ThreadIdentifier);
 
-void yield();
+WTF_EXPORT_PRIVATE void yield();
 
-void lockAtomicallyInitializedStaticMutex();
-void unlockAtomicallyInitializedStaticMutex();
+WTF_EXPORT_PRIVATE void lockAtomicallyInitializedStaticMutex();
+WTF_EXPORT_PRIVATE void unlockAtomicallyInitializedStaticMutex();
 
 } // namespace WTF
 

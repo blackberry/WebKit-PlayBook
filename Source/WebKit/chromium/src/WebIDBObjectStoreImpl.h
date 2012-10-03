@@ -28,7 +28,7 @@
 
 #if ENABLE(INDEXED_DATABASE)
 
-#include "WebCommon.h"
+#include "platform/WebCommon.h"
 #include "WebIDBObjectStore.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
@@ -51,14 +51,18 @@ public:
 
     void get(const WebIDBKey& key, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
     void put(const WebSerializedScriptValue&, const WebIDBKey&, PutMode, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
-    void deleteFunction(const WebIDBKey& key, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
+    void deleteFunction(const WebIDBKey&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
+    void deleteFunction(const WebIDBKeyRange&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
     void clear(WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
 
-    WebIDBIndex* createIndex(const WebString& name, const WebString& keyPath, bool unique, const WebIDBTransaction&, WebExceptionCode&);
+    // FIXME: Remove once callers are updated.
+    WebIDBIndex* createIndex(const WebString& name, const WebString& keyPath, bool unique, const WebIDBTransaction& transaction, WebExceptionCode& ec) { return createIndex(name, keyPath, unique, false, transaction, ec); }
+    WebIDBIndex* createIndex(const WebString& name, const WebString& keyPath, bool unique, bool multiEntry, const WebIDBTransaction&, WebExceptionCode&);
     WebIDBIndex* index(const WebString& name, WebExceptionCode&);
     void deleteIndex(const WebString& name, const WebIDBTransaction&, WebExceptionCode&);
 
     void openCursor(const WebIDBKeyRange&, unsigned short direction, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
+    void count(const WebIDBKeyRange&, WebIDBCallbacks*, const WebIDBTransaction&, WebExceptionCode&);
 
  private:
     WTF::RefPtr<WebCore::IDBObjectStoreBackendInterface> m_objectStore;

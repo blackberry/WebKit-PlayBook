@@ -30,7 +30,6 @@
 #include "Editor.h"
 
 #include "CSSComputedStyleDeclaration.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "CSSPropertyNames.h"
 #include "CSSValueKeywords.h"
 #include "CSSValueList.h"
@@ -56,6 +55,7 @@
 #include "Scrollbar.h"
 #include "Settings.h"
 #include "Sound.h"
+#include "StylePropertySet.h"
 #include "TypingCommand.h"
 #include "UnlinkCommand.h"
 #include "UserTypingGestureIndicator.h"
@@ -99,7 +99,7 @@ static Frame* targetFrame(Frame* frame, Event* event)
     return node->document()->frame();
 }
 
-static bool applyCommandToFrame(Frame* frame, EditorCommandSource source, EditAction action, CSSMutableStyleDeclaration* style)
+static bool applyCommandToFrame(Frame* frame, EditorCommandSource source, EditAction action, StylePropertySet* style)
 {
     // FIXME: We don't call shouldApplyStyle when the source is DOM; is there a good reason for that?
     switch (source) {
@@ -117,14 +117,14 @@ static bool applyCommandToFrame(Frame* frame, EditorCommandSource source, EditAc
 
 static bool executeApplyStyle(Frame* frame, EditorCommandSource source, EditAction action, int propertyID, const String& propertyValue)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(propertyID, propertyValue);
     return applyCommandToFrame(frame, source, action, style.get());
 }
 
 static bool executeApplyStyle(Frame* frame, EditorCommandSource source, EditAction action, int propertyID, int propertyValue)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(propertyID, propertyValue);
     return applyCommandToFrame(frame, source, action, style.get());
 }
@@ -152,7 +152,7 @@ static bool executeToggleStyleInList(Frame* frame, EditorCommandSource source, E
         newStyle = value->cssText();
 
     // FIXME: We shouldn't be having to convert new style into text.  We should have setPropertyCSSValue.
-    RefPtr<CSSMutableStyleDeclaration> newMutableStyle = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> newMutableStyle = StylePropertySet::create();
     newMutableStyle->setProperty(propertyID, newStyle, ec);
     return applyCommandToFrame(frame, source, action, newMutableStyle.get());
 }
@@ -175,7 +175,7 @@ static bool executeToggleStyle(Frame* frame, EditorCommandSource source, EditAct
 
 static bool executeApplyParagraphStyle(Frame* frame, EditorCommandSource source, EditAction action, int propertyID, const String& propertyValue)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(propertyID, propertyValue);
     // FIXME: We don't call shouldApplyStyle when the source is DOM; is there a good reason for that?
     switch (source) {
@@ -242,7 +242,9 @@ static String valueStyle(Frame* frame, int propertyID)
 static TriState stateTextWritingDirection(Frame* frame, WritingDirection direction)
 {
     bool hasNestedOrMultipleEmbeddings;
-    WritingDirection selectionDirection = frame->editor()->textDirectionForSelection(hasNestedOrMultipleEmbeddings);
+    WritingDirection selectionDirection = EditingStyle::textDirectionForSelection(frame->selection()->selection(),
+        frame->selection()->typingStyle(), hasNestedOrMultipleEmbeddings);
+    // FXIME: We should be returning MixedTriState when selectionDirection == direction && hasNestedOrMultipleEmbeddings
     return (selectionDirection == direction && !hasNestedOrMultipleEmbeddings) ? TrueTriState : FalseTriState;
 }
 
@@ -588,7 +590,7 @@ static bool executeJustifyRight(Frame* frame, Event*, EditorCommandSource source
 
 static bool executeMakeTextWritingDirectionLeftToRight(Frame* frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueEmbed);
     style->setProperty(CSSPropertyDirection, CSSValueLtr);
     frame->editor()->applyStyle(style.get(), EditActionSetWritingDirection);
@@ -597,7 +599,7 @@ static bool executeMakeTextWritingDirectionLeftToRight(Frame* frame, Event*, Edi
 
 static bool executeMakeTextWritingDirectionNatural(Frame* frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueNormal);
     frame->editor()->applyStyle(style.get(), EditActionSetWritingDirection);
     return true;
@@ -605,7 +607,7 @@ static bool executeMakeTextWritingDirectionNatural(Frame* frame, Event*, EditorC
 
 static bool executeMakeTextWritingDirectionRightToLeft(Frame* frame, Event*, EditorCommandSource, const String&)
 {
-    RefPtr<CSSMutableStyleDeclaration> style = CSSMutableStyleDeclaration::create();
+    RefPtr<StylePropertySet> style = StylePropertySet::create();
     style->setProperty(CSSPropertyUnicodeBidi, CSSValueEmbed);
     style->setProperty(CSSPropertyDirection, CSSValueRtl);
     frame->editor()->applyStyle(style.get(), EditActionSetWritingDirection);
@@ -961,6 +963,16 @@ static bool executeScrollPageBackward(Frame* frame, Event*, EditorCommandSource,
 static bool executeScrollPageForward(Frame* frame, Event*, EditorCommandSource, const String&)
 {
     return frame->eventHandler()->logicalScrollRecursively(ScrollBlockDirectionForward, ScrollByPage);
+}
+
+static bool executeScrollLineUp(Frame* frame, Event*, EditorCommandSource, const String&)
+{
+    return frame->eventHandler()->scrollRecursively(ScrollUp, ScrollByLine);
+}
+
+static bool executeScrollLineDown(Frame* frame, Event*, EditorCommandSource, const String&)
+{
+    return frame->eventHandler()->scrollRecursively(ScrollDown, ScrollByLine);
 }
 
 static bool executeScrollToBeginningOfDocument(Frame* frame, Event*, EditorCommandSource, const String&)
@@ -1533,6 +1545,8 @@ static const CommandMap& createCommandMap()
         { "RemoveFormat", { executeRemoveFormat, supported, enabledRangeInEditableText, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "ScrollPageBackward", { executeScrollPageBackward, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "ScrollPageForward", { executeScrollPageForward, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
+        { "ScrollLineUp", { executeScrollLineUp, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
+        { "ScrollLineDown", { executeScrollLineDown, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "ScrollToBeginningOfDocument", { executeScrollToBeginningOfDocument, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "ScrollToEndOfDocument", { executeScrollToEndOfDocument, supportedFromMenuOrKeyBinding, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },
         { "SelectAll", { executeSelectAll, supported, enabled, stateNone, valueNull, notTextInsertion, doNotAllowExecutionWhenDisabled } },

@@ -33,7 +33,7 @@
 
 #include "DRTDevToolsClient.h"
 
-#include "WebCString.h"
+#include "platform/WebCString.h"
 #include "WebDevToolsAgent.h"
 #include "WebView.h"
 #include "webkit/support/webkit_support.h"
@@ -47,8 +47,6 @@ DRTDevToolsAgent::DRTDevToolsAgent()
     static int devToolsAgentCounter = 0;
 
     m_routingID = ++devToolsAgentCounter;
-    if (m_routingID == 1)
-        WebDevToolsAgent::setMessageLoopDispatchHandler(&DRTDevToolsAgent::dispatchMessageLoop);
 }
 
 void DRTDevToolsAgent::reset()
@@ -89,14 +87,6 @@ void DRTDevToolsAgent::call(const WebString& args)
         agent->dispatchOnInspectorBackend(args);
 }
 
-void DRTDevToolsAgent::delayedFrontendLoaded()
-{
-    WebDevToolsAgent* agent = webDevToolsAgent();
-    if (agent)
-        agent->frontendLoaded();
-}
-
-
 WebDevToolsAgent* DRTDevToolsAgent::webDevToolsAgent()
 {
     if (!m_webView)
@@ -122,11 +112,6 @@ void DRTDevToolsAgent::detach()
     m_drtDevToolsClient = 0;
 }
 
-void DRTDevToolsAgent::frontendLoaded()
-{
-    postTask(new DelayedFrontendLoadedTask(this));
-}
-
 bool DRTDevToolsAgent::setJavaScriptProfilingEnabled(bool enabled)
 {
     WebDevToolsAgent* agent = webDevToolsAgent();
@@ -143,10 +128,4 @@ bool DRTDevToolsAgent::evaluateInWebInspector(long callID, const std::string& sc
         return false;
     agent->evaluateInWebInspector(callID, WebString::fromUTF8(script));
     return true;
-}
-
-// static method
-void DRTDevToolsAgent::dispatchMessageLoop()
-{
-    webkit_support::DispatchMessageLoop();
 }

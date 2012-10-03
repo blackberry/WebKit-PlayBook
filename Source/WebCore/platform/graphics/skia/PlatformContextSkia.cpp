@@ -32,16 +32,12 @@
 
 #include "PlatformContextSkia.h"
 
-#include "AffineTransform.h"
-#include <gpu/DrawingBuffer.h>
 #include "Extensions3D.h"
 #include "GraphicsContext.h"
 #include "GraphicsContext3D.h"
 #include "ImageBuffer.h"
 #include "NativeImageSkia.h"
 #include "SkiaUtils.h"
-#include <gpu/Texture.h>
-#include <gpu/TilingData.h>
 
 #include "skia/ext/image_operations.h"
 #include "skia/ext/platform_canvas.h"
@@ -51,19 +47,14 @@
 #include "SkDashPathEffect.h"
 #include "SkShader.h"
 
-#include "GrContext.h"
-#include "SkGpuDevice.h"
-
 #include <wtf/MathExtras.h>
 #include <wtf/Vector.h>
 
-#if PLATFORM(BLACKBERRY)
-#include "BlackBerryPlatformGraphics.h"
+#if PLATFORM(CHROMIUM)
+#include "TraceEvent.h"
 #endif
 
 namespace WebCore {
-
-extern bool isPathSkiaSafe(const SkMatrix& transform, const SkPath& path);
 
 // State -----------------------------------------------------------------------
 
@@ -103,11 +94,8 @@ struct PlatformContextSkia::State {
     // If non-empty, the current State is clipped to this image.
     SkBitmap m_imageBufferClip;
     // If m_imageBufferClip is non-empty, this is the region the image is clipped to.
-    FloatRect m_clip;
+    SkRect m_clip;
 
-    // This is a list of clipping paths which are currently active, in the
-    // order in which they were pushed.
-    WTF::Vector<SkPath> m_antiAliasClipPaths;
     InterpolationQuality m_interpolationQuality;
 
     PlatformContextSkia::State cloneInheritedProperties();
@@ -153,7 +141,6 @@ PlatformContextSkia::State::State(const State& other)
     , m_textDrawingMode(other.m_textDrawingMode)
     , m_imageBufferClip(other.m_imageBufferClip)
     , m_clip(other.m_clip)
-    , m_antiAliasClipPaths(other.m_antiAliasClipPaths)
     , m_interpolationQuality(other.m_interpolationQuality)
 {
     // Up the ref count of these. SkSafeRef does nothing if its argument is 0.
@@ -170,12 +157,7 @@ PlatformContextSkia::State::~State()
 // Returns a new State with all of this object's inherited properties copied.
 PlatformContextSkia::State PlatformContextSkia::State::cloneInheritedProperties()
 {
-    PlatformContextSkia::State state(*this);
-
-    // Everything is inherited except for the clip paths.
-    state.m_antiAliasClipPaths.clear();
-
-    return state;
+    return PlatformContextSkia::State(*this);
 }
 
 SkColor PlatformContextSkia::State::applyAlpha(SkColor c) const
@@ -195,7 +177,9 @@ SkColor PlatformContextSkia::State::applyAlpha(SkColor c) const
 // Danger: canvas can be NULL.
 PlatformContextSkia::PlatformContextSkia(SkCanvas* canvas)
     : m_canvas(canvas)
+    , m_trackOpaqueRegion(false)
     , m_printing(false)
+    , m_deferred(false)
     , m_drawingToImageBuffer(false)
     , m_gpuContext(0)
 {
@@ -246,12 +230,16 @@ void PlatformContextSkia::beginLayerClippedToImage(const FloatRect& rect,
     // Skia doesn't support clipping to an image, so we create a layer. The next
     // time restore is invoked the layer and |imageBuffer| are combined to
     // create the resulting image.
-    m_state->m_clip = rect;
     SkRect bounds = { SkFloatToScalar(rect.x()), SkFloatToScalar(rect.y()),
                       SkFloatToScalar(rect.maxX()), SkFloatToScalar(rect.maxY()) };
+    m_state->m_clip = bounds;
+    // Get the absolute coordinates of the stored clipping rectangle to make it
+    // independent of any transform changes.
+    canvas()->getTotalMatrix().mapRect(&m_state->m_clip);
 
     canvas()->clipRect(bounds);
-    if (imageBuffer->size().isEmpty())
+
+    if (imageBuffer->internalSize().isEmpty())
         return;
 
     canvas()->saveLayerAlpha(&bounds, 255,
@@ -274,28 +262,7 @@ void PlatformContextSkia::beginLayerClippedToImage(const FloatRect& rect,
 
 void PlatformContextSkia::clipPathAntiAliased(const SkPath& clipPath)
 {
-    if (m_canvas->getTopDevice()->getDeviceCapabilities() & SkDevice::kVector_Capability) {
-        // When the output is a vector device, like PDF, we don't need antialiased clips.
-        // It's up to the PDF rendering engine to do that. We can simply disable the
-        // antialiased clip code if the output is a vector device.
-        canvas()->clipPath(clipPath);
-        return;
-    }
-
-    // If we are currently tracking any anti-alias clip paths, then we already
-    // have a layer in place and don't need to add another.
-    bool haveLayerOutstanding = m_state->m_antiAliasClipPaths.size();
-
-    // See comments in applyAntiAliasedClipPaths about how this works.
-    m_state->m_antiAliasClipPaths.append(clipPath);
-
-    if (!haveLayerOutstanding) {
-        SkRect bounds = clipPath.getBounds();
-        canvas()->saveLayerAlpha(&bounds, 255, static_cast<SkCanvas::SaveFlags>(SkCanvas::kHasAlphaLayer_SaveFlag | SkCanvas::kFullColorLayer_SaveFlag | SkCanvas::kClipToLayer_SaveFlag));
-        // Guards state modification during clipped operations.
-        // The state is popped in applyAntiAliasedClipPaths().
-        canvas()->save();
-    }
+    canvas()->clipPath(clipPath, SkRegion::kIntersect_Op, true);
 }
 
 void PlatformContextSkia::restore()
@@ -304,9 +271,6 @@ void PlatformContextSkia::restore()
         applyClipFromImage(m_state->m_clip, m_state->m_imageBufferClip);
         canvas()->restore();
     }
-
-    if (!m_state->m_antiAliasClipPaths.isEmpty())
-        applyAntiAliasedClipPaths(m_state->m_antiAliasClipPaths);
 
     m_stateStack.removeLast();
     m_state = &m_stateStack.last();
@@ -322,6 +286,7 @@ void PlatformContextSkia::drawRect(SkRect rect)
     if (fillcolorNotTransparent) {
         setupPaintForFilling(&paint);
         canvas()->drawRect(rect, paint);
+        didDrawRect(rect, paint);
     }
 
     if (m_state->m_strokeStyle != NoStroke
@@ -334,12 +299,16 @@ void PlatformContextSkia::drawRect(SkRect rect)
 
         SkRect topBorder = { rect.fLeft, rect.fTop, rect.fRight, rect.fTop + 1 };
         canvas()->drawRect(topBorder, paint);
+        didDrawRect(topBorder, paint);
         SkRect bottomBorder = { rect.fLeft, rect.fBottom - 1, rect.fRight, rect.fBottom };
         canvas()->drawRect(bottomBorder, paint);
+        didDrawRect(bottomBorder, paint);
         SkRect leftBorder = { rect.fLeft, rect.fTop + 1, rect.fLeft + 1, rect.fBottom - 1 };
         canvas()->drawRect(leftBorder, paint);
+        didDrawRect(leftBorder, paint);
         SkRect rightBorder = { rect.fRight - 1, rect.fTop + 1, rect.fRight, rect.fBottom - 1 };
         canvas()->drawRect(rightBorder, paint);
+        didDrawRect(rightBorder, paint);
     }
 }
 
@@ -574,10 +543,14 @@ void PlatformContextSkia::paintSkPaint(const SkRect& rect,
                                        const SkPaint& paint)
 {
     m_canvas->drawRect(rect, paint);
+    didDrawRect(rect, paint);
 }
 
 const SkBitmap* PlatformContextSkia::bitmap() const
 {
+#if PLATFORM(CHROMIUM)
+    TRACE_EVENT("PlatformContextSkia::bitmap", this, 0);
+#endif
     return &m_canvas->getDevice()->accessBitmap(false);
 }
 
@@ -586,7 +559,7 @@ bool PlatformContextSkia::isNativeFontRenderingAllowed()
 #if USE(SKIA_TEXT)
     return false;
 #else
-    if (useSkiaGPU())
+    if (isAccelerated())
         return false;
     return skia::SupportsPlatformPaint(m_canvas);
 #endif
@@ -615,87 +588,45 @@ bool PlatformContextSkia::hasImageResamplingHint() const
     return !m_imageResamplingHintSrcSize.isEmpty() && !m_imageResamplingHintDstSize.isEmpty();
 }
 
-void PlatformContextSkia::applyClipFromImage(const FloatRect& rect, const SkBitmap& imageBuffer)
+void PlatformContextSkia::applyClipFromImage(const SkRect& rect, const SkBitmap& imageBuffer)
 {
     // NOTE: this assumes the image mask contains opaque black for the portions that are to be shown, as such we
     // only look at the alpha when compositing. I'm not 100% sure this is what WebKit expects for image clipping.
     SkPaint paint;
     paint.setXfermodeMode(SkXfermode::kDstIn_Mode);
-    m_canvas->drawBitmap(imageBuffer, SkFloatToScalar(rect.x()), SkFloatToScalar(rect.y()), &paint);
-}
-
-void PlatformContextSkia::applyAntiAliasedClipPaths(WTF::Vector<SkPath>& paths)
-{
-    // Anti-aliased clipping:
-    //
-    // Skia's clipping is 1-bit only. Consider what would happen if it were 8-bit:
-    // We have a square canvas, filled with white and we declare a circular
-    // clipping path. Then we fill twice with a black rectangle. The fractional
-    // pixels would first get the correct color (white * alpha + black * (1 -
-    // alpha)), but the second fill would apply the alpha to the already
-    // modified color and the result would be too dark.
-    //
-    // This, anti-aliased clipping needs to be performed after the drawing has
-    // been done. In order to do this, we create a new layer of the canvas in
-    // clipPathAntiAliased and store the clipping path. All drawing is done to
-    // the layer's bitmap while it's in effect. When WebKit calls restore() to
-    // undo the clipping, this function is called.
-    //
-    // Here, we walk the list of clipping paths backwards and, for each, we
-    // clear outside of the clipping path. We only need a single extra layer
-    // for any number of clipping paths.
-    //
-    // When we call restore on the SkCanvas, the layer's bitmap is composed
-    // into the layer below and we end up with correct, anti-aliased clipping.
-
-    m_canvas->restore();
-
-    SkPaint paint;
-    paint.setXfermodeMode(SkXfermode::kClear_Mode);
-    paint.setAntiAlias(true);
-    paint.setStyle(SkPaint::kFill_Style);
-
-    for (size_t i = paths.size() - 1; i < paths.size(); --i) {
-        paths[i].toggleInverseFillType();
-        m_canvas->drawPath(paths[i], paint);
-    }
-
+    m_canvas->save(SkCanvas::kMatrix_SaveFlag);
+    m_canvas->resetMatrix();
+    m_canvas->drawBitmapRect(imageBuffer, 0, rect, &paint);
     m_canvas->restore();
 }
 
-void PlatformContextSkia::setGraphicsContext3D(GraphicsContext3D* context, DrawingBuffer* drawingBuffer, const WebCore::IntSize& size)
+void PlatformContextSkia::setGraphicsContext3D(GraphicsContext3D* context)
 {
     m_gpuContext = context;
-#if ENABLE(ACCELERATED_2D_CANVAS)
-    if (context && drawingBuffer) {
-        // use skia gpu rendering if available
-        GrContext* gr = context->grContext();
-        if (gr) {
-            context->makeContextCurrent();
-            drawingBuffer->bind();
-
-            gr->resetContext();
-            drawingBuffer->setGrContext(gr);
-
-            GrPlatformSurfaceDesc drawBufDesc;
-            drawingBuffer->getGrPlatformSurfaceDesc(&drawBufDesc);
-            SkAutoTUnref<GrTexture> drawBufTex(static_cast<GrTexture*>(gr->createPlatformSurface(drawBufDesc)));
-            m_canvas->setDevice(new SkGpuDevice(gr, drawBufTex.get()))->unref();
-        } else
-            m_gpuContext = 0;
-    }
-#endif
 }
 
-void PlatformContextSkia::makeGrContextCurrent()
+void PlatformContextSkia::didDrawRect(const SkRect& rect, const SkPaint& paint, const SkBitmap* bitmap)
 {
-#if PLATFORM(BLACKBERRY) && ENABLE(SKIA_GPU_CANVAS)
-    if (m_canvas->getDevice()->accessTexture())
-        BlackBerry::Platform::Graphics::makeSharedResourceContextCurrent(BlackBerry::Platform::Graphics::GLES2);
-#elif ENABLE(WEBGL)
-    if (m_gpuContext)
-        m_gpuContext->makeContextCurrent();
-#endif
+    if (m_trackOpaqueRegion)
+        m_opaqueRegion.didDrawRect(this, m_opaqueRegionTransform, rect, paint, bitmap);
+}
+
+void PlatformContextSkia::didDrawPath(const SkPath& path, const SkPaint& paint)
+{
+    if (m_trackOpaqueRegion)
+        m_opaqueRegion.didDrawPath(this, m_opaqueRegionTransform, path, paint);
+}
+
+void PlatformContextSkia::didDrawPoints(SkCanvas::PointMode mode, int numPoints, const SkPoint points[], const SkPaint& paint)
+{
+    if (m_trackOpaqueRegion)
+        m_opaqueRegion.didDrawPoints(this, m_opaqueRegionTransform, mode, numPoints, points, paint);
+}
+
+void PlatformContextSkia::didDrawBounded(const SkRect& rect, const SkPaint& paint)
+{
+    if (m_trackOpaqueRegion)
+        m_opaqueRegion.didDrawBounded(this, m_opaqueRegionTransform, rect, paint);
 }
 
 } // namespace WebCore

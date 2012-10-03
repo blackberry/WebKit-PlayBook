@@ -24,7 +24,8 @@ rootSVGElement.appendChild(rect);
 
 // Setup animation test
 function sample1() {
-    shouldBe("rect.style.color", "'rgb(0, 128, 0)'");
+    shouldBe("getComputedStyle(rect).color", "'rgb(0, 128, 0)'");
+    shouldBeEqualToString("rect.style.color", "");
 }
 
 function sample2() {
@@ -33,20 +34,19 @@ function sample2() {
 }
 
 function sample3() {
-    shouldBe("rect.style.fill", "'#008000'");
+    shouldBe("getComputedStyle(rect).fill", "'#008000'");
+    shouldBeEqualToString("rect.style.fill", "");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.1,    "rect", sample1],
-        ["animation", 1.5,    "rect", sample2],
-        ["animation", 3.0,    "rect", sample3],
+        // [animationId, time, sampleCallback]
+        ["animation", 0.001, sample1],
+        ["animation", 1.5, sample2],
+        ["animation", 3.0, sample3],
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 50)", 0);
 var successfullyParsed = true;

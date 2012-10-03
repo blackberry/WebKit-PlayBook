@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  * Copyright (C) 2010 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
@@ -35,20 +35,16 @@
 
 #include "LayerWebKitThread.h"
 
-#include "FrameView.h"
+#include "GraphicsContext.h"
 #include "InstrumentedPlatformCanvas.h"
 #include "LayerCompositingThread.h"
 #include "LayerMessage.h"
-#include "MediaPlayer.h"
 #include "PlatformContextSkia.h"
 #include "RenderLayerBacking.h"
 #include "TransformationMatrix.h"
 
 #include <BlackBerryPlatformGraphics.h>
-#include <BlackBerryPlatformLog.h>
 #include <wtf/CurrentTime.h>
-
-#define DEBUG_VIDEO_CLIPPING 0
 
 namespace WebCore {
 
@@ -64,9 +60,9 @@ LayerWebKitThread::LayerWebKitThread(LayerType type, GraphicsLayerBlackBerry* ow
     , m_owner(owner)
     , m_superlayer(0)
     , m_contents(0)
+    , m_scale(1.0)
     , m_isDrawable(false)
     , m_isMask(false)
-    , m_scale(1.0)
 {
     m_tiler = LayerTiler::create(this);
     m_layerCompositingThread = LayerCompositingThread::create(type, m_tiler);
@@ -110,35 +106,23 @@ SkBitmap LayerWebKitThread::paintContents(const IntRect& contentsRect, double sc
     OwnPtr<InstrumentedPlatformCanvas> canvas;
 
     if (drawsContent()) { // Layer contents must be drawn into a canvas.
-        IntRect untransformedContentsRect = contentsRect;
+        IntRect untransformedContentsRect = mapFromTransformed(contentsRect, scale);
 
-        canvas = adoptPtr(new InstrumentedPlatformCanvas(contentsRect.width(), contentsRect.height(), false, 0));
+        SkBitmap canvasBitmap;
+        canvasBitmap.setConfig(SkBitmap::kARGB_8888_Config, contentsRect.width(), contentsRect.height());
+        if (!canvasBitmap.allocPixels())
+            return SkBitmap();
+        canvasBitmap.setIsOpaque(false);
+        canvasBitmap.eraseColor(0);
+
+        canvas = adoptPtr(new InstrumentedPlatformCanvas(canvasBitmap));
         PlatformContextSkia skiaContext(canvas.get());
 
-#if OS(WINDOWS)
-        // This is needed to get text to show up correctly. Without it,
-        // GDI renders with zero alpha and the text becomes invisible.
-        // Unfortunately, setting this to true disables cleartype.
-        // FIXME: Does this take us down a very slow text rendering path?
-        skiaContext->setDrawingToImageBuffer(true);
-#endif
         GraphicsContext graphicsContext(&skiaContext);
-
         graphicsContext.translate(-contentsRect.x(), -contentsRect.y());
 
-        if (scale != 1.0) {
-            TransformationMatrix matrix;
-            matrix.scale(1.0 / scale);
-            untransformedContentsRect = matrix.mapRect(contentsRect);
-
-            // We extract from the contentsRect but draw a slightly larger region than
-            // we were told to, in order to avoid pixels being rendered only partially.
-            const int atLeastOneDevicePixel =
-                static_cast<int>(ceilf(1.0 / scale));
-            untransformedContentsRect.inflate(atLeastOneDevicePixel);
-
+        if (scale != 1.0)
             graphicsContext.scale(FloatSize(scale, scale));
-        }
 
         // RenderLayerBacking doesn't always clip, so we need to do this by ourselves.
         graphicsContext.clip(untransformedContentsRect);
@@ -180,11 +164,6 @@ void LayerWebKitThread::createFrontBufferLock()
 
 void LayerWebKitThread::updateTextureContentsIfNeeded()
 {
-    // Currently, video layers only work in the accelerated compositing code path.
-    // And video layers have no need to update contents.
-    // FIXME: This is not a ideal solution, we need to a subclass for video layers.
-    if (mediaPlayer())
-        return;
     m_tiler->updateTextureContentsIfNeeded(m_isMask ? 1.0 : contentsScale());
 }
 
@@ -209,30 +188,9 @@ void LayerWebKitThread::setDrawable(bool isDrawable)
 
     m_isDrawable = isDrawable;
 
-    setNeedsTexture(m_isDrawable && (drawsContent() || contents() || pluginView() || mediaPlayer() || canvas()));
+    setNeedsTexture(m_isDrawable && (drawsContent() || contents() || pluginView() || mediaPlayer() || m_texID));
     setNeedsCommit();
 }
-
-#if ENABLE(VIDEO)
-void LayerWebKitThread::setMediaPlayer(MediaPlayer* mediaPlayer)
-{
-    m_mediaPlayer = mediaPlayer;
-    setNeedsTexture(m_isDrawable && (contents() || drawsContent() || this->mediaPlayer()));
-
-    if (m_mediaPlayer)
-        setNeedsDisplay();
-    else {
-        // We can't afford to wait until the next commit
-        // to set the m_mediaPlayer to 0 in the impl, because it is
-        // about to be destroyed.
-        m_layerCompositingThread->setMediaPlayer(0);
-
-        // clear hole punch rect
-        setHolePunchRect(IntRect());
-        setNeedsCommit();
-    }
-}
-#endif
 
 void LayerWebKitThread::setNeedsCommit()
 {
@@ -345,8 +303,8 @@ void LayerWebKitThread::addSublayer(PassRefPtr<LayerWebKitThread> sublayer)
 
 void LayerWebKitThread::insertSublayer(PassRefPtr<LayerWebKitThread> sublayer, size_t index)
 {
-    index = min(index, m_sublayers.size());
     sublayer->removeFromSuperlayer();
+    index = min(index, m_sublayers.size());
     sublayer->setSuperlayer(this);
     m_sublayers.insert(index, sublayer);
 
@@ -402,15 +360,6 @@ int LayerWebKitThread::indexOfSublayer(const LayerWebKitThread* reference)
     return -1;
 }
 
-void LayerWebKitThread::setHolePunchRect(const IntRect& rect)
-{
-#if DEBUG_VIDEO_CLIPPING
-    BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "LayerWebKitThread m_holePunchRect=%s.", rect.toString().utf8().data());
-#endif
-    m_holePunchRect = rect;
-    setNeedsCommit();
-}
-
 void LayerWebKitThread::setBounds(const IntSize& size)
 {
     if (m_bounds == size)
@@ -419,26 +368,8 @@ void LayerWebKitThread::setBounds(const IntSize& size)
     bool firstResize = !m_bounds.width() && !m_bounds.height() && size.width() && size.height();
 
     m_bounds = size;
-    m_backingStoreSize = size;
 
-    // if this layer is for video, the entire layer should be hole punched
-#if ENABLE(VIDEO)
-    if (mediaPlayer()) {
-        // Hole punch rectangle size is equal to the size of this layer.
-        // Note that although we know the *size* of this layer, we won't know the position of this layer
-        // until the LayerCompositingThread::setDrawTransform method is called from the LayerRenderer.
-        setHolePunchRect(IntRect(0, 0, m_bounds.width(), m_bounds.height()));
-        // Also set a clipping rectangle for this hole punch rectangle.
-        FrameView* frameView = mediaPlayer()->frameView();
-        if (frameView)
-            m_holePunchClipRect = frameView->windowClipRect();
-        else
-            m_holePunchClipRect = holePunchRect();
-#if DEBUG_VIDEO_CLIPPING
-        BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "LayerWebKitThread m_holePunchClipRect=%s.", m_holePunchClipRect.toString().utf8().data());
-#endif
-    }
-#endif
+    boundsChanged();
 
     if (firstResize)
         setNeedsDisplay();
@@ -488,11 +419,6 @@ void LayerWebKitThread::setSublayers(const Vector<RefPtr<LayerWebKitThread> >& s
         addSublayer(sublayers[i]);
 }
 
-LayerWebKitThread* LayerWebKitThread::superlayer() const
-{
-    return m_superlayer;
-}
-
 void LayerWebKitThread::setNeedsDisplayInRect(const FloatRect& dirtyRect)
 {
     m_tiler->setNeedsDisplay(dirtyRect);
@@ -521,6 +447,24 @@ void LayerWebKitThread::setIsMask(bool isMask)
     m_isMask = isMask;
     if (isMask)
         m_tiler->disableTiling(true);
+}
+
+IntRect LayerWebKitThread::mapFromTransformed(const IntRect& contentsRect, double scale)
+{
+    IntRect untransformedContentsRect = contentsRect;
+
+    if (scale != 1.0) {
+        TransformationMatrix matrix;
+        matrix.scale(1.0 / scale);
+        untransformedContentsRect = matrix.mapRect(contentsRect);
+
+        // We extract from the contentsRect but draw a slightly larger region than
+        // we were told to, in order to avoid pixels being rendered only partially.
+        const int atLeastOneDevicePixel = static_cast<int>(ceilf(1.0 / scale));
+        untransformedContentsRect.inflate(atLeastOneDevicePixel);
+    }
+
+    return untransformedContentsRect;
 }
 
 }

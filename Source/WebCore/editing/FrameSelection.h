@@ -38,13 +38,13 @@
 namespace WebCore {
 
 class CharacterData;
-class CSSMutableStyleDeclaration;
 class Frame;
 class GraphicsContext;
 class HTMLFormElement;
 class RenderObject;
 class RenderView;
 class Settings;
+class StylePropertySet;
 class VisiblePosition;
 
 enum EUserTriggered { NotUserTriggered = 0, UserTriggered = 1 };
@@ -84,7 +84,7 @@ class DragCaretController : private CaretBase {
     WTF_MAKE_NONCOPYABLE(DragCaretController);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    DragCaretController();
+    static PassOwnPtr<DragCaretController> create();
 
     RenderObject* caretRenderer() const;
     void paintDragCaret(Frame*, GraphicsContext*, const LayoutPoint&, const LayoutRect& clipRect) const;
@@ -100,6 +100,8 @@ public:
     void nodeWillBeRemoved(Node*);
 
 private:
+    DragCaretController();
+
     VisiblePosition m_position;
 };
 
@@ -233,7 +235,7 @@ public:
     void paintDragCaret(GraphicsContext*, const LayoutPoint&, const LayoutRect& clipRect) const;
 
     EditingStyle* typingStyle() const;
-    PassRefPtr<CSSMutableStyleDeclaration> copyTypingStyle() const;
+    PassRefPtr<StylePropertySet> copyTypingStyle() const;
     void setTypingStyle(PassRefPtr<EditingStyle>);
     void clearTypingStyle();
 
@@ -331,4 +333,3 @@ void showTree(const WebCore::FrameSelection*);
 #endif
 
 #endif // FrameSelection_h
-

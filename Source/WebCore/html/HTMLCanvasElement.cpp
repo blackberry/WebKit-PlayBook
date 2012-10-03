@@ -50,6 +50,7 @@
 #include "MIMETypeRegistry.h"
 #include "Page.h"
 #include "RenderHTMLCanvas.h"
+#include "RenderLayer.h"
 #include "Settings.h"
 #include <math.h>
 #include <stdio.h>
@@ -84,7 +85,12 @@ HTMLCanvasElement::HTMLCanvasElement(const QualifiedName& tagName, Document* doc
     , m_size(DefaultWidth, DefaultHeight)
     , m_rendererIsCanvas(false)
     , m_ignoreReset(false)
+#if ENABLE(HIGH_DPI_CANVAS)
+      // FIXME: Make this the default once https://bugs.webkit.org/show_bug.cgi?id=73645 has been fixed.
     , m_deviceScaleFactor(document->frame() ? document->frame()->page()->deviceScaleFactor() : 1)
+#else
+    , m_deviceScaleFactor(1)
+#endif
     , m_originClean(true)
     , m_hasCreatedImageBuffer(false)
 {
@@ -110,12 +116,12 @@ HTMLCanvasElement::~HTMLCanvasElement()
     m_context.clear(); // Ensure this goes away before the ImageBuffer.
 }
 
-void HTMLCanvasElement::parseMappedAttribute(Attribute* attr)
+void HTMLCanvasElement::parseAttribute(Attribute* attr)
 {
     const QualifiedName& attrName = attr->name();
     if (attrName == widthAttr || attrName == heightAttr)
         reset();
-    HTMLElement::parseMappedAttribute(attr);
+    HTMLElement::parseAttribute(attr);
 }
 
 RenderObject* HTMLCanvasElement::createRenderer(RenderArena* arena, RenderStyle* style)
@@ -170,7 +176,7 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type, Canvas
                 usesDashbardCompatibilityMode = settings->usesDashboardBackwardCompatibilityMode();
 #endif
             m_context = CanvasRenderingContext2D::create(this, document()->inQuirksMode(), usesDashbardCompatibilityMode);
-#if USE(IOSURFACE_CANVAS_BACKING_STORE) || ((ENABLE(ACCELERATED_2D_CANVAS) || ENABLE(SKIA_GPU_CANVAS)) && USE(ACCELERATED_COMPOSITING))
+#if USE(IOSURFACE_CANVAS_BACKING_STORE) || (ENABLE(ACCELERATED_2D_CANVAS) && USE(ACCELERATED_COMPOSITING))
             if (m_context) {
                 // Need to make sure a RenderLayer and compositing layer get created for the Canvas
                 setNeedsStyleRecalc(SyntheticStyleChange);
@@ -185,7 +191,7 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type, Canvas
 #endif
     Settings* settings = document()->settings();
     if (settings && settings->webGLEnabled()
-#if !PLATFORM(CHROMIUM) && !PLATFORM(GTK)
+#if !PLATFORM(CHROMIUM) && !PLATFORM(GTK) && !PLATFORM(EFL)
         && settings->acceleratedCompositingEnabled()
 #endif
         ) {
@@ -213,7 +219,7 @@ CanvasRenderingContext* HTMLCanvasElement::getContext(const String& type, Canvas
 
 void HTMLCanvasElement::didDraw(const FloatRect& rect)
 {
-    m_copiedImage.clear(); // Clear our image snapshot if we have one.
+    clearCopiedImage();
 
     if (RenderBox* ro = renderBox()) {
         FloatRect destRect = ro->contentBoxRect();
@@ -272,6 +278,25 @@ void HTMLCanvasElement::reset()
         (*it)->canvasResized(this);
 }
 
+bool HTMLCanvasElement::paintsIntoCanvasBuffer() const
+{
+    ASSERT(m_context);
+#if USE(IOSURFACE_CANVAS_BACKING_STORE)
+    if (m_context->is2d())
+        return true;
+#endif
+
+#if USE(ACCELERATED_COMPOSITING)
+    if (!m_context->isAccelerated())
+        return true;
+
+    if (renderBox() && renderBox()->hasLayer() && renderBox()->layer()->hasAcceleratedCompositing())
+        return false;
+#endif
+    return true;
+}
+
+
 void HTMLCanvasElement::paint(GraphicsContext* context, const LayoutRect& r, bool useLowQualityScale)
 {
     // Clear the dirty rect
@@ -281,7 +306,7 @@ void HTMLCanvasElement::paint(GraphicsContext* context, const LayoutRect& r, boo
         return;
     
     if (m_context) {
-        if (!m_context->paintsIntoCanvasBuffer() && !document()->printing())
+        if (!paintsIntoCanvasBuffer() && !document()->printing())
             return;
         m_context->paintRenderingResultsToCanvas();
     }
@@ -290,9 +315,9 @@ void HTMLCanvasElement::paint(GraphicsContext* context, const LayoutRect& r, boo
         ImageBuffer* imageBuffer = buffer();
         if (imageBuffer) {
             if (m_presentedImage)
-                context->drawImage(m_presentedImage.get(), ColorSpaceDeviceRGB, r, CompositeSourceOver, useLowQualityScale);
+                context->drawImage(m_presentedImage.get(), ColorSpaceDeviceRGB, pixelSnappedIntRect(r), CompositeSourceOver, useLowQualityScale);
             else
-                context->drawImageBuffer(imageBuffer, ColorSpaceDeviceRGB, r, CompositeSourceOver, useLowQualityScale);
+                context->drawImageBuffer(imageBuffer, ColorSpaceDeviceRGB, pixelSnappedIntRect(r), CompositeSourceOver, useLowQualityScale);
         }
     }
 
@@ -333,7 +358,7 @@ void HTMLCanvasElement::setSurfaceSize(const IntSize& size)
     m_size = size;
     m_hasCreatedImageBuffer = false;
     m_imageBuffer.clear();
-    m_copiedImage.clear();
+    clearCopiedImage();
 }
 
 String HTMLCanvasElement::toEncodingMimeType(const String& mimeType)
@@ -410,6 +435,13 @@ FloatSize HTMLCanvasElement::convertLogicalToDevice(const FloatSize& logicalSize
     return FloatSize(width, height);
 }
 
+FloatSize HTMLCanvasElement::convertDeviceToLogical(const FloatSize& deviceSize) const
+{
+    float width = ceilf(deviceSize.width() / m_deviceScaleFactor);
+    float height = ceilf(deviceSize.height() / m_deviceScaleFactor);
+    return FloatSize(width, height);
+}
+
 SecurityOrigin* HTMLCanvasElement::securityOrigin() const
 {
     return document()->securityOrigin();
@@ -424,13 +456,13 @@ bool HTMLCanvasElement::shouldAccelerate(const IntSize& size) const
 {
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
     UNUSED_PARAM(size);
-    return document()->settings()->canvasUsesAcceleratedDrawing();
-#elif ENABLE(ACCELERATED_2D_CANVAS) || ENABLE(SKIA_GPU_CANVAS)
+    return document()->settings() && document()->settings()->canvasUsesAcceleratedDrawing();
+#elif ENABLE(ACCELERATED_2D_CANVAS)
     if (m_context && !m_context->is2d())
         return false;
 
     Settings* settings = document()->settings();
-    if (!settings->accelerated2dCanvasEnabled())
+    if (!settings || !settings->accelerated2dCanvasEnabled())
         return false;
 
     // Do not use acceleration for small canvas.
@@ -440,6 +472,22 @@ bool HTMLCanvasElement::shouldAccelerate(const IntSize& size) const
     return true;
 #else
     UNUSED_PARAM(size);
+    return false;
+#endif
+}
+
+bool HTMLCanvasElement::shouldDefer() const
+{
+#if USE(SKIA)
+    if (m_context && !m_context->is2d())
+        return false;
+
+    Settings* settings = document()->settings();
+    if (!settings || !settings->deferred2dCanvasEnabled())
+        return false;
+
+    return true;
+#else
     return false;
 #endif
 }
@@ -466,8 +514,14 @@ void HTMLCanvasElement::createImageBuffer() const
     if (!bufferSize.width() || !bufferSize.height())
         return;
 
-    RenderingMode renderingMode = shouldAccelerate(bufferSize) ? Accelerated : Unaccelerated;
-    m_imageBuffer = ImageBuffer::create(bufferSize, ColorSpaceDeviceRGB, renderingMode);
+    RenderingMode renderingMode = shouldAccelerate(bufferSize) ? Accelerated : 
+#if USE(SKIA)
+        UnacceleratedNonPlatformBuffer;
+#else
+        Unaccelerated;
+#endif
+    DeferralMode deferralMode = shouldDefer() ? Deferred : NonDeferred;
+    m_imageBuffer = ImageBuffer::create(bufferSize, 1, ColorSpaceDeviceRGB, renderingMode, deferralMode);
     if (!m_imageBuffer)
         return;
     m_imageBuffer->context()->scale(FloatSize(bufferSize.width() / logicalSize.width(), bufferSize.height() / logicalSize.height()));
@@ -477,10 +531,11 @@ void HTMLCanvasElement::createImageBuffer() const
 
 #if USE(JSC)
     JSC::JSLock lock(JSC::SilenceAssertionsOnly);
-    scriptExecutionContext()->globalData()->heap.reportExtraMemoryCost(m_imageBuffer->dataSize());
+    size_t numBytes = 4 * m_imageBuffer->internalSize().width() * m_imageBuffer->internalSize().height();
+    scriptExecutionContext()->globalData()->heap.reportExtraMemoryCost(numBytes);
 #endif
 
-#if USE(IOSURFACE_CANVAS_BACKING_STORE) || (ENABLE(ACCELERATED_2D_CANVAS) || ENABLE(SKIA_GPU_CANVAS)) && USE(ACCELERATED_COMPOSITING)
+#if USE(IOSURFACE_CANVAS_BACKING_STORE) || (ENABLE(ACCELERATED_2D_CANVAS) && USE(ACCELERATED_COMPOSITING))
     if (m_context && m_context->is2d())
         // Recalculate compositing requirements if acceleration state changed.
         const_cast<HTMLCanvasElement*>(this)->setNeedsStyleRecalc(SyntheticStyleChange);

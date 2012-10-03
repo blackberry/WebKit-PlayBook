@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,12 +19,12 @@
 #include "config.h"
 #include "PlatformKeyboardEvent.h"
 
-#include "BlackBerryPlatformKeyboardEvent.h"
-#include "BlackBerryPlatformLog.h"
 #include "NotImplemented.h"
 #include "WindowsKeyboardCodes.h"
 
-#include <sys/keycodes.h>
+#include <BlackBerryPlatformKeyboardEvent.h>
+#include <BlackBerryPlatformLog.h>
+#include <wtf/CurrentTime.h>
 #include <wtf/text/CString.h>
 
 namespace WebCore {
@@ -74,10 +74,10 @@ static String keyIdentifierForBlackBerryCharacter(unsigned short character)
         return "Insert";
     case KEYCODE_PG_UP:
     case KEYCODE_KP_PG_UP:
-        return "PageDown";
+        return "PageUp";
     case KEYCODE_PG_DOWN:
     case KEYCODE_KP_PG_DOWN:
-        return "PageUp";
+        return "PageDown";
     case KEYCODE_END:
     case KEYCODE_KP_END:
         return "End";
@@ -300,10 +300,10 @@ static int windowsKeyCodeForBlackBerryCharacter(unsigned short character)
         return VK_INSERT;
     case KEYCODE_PG_UP:
     case KEYCODE_KP_PG_UP:
-        return VK_NEXT;
+        return VK_PRIOR;
     case KEYCODE_PG_DOWN:
     case KEYCODE_KP_PG_DOWN:
-        return VK_PRIOR;
+        return VK_NEXT;
     case KEYCODE_END:
     case KEYCODE_KP_END:
         return VK_END;
@@ -424,37 +424,33 @@ unsigned short adjustCharacterFromOS(unsigned short character)
     return character;
 }
 
-static inline WebCore::PlatformKeyboardEvent::Type toWebCorePlatformKeyboardEventType(const BlackBerry::Platform::KeyboardEvent::Type type)
+static inline PlatformKeyboardEvent::Type toWebCorePlatformKeyboardEventType(const BlackBerry::Platform::KeyboardEvent::Type type)
 {
     switch (type) {
     case BlackBerry::Platform::KeyboardEvent::KeyDown:
-        return WebCore::PlatformKeyboardEvent::KeyDown;
+        return PlatformEvent::KeyDown;
     case BlackBerry::Platform::KeyboardEvent::KeyUp:
-        return WebCore::PlatformKeyboardEvent::KeyUp;
+        return PlatformEvent::KeyUp;
     case BlackBerry::Platform::KeyboardEvent::KeyChar:
     default:
-        return WebCore::PlatformKeyboardEvent::Char;
+        return PlatformEvent::Char;
     }
 }
 
-PlatformKeyboardEvent::PlatformKeyboardEvent(BlackBerry::Platform::KeyboardEvent event)
-    : m_autoRepeat(false)
+PlatformKeyboardEvent::PlatformKeyboardEvent(const BlackBerry::Platform::KeyboardEvent& event)
+    : PlatformEvent(toWebCorePlatformKeyboardEventType(event.type()), event.shiftActive() || (event.character() == KEYCODE_BACK_TAB), event.ctrlActive(), event.altActive(), false, currentTime())
+    , m_keyIdentifier(keyIdentifierForBlackBerryCharacter(event.character()))
+    , m_windowsVirtualKeyCode(windowsKeyCodeForBlackBerryCharacter(event.character()))
+    , m_autoRepeat(false)
     , m_isKeypad(false)
-    , m_shiftKey(event.shiftActive())
-    , m_ctrlKey(event.ctrlActive())
-    , m_altKey(event.altActive())
-    , m_metaKey(false)
+    , m_unmodifiedCharacter(event.character())
 {
-    m_type = toWebCorePlatformKeyboardEventType(event.type());
-    m_unmodifiedCharacter = event.character();
-    m_keyIdentifier = keyIdentifierForBlackBerryCharacter(event.character());
-    m_windowsVirtualKeyCode = windowsKeyCodeForBlackBerryCharacter(event.character());
     unsigned short character = adjustCharacterFromOS(event.character());
     m_text = String(&character, 1);
     m_unmodifiedText = m_text;
 
     if (event.character() == KEYCODE_BACK_TAB)
-        m_shiftKey = true; // BackTab should be treated as Shift + Tab.
+        m_modifiers |= ShiftKey; // BackTab should be treated as Shift + Tab.
 
     BlackBerry::Platform::log(BlackBerry::Platform::LogLevelInfo, "Keyboard event received text=%lc, keyIdentifier=%s, windowsVirtualKeyCode=%d", event.character(), m_keyIdentifier.latin1().data(), m_windowsVirtualKeyCode);
 }
@@ -465,16 +461,16 @@ bool PlatformKeyboardEvent::currentCapsLockState()
     return false;
 }
 
-void PlatformKeyboardEvent::disambiguateKeyDownEvent(PlatformKeyboardEvent::Type type, bool backwardCompatibilityMode)
+void PlatformKeyboardEvent::disambiguateKeyDownEvent(PlatformEvent::Type type, bool backwardCompatibilityMode)
 {
     // Can only change type from KeyDown to RawKeyDown or Char, as we lack information for other conversions.
-    ASSERT(m_type == KeyDown);
+    ASSERT(m_type == PlatformEvent::KeyDown);
     m_type = type;
 
     if (backwardCompatibilityMode)
         return;
 
-    if (type == RawKeyDown) {
+    if (type == PlatformEvent::RawKeyDown) {
         m_text = String();
         m_unmodifiedText = String();
     } else {
@@ -483,7 +479,7 @@ void PlatformKeyboardEvent::disambiguateKeyDownEvent(PlatformKeyboardEvent::Type
     }
 }
 
-void PlatformKeyboardEvent::getCurrentModifierState(bool& shiftKey, bool& ctrlKey, bool& altKey, bool& metaKey)
+void PlatformKeyboardEvent::getCurrentModifierState(bool&, bool&, bool&, bool&)
 {
     notImplemented();
 }

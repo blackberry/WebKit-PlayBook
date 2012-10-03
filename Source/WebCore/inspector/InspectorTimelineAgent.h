@@ -33,6 +33,7 @@
 
 #if ENABLE(INSPECTOR)
 
+#include "InspectorBaseAgent.h"
 #include "InspectorFrontend.h"
 #include "InspectorValues.h"
 #include "LayoutTypes.h"
@@ -52,7 +53,7 @@ class ResourceResponse;
 
 typedef String ErrorString;
 
-class InspectorTimelineAgent : ScriptGCEventListener {
+class InspectorTimelineAgent : public InspectorBaseAgent<InspectorTimelineAgent>, ScriptGCEventListener, public InspectorBackendDispatcher::TimelineCommandHandler {
     WTF_MAKE_NONCOPYABLE(InspectorTimelineAgent);
 public:
     static PassOwnPtr<InspectorTimelineAgent> create(InstrumentingAgents* instrumentingAgents, InspectorState* state)
@@ -62,13 +63,13 @@ public:
 
     ~InspectorTimelineAgent();
 
-    void setFrontend(InspectorFrontend*);
-    void clearFrontend();
-    void restore();
+    virtual void setFrontend(InspectorFrontend*);
+    virtual void clearFrontend();
+    virtual void restore();
 
-    void start(ErrorString*, int* maxCallStackDepth);
-    void stop(ErrorString*);
-    bool started() const;
+    virtual void start(ErrorString*, const int* maxCallStackDepth);
+    virtual void stop(ErrorString*);
+    virtual void setIncludeMemoryDetails(ErrorString*, bool);
 
     int id() const { return m_id; }
 
@@ -120,10 +121,10 @@ public:
     void willReceiveResourceData(unsigned long identifier);
     void didReceiveResourceData();
 
-    void didRegisterAnimationFrameCallback(int callbackId);
-    void didCancelAnimationFrameCallback(int callbackId);
-    void willFireAnimationFrameEvent(int callbackId);
-    void didFireAnimationFrameEvent();
+    void didRequestAnimationFrame(int callbackId);
+    void didCancelAnimationFrame(int callbackId);
+    void willFireAnimationFrame(int callbackId);
+    void didFireAnimationFrame();
 
     virtual void didGC(double, double, size_t);
 
@@ -141,19 +142,17 @@ private:
         
     InspectorTimelineAgent(InstrumentingAgents*, InspectorState*);
 
-    void pushCurrentRecord(PassRefPtr<InspectorObject>, const String& type);
+    void pushCurrentRecord(PassRefPtr<InspectorObject>, const String& type, bool captureCallStack);
     void setHeapSizeStatistic(InspectorObject* record);
         
     void didCompleteCurrentRecord(const String& type);
-    void appendRecord(PassRefPtr<InspectorObject> data, const String& type);
+    void appendRecord(PassRefPtr<InspectorObject> data, const String& type, bool captureCallStack);
 
     void addRecordToTimeline(PassRefPtr<InspectorObject>, const String& type);
 
     void pushGCEventRecords();
     void clearRecordStack();
 
-    InstrumentingAgents* m_instrumentingAgents;
-    InspectorState* m_state;
     InspectorFrontend::Timeline* m_frontend;
 
     Vector<TimelineRecordEntry> m_recordStack;

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -30,50 +30,22 @@
 
 #include "config.h"
 #include "SocketStreamHandle.h"
+#include "SocketStreamHandleInternal.h"
 
 #if ENABLE(WEB_SOCKETS)
 
 #include "Logging.h"
 #include "NotImplemented.h"
 #include "SocketStreamHandleClient.h"
-#include "WebData.h"
+#include "platform/WebData.h"
 #include "WebKit.h"
-#include "WebKitPlatformSupport.h"
-#include "WebSocketStreamHandle.h"
-#include "WebSocketStreamHandleClient.h"
-#include "WebURL.h"
+#include "platform/WebKitPlatformSupport.h"
+#include "platform/WebSocketStreamHandle.h"
 #include <wtf/PassOwnPtr.h>
 
 using namespace WebKit;
 
 namespace WebCore {
-
-class SocketStreamHandleInternal : public WebSocketStreamHandleClient {
-public:
-    static PassOwnPtr<SocketStreamHandleInternal> create(SocketStreamHandle* handle)
-    {
-        return adoptPtr(new SocketStreamHandleInternal(handle));
-    }
-    virtual ~SocketStreamHandleInternal();
-
-    void connect(const KURL&);
-    int send(const char*, int);
-    void close();
-
-    virtual void didOpenStream(WebSocketStreamHandle*, int);
-    virtual void didSendData(WebSocketStreamHandle*, int);
-    virtual void didReceiveData(WebSocketStreamHandle*, const WebData&);
-    virtual void didClose(WebSocketStreamHandle*);
-    virtual void didFail(WebSocketStreamHandle*, const WebSocketStreamError&);
-
-private:
-    explicit SocketStreamHandleInternal(SocketStreamHandle*);
-
-    SocketStreamHandle* m_handle;
-    OwnPtr<WebSocketStreamHandle> m_socket;
-    int m_maxPendingSendAllowed;
-    int m_pendingAmountSent;
-};
 
 SocketStreamHandleInternal::SocketStreamHandleInternal(SocketStreamHandle* handle)
     : m_handle(handle)

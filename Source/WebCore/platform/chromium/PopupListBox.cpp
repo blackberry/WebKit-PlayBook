@@ -83,14 +83,14 @@ PopupListBox::PopupListBox(PopupMenuClient* client, const PopupContainerSettings
 
 bool PopupListBox::handleMouseDownEvent(const PlatformMouseEvent& event)
 {
-    Scrollbar* scrollbar = scrollbarAtPoint(event.pos());
+    Scrollbar* scrollbar = scrollbarAtPoint(event.position());
     if (scrollbar) {
         m_capturingScrollbar = scrollbar;
         m_capturingScrollbar->mouseDown(event);
         return true;
     }
 
-    if (!isPointInBounds(event.pos()))
+    if (!isPointInBounds(event.position()))
         abandon();
 
     return true;
@@ -103,7 +103,7 @@ bool PopupListBox::handleMouseMoveEvent(const PlatformMouseEvent& event)
         return true;
     }
 
-    Scrollbar* scrollbar = scrollbarAtPoint(event.pos());
+    Scrollbar* scrollbar = scrollbarAtPoint(event.position());
     if (m_lastScrollbarUnderMouse != scrollbar) {
         // Send mouse exited to the old scrollbar.
         if (m_lastScrollbarUnderMouse)
@@ -116,10 +116,10 @@ bool PopupListBox::handleMouseMoveEvent(const PlatformMouseEvent& event)
         return true;
     }
 
-    if (!isPointInBounds(event.pos()))
+    if (!isPointInBounds(event.position()))
         return false;
 
-    selectIndex(pointToRowIndex(event.pos()));
+    selectIndex(pointToRowIndex(event.position()));
     return true;
 }
 
@@ -131,12 +131,12 @@ bool PopupListBox::handleMouseReleaseEvent(const PlatformMouseEvent& event)
         return true;
     }
 
-    if (!isPointInBounds(event.pos()))
+    if (!isPointInBounds(event.position()))
         return true;
 
     // Need to check before calling acceptIndex(), because m_popupClient might be removed in acceptIndex() calling because of event handler.
     bool isSelectPopup = m_popupClient->menuStyle().menuType() == PopupMenuStyle::SelectPopup;
-    if (acceptIndex(pointToRowIndex(event.pos())) && m_focusedNode && isSelectPopup) {
+    if (acceptIndex(pointToRowIndex(event.position())) && m_focusedNode && isSelectPopup) {
         m_focusedNode->dispatchMouseEvent(event, eventNames().mouseupEvent);
         m_focusedNode->dispatchMouseEvent(event, eventNames().clickEvent);
 
@@ -149,14 +149,12 @@ bool PopupListBox::handleMouseReleaseEvent(const PlatformMouseEvent& event)
 
 bool PopupListBox::handleWheelEvent(const PlatformWheelEvent& event)
 {
-    if (!isPointInBounds(event.pos())) {
+    if (!isPointInBounds(event.position())) {
         abandon();
         return true;
     }
 
-    // Pass it off to the scroll view.
-    // Sadly, WebCore devs don't understand the whole "const" thing.
-    wheelEvent(const_cast<PlatformWheelEvent&>(event));
+    ScrollableArea::handleWheelEvent(event);
     return true;
 }
 
@@ -186,7 +184,7 @@ bool PopupListBox::handleTouchEvent(const PlatformTouchEvent&)
 }
 #endif
 
-#if ENABLE(GESTURE_RECOGNIZER)
+#if ENABLE(GESTURE_EVENTS)
 bool PopupListBox::handleGestureEvent(const PlatformGestureEvent&)
 {
     return false;
@@ -199,12 +197,12 @@ static bool isCharacterTypeEvent(const PlatformKeyboardEvent& event)
     // We use RawKeyDown/Char/KeyUp event scheme on all platforms,
     // so PlatformKeyboardEvent::Char (not RawKeyDown) type event
     // is considered as character type event.
-    return event.type() == PlatformKeyboardEvent::Char;
+    return event.type() == PlatformEvent::Char;
 }
 
 bool PopupListBox::handleKeyEvent(const PlatformKeyboardEvent& event)
 {
-    if (event.type() == PlatformKeyboardEvent::KeyUp)
+    if (event.type() == PlatformEvent::KeyUp)
         return true;
 
     if (!numItems() && event.windowsVirtualKeyCode() != VKEY_ESCAPE)

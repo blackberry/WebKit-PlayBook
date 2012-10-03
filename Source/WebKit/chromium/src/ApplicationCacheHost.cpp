@@ -32,8 +32,8 @@
 #include "ApplicationCacheHost.h"
 
 #include "ApplicationCacheHostInternal.h"
-#include "DocumentLoader.h"
 #include "DOMApplicationCache.h"
+#include "DocumentLoader.h"
 #include "Frame.h"
 #include "InspectorApplicationCacheAgent.h"
 #include "InspectorInstrumentation.h"
@@ -42,12 +42,12 @@
 #include "SecurityOrigin.h"
 #include "Settings.h"
 #include "WebFrameImpl.h"
-#include "WebURL.h"
-#include "WebURLError.h"
-#include "WebURLResponse.h"
-#include "WebVector.h"
 #include "WrappedResourceRequest.h"
 #include "WrappedResourceResponse.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLError.h"
+#include "platform/WebURLResponse.h"
+#include "platform/WebVector.h"
 
 using namespace WebKit;
 
@@ -289,7 +289,15 @@ bool ApplicationCacheHost::update()
 
 bool ApplicationCacheHost::swapCache()
 {
-    return m_internal ? m_internal->m_outerHost->swapCache() : false;
+    bool success = m_internal ? m_internal->m_outerHost->swapCache() : false;
+    if (success)
+        InspectorInstrumentation::updateApplicationCacheStatus(m_documentLoader->frame());
+    return success;
+}
+
+void ApplicationCacheHost::abort()
+{
+    // FIXME: See https://bugs.webkit.org/show_bug.cgi?id=76270
 }
 
 bool ApplicationCacheHost::isApplicationCacheEnabled()

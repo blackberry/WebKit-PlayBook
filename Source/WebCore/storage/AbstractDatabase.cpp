@@ -33,6 +33,7 @@
 #if ENABLE(SQL_DATABASE)
 
 #include "DatabaseAuthorizer.h"
+#include "DatabaseContext.h"
 #include "DatabaseTracker.h"
 #include "ExceptionCode.h"
 #include "Logging.h"
@@ -48,6 +49,10 @@
 #include <wtf/StdLibExtras.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringHash.h>
+
+#if PLATFORM(CHROMIUM)
+#include "DatabaseObserver.h" // For error reporting.
+#endif
 
 namespace WebCore {
 
@@ -183,8 +188,9 @@ const char* AbstractDatabase::databaseInfoTableName()
 }
 
 AbstractDatabase::AbstractDatabase(ScriptExecutionContext* context, const String& name, const String& expectedVersion,
-                                   const String& displayName, unsigned long estimatedSize)
+                                   const String& displayName, unsigned long estimatedSize, DatabaseType databaseType)
     : m_scriptExecutionContext(context)
+    , m_databaseContext(DatabaseContext::from(context))
     , m_name(name.isolatedCopy())
     , m_expectedVersion(expectedVersion.isolatedCopy())
     , m_displayName(displayName.isolatedCopy())
@@ -192,6 +198,7 @@ AbstractDatabase::AbstractDatabase(ScriptExecutionContext* context, const String
     , m_guid(0)
     , m_opened(false)
     , m_new(false)
+    , m_isSyncDatabase(databaseType == SyncDatabase)
 {
     ASSERT(context->isContextThread());
     m_contextThreadSecurityOrigin = m_scriptExecutionContext->securityOrigin();
@@ -219,6 +226,7 @@ AbstractDatabase::AbstractDatabase(ScriptExecutionContext* context, const String
 
 AbstractDatabase::~AbstractDatabase()
 {
+    ASSERT(!m_opened);
 }
 
 void AbstractDatabase::closeDatabase()
@@ -258,6 +266,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
     const int maxSqliteBusyWaitTime = 30000;
 
     if (!m_sqliteDatabase.open(m_filename, true)) {
+        reportOpenDatabaseResult(1, INVALID_STATE_ERR, m_sqliteDatabase.lastError());
         errorMessage = formatErrorMessage("unable to open database", m_sqliteDatabase.lastError(), m_sqliteDatabase.lastErrorMsg());
         ec = INVALID_STATE_ERR;
         return false;
@@ -299,6 +308,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
             SQLiteTransaction transaction(m_sqliteDatabase);
             transaction.begin();
             if (!transaction.inProgress()) {
+                reportOpenDatabaseResult(2, INVALID_STATE_ERR, m_sqliteDatabase.lastError());
                 errorMessage = formatErrorMessage("unable to open database, failed to start transaction", m_sqliteDatabase.lastError(), m_sqliteDatabase.lastErrorMsg());
                 ec = INVALID_STATE_ERR;
                 m_sqliteDatabase.close();
@@ -310,6 +320,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
                 m_new = true;
 
                 if (!m_sqliteDatabase.executeCommand("CREATE TABLE " + tableName + " (key TEXT NOT NULL ON CONFLICT FAIL UNIQUE ON CONFLICT REPLACE,value TEXT NOT NULL ON CONFLICT FAIL);")) {
+                    reportOpenDatabaseResult(3, INVALID_STATE_ERR, m_sqliteDatabase.lastError());
                     errorMessage = formatErrorMessage("unable to open database, failed to create 'info' table", m_sqliteDatabase.lastError(), m_sqliteDatabase.lastErrorMsg());
                     ec = INVALID_STATE_ERR;
                     transaction.rollback();
@@ -317,6 +328,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
                     return false;
                 }
             } else if (!getVersionFromDatabase(currentVersion, false)) {
+                reportOpenDatabaseResult(4, INVALID_STATE_ERR, m_sqliteDatabase.lastError());
                 errorMessage = formatErrorMessage("unable to open database, failed to read current version", m_sqliteDatabase.lastError(), m_sqliteDatabase.lastErrorMsg());
                 ec = INVALID_STATE_ERR;
                 transaction.rollback();
@@ -329,6 +341,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
             } else if (!m_new || shouldSetVersionInNewDatabase) {
                 LOG(StorageAPI, "Setting version %s in database %s that was just created", m_expectedVersion.ascii().data(), databaseDebugName().ascii().data());
                 if (!setVersionInDatabase(m_expectedVersion, false)) {
+                    reportOpenDatabaseResult(5, INVALID_STATE_ERR, m_sqliteDatabase.lastError());
                     errorMessage = formatErrorMessage("unable to open database, failed to write current version", m_sqliteDatabase.lastError(), m_sqliteDatabase.lastErrorMsg());
                     ec = INVALID_STATE_ERR;
                     transaction.rollback();
@@ -350,6 +363,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
     // If the expected version isn't the empty string, ensure that the current database version we have matches that version. Otherwise, set an exception.
     // If the expected version is the empty string, then we always return with whatever version of the database we have.
     if ((!m_new || shouldSetVersionInNewDatabase) && m_expectedVersion.length() && m_expectedVersion != currentVersion) {
+        reportOpenDatabaseResult(6, INVALID_STATE_ERR, 0);
         errorMessage = "unable to open database, version mismatch, '" + m_expectedVersion + "' does not match the currentVersion of '" + currentVersion + "'";
         ec = INVALID_STATE_ERR;
         // Close the handle to the database file.
@@ -365,6 +379,7 @@ bool AbstractDatabase::performOpenAndVerify(bool shouldSetVersionInNewDatabase, 
     if (m_new && !shouldSetVersionInNewDatabase)
         m_expectedVersion = ""; // The caller provided a creationCallback which will set the expected version.
 
+    reportOpenDatabaseResult(0, -1, 0); // OK
     return true;
 }
 
@@ -535,6 +550,7 @@ void AbstractDatabase::incrementalVacuumIfNeeded()
     int64_t totalSize = m_sqliteDatabase.totalSize();
     if (totalSize <= 10 * freeSpaceSize) {
         int result = m_sqliteDatabase.runIncrementalVacuumCommand();
+        reportVacuumDatabaseResult(result);
         if (result != SQLResultOk)
             logErrorMessage(formatErrorMessage("error vacuuming database", result, m_sqliteDatabase.lastErrorMsg()));
     }
@@ -553,8 +569,50 @@ bool AbstractDatabase::isInterrupted()
 
 void AbstractDatabase::logErrorMessage(const String& message)
 {
-    m_scriptExecutionContext->addMessage(OtherMessageSource, LogMessageType, ErrorMessageLevel, message, 0, String(), 0);
+    m_scriptExecutionContext->addConsoleMessage(OtherMessageSource, LogMessageType, ErrorMessageLevel, message);
 }
+
+#if PLATFORM(CHROMIUM)
+// These are used to generate histograms of errors seen with websql.
+// See about:histograms in chromium.
+void AbstractDatabase::reportOpenDatabaseResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    DatabaseObserver::reportOpenDatabaseResult(this, errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void AbstractDatabase::reportChangeVersionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    DatabaseObserver::reportChangeVersionResult(this, errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void AbstractDatabase::reportStartTransactionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    DatabaseObserver::reportStartTransactionResult(this, errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void AbstractDatabase::reportCommitTransactionResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    DatabaseObserver::reportCommitTransactionResult(this, errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void AbstractDatabase::reportExecuteStatementResult(int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    DatabaseObserver::reportExecuteStatementResult(this, errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void AbstractDatabase::reportVacuumDatabaseResult(int sqliteErrorCode)
+{
+    DatabaseObserver::reportVacuumDatabaseResult(this, sqliteErrorCode);
+}
+
+#else
+void AbstractDatabase::reportOpenDatabaseResult(int, int, int) { }
+void AbstractDatabase::reportChangeVersionResult(int, int, int) { }
+void AbstractDatabase::reportStartTransactionResult(int, int, int) { }
+void AbstractDatabase::reportCommitTransactionResult(int, int, int) { }
+void AbstractDatabase::reportExecuteStatementResult(int, int, int) { }
+void AbstractDatabase::reportVacuumDatabaseResult(int) { }
+#endif // PLATFORM(CHROMIUM)
 
 } // namespace WebCore
 

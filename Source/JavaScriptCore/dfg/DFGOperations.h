@@ -28,15 +28,14 @@
 
 #if ENABLE(DFG_JIT)
 
-#include <dfg/DFGJITCompiler.h>
+#include "DFGJITCompiler.h"
+#include "PutKind.h"
 
 namespace JSC {
 
 struct GlobalResolveInfo;
 
 namespace DFG {
-
-enum PutKind { Direct, NotDirect };
 
 extern "C" {
 
@@ -72,6 +71,7 @@ typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EJJ)(ExecState*, EncodedJS
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EJ)(ExecState*, EncodedJSValue);
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EJP)(ExecState*, EncodedJSValue, void*);
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_ECI)(ExecState*, JSCell*, Identifier*);
+typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EJI)(ExecState*, EncodedJSValue, Identifier*);
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EP)(ExecState*, void*);
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EPP)(ExecState*, void*, void*);
 typedef EncodedJSValue DFG_OPERATION (*J_DFGOperation_EGI)(ExecState*, GlobalResolveInfo*, Identifier*);
@@ -89,6 +89,7 @@ typedef void DFG_OPERATION (*V_DFGOperation_EAZJ)(ExecState*, JSArray*, int32_t,
 typedef double DFG_OPERATION (*D_DFGOperation_DD)(double, double);
 typedef double DFG_OPERATION (*D_DFGOperation_EJ)(ExecState*, EncodedJSValue);
 typedef void* DFG_OPERATION (*P_DFGOperation_E)(ExecState*);
+typedef void DFG_OPERATION (V_DFGOperation_EC)(ExecState*, JSCell*);
 
 // These routines are provide callbacks out to C++ implementations of operations too complex to JIT.
 JSCell* DFG_OPERATION operationNewObject(ExecState*);
@@ -99,11 +100,12 @@ EncodedJSValue DFG_OPERATION operationValueAdd(ExecState*, EncodedJSValue encode
 EncodedJSValue DFG_OPERATION operationValueAddNotNumber(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2);
 EncodedJSValue DFG_OPERATION operationGetByVal(ExecState*, EncodedJSValue encodedBase, EncodedJSValue encodedProperty);
 EncodedJSValue DFG_OPERATION operationGetByValCell(ExecState*, JSCell*, EncodedJSValue encodedProperty);
-EncodedJSValue DFG_OPERATION operationGetById(ExecState*, JSCell*, Identifier*);
-EncodedJSValue DFG_OPERATION operationGetByIdBuildList(ExecState*, JSCell*, Identifier*);
-EncodedJSValue DFG_OPERATION operationGetByIdProtoBuildList(ExecState*, JSCell*, Identifier*);
-EncodedJSValue DFG_OPERATION operationGetByIdOptimize(ExecState*, JSCell*, Identifier*);
-EncodedJSValue DFG_OPERATION operationGetMethodOptimize(ExecState*, JSCell*, Identifier*);
+EncodedJSValue DFG_OPERATION operationGetById(ExecState*, EncodedJSValue, Identifier*);
+EncodedJSValue DFG_OPERATION operationGetByIdBuildList(ExecState*, EncodedJSValue, Identifier*);
+EncodedJSValue DFG_OPERATION operationGetByIdProtoBuildList(ExecState*, EncodedJSValue, Identifier*);
+EncodedJSValue DFG_OPERATION operationGetByIdOptimize(ExecState*, EncodedJSValue, Identifier*);
+EncodedJSValue DFG_OPERATION operationCallCustomGetter(ExecState*, JSCell*, PropertySlot::GetValueFunc, Identifier*);
+EncodedJSValue DFG_OPERATION operationCallGetter(ExecState*, JSCell*, JSCell*);
 EncodedJSValue DFG_OPERATION operationResolve(ExecState*, Identifier*);
 EncodedJSValue DFG_OPERATION operationResolveBase(ExecState*, Identifier*);
 EncodedJSValue DFG_OPERATION operationResolveBaseStrictPut(ExecState*, Identifier*);
@@ -128,6 +130,10 @@ void DFG_OPERATION operationPutByIdStrictOptimize(ExecState*, EncodedJSValue enc
 void DFG_OPERATION operationPutByIdNonStrictOptimize(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
 void DFG_OPERATION operationPutByIdDirectStrictOptimize(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
 void DFG_OPERATION operationPutByIdDirectNonStrictOptimize(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
+void DFG_OPERATION operationPutByIdStrictBuildList(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
+void DFG_OPERATION operationPutByIdNonStrictBuildList(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
+void DFG_OPERATION operationPutByIdDirectStrictBuildList(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
+void DFG_OPERATION operationPutByIdDirectNonStrictBuildList(ExecState*, EncodedJSValue encodedValue, JSCell* base, Identifier*);
 // These comparisons return a boolean within a size_t such that the value is zero extended to fill the register.
 size_t DFG_OPERATION operationCompareLess(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2);
 size_t DFG_OPERATION operationCompareLessEq(ExecState*, EncodedJSValue encodedOp1, EncodedJSValue encodedOp2);
@@ -140,20 +146,51 @@ void* DFG_OPERATION operationVirtualCall(ExecState*);
 void* DFG_OPERATION operationLinkCall(ExecState*);
 void* DFG_OPERATION operationVirtualConstruct(ExecState*);
 void* DFG_OPERATION operationLinkConstruct(ExecState*);
+JSCell* DFG_OPERATION operationCreateActivation(ExecState*);
+void DFG_OPERATION operationTearOffActivation(ExecState*, JSCell*);
+JSCell* DFG_OPERATION operationNewFunction(ExecState*, JSCell*);
+JSCell* DFG_OPERATION operationNewFunctionExpression(ExecState*, JSCell*);
 
 // This method is used to lookup an exception hander, keyed by faultLocation, which is
 // the return location from one of the calls out to one of the helper operations above.
 struct DFGHandler {
     DFGHandler(ExecState* exec, void* handler)
-        : exec(exec)
-        , handler(handler)
     {
+        u.s.exec = exec;
+        u.s.handler = handler;
     }
 
-    ExecState* exec;
-    void* handler;
+#if !CPU(X86_64)
+    uint64_t encoded()
+    {
+        COMPILE_ASSERT(sizeof(Union) == sizeof(uint64_t), DFGHandler_Union_is_64bit);
+        return u.encoded;
+    }
+#endif
+
+    union Union {
+        struct Struct {
+            ExecState* exec;
+            void* handler;
+        } s;
+        uint64_t encoded;
+    } u;
 };
-DFGHandler DFG_OPERATION lookupExceptionHandler(ExecState*, ReturnAddressPtr faultLocation);
+#if CPU(X86_64)
+typedef DFGHandler DFGHandlerEncoded;
+inline DFGHandlerEncoded dfgHandlerEncoded(ExecState* exec, void* handler)
+{
+    return DFGHandler(exec, handler);
+}
+#else
+typedef uint64_t DFGHandlerEncoded;
+inline DFGHandlerEncoded dfgHandlerEncoded(ExecState* exec, void* handler)
+{
+    return DFGHandler(exec, handler).encoded();
+}
+#endif
+DFGHandlerEncoded DFG_OPERATION lookupExceptionHandler(ExecState*, uint32_t);
+DFGHandlerEncoded DFG_OPERATION lookupExceptionHandlerInStub(ExecState*, StructureStubInfo*);
 
 // These operations implement the implicitly called ToInt32, ToNumber, and ToBoolean conversions from ES5.
 double DFG_OPERATION dfgConvertJSValueToNumber(ExecState*, EncodedJSValue);

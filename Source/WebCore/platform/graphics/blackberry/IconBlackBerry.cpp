@@ -22,10 +22,7 @@
 #include "GraphicsContext.h"
 #include "IntRect.h"
 #include "NotImplemented.h"
-#include "PassRefPtr.h"
 #include "PlatformString.h"
-
-#include <wtf/Vector.h>
 
 namespace WebCore {
 
@@ -39,7 +36,7 @@ void Icon::paint(GraphicsContext*, IntRect const&)
     notImplemented();
 }
 
-WTF::PassRefPtr<Icon> Icon::createIconForFiles(const Vector<String>& filenames)
+PassRefPtr<Icon> Icon::createIconForFiles(const Vector<String>&)
 {
     // FIXME: remove 0 template param when this is implemented
     notImplemented();

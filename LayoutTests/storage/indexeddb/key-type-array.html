@@ -1,7 +1,6 @@
 <!DOCTYPE html>
 <html>
 <head>
-<link rel="stylesheet" href="../../fast/js/resources/js-test-style.css">
 <script src="../../fast/js/resources/js-test-pre.js"></script>
 <script src="resources/shared.js"></script>
 </head>
@@ -189,21 +188,18 @@ function testInvalidArrayKeys()
 
 function makeArrayOfDepth(n)
 {
-    var array = [], current = array;
+    var array = [];
     while (--n) {
-        current.push([]);
-        current = current[0];
+        array = [array];
     }
     return array;
 }
 
 function testDepthLimits()
 {
-    shouldBe("indexedDB.cmp(makeArrayOfDepth(5), 0)", "1");
-    shouldBe("indexedDB.cmp(makeArrayOfDepth(50), 0)", "1");
-    shouldBe("indexedDB.cmp(makeArrayOfDepth(500), 0)", "1");
-    shouldBe("indexedDB.cmp(makeArrayOfDepth(5000), 0)", "1");
-    evalAndExpectException("indexedDB.cmp(makeArrayOfDepth(50000), 0)", "IDBDatabaseException.DATA_ERR");
+    shouldBe("indexedDB.cmp(makeArrayOfDepth(25), 0)", "1");
+    shouldBe("indexedDB.cmp(makeArrayOfDepth(250), 0)", "1");
+    evalAndExpectException("indexedDB.cmp(makeArrayOfDepth(2500), 0)", "IDBDatabaseException.DATA_ERR");
     debug("");
 
     done();

@@ -115,7 +115,7 @@ TEST(KURLTest, SameGetters)
 
 // Test a few cases where we're different just to make sure we give reasonable
 // output.
-TEST(KURLTest, DifferentGetters)
+TEST(KURLTest, DISABLED_DifferentGetters)
 {
     ComponentCase cases[] = {
         // url                                    protocol      host        port  user  pass    path                lastPath  query      ref
@@ -155,7 +155,7 @@ TEST(KURLTest, DifferentGetters)
 
 // Ensures that both ASCII and UTF-8 canonical URLs are handled properly and we
 // get the correct string object out.
-TEST(KURLTest, UTF8)
+TEST(KURLTest, DISABLED_UTF8)
 {
     const char asciiURL[] = "http://foo/bar#baz";
     WebCore::KURL asciiKURL(WebCore::ParsedURLString, asciiURL);
@@ -316,7 +316,7 @@ TEST(KURLTest, Encode)
         {"\x10\x11\x12\x13\x14\x15\x16\x17\x18\x19\x1A\x1B\x1C\x1D\x1E\x1F",
           "%10%11%12%13%14%15%16%17%18%19%1A%1B%1C%1D%1E%1F"},
         {" !\"#$%&'()*+,-./",
-          "%20!%22%23%24%25%26'()*%2B%2C-.%2F"},
+          "%20!%22%23%24%25%26'()*%2B%2C-./"},
         {"0123456789:;<=>?",
           "0123456789%3A%3B%3C%3D%3E%3F"},
         {"@ABCDEFGHIJKLMNO",

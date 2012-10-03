@@ -26,7 +26,6 @@
 
 #include "DataObjectGtk.h"
 #include "DumpRenderTreeSupportGtk.h"
-#include "EditCommand.h"
 #include "Editor.h"
 #include "EventNames.h"
 #include "FocusController.h"
@@ -38,6 +37,7 @@
 #include "Page.h"
 #include "PasteboardHelper.h"
 #include "PlatformKeyboardEvent.h"
+#include "UndoStep.h"
 #include "WebKitDOMBinding.h"
 #include "WebKitDOMCSSStyleDeclarationPrivate.h"
 #include "WebKitDOMHTMLElementPrivate.h"
@@ -235,10 +235,10 @@ bool EditorClient::shouldChangeSelectedRange(Range* fromRange, Range* toRange, E
     return accept;
 }
 
-bool EditorClient::shouldApplyStyle(WebCore::CSSStyleDeclaration* declaration, WebCore::Range* range)
+bool EditorClient::shouldApplyStyle(WebCore::StylePropertySet* set, WebCore::Range* range)
 {
     gboolean accept = TRUE;
-    GRefPtr<WebKitDOMCSSStyleDeclaration> kitDeclaration(kit(declaration));
+    GRefPtr<WebKitDOMCSSStyleDeclaration> kitDeclaration(kit(set->ensureCSSStyleDeclaration()));
     GRefPtr<WebKitDOMRange> kitRange(adoptGRef(kit(range)));
     g_signal_emit_by_name(m_webView, "should-apply-style", kitDeclaration.get(), kitRange.get(), &accept);
     return accept;
@@ -291,7 +291,7 @@ static void setSelectionPrimaryClipboardIfNeeded(WebKitWebView* webView)
     if (!targetFrame->selection()->isRange())
         return;
 
-    dataObject->clear();
+    dataObject->clearAll();
     dataObject->setRange(targetFrame->selection()->toNormalizedRange());
 
     viewSettingClipboard = webView;
@@ -302,33 +302,31 @@ static void setSelectionPrimaryClipboardIfNeeded(WebKitWebView* webView)
 }
 #endif
 
-void EditorClient::respondToChangedSelection()
+void EditorClient::respondToChangedSelection(Frame* frame)
 {
     g_signal_emit_by_name(m_webView, "selection-changed");
 
-    WebKitWebViewPrivate* priv = m_webView->priv;
-    WebCore::Page* corePage = core(m_webView);
-    Frame* targetFrame = corePage->focusController()->focusedOrMainFrame();
-
-    if (!targetFrame)
+    if (!frame)
         return;
 
-    if (targetFrame->editor()->ignoreCompositionSelectionChange())
+    if (frame->editor()->ignoreCompositionSelectionChange())
         return;
 
 #if PLATFORM(X11)
     setSelectionPrimaryClipboardIfNeeded(m_webView);
 #endif
 
-    if (!targetFrame->editor()->hasComposition())
+    if (!frame->editor()->hasComposition())
         return;
 
     unsigned start;
     unsigned end;
-    if (!targetFrame->editor()->getCompositionSelection(start, end)) {
+    WebKitWebViewPrivate* priv = m_webView->priv;
+
+    if (!frame->editor()->getCompositionSelection(start, end)) {
         // gtk_im_context_reset() clears the composition for us.
         gtk_im_context_reset(priv->imContext.get());
-        targetFrame->editor()->cancelComposition();
+        frame->editor()->cancelComposition();
     }
 }
 
@@ -347,18 +345,18 @@ void EditorClient::didSetSelectionTypesForPasteboard()
     notImplemented();
 }
 
-void EditorClient::registerCommandForUndo(WTF::PassRefPtr<WebCore::EditCommand> command)
+void EditorClient::registerUndoStep(WTF::PassRefPtr<WebCore::UndoStep> step)
 {
     if (undoStack.size() == maximumUndoStackDepth)
         undoStack.removeFirst();
     if (!m_isInRedo)
         redoStack.clear();
-    undoStack.append(command);
+    undoStack.append(step);
 }
 
-void EditorClient::registerCommandForRedo(WTF::PassRefPtr<WebCore::EditCommand> command)
+void EditorClient::registerRedoStep(WTF::PassRefPtr<WebCore::UndoStep> step)
 {
-    redoStack.append(command);
+    redoStack.append(step);
 }
 
 void EditorClient::clearUndoRedoOperations()
@@ -390,23 +388,23 @@ bool EditorClient::canRedo() const
 void EditorClient::undo()
 {
     if (canUndo()) {
-        RefPtr<WebCore::EditCommand> command(*(--undoStack.end()));
+        RefPtr<WebCore::UndoStep> step(*(--undoStack.end()));
         undoStack.remove(--undoStack.end());
         // unapply will call us back to push this command onto the redo stack.
-        command->unapply();
+        step->unapply();
     }
 }
 
 void EditorClient::redo()
 {
     if (canRedo()) {
-        RefPtr<WebCore::EditCommand> command(*(--redoStack.end()));
+        RefPtr<WebCore::UndoStep> step(*(--redoStack.end()));
         redoStack.remove(--redoStack.end());
 
         ASSERT(!m_isInRedo);
         m_isInRedo = true;
         // reapply will call us back to push this command onto the undo stack.
-        command->reapply();
+        step->reapply();
         m_isInRedo = false;
     }
 }
@@ -504,7 +502,7 @@ void EditorClient::handleKeyboardEvent(KeyboardEvent* event)
         // During RawKeyDown events if an editor command will insert text, defer
         // the insertion until the keypress event. We want keydown to bubble up
         // through the DOM first.
-        if (platformEvent->type() == PlatformKeyboardEvent::RawKeyDown) {
+        if (platformEvent->type() == PlatformEvent::RawKeyDown) {
             if (executePendingEditorCommands(frame, false))
                 event->setDefaultHandled();
 

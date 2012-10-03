@@ -1,3 +1,1672 @@
+2012-03-12  Antonio Gomes  <agomes@rim.com>
+
+        Convert nodesFromRect tests to use Internals interface
+        https://bugs.webkit.org/show_bug.cgi?id=80886
+
+        Reviewed by Ryosuke Niwa.
+
+        Removed DRTSupportQt::nodesFromRect support, since
+        it can work in the cross-port way through the
+        Internals interface.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+
+2012-02-27  Caio Marcelo de Oliveira Filho  <caio.oliveira@openbossa.org>
+
+        [Qt] Move registration of experimental types to the proper plugin
+        https://bugs.webkit.org/show_bug.cgi?id=79706
+
+        Reviewed by Tor Arne Vestbø.
+
+        * declarative/experimental/plugin.cpp:
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2012-02-28  Antti Koivisto  <antti@apple.com>
+
+        Try to fix build.
+
+        Not reviewed.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::styleProperty):
+
+2012-02-26  Hajime Morrita  <morrita@chromium.org>
+
+        Move ChromeClient::showContextMenu() to ContextMenuClient
+        https://bugs.webkit.org/show_bug.cgi?id=79427
+
+        Reviewed by Adam Barth.
+
+        * WebCoreSupport/ChromeClientQt.h:
+        (ChromeClientQt):
+
+2012-02-24  Jocelyn Turcotte  <jocelyn.turcotte@nokia.com>
+
+        [Qt] API: Unify the loading properties and signals.
+        https://bugs.webkit.org/show_bug.cgi?id=79486
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2012-02-24  Holger Hans Peter Freyther  <holger@moiji-mobile.com>
+
+        [Qt] Build fix. macro "QSKIP" now only takes 1 argument on Qt5
+        https://bugs.webkit.org/show_bug.cgi?id=79328
+
+        Reviewed by Csaba Osztrogonác.
+
+        Introduce an alternative QSKIP that can work with both Qt4
+        and Qt5 without adding #ifdef to each usage site.
+
+        * tests/benchmarks/loading/tst_loading.cpp:
+        (tst_Loading::load):
+        * tests/benchmarks/painting/tst_painting.cpp:
+        (tst_Painting::paint):
+        * tests/qdeclarativewebview/tst_qdeclarativewebview.cpp:
+        (tst_QDeclarativeWebView::elementAreaAt):
+        * tests/qwebframe/tst_qwebframe.cpp:
+        (tst_QWebFrame::setHtmlWithBaseURL):
+        * tests/qwebpage/tst_qwebpage.cpp:
+        (tst_QWebPage::geolocationRequestJS):
+        (tst_QWebPage::loadHtml5Video):
+        (tst_QWebPage::screenshot):
+        * tests/qwebview/tst_qwebview.cpp:
+        (tst_QWebView::reusePage):
+
+2012-02-24  Shinya Kawanaka  <shinyak@chromium.org>
+
+        SpellCheckRequest needs to know the context where the spellcheck happened.
+        https://bugs.webkit.org/show_bug.cgi?id=79320
+
+        Reviewed by Hajime Morita.
+
+        * WebCoreSupport/TextCheckerClientQt.h:
+        (WebCore::TextCheckerClientQt::requestCheckingOfString):
+
+2012-02-23  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Add support for touch cancellation
+        https://bugs.webkit.org/show_bug.cgi?id=79348
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Forward incoming touch cancellation events to the WebCore
+        event handler.
+
+        * Api/qgraphicswebview.cpp:
+        (QGraphicsWebView::sceneEvent):
+        * Api/qwebpage.cpp:
+        (QWebPage::event):
+        * Api/qwebview.cpp:
+        (QWebView::event):
+
+2012-02-22  Hajime Morrita  <morrita@chromium.org>
+
+        NOTIFICATIONS should be implemented as PageSupplement
+        https://bugs.webkit.org/show_bug.cgi?id=79052
+
+        Reviewed by Adam Barth.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+
+2012-02-21  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::shouldApplyStyle):
+        * WebCoreSupport/EditorClientQt.h:
+        (EditorClientQt):
+
+2012-02-22  Mihnea Ovidenie  <mihnea@adobe.com>
+
+        [Qt] REGRESSION(r108108): It made 3 fast/repaint tests fail
+        https://bugs.webkit.org/show_bug.cgi?id=78960
+
+        Reviewed by Csaba Osztrogonác.
+
+        * Api/qwebsettings.cpp:
+        (QWebSettingsPrivate::apply):
+        (QWebSettings::QWebSettings):
+        * Api/qwebsettings.h:
+
+2012-02-22  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Move QMenu dependant scrollbar context menu handling out of WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=79233
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Move scrollbar context menu handling here, it's the only place where it is
+        used.
+
+        * Api/qwebpage.cpp:
+        (handleScrollbarContextMenuEvent):
+        (QWebPage::swallowContextMenuEvent):
+
+2012-02-22  Kenneth Rohde Christiansen  <kenneth@webkit.org>
+
+        Merge setVisibleRectTrajectoryVector and adjustVisibleRect to
+        the more descriptive coverWithTilesIfNeeded
+        https://bugs.webkit.org/show_bug.cgi?id=79230
+
+        Reviewed by Simon Hausmann.
+
+        * Api/qgraphicswebview.cpp:
+        (QGraphicsWebView::paint):
+
+            Use coverWithTilesIfNeeded().
+
+2012-02-22  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Remove the remaining uses of CSSStyleDeclaration in Editor
+        https://bugs.webkit.org/show_bug.cgi?id=78939
+
+        Reviewed by Enrica Casucci.
+
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::shouldApplyStyle):
+        * WebCoreSupport/EditorClientQt.h:
+        (EditorClientQt):
+
+2012-02-21  Csaba Osztrogonác  <ossy@webkit.org>
+
+        [Qt] tst_QWebPage::infiniteLoopJS() timeouts with DFG JIT
+        https://bugs.webkit.org/show_bug.cgi?id=79040
+
+        Reviewed by Simon Hausmann.
+
+        * tests/qwebpage/tst_qwebpage.cpp:
+        (tst_QWebPage): Disable tst_QWebPage::infiniteLoopJS() until proper fix.
+
+2012-02-21  Andras Becsi  <andras.becsi@nokia.com>
+
+        [Qt] Print warning when importing experimental WK2 APIs in QML
+        https://bugs.webkit.org/show_bug.cgi?id=78817
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/experimental/plugin.cpp:
+
+2012-02-20  Benjamin Poulain  <benjamin@webkit.org>
+
+        Get rid of the LocalizationStrategy
+        https://bugs.webkit.org/show_bug.cgi?id=78324
+
+        Reviewed by Sam Weinig.
+
+        Move the localization code from PlatformStrategiesQt.cpp
+        to LocalizedStringsQt.cpp.
+
+        Get rid of LocalizationStrategy from PlatformStrategiesQt
+
+        * WebCoreSupport/PlatformStrategiesQt.cpp:
+        * WebCoreSupport/PlatformStrategiesQt.h:
+        (PlatformStrategiesQt):
+
+2012-02-16  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Unreviewed brown-paper bag build fix.
+
+        * WebCoreSupport/WebEventConversion.cpp:
+        (WebCore::WebKitPlatformWheelEvent::WebKitPlatformWheelEvent):
+
+2012-02-16  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Move event conversion functions from WebCore to WebKit
+        https://bugs.webkit.org/show_bug.cgi?id=78788
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Move QtWidgets dependent mouse event constructors out of WebCore
+        into WebKit, similar to the web event conversions of WebKit2.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::mouseMoveEvent):
+        (QWebPagePrivate::mousePressEvent):
+        (QWebPagePrivate::mouseDoubleClickEvent):
+        (QWebPagePrivate::mouseTripleClickEvent):
+        (QWebPagePrivate::mouseReleaseEvent):
+        (QWebPagePrivate::wheelEvent):
+        (QWebPage::swallowContextMenuEvent):
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::postProgressFinishedNotification):
+        * WebCoreSupport/WebEventConversion.cpp: Added.
+        (WebCore):
+        (WebCore::mouseEventModifiersFromQtKeyboardModifiers):
+        (WebCore::mouseEventTypeAndMouseButtonFromQEvent):
+        (WebKitPlatformMouseEvent):
+        (WebCore::WebKitPlatformMouseEvent::WebKitPlatformMouseEvent):
+        (WebCore::convertMouseEvent):
+        (WebKitPlatformWheelEvent):
+        (WebCore::WebKitPlatformWheelEvent::applyDelta):
+        (WebCore::WebKitPlatformWheelEvent::WebKitPlatformWheelEvent):
+        (WebCore::convertWheelEvent):
+        * WebCoreSupport/WebEventConversion.h: Added.
+        (WebCore):
+
+2012-02-16  Adenilson Cavalcanti  <cavalcantii@gmail.com>
+
+        [Qt][WK2] Split QWebPermissionRequest into QWebSecurityOrigin
+        https://bugs.webkit.org/show_bug.cgi?id=73215
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Adding a class to access security information data
+        (e.g. port/scheme/etc),
+        while allowing it to be handled in QML side.
+
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2012-02-15  Sadrul Habib Chowdhury  <sadrul@chromium.org>
+
+        Notify ChromeClient when touch-event handlers are installed/removed.
+        https://bugs.webkit.org/show_bug.cgi?id=77440
+
+        Reviewed by Darin Fisher and Ryosuke Niwa.
+
+        * WebCoreSupport/ChromeClientQt.h:
+        (WebCore::ChromeClientQt::numTouchEventHandlersChanged):
+
+2012-02-15  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Unreviewed Qt 4.x build fix.
+
+        * WebCoreSupport/PageClientQt.cpp: Fix the QT_VERSION_CHECK pre-processor foo.
+
+2012-02-15  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Replace use of QGLWidget/QGLContext with QOpenGLContext and QSurface for Qt 5
+        https://bugs.webkit.org/show_bug.cgi?id=78694
+
+        Reviewed by Noam Rosenthal.
+
+        * WebCoreSupport/PageClientQt.cpp:
+        (createPlatformGraphicsContext3DFromWidget): Return the QOpenGLContext and QSurface
+        from the QGLWidget when compiling with Qt 5, as that's what WebCore expects.
+
+2012-02-15  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Move Qt platform specific GL Context/Surface creation out of WebCore into WebKit
+        https://bugs.webkit.org/show_bug.cgi?id=78692
+
+        Reviewed by Noam Rosenthal.
+
+        Implement GLWidget and GLContext creation from the page client interface.
+
+        * WebCoreSupport/PageClientQt.cpp:
+        (createPlatformGraphicsContext3DFromWidget):
+        (WebCore):
+        (WebCore::PageClientQWidget::createPlatformGraphicsContext3D):
+        (WebCore::PageClientQGraphicsWidget::createPlatformGraphicsContext3D):
+        * WebCoreSupport/PageClientQt.h:
+        (PageClientQWidget):
+        (PageClientQGraphicsWidget):
+
+2012-02-14  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Eliminate first set of QtWidgets dependencies from WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=78611
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * Api/qwebpage.cpp: Add missing includes.
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp: Ditto.
+        * WebCoreSupport/FrameLoaderClientQt.cpp: Make it compile by casting
+        the QObject based PlatformWidget back to QWidget before doing QWidget
+        specific function calls.
+        * WebCoreSupport/InitWebCoreQt.cpp:
+        (WebCore::initializeWebCoreQt): Moved QStyle specific web-graphic initialization
+        here from WebCore.
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::PageClientQWidget::setWidgetVisible): Implement show/hiding of widgets
+        through delegation to QWidget.
+        (WebCore):
+        (WebCore::PageClientQGraphicsWidget::setWidgetVisible): Provide empty widget
+        show/hide implementation, as it doesn't seem to make sense for graphicsviews.
+        * WebCoreSupport/PageClientQt.h:
+        (PageClientQWidget):
+        (PageClientQGraphicsWidget):
+
+2012-02-15  Kenneth Rohde Christiansen  <kenneth@webkit.org>
+
+        [Qt] Be smarted with tile usages during tiling
+        https://bugs.webkit.org/show_bug.cgi?id=78243
+
+        Reviewed by Simon Hausmann.
+
+        Remove internal API used by Symbian.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::dynamicPropertyChangeEvent):
+
+2012-02-15  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Texmap] Divide TextureMapperNode.cpp to 3 files.
+        https://bugs.webkit.org/show_bug.cgi?id=76660
+
+        Rename TextureMapperNode to TextureMapperLayer.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::renderCompositedLayers):
+        * Api/qwebframe.h:
+        (WebCore):
+        * Api/qwebframe_p.h:
+        (WebCore):
+        (QWebFramePrivate::QWebFramePrivate):
+        (QWebFramePrivate):
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::TextureMapperLayerClientQt::TextureMapperLayerClientQt):
+        (WebCore::TextureMapperLayerClientQt::setTextureMapper):
+        (WebCore::TextureMapperLayerClientQt::~TextureMapperLayerClientQt):
+        (WebCore::TextureMapperLayerClientQt::syncRootLayer):
+        (WebCore::TextureMapperLayerClientQt::rootLayer):
+        (WebCore::PageClientQWidget::setRootGraphicsLayer):
+        (WebCore::PageClientQWidget::syncLayers):
+        (WebCore::PageClientQGraphicsWidget::syncLayers):
+        (WebCore::PageClientQGraphicsWidget::setRootGraphicsLayer):
+        * WebCoreSupport/PageClientQt.h:
+        (TextureMapperLayerClientQt):
+        (PageClientQWidget):
+        (PageClientQGraphicsWidget):
+
+2012-02-11  Nikolas Zimmermann  <nzimmermann@rim.com>
+
+        Convert svg/animations to use SMIL methods for driving the timeline
+        https://bugs.webkit.org/show_bug.cgi?id=78422
+
+        Reviewed by Dirk Schulze.
+
+        Remove SVG animation sampling functionality provided for DRT, which no longer uses it.
+        Instead we switched the svg/animations tests to use SVGSVGElement.setCurrentTime.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+
+2012-02-13  Enrica Casucci  <enrica@apple.com>
+
+        Build fix. Unreviewed.
+
+        * WebCoreSupport/PlatformStrategiesQt.cpp:
+        (PlatformStrategiesQt::createPasteboardStrategy):
+
+2012-02-13  Enrica Casucci  <enrica@apple.com>
+
+        Refactor Mac platform implementation of the Pasteboard class to use Platform Strategies.
+        https://bugs.webkit.org/show_bug.cgi?id=78282
+
+        Build fix. Unreviewed.
+
+        * WebCoreSupport/PlatformStrategiesQt.cpp:
+        (WebPlatformStrategies::createPasteboardStrategy):
+        * WebCoreSupport/PlatformStrategiesQt.h:
+        (PlatformStrategiesQt):
+
+2012-02-12  Hajime Morrita  <morrita@chromium.org>
+
+        Page should have less intrusive way to associate API implementation objects.
+        https://bugs.webkit.org/show_bug.cgi?id=78085
+
+        Reviewed by Adam Barth.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::setMockDeviceOrientation):
+
+2012-02-09  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Fix compilation with newer Qt5
+        https://bugs.webkit.org/show_bug.cgi?id=77653
+
+        Reviewed by Tor Arne Vestbø.
+
+        * Api/qgraphicswebview.cpp: Removed unnecessary inclusion of removed header file.
+        * declarative/public.pri: Use quick1 instead of qtquick1. It's mandator with Qt 5.
+        * tests/tests.pri: Ditto.
+        * declarative/qdeclarativewebview_p.h: Fix includes, just use the module-less
+        version that works with all Qt versions.
+        * tests/qdeclarativewebview/tst_qdeclarativewebview.cpp: Ditto.
+
+2012-02-08  Leo Franchi  <lfranchi@kde.org>
+
+        Remote web inspector reentrancy fixes
+        https://bugs.webkit.org/show_bug.cgi?id=77022
+
+        Reviewed by Joseph Pecoraro.
+
+        * WebCoreSupport/InspectorServerQt.cpp:
+        (WebCore::InspectorServerRequestHandlerQt::tcpReadyRead):
+        (WebCore::InspectorServerRequestHandlerQt::webSocketReadyRead):
+
+2012-02-06  Caio Marcelo de Oliveira Filho  <caio.oliveira@openbossa.org>
+
+        Provide more attribute methods in Element
+        https://bugs.webkit.org/show_bug.cgi?id=77800
+
+        Reviewed by Ryosuke Niwa.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::attributeNames): access attributes via Element interface.
+
+2012-02-03  Jocelyn Turcotte  <jocelyn.turcotte@nokia.com>
+
+        [Qt] Don't version QtWebKit.experimental.
+        https://bugs.webkit.org/show_bug.cgi?id=77739
+
+        Reviewed by Tor Arne Vestbø.
+
+        We won't support previous versions of the experimental API.
+
+        * declarative/experimental/plugin.cpp:
+
+2012-02-05  Gavin Barraclough  <barraclough@apple.com>
+
+        Remove JSObject defineGetter/defineSetter lookupGetter/lookupSetter
+        https://bugs.webkit.org/show_bug.cgi?id=77451
+
+        Reviewed by Sam Weinig.
+
+        These can now all be implemented in terms of defineOwnProperty & getPropertyDescriptor.
+        Also remove initializeGetterSetterProperty, since this is equivalent to putDirectAccessor.
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::addQtSenderToGlobalObject):
+
+2012-02-03  Antti Koivisto  <antti@apple.com>
+
+        Rename CSSMutableStyleDeclaration.h/.cpp to StylePropertySet.h/.cpp 
+        https://bugs.webkit.org/show_bug.cgi?id=77779
+
+        Reviewed by Darin Adler.
+
+        * Api/qwebelement.cpp:
+
+2012-02-03  Antti Koivisto  <antti@apple.com>
+
+        https://bugs.webkit.org/show_bug.cgi?id=77740
+        Split CSSMutableStyleDeclaration into separate internal and CSSOM types 
+
+        Reviewed by Andreas Kling and Darin Adler.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::styleProperty):
+
+2012-02-03  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Qt][Texmap] Refactor TextureMapper API to use ImageBuffers when possible.
+        https://bugs.webkit.org/show_bug.cgi?id=77148
+
+        Reviewed by Martin Robinson.
+
+        Use TextureMapper::create instead of creating TextureMapperGL/TextureMapperQt directly.
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::renderCompositedLayers):
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::PageClientQWidget::setRootGraphicsLayer):
+        (WebCore::PageClientQGraphicsWidget::setRootGraphicsLayer):
+
+2012-02-02  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r106620.
+        http://trac.webkit.org/changeset/106620
+        https://bugs.webkit.org/show_bug.cgi?id=77716
+
+        It broke non ENABLE(3D_RENDERING) builds (Requested by
+        Ossy_morning on #webkit).
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::renderCompositedLayers):
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::PageClientQWidget::setRootGraphicsLayer):
+        (WebCore::PageClientQGraphicsWidget::setRootGraphicsLayer):
+
+2012-02-02  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Qt][Texmap] Refactor TextureMapper API to use ImageBuffers when possible.
+        https://bugs.webkit.org/show_bug.cgi?id=77148
+
+        Reviewed by Martin Robinson.
+
+        Use TextureMapper::create instead of creating TextureMapperGL/TextureMapperQt directly.
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::renderCompositedLayers):
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::PageClientQWidget::setRootGraphicsLayer):
+        (WebCore::PageClientQGraphicsWidget::setRootGraphicsLayer):
+
+2012-02-01  Caio Marcelo de Oliveira Filho  <caio.oliveira@openbossa.org>
+
+        Avoid creating NamedNodeMap unnecessarily
+        https://bugs.webkit.org/show_bug.cgi?id=77574
+
+        Reviewed by Ryosuke Niwa.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::attributeNames): use updateAttributes().
+
+2012-02-01  Alexis Menard  <alexis.menard@openbossa.org>
+
+        CSSStyleDeclaration.getPropertyPriority() fails for CSS shorthand properties with 'important' priority
+        https://bugs.webkit.org/show_bug.cgi?id=49058
+
+        Reviewed by Andreas Kling.
+
+        Update the code as getPropertyPriority has been renamed to propertyIsImportant.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::styleProperty):
+
+2012-01-31  Antti Koivisto  <antti@apple.com>
+
+        Try to fix Qt build.
+
+        Not reviewed.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::styleProperty):
+
+2012-01-30  Antti Koivisto  <antti@apple.com>
+
+        Reduce non-CSSOM API of CSSStyleDeclaration
+        https://bugs.webkit.org/show_bug.cgi?id=77299
+
+        Reviewed by Andreas Kling.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::styleProperty):
+        (QWebElement::setStyleProperty):
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::computedStyleIncludingVisitedInfo):
+
+2012-01-25  Zeno Albisser  <zeno@webkit.org>
+
+        [Qt] public.pri is missing dependency to quick module.
+        https://bugs.webkit.org/show_bug.cgi?id=77016
+
+        Reviewed by Tor Arne Vestbø.
+
+        * declarative/public.pri:
+
+2012-01-17  Viatcheslav Ostapenko  <ostapenko.viatcheslav@nokia.com>
+
+        [Qt] Debug build fails with debug qt5
+        https://bugs.webkit.org/show_bug.cgi?id=76463
+
+        Reviewed by Simon Hausmann.
+
+        Add QNetworkCookie include in order to satisfy sizeof in QTypeInfo in debug builds.
+
+        * WebCoreSupport/FrameNetworkingContextQt.cpp:
+
+2012-01-13  Marcelo Lira  <marcelo.lira@openbossa.org>
+
+        [Qt] Fix missing signal in qwebframe API test for Qt5
+        https://bugs.webkit.org/show_bug.cgi?id=76195
+
+        Reviewed by Noam Rosenthal.
+
+        In Qt5 QObject has a new signal with this signature: "objectNameChanged(QString)".
+
+        * tests/qwebframe/tst_qwebframe.cpp:
+        (tst_QWebFrame::enumerate_data):
+
+2012-01-11  Vsevolod Vlasov  <vsevik@chromium.org>
+
+        Make default console messages line numbers consistent.
+        https://bugs.webkit.org/show_bug.cgi?id=74075
+
+        Reviewed by Pavel Feldman.
+
+        Unset line numbers are not printed to console now.
+
+        * Api/qwebpage.cpp:
+        (QWebPage::javaScriptConsoleMessage):
+
+2012-01-11  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Unreviewed trivial build fix: Removed unnecessary QHttpRequestHeader
+        inclusion (and the file is removed in newer Qt 5 versions).
+
+        * Api/qwebpage.cpp:
+
+2012-01-11  Rafael Brandao  <rafael.lobo@openbossa.org>
+
+        [Qt][WK2] Fix the build for newer Qt5
+        https://bugs.webkit.org/show_bug.cgi?id=75964
+
+        Reviewed by Simon Hausmann.
+
+        Added QHttpHeader, QHttpResponseHeader and QHttpRequestHeader
+        that were removed from Qt. They are now kept under a private header
+        and only the relevant code is present.
+
+        * Api/qhttpheader.cpp: Added.
+        (QHttpHeader::QHttpHeader):
+        (QHttpHeader::~QHttpHeader):
+        (QHttpHeader::parse):
+        (QHttpHeader::value):
+        (QHttpHeader::hasKey):
+        (QHttpHeader::setValue):
+        (QHttpHeader::addValue):
+        (QHttpHeader::parseLine):
+        (QHttpHeader::toString):
+        (QHttpHeader::hasContentLength):
+        (QHttpHeader::contentLength):
+        (QHttpHeader::setContentLength):
+        (QHttpHeader::hasContentType):
+        (QHttpHeader::contentType):
+        (QHttpHeader::setContentType):
+        (QHttpResponseHeader::QHttpResponseHeader):
+        (QHttpResponseHeader::parseLine):
+        (QHttpResponseHeader::toString):
+        (QHttpRequestHeader::QHttpRequestHeader):
+        (QHttpRequestHeader::parseLine):
+        (QHttpRequestHeader::toString):
+        * Api/qhttpheader_p.h: Added.
+        (QHttpHeader::isValid):
+        (QHttpHeader::setValid):
+        (QHttpResponseHeader::statusCode):
+        (QHttpResponseHeader::reasonPhrase):
+        (QHttpResponseHeader::majorVersion):
+        (QHttpResponseHeader::minorVersion):
+        (QHttpRequestHeader::method):
+        (QHttpRequestHeader::path):
+        (QHttpRequestHeader::majorVersion):
+        (QHttpRequestHeader::minorVersion):
+        * WebCoreSupport/InspectorServerQt.cpp:
+
+2012-01-10  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Qt] Enable CSS_FILTERS in Qt build
+        https://bugs.webkit.org/show_bug.cgi?id=75777
+
+        For now, disallow compositing for filters. We will change that trigger when
+        https://bugs.webkit.org/show_bug.cgi?id=75778 is implemented.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::allowedCompositingTriggers):
+
+2012-01-08  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r104421.
+        http://trac.webkit.org/changeset/104421
+        https://bugs.webkit.org/show_bug.cgi?id=75816
+
+        Need to rebaseline some tests on Linux (Requested by noamr on
+        #webkit).
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::allowedCompositingTriggers):
+
+2012-01-08  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Qt] Enable CSS_FILTERS in Qt build
+        https://bugs.webkit.org/show_bug.cgi?id=75777
+
+        For now, disallow compositing for filters. We will change that trigger when
+        https://bugs.webkit.org/show_bug.cgi?id=75778 is implemented.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::allowedCompositingTriggers):
+
+2012-01-08  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r104403.
+        http://trac.webkit.org/changeset/104403
+        https://bugs.webkit.org/show_bug.cgi?id=75803
+
+        It broke all tests on Qt5 (Requested by Ossy_weekend on
+        #webkit).
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::allowedCompositingTriggers):
+
+2012-01-08  No'am Rosenthal  <noam.rosenthal@nokia.com>
+
+        [Qt] Enable CSS_FILTERS in Qt build
+        https://bugs.webkit.org/show_bug.cgi?id=75777
+
+        For now, disallow compositing for filters. We will change that trigger when
+        https://bugs.webkit.org/show_bug.cgi?id=75778 is implemented.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::allowedCompositingTriggers):
+
+2012-01-05  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r104231.
+        http://trac.webkit.org/changeset/104231
+        https://bugs.webkit.org/show_bug.cgi?id=75668
+
+        Breaks the Qt build (Requested by abarth on #webkit).
+
+        * Api/qwebpage.cpp:
+        (QWebPage::acceptNavigationRequest):
+
+2012-01-05  Adam Barth  <abarth@webkit.org>
+
+        Introduce Platform namespace for WebCore/platform
+        https://bugs.webkit.org/show_bug.cgi?id=75653
+
+        Reviewed by Eric Seidel.
+
+        * Api/qwebpage.cpp:
+        (QWebPage::acceptNavigationRequest):
+
+2012-01-05  Zeno Albisser  <zeno@webkit.org>
+
+        [Qt][WK2] Implement custom URL schemes defined in QML.
+        https://bugs.webkit.org/show_bug.cgi?id=74931
+
+        Make classes QQuickUrlSchemeDelegate, QQuickNetworkRequest
+        and QQuickNetworkReply accessible from QML.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * declarative/experimental/experimental.pri:
+        * declarative/experimental/plugin.cpp:
+        * declarative/public.pri:
+
+2012-01-04  Tor Arne Vestbø  <tor.arne.vestbo@nokia.com>
+
+        [Qt] Introduce new qmake variable 'WEBKIT' for signaling dependencies
+
+        The custom qmake variable 'WEBKIT' is used for signaling that a
+        target depends in some way on other subproject of the WebKit
+        project. For now this is limited to the set of intermediate
+        libraries: wtf, javascriptcore, webcore, and webkit2.
+
+        This replaces the previous convension of using load(foo) for
+        just include paths, and CONFIG += foo to also link against foo.
+
+        Adding a dependency results in additional include paths being
+        available, and potentially linking to the library. This is
+        decided by the build system based on conditions such as what
+        kind of target is being built and the general build config.
+
+        An advantage to his approach is that it simplifies the individual
+        foo.prf files, for example by allowing us to use INCLUDEPATH +=
+        and LIBS += as normal instead of prepending.
+
+        Reviewed by Simon Hausmann.
+
+        * tests/qgraphicswebview/qgraphicswebview.pro:
+
+2012-01-04  Tor Arne Vestbø  <tor.arne.vestbo@nokia.com>
+
+        [Qt] Move use of $$qtLibraryTarget() to a single place
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * declarative/experimental/experimental.pri:
+        * declarative/public.pri:
+        * examples/platformplugin/platformplugin.pro:
+
+2012-01-03  Jon Lee  <jonlee@apple.com>
+
+        Leak of WebNotificationClient when page is destroyed
+        https://bugs.webkit.org/show_bug.cgi?id=74980
+        <rdar://problem/10611231>
+
+        Reviewed by Mark Rowe.
+
+        * WebCoreSupport/NotificationPresenterClientQt.cpp:
+        (WebCore::NotificationPresenterClientQt::notificationControllerDestroyed): Empty implementation, because
+        ownership model differs.
+        * WebCoreSupport/NotificationPresenterClientQt.h:
+
+2011-12-20  Adam Klein  <adamk@chromium.org>
+
+        Avoid unnecessary work when removing attributes from an element
+        https://bugs.webkit.org/show_bug.cgi?id=74953
+
+        Reviewed by Ryosuke Niwa.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::removeAttribute): Updated a caller of
+        WebCore::Element::removeAttribute to remove ExceptionCode argument.
+
+2011-12-20  Rafael Brandao  <rafael.lobo@openbossa.org>
+
+        [Qt] Extend QQuickWebview::navigationRequested API
+        https://bugs.webkit.org/show_bug.cgi?id=73818
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/experimental/plugin.cpp:
+
+2011-12-20  Jarred Nicholls  <jarred@sencha.com>
+
+        [Qt] HTTP header injection via QWebPage::userAgentForUrl()
+        https://bugs.webkit.org/show_bug.cgi?id=68560
+
+        Strip out newline characters from the result of userAgentForUrl() to prevent additional
+        HTTP headers in HTTP requests.
+
+        New QtTest case that validates the user agent, as returned by navigator.userAgent, does not
+        contain any newline characters.
+
+        Reviewed by Simon Hausmann.
+
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::userAgent):
+        * tests/qwebpage/tst_qwebpage.cpp:
+        (CustomUserAgentWebPage::userAgentForUrl):
+        (tst_QWebPage::userAgentNewlineStripping):
+
+2011-12-20  Rafael Brandao  <rafael.lobo@openbossa.org>
+
+        [Qt][WK2] Implement favicon support
+        https://bugs.webkit.org/show_bug.cgi?id=71082
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::initializeEngine): Setup for the QDeclarativeImageProvider to display favicons.
+        Its handles the following url format: "image://webicon/<iconID>#<pageURL>".
+
+2011-12-19  Sam Weinig  <sam@webkit.org>
+
+        More PlatformEvent cleanup
+        https://bugs.webkit.org/show_bug.cgi?id=74831
+
+        Reviewed by Dan Bernstein.
+
+        * Api/qwebpage.cpp:
+        (QWebPage::swallowContextMenuEvent):
+        Update to use new names, access style.
+
+2011-12-19  Alexander Færøy  <ahf@0x90.dk>
+
+        [Qt] Cleanup QTM_NAMESPACE usage in DeviceOrientationProviderQt
+        https://bugs.webkit.org/show_bug.cgi?id=74853
+
+        Reviewed by Simon Hausmann.
+
+        * Api/qwebframe_p.h:
+        * WebCoreSupport/DeviceOrientationProviderQt.cpp:
+        * WebCoreSupport/DeviceOrientationProviderQt.h:
+
+2011-12-19  Alexander Færøy  <ahf@0x90.dk>
+
+        [Qt] Cleanup DeviceMotionClientQt and friends.
+        https://bugs.webkit.org/show_bug.cgi?id=74849
+
+        This patch cleans up the DeviceMotionQt class and friends by applying
+        the following changes:
+
+        - Remove unnecessary pointer to QWebPage. This is needed to be able to
+          reuse the code for WebKit2.
+        - Remove QObject dependencies and all signals/slots. Instead, we call
+          didChangeDeviceMotion() on the controller directly from
+          DeviceMotionProviderQt.
+
+        Reviewed by Simon Hausmann.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+        * WebCoreSupport/DeviceMotionClientQt.cpp:
+        (WebCore::DeviceMotionClientQt::DeviceMotionClientQt):
+        (WebCore::DeviceMotionClientQt::~DeviceMotionClientQt):
+        (WebCore::DeviceMotionClientQt::setController):
+        * WebCoreSupport/DeviceMotionClientQt.h:
+        * WebCoreSupport/DeviceMotionProviderQt.cpp:
+        (WebCore::DeviceMotionProviderQt::DeviceMotionProviderQt):
+        (WebCore::DeviceMotionProviderQt::setController):
+        (WebCore::DeviceMotionProviderQt::filter):
+        * WebCoreSupport/DeviceMotionProviderQt.h:
+
+2011-12-18  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        Rename EditCommandQt to UndoStepQt
+        https://bugs.webkit.org/show_bug.cgi?id=74754
+
+        Reviewed by Ryosuke Niwa.
+
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::registerUndoStep):
+        * WebCoreSupport/UndoStepQt.cpp: Renamed from Source/WebKit/qt/WebCoreSupport/EditCommandQt.cpp.
+        (UndoStepQt::UndoStepQt):
+        (UndoStepQt::~UndoStepQt):
+        (UndoStepQt::redo):
+        (UndoStepQt::undo):
+        * WebCoreSupport/UndoStepQt.h: Renamed from Source/WebKit/qt/WebCoreSupport/EditCommandQt.h.
+
+2011-12-16  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Rename registerCommandFor(Undo|Redo) to register(Undo|Redo)Step
+        https://bugs.webkit.org/show_bug.cgi?id=74748
+
+        Reviewed by Eric Seidel.
+
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::registerUndoStep):
+        (WebCore::EditorClientQt::registerRedoStep):
+        * WebCoreSupport/EditorClientQt.h:
+
+2011-12-16  Sam Weinig  <sam@webkit.org>
+
+        Give PlatformEvents a base class
+        https://bugs.webkit.org/show_bug.cgi?id=74685
+
+        Reviewed by Anders Carlsson.
+
+        Add a base class for PlatformMouseEvent, PlatformKeyboardEvent, PlatformWheelEvent
+        and PlatformGestureEvent and move Type enumeration and modifiers down to it.
+
+        * WebCoreSupport/DragClientQt.cpp:
+        (WebCore::DragClientQt::startDrag):
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::handleKeyboardEvent):
+
+2011-12-16  Ryosuke Niwa  <rniwa@webkit.org>
+
+        Only EditCommandComposition should implement unapply and reapply
+        https://bugs.webkit.org/show_bug.cgi?id=74490
+
+        Reviewed by Eric Seidel.
+
+        EditCommandQt is to be renamed to UndoStepQt in a follow up patch.
+
+        * WebCoreSupport/EditCommandQt.cpp:
+        (EditCommandQt::EditCommandQt):
+        * WebCoreSupport/EditCommandQt.h:
+        * WebCoreSupport/EditorClientQt.cpp:
+        (WebCore::EditorClientQt::registerCommandForUndo):
+        (WebCore::EditorClientQt::registerCommandForRedo):
+
+2011-12-14  Tor Arne Vestbø  <tor.arne.vestbo@nokia.com>
+
+        [Qt] Get rid of layering violation in PluginViewQt
+
+        PluginViewQt has a layering violation in relying on QWebPagePrivate for
+        the check if running under DRT. We remove this and add a specific flag
+        in the PluginView for this check, enabled from DRTSupport. This isn't
+        pretty, but an improvement over what's currently there.
+
+        Reviewed by Simon Hausmann.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::setDumpRenderTreeModeEnabled):
+
+2011-12-15  Michael Brüning  <michael.bruning@nokia.com>
+
+        [QT][WK2]Add (experimental) viewport info view to Minibrowser/qt.
+        https://bugs.webkit.org/show_bug.cgi?id=72893
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        This patch extends QQuickWebViewExperimental by a property named
+        viewportInfo, which contains the viewport scalability and
+        layout and contents size information. This property is exposed to
+        QML through the experimental extension for QQuickWebView.
+
+        * declarative/experimental/plugin.cpp:
+
+2011-12-15  Alexander Færøy  <ahf@0x90.dk>
+
+        [Qt] Remove unnecessary methods and members from DeviceOrientationClientQt
+        https://bugs.webkit.org/show_bug.cgi?id=74588
+
+        Reviewed by Simon Hausmann.
+
+        Remove the unused method changeDeviceOrientation() from
+        DeviceOrientationClientQt and remove the DeviceOrientationController
+        member since it is unused.
+
+        * WebCoreSupport/DeviceOrientationClientQt.cpp:
+        (WebCore::DeviceOrientationClientQt::DeviceOrientationClientQt):
+        (WebCore::DeviceOrientationClientQt::setController):
+        * WebCoreSupport/DeviceOrientationClientQt.h:
+
+2011-12-14  Jing Zhao  <jingzhao@chromium.org>
+
+        Opening two popup menus by dispatchEvent() makes problems.
+        https://bugs.webkit.org/show_bug.cgi?id=73304
+
+        Reviewed by Kent Tamura.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::hasOpenedPopup): Not implemented.
+        * WebCoreSupport/ChromeClientQt.h: Overrides hasOpenedPopup().
+
+2011-12-14  Hajime Morrita  <morrita@chromium.org>
+
+        JS_INLINE and WTF_INLINE should be visible from WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=73191
+
+        Reviewed by Kevin Ollivier.
+        
+        Added a INCLUDEPATH to make JSExportMacros.h visible.
+
+        * tests/MIMESniffing/MIMESniffing.pro
+
+2011-12-14  Alexander Færøy  <ahf@0x90.dk>
+
+        [Qt] DeviceOrientationClientQt should initialize m_controller to zero.
+        https://bugs.webkit.org/show_bug.cgi?id=74522
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebCoreSupport/DeviceOrientationProviderQt.cpp:
+        (WebCore::DeviceOrientationProviderQt::DeviceOrientationProviderQt):
+
+2011-12-14  Alexander Færøy  <alexander.faeroy@nokia.com>
+
+        [Qt] Fix compilation of QtWebKit with --orientation-events without ENABLE_DEVICE_ORIENTATION
+        https://bugs.webkit.org/show_bug.cgi?id=74492
+
+        Reviewed by Simon Hausmann.
+
+        * Api/qwebframe.cpp:
+        (QWebFramePrivate::_q_orientationChanged):
+        * Api/qwebframe_p.h:
+        * WebCoreSupport/DeviceMotionProviderQt.cpp:
+        * WebCoreSupport/DeviceMotionProviderQt.h:
+        * WebCoreSupport/DeviceOrientationProviderQt.cpp:
+        * WebCoreSupport/DeviceOrientationProviderQt.h:
+
+2011-12-14  Alexander Færøy  <alexander.faeroy@nokia.com>
+
+        Fix compilation for Qt with --minimal option after r102755.
+
+        Reviewed by Csaba Osztrogonác.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+
+2011-12-14  Alexander Færøy  <alexander.faeroy@nokia.com>
+
+        [Qt] DeviceOrientationClientMockQt should be removed in favor of DeviceOrientationClientMock
+        https://bugs.webkit.org/show_bug.cgi?id=74417
+
+        Reviewed by Simon Hausmann.
+
+        Based on original patch by Kenneth Christiansen.
+
+        Already covered by current tests.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+        * WebCoreSupport/DeviceMotionProviderQt.cpp:
+        (WebCore::DeviceMotionProviderQt::DeviceMotionProviderQt):
+        (WebCore::DeviceMotionProviderQt::filter):
+        * WebCoreSupport/DeviceMotionProviderQt.h:
+        * WebCoreSupport/DeviceOrientationClientMockQt.cpp: Removed.
+        * WebCoreSupport/DeviceOrientationClientMockQt.h: Removed.
+        * WebCoreSupport/DeviceOrientationClientQt.cpp:
+        (WebCore::DeviceOrientationClientQt::DeviceOrientationClientQt):
+        (WebCore::DeviceOrientationClientQt::~DeviceOrientationClientQt):
+        (WebCore::DeviceOrientationClientQt::lastOrientation):
+        * WebCoreSupport/DeviceOrientationClientQt.h:
+        * WebCoreSupport/DeviceOrientationProviderQt.cpp:
+        (WebCore::DeviceOrientationProviderQt::DeviceOrientationProviderQt):
+        (WebCore::DeviceOrientationProviderQt::setController):
+        (WebCore::DeviceOrientationProviderQt::start):
+        (WebCore::DeviceOrientationProviderQt::stop):
+        (WebCore::DeviceOrientationProviderQt::filter):
+        * WebCoreSupport/DeviceOrientationProviderQt.h:
+        (WebCore::DeviceOrientationProviderQt::isActive):
+        (WebCore::DeviceOrientationProviderQt::lastOrientation):
+        (WebCore::DeviceOrientationProviderQt::hasAlpha):
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (toDeviceOrientationClientMock):
+        (DumpRenderTreeSupportQt::setMockDeviceOrientation):
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+
+2011-12-12  Nándor Huszka  <huszka.nandor@stud.u-szeged.hu>
+
+        [Qt] Missing layoutTestController.dumpWillCacheResponse
+        https://bugs.webkit.org/show_bug.cgi?id=74287
+
+        Reviewed by Csaba Osztrogonác.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::dumpWillCacheResponseCallbacks):
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::dispatchDidReceiveResponse):
+        * WebCoreSupport/FrameLoaderClientQt.h:
+
+2011-12-12  Alexis Menard  <alexis.menard@openbossa.org>
+
+        [Qt][WK2] History is not accessible in QML.
+        https://bugs.webkit.org/show_bug.cgi?id=73016
+
+        Reviewed by Simon Hausmann.
+
+        Register QWebNavigationHistory and QWebNavigationListModel in the QML plugin.
+
+        * declarative/experimental/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2011-12-09  Jesus Sanchez-Palencia  <jesus.palencia@openbossa.org>
+
+        [Qt] request parameter of QQuickWebView::navigationRequested is not a registered type
+        https://bugs.webkit.org/show_bug.cgi?id=73826
+
+        Reviewed by Tor Arne Vestbø.
+
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes): Registering QWebNavigationRequest
+
+2011-12-08  Pierre Rossi  <pierre.rossi@gmail.com>
+
+        Drop ENABLE_NO_LISTBOX_RENDERING, and make it a runtime decision.
+        https://bugs.webkit.org/show_bug.cgi?id=73916
+
+        Reviewed by Kent Tamura.
+
+        * WebCoreSupport/PopupMenuQt.cpp:
+        (SelectData::multiple):
+        (WebCore::PopupMenuQt::selectItem):
+
+2011-12-07  Csaba Osztrogonác  <ossy@webkit.org>
+
+        [Qt] Unreviewed buildfix after r102262.
+
+        * Api/qwebelement.cpp:
+        (QWebElement::setStyleProperty):
+
+2011-12-07  Mary Wu  <mary.wu@torchmobile.com.cn>
+
+        Change function name InitializeLoggingChannelsIfNecessary to follow coding style guideline
+        https://bugs.webkit.org/show_bug.cgi?id=73986
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * WebCoreSupport/InitWebCoreQt.cpp:
+        (WebCore::initializeWebCoreQt):
+
+2011-12-06  Zeno Albisser  <zeno@webkit.org>
+
+        [Qt][Mac] Building debug version only fails.
+        https://bugs.webkit.org/show_bug.cgi?id=73895
+
+        WebKit pro/pri files should not explicitly adjust
+        the debug_and_release settings.
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * declarative/experimental/experimental.pri:
+        * declarative/public.pri:
+
+2011-12-02  Hajime Morrita  <morrita@chromium.org>
+
+        Unreviewed, rolling out r101751 and r101775.
+        http://trac.webkit.org/changeset/101751
+        http://trac.webkit.org/changeset/101775
+        https://bugs.webkit.org/show_bug.cgi?id=73191
+
+        breaks Windows build
+
+        * tests/MIMESniffing/MIMESniffing.pro:
+
+2011-12-01  Hajime Morrita  <morrita@chromium.org>
+
+        JS_INLINE and WTF_INLINE should be visible from WebCore
+        https://bugs.webkit.org/show_bug.cgi?id=73191
+
+        Reviewed by Kevin Ollivier.
+        
+        Added a INCLUDEPATH to make JSExportMacros.h visible.
+
+        * tests/MIMESniffing/MIMESniffing.pro
+
+2011-11-30  Alexey Proskuryakov  <ap@apple.com>
+
+        Remove an unneeded argument from FrameLoaderClient::download
+        https://bugs.webkit.org/show_bug.cgi?id=73486
+
+        Reviewed by Andreas Kling.
+
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::download):
+        * WebCoreSupport/FrameLoaderClientQt.h:
+        Updated for the change.
+
+2011-11-30  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Fix crash when using Qt DRT with V8.
+
+        Reviewed by Csaba Osztrogonác.
+
+        Add missing handle scopes for the handles returned by mainWorldContext.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::injectInternalsObject):
+        (DumpRenderTreeSupportQt::resetInternalsObject):
+
+2011-11-30  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Fix crashing layout tests
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Fix ASSERTION FAILED: m_key != PTHREAD_KEYS_MAX in ThreadIdentifierDataPthreads.cpp(65)
+        static WTF::ThreadIdentifier WTF::ThreadIdentifierData::identifier()
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::initialize): Add missing WebCore::initializeWebCoreQt().
+
+2011-11-30  Andrew Wason  <rectalogic@rectalogic.com>
+
+        Replace Qt QThread threading back-end with pthread/Win32 threading back-ends
+        https://bugs.webkit.org/show_bug.cgi?id=72155
+
+        Reviewed by Simon Hausmann.
+
+        Extract WebCore initialization out of QWebPagePrivate into a
+        separate initialization function. This also needs to be called
+        from public static QWebSettings methods that call into WebCore,
+        since those can be used before a QWebPage has been constructed.
+
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate):
+        * Api/qwebsettings.cpp:
+        (QWebSettings::globalSettings):
+        (QWebSettings::setIconDatabasePath):
+        (QWebSettings::iconDatabasePath):
+        (QWebSettings::clearIconDatabase):
+        (QWebSettings::iconForUrl):
+        (QWebSettings::setWebGraphic):
+        (QWebSettings::webGraphic):
+        (QWebSettings::clearMemoryCaches):
+        (QWebSettings::maximumPagesInCache):
+        (QWebSettings::setObjectCacheCapacities):
+        (QWebSettings::setOfflineStoragePath):
+        (QWebSettings::offlineStoragePath):
+        (QWebSettings::setOfflineWebApplicationCachePath):
+        (QWebSettings::offlineWebApplicationCachePath):
+        (QWebSettings::setOfflineWebApplicationCacheQuota):
+        (QWebSettings::offlineWebApplicationCacheQuota):
+        (QWebSettings::enablePersistentStorage):
+        * WebCoreSupport/InitWebCoreQt.cpp: Added.
+        (WebCore::initializeWebCoreQt):
+        * WebCoreSupport/InitWebCoreQt.h: Added.
+
+2011-11-30  Adenilson Cavalcanti  <adenilson.silva@openbossa.org>
+
+        [Qt][WK2] Implement permission API for Qt port
+        https://bugs.webkit.org/show_bug.cgi?id=59200
+
+        Permission API hookup for Geolocation, it allows to receive in WebView
+        a signal when a permission request is done (e.g. to grant permission
+        for accessing geolocation information) and set it accordingly.
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2011-11-29  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Make WebKit/qt build with V8 and Qt 5
+        https://bugs.webkit.org/show_bug.cgi?id=73315
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * Api/qwebelement.cpp:
+        (QtWebElementRuntime::initialize): #ifdef JSC code
+        properly. There's no V8 equivalent just yet.
+        * Api/qwebelement.h: Get rid of old V8 cruft.
+        * Api/qwebframe.cpp:
+        (QWebFrame::addToJavaScriptWindowObject): QScriptEngine -> QJSEngine.
+        (QWebFrame::evaluateJavaScript): Ditto.
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (QtDRTNodeRuntime::initialize): #ifdef JSC code.
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::didCreateScriptContext): Adapt to FrameLoaderClient
+        V8 API changes that happened long time ago.
+        (WebCore::FrameLoaderClientQt::willReleaseScriptContext): Ditto.
+        * WebCoreSupport/FrameLoaderClientQt.h: Ditto.
+        * WebCoreSupport/InspectorClientQt.cpp: Add missing include for V8 build.
+
+2011-11-28  Jon Lee  <jonlee@apple.com>
+
+        Create skeleton framework for notifications support in WK2
+        https://bugs.webkit.org/show_bug.cgi?id=73253
+        <rdar://problem/10356943>
+
+        Reviewed by Sam Weinig.
+
+        * Api/qwebpage.cpp: Add notification client to pageClients.
+        (QWebPagePrivate::QWebPagePrivate):
+        * WebCoreSupport/ChromeClientQt.cpp: Remove notification client from ChromeClient implementation.
+        * WebCoreSupport/ChromeClientQt.h:
+        * WebCoreSupport/NotificationPresenterClientQt.cpp: Refactor with change of NotificationContents to struct
+        (WebCore::NotificationWrapper::title):
+        (WebCore::NotificationWrapper::message):
+        (WebCore::NotificationPresenterClientQt::displayNotification):
+        (WebCore::NotificationPresenterClientQt::cancel):
+        (WebCore::NotificationPresenterClientQt::notificationClicked):
+        (WebCore::NotificationPresenterClientQt::dumpReplacedIdText):
+        (WebCore::NotificationPresenterClientQt::dumpShowText):
+
+2011-11-28  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Build system fixes against V8.
+
+        Reviewed by Tor Arne Vestbø.
+
+        Add forwarding headers for building against Qt's v8 with
+        v8 include style.
+
+        * v8/ForwardingHeaders/v8-debug.h: Added.
+        * v8/ForwardingHeaders/v8-preparser.h: Added.
+        * v8/ForwardingHeaders/v8-profiler.h: Added.
+        * v8/ForwardingHeaders/v8-testing.h: Added.
+        * v8/ForwardingHeaders/v8.h: Added.
+        * v8/ForwardingHeaders/v8stdint.h: Added.
+
+2011-11-26  Pavel Feldman  <pfeldman@google.com>
+
+        Web Inspector: remove disconnectFromBackend from the protocol.
+        https://bugs.webkit.org/show_bug.cgi?id=73127
+
+        Reviewed by Yury Semikhatsky.
+
+        * WebCoreSupport/InspectorClientQt.cpp:
+        (WebCore::InspectorClientQt::inspectorDestroyed):
+        (WebCore::InspectorClientQt::closeInspectorFrontend):
+        (WebCore::InspectorFrontendClientQt::inspectorClientDestroyed):
+        * WebCoreSupport/InspectorClientQt.h:
+
+2011-11-26  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r101193.
+        http://trac.webkit.org/changeset/101193
+        https://bugs.webkit.org/show_bug.cgi?id=73158
+
+        Breaks Windows and Qt minimal. (Requested by pfeldman on
+        #webkit).
+
+        * WebCoreSupport/InspectorClientQt.cpp:
+        (WebCore::InspectorClientQt::inspectorDestroyed):
+        (WebCore::InspectorFrontendClientQt::disconnectFromBackend):
+        (WebCore::InspectorFrontendClientQt::inspectorClientDestroyed):
+        * WebCoreSupport/InspectorClientQt.h:
+
+2011-11-26  Pavel Feldman  <pfeldman@google.com>
+
+        Web Inspector: remove disconnectFromBackend from the protocol.
+        https://bugs.webkit.org/show_bug.cgi?id=73127
+
+        Reviewed by Yury Semikhatsky.
+
+        * WebCoreSupport/InspectorClientQt.cpp:
+        (WebCore::InspectorClientQt::inspectorDestroyed):
+        (WebCore::InspectorClientQt::closeInspectorFrontend):
+        (WebCore::InspectorFrontendClientQt::inspectorClientDestroyed):
+        * WebCoreSupport/InspectorClientQt.h:
+
+2011-11-25  Alexis Menard  <alexis.menard@openbossa.org>
+
+        [Qt][WK2] QWebDownloadItem should be registered in the experimental plugin.
+        https://bugs.webkit.org/show_bug.cgi?id=73132
+
+        Reviewed by Simon Hausmann.
+
+        Make sure QWebDownloadItem is registered in the right plugin.
+
+        * declarative/experimental/plugin.cpp:
+        * declarative/plugin.cpp:
+        (WebKitQmlPlugin::registerTypes):
+
+2011-11-22  Pavel Feldman  <pfeldman@google.com>
+
+        Web Inspector: remove Inspector::bringToFront from the protocol.
+        https://bugs.webkit.org/show_bug.cgi?id=72937
+
+        Reviewed by Yury Semikhatsky.
+
+        * WebCoreSupport/InspectorClientQt.cpp:
+        (WebCore::InspectorClientQt::bringFrontendToFront):
+        * WebCoreSupport/InspectorClientQt.h:
+
+2011-10-17  Antonio Gomes  <agomes@rim.com>
+
+        Pass a Frame* parameter in EditorClient::respondToChangedSelection
+        https://bugs.webkit.org/show_bug.cgi?id=70248
+
+        Reviewed by Ryosuke Niwa.
+
+        * WebCoreSupport/EditorClientQt.cpp: Make use of the newly added Frame* parameter.
+        (WebCore::EditorClientQt::respondToChangedSelection):
+        * WebCoreSupport/EditorClientQt.h:
+
+2011-11-18  Yuta Kitamura  <yutak@chromium.org>
+
+        [Qt] Enable WebSocket hybi tests
+        https://bugs.webkit.org/show_bug.cgi?id=72687
+
+        Reviewed by Simon Hausmann.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::defaultHixie76WebSocketProtocolEnabled):
+        (DumpRenderTreeSupportQt::setHixie76WebSocketProtocolEnabled):
+        Call WebCore::Settings::setUseHixie76WebSocketProtocol() to switch WebSocket protocols.
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+
+2011-11-17  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Layer violation: ThirdPartyCookiesQt.cpp uses QWebSettings in two places
+        https://bugs.webkit.org/show_bug.cgi?id=72597
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Implemented NetworkingContext::thirdPartyCookiePolicyPermission, which queries
+        the global QWebSettings.
+
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp:
+        (DumpRenderTreeSupportQt::thirdPartyCookiePolicyAllows): Adapt to the
+        changed thirdPartyCookiePolicyPermits WebCore API that operates on a networking context.
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::dispatchDecidePolicyForNewWindowAction): Pass networking
+        context to ResourceRequest::toNetworkRequest.
+        (WebCore::FrameLoaderClientQt::dispatchDecidePolicyForNavigationAction): Ditto.
+        (WebCore::FrameLoaderClientQt::startDownload): Ditto.
+        * WebCoreSupport/FrameNetworkingContextQt.cpp:
+        (WebCore::FrameNetworkingContextQt::thirdPartyCookiePolicyPermission): Implement.
+        * WebCoreSupport/FrameNetworkingContextQt.h:
+        * tests/qwebpage/tst_qwebpage.cpp:
+        (tst_QWebPage::thirdPartyCookiePolicy): Adapt to QtDRTSupport API change.
+
+2011-11-17  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Layer violation: qt_runtime.cpp accesses QWebElement and QTDRTNode
+        https://bugs.webkit.org/show_bug.cgi?id=72595
+
+        Reviewed by Noam Rosenthal.
+
+        Move QWebElement and QtDRTNode JS bindings from WebCore to WebKit/qt.
+
+        * Api/qwebelement.cpp: Add QWebElement to JSValue and JSValue to QWebElement
+        conversion through intermediate QVariant.
+        (QtWebElementRuntime::create):
+        (QtWebElementRuntime::get):
+        (convertJSValueToWebElementVariant):
+        (convertWebElementVariantToJSValue):
+        (QtWebElementRuntime::initialize): Register conversion functions for QWebElement.
+        * Api/qwebelement.h:
+        * Api/qwebelement_p.h: Added.
+        * Api/qwebpage.cpp:
+        (QWebPagePrivate::QWebPagePrivate): Initialize QWebElement conversion functions for
+        the JS runtime.
+        * WebCoreSupport/DumpRenderTreeSupportQt.cpp: Add QtDRTNode to JSValue and JSValue to
+        QtDRTNode conversion through intermediate QVariant.
+        (QtDRTNodeRuntime::create):
+        (QtDRTNodeRuntime::get):
+        (convertJSValueToNodeVariant):
+        (convertNodeVariantToJSValue):
+        (QtDRTNodeRuntime::initialize):
+        (DumpRenderTreeSupportQt::initialize): Register conversion functions for QtDRTNode.
+        * WebCoreSupport/DumpRenderTreeSupportQt.h:
+
+2011-11-17  Alexis Menard  <alexis.menard@openbossa.org>
+
+        [Qt] The experimental plugin doesn't work after being renamed.
+
+        Reviewed by Tor Arne Vestbø.
+
+        It was renamed from private to experimental but the qmldir file
+        was forgotten.
+
+        * declarative/experimental/qmldir:
+
+2011-11-17  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Layer violation: WebCore::dnsPrefetch uses QWebSettings::globalSettings()
+        https://bugs.webkit.org/show_bug.cgi?id=72596
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        * Api/qwebsettings.cpp:
+        (QWebSettingsPrivate::apply): Propagate the DNS prefetch setting to WebCore::Settings.
+
+2011-11-17  Simon Hausmann  <simon.hausmann@nokia.com>
+
+        [Qt] Layer violation: Image::loadPlatformResource uses QWebSettings::webGraphic
+        https://bugs.webkit.org/show_bug.cgi?id=72594
+
+        Reviewed by Kenneth Rohde Christiansen.
+
+        Move resource pixmap cache into ImageQt.cpp.
+
+        * Api/qwebsettings.cpp:
+        (resourceNameForWebGraphic): Helper function to translate between public API enums and
+        resource names.
+        (QWebSettings::setWebGraphic): Call the new ImageQt::setPlatformResource setter.
+        (QWebSettings::webGraphic): Call Image::loadPlatformResource to read from the cache
+        in WebCore.
+
+2011-11-17  Tor Arne Vestbø  <tor.arne.vestbo@nokia.com>
+
+        [Qt] Move WebKit2 C++ APIs to private API and build QML extension plugin on top of that
+
+        A new extension object has been added to QQuickWebView (the same approach should be used
+        for other API classes that need experimental APIs). The QML extension mechanism is then
+        built on top of the experimental object.
+
+        https://bugs.webkit.org/show_bug.cgi?id=72522
+
+        Reviewed by Simon Hausmann.
+
+        * declarative/declarative.pro:
+        * declarative/experimental/experimental.pri: Renamed from Source/WebKit/qt/declarative/private/private.pro.
+        * declarative/experimental/plugin.cpp: Renamed from Source/WebKit/qt/declarative/private/plugin.cpp.
+        (QQuickWebViewExperimentalExtension::QQuickWebViewExperimentalExtension):
+        (QQuickWebViewExperimentalExtension::experimental):
+        * declarative/experimental/qmldir: Renamed from Source/WebKit/qt/declarative/private/qmldir.
+        * declarative/plugin.cpp:
+        * declarative/public.pri: Copied from Source/WebKit/qt/declarative/declarative.pro.
+
+2011-11-16  Sheriff Bot  <webkit.review.bot@gmail.com>
+
+        Unreviewed, rolling out r100448.
+        http://trac.webkit.org/changeset/100448
+        https://bugs.webkit.org/show_bug.cgi?id=72512
+
+        It caused a regression breaking LayoutTests/http/tests/loading
+        /text-content-type-with-binary-extension.html (Requested by
+        jeez_ on #webkit).
+
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::canShowMIMEType):
+
+2011-11-16  Jesus Sanchez-Palencia  <jesus.palencia@openbossa.org>
+
+        [Qt] FrameLoaderClientQt::canShowMIMEType should always return true
+        https://bugs.webkit.org/show_bug.cgi?id=72169
+
+        Reviewed by Simon Hausmann.
+
+        Currently FrameLoaderClientQt::canShowMIMEType is called after
+        dispatchDecidePolicyForResponse. If decidePolicyForResponse returns
+        PolicyUse and canShowMIMEType returns false, then we have a bug.
+        Therefore, FrameLoaderClientQt::canShowMIMEType now will always
+        return true, following the implemenation of WebKit2.
+
+        * WebCoreSupport/FrameLoaderClientQt.cpp:
+        (WebCore::FrameLoaderClientQt::canShowMIMEType):
+
+2011-11-15  Huang Dongsung  <luxtella@company100.net>
+
+        [TexMap][Qt] Start PageClientQ[Graphics]Widget::syncTimer only when the syncTimer
+        is inactive.
+        https://bugs.webkit.org/show_bug.cgi?id=70407
+
+        Make sure we only activate the synchronization timer in
+        PageClientQWidget/PageClientQGraphicsWidget if it's not already active,
+        otherwise syncLayers may be called redundantly.
+
+        Reviewed by Noam Rosenthal.
+
+        * WebCoreSupport/PageClientQt.cpp:
+        (WebCore::PageClientQWidget::markForSync):
+        (WebCore::PageClientQWidget::syncLayers):
+        (WebCore::PageClientQGraphicsWidget::syncLayers):
+        (WebCore::PageClientQGraphicsWidget::markForSync):
+        * WebCoreSupport/PageClientQt.h:
+        (WebCore::PageClientQGraphicsWidget::PageClientQGraphicsWidget):
+
+2011-11-15  Jochen Eisinger  <jochen@chromium.org>
+
+        Rename ReferrerPolicy to clarify its meaning
+        https://bugs.webkit.org/show_bug.cgi?id=72420
+
+        Reviewed by Nate Chapin.
+
+        * Api/qwebpage.cpp:
+        (openNewWindow):
+        (QWebPage::triggerAction):
+
+2011-11-15  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow screenToWindow/windowToScreen should be screenToRootView/rootViewToScreen
+        https://bugs.webkit.org/show_bug.cgi?id=72397
+
+        Reviewed by Dan Bernstein.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::rootViewToScreen):
+        (WebCore::ChromeClientQt::screenToRootView):
+        * WebCoreSupport/ChromeClientQt.h:
+
+2011-11-14  Anders Carlsson  <andersca@apple.com>
+
+        HostWindow invalidation functions should use root view coordinates
+        https://bugs.webkit.org/show_bug.cgi?id=72338
+
+        Reviewed by Dan Bernstein.
+
+        * WebCoreSupport/ChromeClientQt.cpp:
+        (WebCore::ChromeClientQt::invalidateRootView):
+        (WebCore::ChromeClientQt::invalidateContentsAndRootView):
+        (WebCore::ChromeClientQt::invalidateContentsForSlowScroll):
+        * WebCoreSupport/ChromeClientQt.h:
+
 2011-11-11  Pierre Rossi  <pierre.rossi@gmail.com>
 
         [Qt] Remove the QStyle dependency in Qt's mobile theme

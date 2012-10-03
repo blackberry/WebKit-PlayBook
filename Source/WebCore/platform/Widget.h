@@ -45,13 +45,8 @@
 #endif
 
 #if PLATFORM(MAC)
-#ifdef __OBJC__
-@class NSView;
-@class NSWindow;
-#else
-class NSView;
-class NSWindow;
-#endif
+OBJC_CLASS NSView;
+OBJC_CLASS NSWindow;
 typedef NSView *PlatformWidget;
 #endif
 
@@ -68,9 +63,9 @@ typedef GtkWidget* PlatformWidget;
 
 #if PLATFORM(QT)
 QT_BEGIN_NAMESPACE
-class QWidget;
+class QObject;
 QT_END_NAMESPACE
-typedef QWidget* PlatformWidget;
+typedef QObject* PlatformWidget;
 #endif
 
 #if PLATFORM(BLACKBERRY)

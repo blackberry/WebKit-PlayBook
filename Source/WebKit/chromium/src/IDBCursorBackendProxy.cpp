@@ -34,7 +34,7 @@
 #include "SerializedScriptValue.h"
 #include "WebIDBCallbacksImpl.h"
 #include "WebIDBKey.h"
-#include "WebSerializedScriptValue.h"
+#include "platform/WebSerializedScriptValue.h"
 
 using namespace WebCore;
 
@@ -87,6 +87,11 @@ void IDBCursorBackendProxy::continueFunction(PassRefPtr<IDBKey> key, PassRefPtr<
 void IDBCursorBackendProxy::deleteFunction(PassRefPtr<IDBCallbacks> callbacks, ExceptionCode& ec)
 {
     m_idbCursor->deleteFunction(new WebIDBCallbacksImpl(callbacks), ec);
+}
+
+void IDBCursorBackendProxy::postSuccessHandlerCallback()
+{
+    m_idbCursor->postSuccessHandlerCallback();
 }
 
 } // namespace WebKit

@@ -24,76 +24,59 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "TestController.h"
 
+#include "PlatformWebView.h"
 #include "WKStringQt.h"
 
 #include <cstdlib>
 #include <QCoreApplication>
+#include <QElapsedTimer>
 #include <QEventLoop>
 #include <QFileInfo>
 #include <QLibrary>
 #include <QObject>
+#include <qquickwebview_p.h>
 #include <QtGlobal>
 #include <wtf/Platform.h>
 #include <wtf/text/WTFString.h>
 
 namespace WTR {
 
-// With a bigger interval we would waste to much time
-// after the test had been finished.
-static const unsigned kTimerIntervalMS = 1;
-
-class RunUntilConditionLoop : public QObject {
-    Q_OBJECT
-
-public:
-    static void start(bool& done)
-    {
-        static RunUntilConditionLoop* instance = new RunUntilConditionLoop;
-        instance->run(done);
-    }
-
-private:
-    RunUntilConditionLoop() {}
-
-    void run(bool& done)
-    {
-        m_condition = &done;
-        m_timerID = startTimer(kTimerIntervalMS);
-        ASSERT(m_timerID);
-        m_eventLoop.exec(QEventLoop::ExcludeUserInputEvents);
-    }
-
-    virtual void timerEvent(QTimerEvent*)
-    {
-        if (!*m_condition)
-            return;
-
-        killTimer(m_timerID);
-        m_eventLoop.exit();
-    }
-
-    QEventLoop m_eventLoop;
-    bool* m_condition;
-    int m_timerID;
-};
-
-void TestController::platformInitialize()
+void TestController::notifyDone()
 {
 }
 
-void TestController::runUntil(bool& done)
+void TestController::platformInitialize()
 {
-    RunUntilConditionLoop::start(done);
-    ASSERT(done);
+    QQuickWebView::platformInitialize();
+}
+
+void TestController::platformRunUntil(bool& condition, double timeout)
+{
+    if (qgetenv("QT_WEBKIT2_DEBUG") == "1") {
+        // Never timeout if we are debugging.
+        while (!condition)
+            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, 50);
+        return;
+    }
+
+    int timeoutInMSecs = timeout * 1000;
+    QElapsedTimer timer;
+    timer.start();
+    while (!condition) {
+        if (timer.elapsed() > timeoutInMSecs)
+            return;
+        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents, timeoutInMSecs - timer.elapsed());
+    }
 }
 
 static bool isExistingLibrary(const QString& path)
 {
 #if OS(WINDOWS)
     const char* librarySuffixes[] = { ".dll" };
-#elif PLATFORM(MAC)
+#elif OS(MAC_OS_X)
     const char* librarySuffixes[] = { ".bundle", ".dylib", ".so" };
 #elif OS(UNIX)
     const char* librarySuffixes[] = { ".so" };
@@ -121,14 +104,23 @@ void TestController::initializeInjectedBundlePath()
 
 void TestController::initializeTestPluginDirectory()
 {
-    // This is called after initializeInjectedBundlePath.
-    m_testPluginDirectory = m_injectedBundlePath;
+    m_testPluginDirectory = WKStringCreateWithUTF8CString(qgetenv("QTWEBKIT_PLUGIN_PATH").constData());
 }
 
 void TestController::platformInitializeContext()
 {
 }
 
-#include "TestControllerQt.moc"
+void TestController::runModal(PlatformWebView* view)
+{
+    QEventLoop eventLoop;
+    view->setModalEventLoop(&eventLoop);
+    eventLoop.exec(QEventLoop::ExcludeUserInputEvents);
+}
+
+const char* TestController::platformLibraryPathForTesting()
+{
+    return 0;
+}
 
 } // namespace WTR

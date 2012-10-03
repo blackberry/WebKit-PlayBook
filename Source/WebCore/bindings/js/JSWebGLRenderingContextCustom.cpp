@@ -30,10 +30,8 @@
 #include "JSWebGLRenderingContext.h"
 
 #include "ExceptionCode.h"
-#include "Float32Array.h"
 #include "HTMLCanvasElement.h"
 #include "HTMLImageElement.h"
-#include "Int32Array.h"
 #include "JSFloat32Array.h"
 #include "JSHTMLCanvasElement.h"
 #include "JSHTMLImageElement.h"
@@ -42,9 +40,12 @@
 #include "JSOESStandardDerivatives.h"
 #include "JSOESTextureFloat.h"
 #include "JSOESVertexArrayObject.h"
+#include "JSUint32Array.h"
 #include "JSUint8Array.h"
 #include "JSWebGLBuffer.h"
+#include "JSWebGLCompressedTextureS3TC.h"
 #include "JSWebGLFramebuffer.h"
+#include "JSWebGLLoseContext.h"
 #include "JSWebGLProgram.h"
 #include "JSWebGLRenderbuffer.h"
 #include "JSWebGLShader.h"
@@ -52,25 +53,27 @@
 #include "JSWebGLUniformLocation.h"
 #include "JSWebGLVertexArrayObjectOES.h"
 #include "JSWebKitCSSMatrix.h"
-#include "JSWebKitLoseContext.h"
 #include "NotImplemented.h"
 #include "OESStandardDerivatives.h"
 #include "OESTextureFloat.h"
 #include "OESVertexArrayObject.h"
 #include "WebGLBuffer.h"
+#include "WebGLCompressedTextureS3TC.h"
 #include "WebGLDebugRendererInfo.h"
 #include "WebGLDebugShaders.h"
 #include "WebGLExtension.h"
 #include "WebGLFramebuffer.h"
 #include "WebGLGetInfo.h"
+#include "WebGLLoseContext.h"
 #include "WebGLProgram.h"
 #include "WebGLRenderingContext.h"
 #include "WebGLVertexArrayObjectOES.h"
-#include "WebKitLoseContext.h"
 #include <runtime/Error.h>
 #include <runtime/JSArray.h>
 #include <wtf/FastMalloc.h>
-#include <wtf/OwnFastMallocPtr.h>
+#include <wtf/Float32Array.h>
+#include <wtf/Int32Array.h>
+#include <wtf/Uint32Array.h>
 
 #if ENABLE(VIDEO)
 #include "HTMLVideoElement.h"
@@ -121,6 +124,8 @@ static JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, const WebG
         return toJS(exec, globalObject, info.getWebGLTexture());
     case WebGLGetInfo::kTypeWebGLUnsignedByteArray:
         return toJS(exec, globalObject, info.getWebGLUnsignedByteArray());
+    case WebGLGetInfo::kTypeWebGLUnsignedIntArray:
+        return toJS(exec, globalObject, info.getWebGLUnsignedIntArray());
     case WebGLGetInfo::kTypeWebGLVertexArrayObjectOES:
         return toJS(exec, globalObject, info.getWebGLVertexArrayObjectOES());
     default:
@@ -181,8 +186,8 @@ static JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, WebGLExten
     if (!extension)
         return jsNull();
     switch (extension->getName()) {
-    case WebGLExtension::WebKitLoseContextName:
-        return toJS(exec, globalObject, static_cast<WebKitLoseContext*>(extension));
+    case WebGLExtension::WebKitWebGLLoseContextName:
+        return toJS(exec, globalObject, static_cast<WebGLLoseContext*>(extension));
     case WebGLExtension::OESStandardDerivativesName:
         return toJS(exec, globalObject, static_cast<OESStandardDerivatives*>(extension));
     case WebGLExtension::OESTextureFloatName:
@@ -193,6 +198,8 @@ static JSValue toJS(ExecState* exec, JSDOMGlobalObject* globalObject, WebGLExten
         return toJS(exec, globalObject, static_cast<WebGLDebugRendererInfo*>(extension));
     case WebGLExtension::WebGLDebugShadersName:
         return toJS(exec, globalObject, static_cast<WebGLDebugShaders*>(extension));
+    case WebGLExtension::WebKitWebGLCompressedTextureS3TCName:
+        return toJS(exec, globalObject, static_cast<WebGLCompressedTextureS3TC*>(extension));
     }
     ASSERT_NOT_REACHED();
     return jsNull();
@@ -239,7 +246,7 @@ JSValue JSWebGLRenderingContext::getExtension(ExecState* exec)
         return throwSyntaxError(exec);
 
     WebGLRenderingContext* context = static_cast<WebGLRenderingContext*>(impl());
-    const String& name = ustringToString(exec->argument(0).toString(exec));
+    const String& name = ustringToString(exec->argument(0).toString(exec)->value(exec));
     if (exec->hadException())
         return jsUndefined();
     WebGLExtension* extension = context->getExtension(name);

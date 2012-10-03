@@ -27,11 +27,11 @@
  */
 
 #include "config.h"
-#include "WebArrayBufferView.h"
+#include "platform/WebArrayBufferView.h"
 
 #include "ArrayBufferView.h"
 
-using namespace WebCore;
+using namespace WTF;
 
 namespace WebKit {
 

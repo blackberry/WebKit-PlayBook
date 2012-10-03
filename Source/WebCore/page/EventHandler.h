@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2006, 2007, 2009, 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2012  Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -127,7 +128,8 @@ public:
 #if ENABLE(DRAG_SUPPORT)
     bool updateDragAndDrop(const PlatformMouseEvent&, Clipboard*);
     void cancelDragAndDrop(const PlatformMouseEvent&, Clipboard*);
-    void performDragAndDrop(const PlatformMouseEvent&, Clipboard*);
+    bool performDragAndDrop(const PlatformMouseEvent&, Clipboard*);
+    void updateDragStateAfterEditDragIfNeeded(Element* rootEditableElement);
 #endif
 
     void scheduleHoverStateUpdate();
@@ -149,17 +151,20 @@ public:
     bool tabsToAllFormControls(KeyboardEvent*) const;
 
     bool mouseMoved(const PlatformMouseEvent&);
+    bool passMouseMovedEventToScrollbars(const PlatformMouseEvent&);
 
     void lostMouseCapture();
 
     bool handleMousePressEvent(const PlatformMouseEvent&);
-    bool handleMouseMoveEvent(const PlatformMouseEvent&, HitTestResult* hoveredNode = 0);
+    bool handleMouseMoveEvent(const PlatformMouseEvent&, HitTestResult* hoveredNode = 0, bool onlyUpdateScrollbars = false);
     bool handleMouseReleaseEvent(const PlatformMouseEvent&);
-    bool handleWheelEvent(PlatformWheelEvent&);
+    bool handleWheelEvent(const PlatformWheelEvent&);
     void defaultWheelEventHandler(Node*, WheelEvent*);
 
 #if ENABLE(GESTURE_EVENTS)
     bool handleGestureEvent(const PlatformGestureEvent&);
+    bool handleGestureTap(const PlatformGestureEvent&);
+    bool handleGestureScrollUpdate(const PlatformGestureEvent&);
 #endif
 
 #if ENABLE(CONTEXT_MENUS)
@@ -199,6 +204,8 @@ public:
     void mouseMoved(NSEvent *);
     bool keyEvent(NSEvent *);
     bool wheelEvent(NSEvent *);
+
+    void passMouseMovedEventToScrollbars(NSEvent *);
 
     void sendFakeEventsAfterWidgetTracking(NSEvent *initiatingEvent);
 
@@ -265,6 +272,10 @@ private:
     void fakeMouseMoveEventTimerFired(Timer<EventHandler>*);
     void cancelFakeMouseMoveEvent();
 
+#if ENABLE(TOUCH_EVENTS)
+    bool dispatchSyntheticTouchEventIfEnabled(const PlatformMouseEvent&);
+#endif
+
     void invalidateClick();
 
     Node* nodeUnderMouse() const;
@@ -304,7 +315,7 @@ private:
     bool passWidgetMouseDownEventToWidget(RenderWidget*);
 
     bool passMouseDownEventToWidget(Widget*);
-    bool passWheelEventToWidget(PlatformWheelEvent&, Widget*);
+    bool passWheelEventToWidget(const PlatformWheelEvent&, Widget*);
 
     void defaultSpaceEventHandler(KeyboardEvent*);
     void defaultBackspaceEventHandler(KeyboardEvent*);
@@ -430,6 +441,7 @@ private:
     TouchTargetMap m_originatingTouchPointTargets;
     bool m_touchPressed;
 #endif
+    double m_maxMouseMovedDuration;
 
 #if PLATFORM(BLACKBERRY)
     Timer<EventHandler> m_sendEventsTimer;

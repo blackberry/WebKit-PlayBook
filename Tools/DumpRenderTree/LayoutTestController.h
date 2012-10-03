@@ -60,6 +60,7 @@ public:
     void disableImageLoading();
     void dispatchPendingLoadRequests();
     void display();
+    void displayInvalidatedRegion();
     void execCommand(JSStringRef name, JSStringRef value);
     bool findString(JSContextRef, JSStringRef, JSObjectRef optionsArray);
     void goBack();
@@ -68,7 +69,6 @@ public:
     bool isCommandEnabled(JSStringRef name);
     void keepWebHistory();
     JSValueRef computedStyleIncludingVisitedInfo(JSContextRef, JSValueRef);
-    JSValueRef nodesFromRect(JSContextRef, JSValueRef, int x, int y, unsigned top, unsigned right, unsigned bottom, unsigned left, bool ignoreClipping);
     void notifyDone();
     int numberOfPages(float pageWidthInPixels, float pageHeightInPixels);
     int numberOfPendingGeolocationPermissionRequests();
@@ -107,6 +107,7 @@ public:
     void setMockGeolocationError(int code, JSStringRef message);
     void setMockGeolocationPosition(double latitude, double longitude, double accuracy);
     void addMockSpeechInputResult(JSStringRef result, double confidence, JSStringRef language);
+    void setMockSpeechInputDumpRect(bool flag);
     void setPersistentUserStyleSheetLocation(JSStringRef path);
     void setPluginsEnabled(bool flag);
     void setPopupBlockingEnabled(bool flag);
@@ -134,14 +135,21 @@ public:
     unsigned workerThreadCount() const;
     int windowCount();
     
+#if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(WIN)
+    JSRetainPtr<JSStringRef> platformName() const;
+#endif
+
     void grantDesktopNotificationPermission(JSStringRef origin);
     bool checkDesktopNotificationPermission(JSStringRef origin);
+    void ignoreDesktopNotificationPermissionRequests();
+    bool areDesktopNotificationPermissionRequestsIgnored() const { return m_areDesktopNotificationPermissionRequestsIgnored; }
+    void simulateDesktopNotificationClick(JSStringRef title);
 
     bool elementDoesAutoCompleteForElementWithId(JSStringRef id);
 
     bool dumpAsAudio() const { return m_dumpAsAudio; }
     void setDumpAsAudio(bool dumpAsAudio) { m_dumpAsAudio = dumpAsAudio; }
-
+    
     bool dumpAsPDF() const { return m_dumpAsPDF; }
     void setDumpAsPDF(bool dumpAsPDF) { m_dumpAsPDF = dumpAsPDF; }
 
@@ -151,7 +159,6 @@ public:
     bool generatePixelResults() const { return m_generatePixelResults; }
     void setGeneratePixelResults(bool generatePixelResults) { m_generatePixelResults = generatePixelResults; }
 
-    	
     bool disallowIncreaseForApplicationCacheQuota() const { return m_disallowIncreaseForApplicationCacheQuota; }
     void setDisallowIncreaseForApplicationCacheQuota(bool disallowIncrease) { m_disallowIncreaseForApplicationCacheQuota = disallowIncrease; }
 
@@ -284,7 +291,6 @@ public:
     
     bool pauseAnimationAtTimeOnElementWithId(JSStringRef animationName, double time, JSStringRef elementId);
     bool pauseTransitionAtTimeOnElementWithId(JSStringRef propertyName, double time, JSStringRef elementId);
-    bool sampleSVGAnimationForElementAtTime(JSStringRef animationId, double time, JSStringRef elementId);
     unsigned numberOfActiveAnimations() const;
     void suspendAnimations() const;
     void resumeAnimations() const;
@@ -304,7 +310,7 @@ public:
     void showWebInspector();
     void closeWebInspector();
     void evaluateInWebInspector(long callId, JSStringRef script);
-    void evaluateScriptInIsolatedWorld(unsigned worldId, JSObjectRef globalObject, JSStringRef script);
+    void evaluateScriptInIsolatedWorld(unsigned worldID, JSObjectRef globalObject, JSStringRef script);
     void allowRoundingHacks();
 
     bool shouldStayOnPageAfterHandlingBeforeUnload() const { return m_shouldStayOnPageAfterHandlingBeforeUnload; }
@@ -409,6 +415,7 @@ private:
     bool m_deferMainResourceDataLoad;
     bool m_shouldPaintBrokenImage;
     bool m_shouldStayOnPageAfterHandlingBeforeUnload;
+    bool m_areDesktopNotificationPermissionRequestsIgnored;
 
     std::string m_authenticationUsername;
     std::string m_authenticationPassword; 
@@ -416,7 +423,7 @@ private:
     std::string m_expectedPixelHash;    // empty string if no hash
 
     std::set<std::string> m_willSendRequestClearHeaders;
-
+    
     // base64 encoded WAV audio data is stored here.
     std::string m_encodedAudioData;
     

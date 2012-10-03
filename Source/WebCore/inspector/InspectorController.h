@@ -33,8 +33,8 @@
 
 #include "PlatformString.h"
 #include <wtf/Forward.h>
+#include <wtf/HashMap.h>
 #include <wtf/Noncopyable.h>
-#include <wtf/Vector.h>
 
 namespace WebCore {
 
@@ -45,35 +45,30 @@ class InjectedScriptManager;
 class InspectorAgent;
 class InspectorApplicationCacheAgent;
 class InspectorBackendDispatcher;
-class InspectorCSSAgent;
+class InspectorBaseAgentInterface;
 class InspectorClient;
-class InspectorConsoleAgent;
 class InspectorDOMAgent;
-class InspectorDOMDebuggerAgent;
-class InspectorDOMStorageAgent;
-class InspectorDatabaseAgent;
 class InspectorDebuggerAgent;
 class InspectorFrontend;
 class InspectorFrontendClient;
 class InspectorPageAgent;
 class InspectorProfilerAgent;
 class InspectorResourceAgent;
-class InspectorRuntimeAgent;
 class InspectorState;
-class InspectorStorageAgent;
-class InspectorTimelineAgent;
-class InspectorWorkerAgent;
 class InstrumentingAgents;
 class Page;
 class PostWorkerNotificationToFrontendTask;
 class Node;
 
+struct Highlight;
+
 class InspectorController {
     WTF_MAKE_NONCOPYABLE(InspectorController);
     WTF_MAKE_FAST_ALLOCATED;
 public:
-    InspectorController(Page*, InspectorClient*);
     ~InspectorController();
+
+    static PassOwnPtr<InspectorController> create(Page*, InspectorClient*);
     void inspectedPageDestroyed();
 
     bool enabled() const;
@@ -85,7 +80,7 @@ public:
     void setInspectorFrontendClient(PassOwnPtr<InspectorFrontendClient>);
     bool hasInspectorFrontendClient() const;
     void didClearWindowObjectInWorld(Frame*, DOMWrapperWorld*);
-    void setInspectorExtensionAPI(const String& source);
+    void setInjectedScriptForOrigin(const String& origin, const String& source);
 
     void dispatchMessageFromFrontend(const String& message);
 
@@ -95,61 +90,43 @@ public:
     void restoreInspectorStateFromCookie(const String& inspectorCookie);
     void setProcessId(long);
 
-    void showConsole();
     void inspect(Node*);
     void drawHighlight(GraphicsContext&) const;
+    void getHighlight(Highlight*) const;
     void hideHighlight();
     Node* highlightedNode() const;
 
     void evaluateForTestInFrontend(long callId, const String& script);
 
-    void startTimelineProfiler();
-    void stopTimelineProfiler();
-    bool timelineProfilerEnabled();
-
 #if ENABLE(JAVASCRIPT_DEBUGGER)
     bool profilerEnabled();
     void enableProfiler();
-    void startUserInitiatedProfiling();
-    bool isRecordingUserInitiatedProfile() const;
-    void stopUserInitiatedProfiling();
     void disableProfiler();
-    void showAndEnableDebugger();
-    bool debuggerEnabled();
-    void disableDebugger();
+
     void resume();
 #endif
 
     void setResourcesDataSizeLimitsFromInternals(int maximumResourcesContentSize, int maximumSingleResourceContentSize);
 
+    InspectorPageAgent* pageAgent() const { return m_pageAgent; }
+
 private:
+    InspectorController(Page*, InspectorClient*);
+
     friend class PostWorkerNotificationToFrontendTask;
     friend InstrumentingAgents* instrumentationForPage(Page*);
 
     OwnPtr<InstrumentingAgents> m_instrumentingAgents;
     OwnPtr<InjectedScriptManager> m_injectedScriptManager;
     OwnPtr<InspectorState> m_state;
-    OwnPtr<InspectorAgent> m_inspectorAgent;
 
-    OwnPtr<InspectorPageAgent> m_pageAgent;
-    OwnPtr<InspectorDOMAgent> m_domAgent;
-    OwnPtr<InspectorCSSAgent> m_cssAgent;
-#if ENABLE(SQL_DATABASE)
-    OwnPtr<InspectorDatabaseAgent> m_databaseAgent;
-#endif
-    OwnPtr<InspectorDOMStorageAgent> m_domStorageAgent;
-    OwnPtr<InspectorTimelineAgent> m_timelineAgent;
-    OwnPtr<InspectorApplicationCacheAgent> m_applicationCacheAgent;
-    RefPtr<InspectorResourceAgent> m_resourceAgent;
-    OwnPtr<InspectorRuntimeAgent> m_runtimeAgent;
-    OwnPtr<InspectorConsoleAgent> m_consoleAgent;
+    InspectorAgent* m_inspectorAgent;
+    InspectorDOMAgent* m_domAgent;
+    InspectorResourceAgent* m_resourceAgent;
+    InspectorPageAgent* m_pageAgent;
 #if ENABLE(JAVASCRIPT_DEBUGGER)
-    OwnPtr<InspectorDebuggerAgent> m_debuggerAgent;
-    OwnPtr<InspectorDOMDebuggerAgent> m_domDebuggerAgent;
-    OwnPtr<InspectorProfilerAgent> m_profilerAgent;
-#endif
-#if ENABLE(WORKERS)
-    OwnPtr<InspectorWorkerAgent> m_workerAgent;
+    InspectorDebuggerAgent* m_debuggerAgent;
+    InspectorProfilerAgent* m_profilerAgent;
 #endif
 
     RefPtr<InspectorBackendDispatcher> m_inspectorBackendDispatcher;
@@ -157,8 +134,8 @@ private:
     OwnPtr<InspectorFrontend> m_inspectorFrontend;
     Page* m_page;
     InspectorClient* m_inspectorClient;
-    bool m_openingFrontend;
-    bool m_startUserInitiatedDebuggingWhenFrontedIsConnected;
+    typedef Vector<OwnPtr<InspectorBaseAgentInterface> > Agents;
+    Agents m_agents;
 };
 
 }

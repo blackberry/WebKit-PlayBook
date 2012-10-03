@@ -39,13 +39,6 @@ public:
 
     TransformationMatrix matrix() const {return m_matrix; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s %s]", TransformOperation::toString().latin1().data(), matrix().toString().latin1().data());
-    }
-#endif
-
 private:    
     virtual bool isIdentity() const { return m_matrix.isIdentity(); }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,6 +21,8 @@
 
 #include "BlackBerryPlatformIntRectRegion.h"
 #include "BlackBerryPlatformPrimitives.h"
+// FIXME: PR #138540. Remove this #include when we find a lock free way.
+#include <BlackBerryPlatformThreading.h>
 
 namespace BlackBerry {
 namespace Platform {
@@ -55,6 +57,8 @@ class TileBuffer {
         Platform::IntRectRegion m_renderedRegion;
         mutable Platform::Graphics::Buffer* m_buffer;
         mutable int m_blitGeneration;
+        // FIXME: PR #138540. Remove the mutex when we find a lock free way.
+        mutable Platform::Mutex m_mutex;
 };
 
 
@@ -94,7 +98,7 @@ public:
 private:
     BackingStoreTile(const Platform::IntSize&, BufferingMode);
 
-    mutable unsigned m_frontBuffer;
+    mutable TileBuffer* m_frontBuffer;
     BufferingMode m_bufferingMode;
     bool m_checkered;
     bool m_committed;
@@ -102,7 +106,8 @@ private:
     int m_horizontalShift;
     int m_verticalShift;
 };
-}
-}
+
+} // namespace WebKit
+} // namespace BlackBerry
 
 #endif // BackingStoreTile_h

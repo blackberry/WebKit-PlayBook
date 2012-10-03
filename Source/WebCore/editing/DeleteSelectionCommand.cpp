@@ -361,7 +361,7 @@ void DeleteSelectionCommand::removeNode(PassRefPtr<Node> node)
         }
         
         // Make sure empty cell has some height, if a placeholder can be inserted.
-        updateLayout();
+        document()->updateLayoutIgnorePendingStylesheets();
         RenderObject *r = node->renderer();
         if (r && r->isTableCell() && toRenderTableCell(r)->contentHeight() <= 0) {
             Position firstEditablePosition = firstEditablePositionInNode(node.get());
@@ -418,10 +418,12 @@ void DeleteSelectionCommand::handleGeneralDelete()
     if (startNode == m_startBlock && startOffset == 0 && canHaveChildrenForEditing(startNode) && !startNode->hasTagName(tableTag)) {
         startOffset = 0;
         startNode = startNode->traverseNextNode();
+        if (!startNode)
+            return;
     }
 
     if (startOffset >= caretMaxOffset(startNode) && startNode->isTextNode()) {
-        Text *text = static_cast<Text *>(startNode);
+        Text* text = toText(startNode);
         if (text->length() > (unsigned)caretMaxOffset(startNode))
             deleteTextFromNode(text, caretMaxOffset(startNode), text->length() - caretMaxOffset(startNode));
     }
@@ -439,7 +441,7 @@ void DeleteSelectionCommand::handleGeneralDelete()
         if (m_downstreamEnd.deprecatedEditingOffset() - startOffset > 0) {
             if (startNode->isTextNode()) {
                 // in a text node that needs to be trimmed
-                Text* text = static_cast<Text*>(startNode);
+                Text* text = toText(startNode);
                 deleteTextFromNode(text, startOffset, m_downstreamEnd.deprecatedEditingOffset() - startOffset);
             } else {
                 removeChildrenInRange(startNode, startOffset, m_downstreamEnd.deprecatedEditingOffset());
@@ -459,14 +461,14 @@ void DeleteSelectionCommand::handleGeneralDelete()
         if (startOffset > 0) {
             if (startNode->isTextNode()) {
                 // in a text node that needs to be trimmed
-                Text *text = static_cast<Text *>(node.get());
+                Text* text = toText(node.get());
                 deleteTextFromNode(text, startOffset, text->length() - startOffset);
                 node = node->traverseNextNode();
             } else {
                 node = startNode->childNode(startOffset);
             }
         } else if (startNode == m_upstreamEnd.deprecatedNode() && startNode->isTextNode()) {
-            Text* text = static_cast<Text*>(m_upstreamEnd.deprecatedNode());
+            Text* text = toText(m_upstreamEnd.deprecatedNode());
             deleteTextFromNode(text, 0, m_upstreamEnd.deprecatedEditingOffset());
         }
         
@@ -499,7 +501,7 @@ void DeleteSelectionCommand::handleGeneralDelete()
             } else {
                 if (m_downstreamEnd.deprecatedNode()->isTextNode()) {
                     // in a text node that needs to be trimmed
-                    Text* text = static_cast<Text*>(m_downstreamEnd.deprecatedNode());
+                    Text* text = toText(m_downstreamEnd.deprecatedNode());
                     if (m_downstreamEnd.deprecatedEditingOffset() > 0) {
                         deleteTextFromNode(text, 0, m_downstreamEnd.deprecatedEditingOffset());
                     }
@@ -528,15 +530,15 @@ void DeleteSelectionCommand::handleGeneralDelete()
 
 void DeleteSelectionCommand::fixupWhitespace()
 {
-    updateLayout();
+    document()->updateLayoutIgnorePendingStylesheets();
     // FIXME: isRenderedCharacter should be removed, and we should use VisiblePosition::characterAfter and VisiblePosition::characterBefore
     if (m_leadingWhitespace.isNotNull() && !m_leadingWhitespace.isRenderedCharacter() && m_leadingWhitespace.deprecatedNode()->isTextNode()) {
-        Text* textNode = static_cast<Text*>(m_leadingWhitespace.deprecatedNode());
+        Text* textNode = toText(m_leadingWhitespace.deprecatedNode());
         ASSERT(!textNode->renderer() || textNode->renderer()->style()->collapseWhiteSpace());
         replaceTextInNodePreservingMarkers(textNode, m_leadingWhitespace.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
     }
     if (m_trailingWhitespace.isNotNull() && !m_trailingWhitespace.isRenderedCharacter() && m_trailingWhitespace.deprecatedNode()->isTextNode()) {
-        Text* textNode = static_cast<Text*>(m_trailingWhitespace.deprecatedNode());
+        Text* textNode = toText(m_trailingWhitespace.deprecatedNode());
         ASSERT(!textNode->renderer() ||textNode->renderer()->style()->collapseWhiteSpace());
         replaceTextInNodePreservingMarkers(textNode, m_trailingWhitespace.deprecatedEditingOffset(), 1, nonBreakingSpaceString());
     }
@@ -746,6 +748,24 @@ String DeleteSelectionCommand::originalStringForAutocorrectionAtBeginningOfSelec
     return String();
 }
 
+// This method removes div elements with no attributes that have only one child or no children at all.
+void DeleteSelectionCommand::removeRedundantBlocks()
+{
+    Node* node = m_endingPosition.containerNode();
+    Node* rootNode = node->rootEditableElement();
+   
+    while (node != rootNode) {
+        if (isRemovableBlock(node)) {
+            if (node == m_endingPosition.anchorNode())
+                updatePositionForNodeRemoval(m_endingPosition, node);
+            
+            CompositeEditCommand::removeNodePreservingChildren(node);
+            node = m_endingPosition.anchorNode();
+        } else
+            node = node->parentNode();
+    }
+}
+
 void DeleteSelectionCommand::doApply()
 {
     // If selection has not been set to a custom selection when the command was created,
@@ -810,8 +830,10 @@ void DeleteSelectionCommand::doApply()
     
     RefPtr<Node> placeholder = m_needPlaceholder ? createBreakElement(document()).get() : 0;
     
-    if (placeholder)
+    if (placeholder) {
+        removeRedundantBlocks();
         insertNodeAt(placeholder.get(), m_endingPosition);
+    }
 
     rebalanceWhitespaceAt(m_endingPosition);
 

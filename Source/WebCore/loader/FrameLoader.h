@@ -42,6 +42,7 @@
 #include "ResourceHandle.h"
 #include "ResourceLoadNotifier.h"
 #include "SecurityContext.h"
+#include "SecurityPolicy.h"
 #include "SubframeLoader.h"
 #include "Timer.h"
 #include <wtf/Forward.h>
@@ -100,7 +101,7 @@ public:
     // FIXME: These are all functions which start loads. We have too many.
     void loadURLIntoChildFrame(const KURL&, const String& referer, Frame*);
     void loadFrameRequest(const FrameLoadRequest&, bool lockHistory, bool lockBackForwardList,  // Called by submitForm, calls loadPostRequest and loadURL.
-        PassRefPtr<Event>, PassRefPtr<FormState>, ReferrerPolicy);
+        PassRefPtr<Event>, PassRefPtr<FormState>, ShouldSendReferrer);
 
     void load(const ResourceRequest&, bool lockHistory);                                        // Called by WebFrame, calls load(ResourceRequest, SubstituteData).
     void load(const ResourceRequest&, const SubstituteData&, bool lockHistory);                 // Called both by WebFrame and internally, calls load(DocumentLoader*).
@@ -111,7 +112,7 @@ public:
     unsigned long loadResourceSynchronously(const ResourceRequest&, StoredCredentials, ResourceError&, ResourceResponse&, Vector<char>& data);
 
     void changeLocation(SecurityOrigin*, const KURL&, const String& referrer, bool lockHistory = true, bool lockBackForwardList = true, bool refresh = false);
-    void urlSelected(const KURL&, const String& target, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, ReferrerPolicy);
+    void urlSelected(const KURL&, const String& target, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, ShouldSendReferrer);
     void submitForm(PassRefPtr<FormSubmission>);
 
     void reload(bool endToEndReload = false);
@@ -119,6 +120,7 @@ public:
 
     void open(CachedFrameBase&);
     void loadItem(HistoryItem*, FrameLoadType);
+    HistoryItem* requestedHistoryItem() const { return m_requestedHistoryItem.get(); }
 
     static void reportLocalLoadFailed(Frame*, const String& url);
 
@@ -178,7 +180,12 @@ public:
     CachePolicy subresourceCachePolicy() const;
 
     void didFirstLayout();
+
+    // FIXME: didFirstVisuallyNonEmptyLayout() and didNewFirstVisuallyNonEmptyLayout() should be merged.
+    // The only reason for both to exist is to experiment with different heuristics for the time being.
     void didFirstVisuallyNonEmptyLayout();
+    void didNewFirstVisuallyNonEmptyLayout();
+
     void checkRelayoutForContentsSizeFromHistory();
     bool shouldRestoreScrollPositionAndViewState() const;
 
@@ -199,7 +206,7 @@ public:
     void setDefersLoading(bool);
 
 #if PLATFORM(BLACKBERRY)
-    void urlSelectedWithRequest(const ResourceRequest&, const String& target, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, bool userGesture, ReferrerPolicy);
+    void urlSelectedWithRequest(const ResourceRequest&, const String& target, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, bool userGesture, SecurityPolicy::ReferrerPolicy);
 #endif
 
     void didExplicitOpen();
@@ -267,7 +274,9 @@ public:
     // uses the policy machinery (and therefore is called via the PolicyChecker).  Once we
     // introduce a proper callback type for this function, we should make it private again.
     void continueLoadAfterWillSubmitForm();
-    
+
+    void setOriginalURLForDownloadRequest(ResourceRequest&);
+
     bool suppressOpenerInNewFrame() const { return m_suppressOpenerInNewFrame; }
 
     static ObjectContentType defaultObjectContentType(const KURL&, const String& mimeType, bool shouldPreferPlugInsForImages);
@@ -340,7 +349,7 @@ private:
 
     void dispatchDidCommitLoad();
 
-    void urlSelected(const FrameLoadRequest&, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, ReferrerPolicy, ShouldReplaceDocumentIfJavaScriptURL);
+    void urlSelected(const FrameLoadRequest&, PassRefPtr<Event>, bool lockHistory, bool lockBackForwardList, ShouldSendReferrer, ShouldReplaceDocumentIfJavaScriptURL);
 
     void loadWithDocumentLoader(DocumentLoader*, FrameLoadType, PassRefPtr<FormState>); // Calls continueLoadAfterNavigationPolicy
     void load(DocumentLoader*);                                                         // Calls loadWithDocumentLoader   
@@ -449,6 +458,7 @@ private:
 #endif
 
     KURL m_previousUrl;
+    RefPtr<HistoryItem> m_requestedHistoryItem;
 };
 
 // This function is called by createWindow() in JSDOMWindowBase.cpp, for example, for

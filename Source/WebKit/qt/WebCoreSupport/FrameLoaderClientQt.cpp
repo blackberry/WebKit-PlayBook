@@ -73,6 +73,7 @@
 #include "V8DOMWindow.h"
 #endif
 #include "ViewportArguments.h"
+#include "WebEventConversion.h"
 
 #include "qwebframe.h"
 #include "qwebframe_p.h"
@@ -172,6 +173,7 @@ namespace WebCore {
 bool FrameLoaderClientQt::dumpFrameLoaderCallbacks = false;
 bool FrameLoaderClientQt::dumpProgressFinishedCallback = false;
 bool FrameLoaderClientQt::dumpUserGestureInFrameLoaderCallbacks = false;
+bool FrameLoaderClientQt::dumpWillCacheResponseCallbacks = false;
 bool FrameLoaderClientQt::dumpResourceLoadCallbacks = false;
 bool FrameLoaderClientQt::sendRequestReturnsNullOnRedirect = false;
 bool FrameLoaderClientQt::sendRequestReturnsNull = false;
@@ -395,10 +397,10 @@ void FrameLoaderClientQt::dispatchDidChangeLocationWithinPage()
 }
 
 #if USE(V8)
-void FrameLoaderClientQt::didCreateScriptContextForFrame()
+void FrameLoaderClientQt::didCreateScriptContext(v8::Handle<v8::Context>, int)
 {
 }
-void FrameLoaderClientQt::didDestroyScriptContextForFrame()
+void FrameLoaderClientQt::willReleaseScriptContext(v8::Handle<v8::Context>, int)
 {
 }
 void FrameLoaderClientQt::didCreateIsolatedScriptContext()
@@ -605,7 +607,7 @@ void FrameLoaderClientQt::postProgressFinishedNotification()
             QPoint localPos = view->mapFromGlobal(QCursor::pos());
             if (view->rect().contains(localPos)) {
                 QMouseEvent event(QEvent::MouseMove, localPos, Qt::NoButton, Qt::NoButton, Qt::NoModifier);
-                m_frame->eventHandler()->mouseMoved(PlatformMouseEvent(&event, 0));
+                m_frame->eventHandler()->mouseMoved(convertMouseEvent(&event, 0));
             }
         }
     }
@@ -735,7 +737,7 @@ void FrameLoaderClientQt::setTitle(const StringWithDirection& title, const KURL&
 String FrameLoaderClientQt::userAgent(const KURL& url)
 {
     if (m_webFrame) {
-        return m_webFrame->page()->userAgentForUrl(url);
+        return m_webFrame->page()->userAgentForUrl(url).remove(QLatin1Char('\n')).remove(QLatin1Char('\r'));
     }
     return String();
 }
@@ -1022,7 +1024,7 @@ WTF::PassRefPtr<WebCore::DocumentLoader> FrameLoaderClientQt::createDocumentLoad
     return loader.release();
 }
 
-void FrameLoaderClientQt::download(WebCore::ResourceHandle* handle, const WebCore::ResourceRequest&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&)
+void FrameLoaderClientQt::download(WebCore::ResourceHandle* handle, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&)
 {
     if (!m_webFrame)
         return;
@@ -1109,6 +1111,10 @@ void FrameLoaderClientQt::dispatchDidReceiveResponse(WebCore::DocumentLoader*, u
 {
 
     m_response = response;
+    if (dumpWillCacheResponseCallbacks)
+        printf("%s - willCacheResponse: called\n",
+               qPrintable(dumpAssignedUrls[identifier]));
+
     if (dumpResourceLoadCallbacks)
         printf("%s - didReceiveResponse %s\n",
                qPrintable(dumpAssignedUrls[identifier]),
@@ -1242,7 +1248,7 @@ void FrameLoaderClientQt::dispatchDecidePolicyForResponse(FramePolicyFunction fu
 void FrameLoaderClientQt::dispatchDecidePolicyForNewWindowAction(FramePolicyFunction function, const WebCore::NavigationAction& action, const WebCore::ResourceRequest& request, PassRefPtr<WebCore::FormState>, const WTF::String&)
 {
     Q_ASSERT(m_webFrame);
-    QNetworkRequest r(request.toNetworkRequest(m_webFrame));
+    QNetworkRequest r(request.toNetworkRequest(m_frame->loader()->networkingContext()));
     QWebPage* page = m_webFrame->page();
 
     if (!page->d->acceptNavigationRequest(0, r, QWebPage::NavigationType(action.type()))) {
@@ -1263,7 +1269,7 @@ void FrameLoaderClientQt::dispatchDecidePolicyForNewWindowAction(FramePolicyFunc
 void FrameLoaderClientQt::dispatchDecidePolicyForNavigationAction(FramePolicyFunction function, const WebCore::NavigationAction& action, const WebCore::ResourceRequest& request, PassRefPtr<WebCore::FormState>)
 {
     Q_ASSERT(m_webFrame);
-    QNetworkRequest r(request.toNetworkRequest(m_webFrame));
+    QNetworkRequest r(request.toNetworkRequest(m_frame->loader()->networkingContext()));
     QWebPage*page = m_webFrame->page();
     PolicyAction result;
 
@@ -1318,7 +1324,7 @@ void FrameLoaderClientQt::startDownload(const WebCore::ResourceRequest& request,
     if (!m_webFrame)
         return;
 
-    emit m_webFrame->page()->downloadRequested(request.toNetworkRequest(m_webFrame));
+    emit m_webFrame->page()->downloadRequested(request.toNetworkRequest(m_frame->loader()->networkingContext()));
 }
 
 PassRefPtr<Frame> FrameLoaderClientQt::createFrame(const KURL& url, const String& name, HTMLFrameOwnerElement* ownerElement,
@@ -1446,15 +1452,16 @@ public:
     virtual void invalidateRect(const IntRect& r)
     { 
         if (platformWidget())
-            platformWidget()->update(r);
+            static_cast<QWidget*>(platformWidget())->update(r);
     }
     virtual void frameRectsChanged()
     {
-        if (!platformWidget())
+        QWidget* widget = static_cast<QWidget*>(platformWidget());
+        if (!widget)
             return;
 
         IntRect windowRect = convertToContainingWindow(IntRect(0, 0, frameRect().width(), frameRect().height()));
-        platformWidget()->setGeometry(windowRect);
+        widget->setGeometry(windowRect);
 
         ScrollView* parentScrollView = parent();
         if (!parentScrollView)
@@ -1463,14 +1470,14 @@ public:
         ASSERT(parentScrollView->isFrameView());
         IntRect clipRect(static_cast<FrameView*>(parentScrollView)->windowClipRect());
         clipRect.move(-windowRect.x(), -windowRect.y());
-        clipRect.intersect(platformWidget()->rect());
+        clipRect.intersect(widget->rect());
 
         QRegion clipRegion = QRegion(clipRect);
-        platformWidget()->setMask(clipRegion);
+        widget->setMask(clipRegion);
 
         handleVisibility();
 
-        platformWidget()->update();
+        widget->update();
     }
 
     virtual void show()
@@ -1485,10 +1492,11 @@ private:
         if (!isVisible())
             return;
 
+        QWidget* widget = static_cast<QWidget*>(platformWidget());
         // If setMask is set with an empty QRegion, no clipping will
         // be performed, so in that case we hide the platformWidget.
-        QRegion mask = platformWidget()->mask();
-        platformWidget()->setVisible(!mask.isEmpty());
+        QRegion mask = widget->mask();
+        widget->setVisible(!mask.isEmpty());
     }
 };
 
@@ -1585,7 +1593,7 @@ PassRefPtr<Widget> FrameLoaderClientQt::createPlugin(const IntSize& pluginSize, 
 
                 styleSheet += QString::fromLatin1(getPropertyName(property));
                 styleSheet += QLatin1Char(':');
-                styleSheet += computedStyle(element)->getPropertyValue(property);
+                styleSheet += CSSComputedStyleDeclaration::create(element)->getPropertyValue(property);
                 styleSheet += QLatin1Char(';');
             }
 

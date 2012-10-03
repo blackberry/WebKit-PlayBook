@@ -36,7 +36,7 @@
 #include "RenderObject.h"
 #include "RenderTextControlSingleLine.h"
 #include "TextControlInnerElements.h"
-#include "WebString.h"
+#include "platform/WebString.h"
 #include <wtf/PassRefPtr.h>
 
 using namespace WebCore;
@@ -90,7 +90,7 @@ int WebInputElement::size() const
 
 void WebInputElement::setValue(const WebString& value, bool sendChangeEvent)
 {
-    unwrap<HTMLInputElement>()->setValue(value, sendChangeEvent);
+    unwrap<HTMLInputElement>()->setValue(value, sendChangeEvent ? DispatchChangeEvent : DispatchNoEvent);
 }
 
 WebString WebInputElement::value() const

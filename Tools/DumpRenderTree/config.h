@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2008 Nuanti Ltd.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Library General Public
@@ -30,39 +29,17 @@
 #endif
 
 #include <wtf/Platform.h>
-
-/* See note in wtf/Platform.h for more info on EXPORT_MACROS. */
-#if USE(EXPORT_MACROS)
-
 #include <wtf/ExportMacros.h>
-
-#define WTF_EXPORT_PRIVATE WTF_IMPORT
-#define JS_EXPORT_PRIVATE WTF_IMPORT
-#define WEBKIT_EXPORTDATA WTF_IMPORT
-
-#define JS_EXPORTDATA JS_EXPORT_PRIVATE
-#define JS_EXPORTCLASS JS_EXPORT_PRIVATE
-
-#else /* !USE(EXPORT_MACROS) */
-
-#if OS(WINDOWS) && !COMPILER(GCC) && !defined(BUILDING_WX__)
-#define JS_EXPORTDATA __declspec(dllimport)
-#define WEBKIT_EXPORTDATA __declspec(dllimport)
-#else
-#define JS_EXPORTDATA
-#define WEBKIT_EXPORTDATA
+#if USE(JSC)
+#include <runtime/JSExportMacros.h>
 #endif
-
-#define WTF_EXPORT_PRIVATE
-#define JS_EXPORT_PRIVATE
-
-#endif /* USE(EXPORT_MACROS) */
 
 // On MSW, wx headers need to be included before windows.h is.
 // The only way we can always ensure this is if we include wx here.
 #if PLATFORM(WX)
 #include <wx/defs.h>
 #endif
+
 
 #ifdef __cplusplus
 #undef new

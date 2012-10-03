@@ -48,11 +48,10 @@ namespace ApplicationCacheAgentState {
 static const char applicationCacheAgentEnabled[] = "applicationCacheAgentEnabled";
 }
 
-InspectorApplicationCacheAgent::InspectorApplicationCacheAgent(InstrumentingAgents* instrumentingAgents, InspectorPageAgent* pageAgent, InspectorState* state)
-    : m_instrumentingAgents(instrumentingAgents)
+InspectorApplicationCacheAgent::InspectorApplicationCacheAgent(InstrumentingAgents* instrumentingAgents, InspectorState* state, InspectorPageAgent* pageAgent)
+    : InspectorBaseAgent<InspectorApplicationCacheAgent>("ApplicationCache", instrumentingAgents, state)
     , m_pageAgent(pageAgent)
     , m_frontend(0)
-    , m_state(state)
 {
 }
 
@@ -79,6 +78,9 @@ void InspectorApplicationCacheAgent::enable(ErrorString*)
 {
     m_state->setBoolean(ApplicationCacheAgentState::applicationCacheAgentEnabled, true);
     m_instrumentingAgents->setInspectorApplicationCacheAgent(this);
+
+    // We need to pass initial navigator.onOnline.
+    networkStateChanged();
 }
 
 void InspectorApplicationCacheAgent::updateApplicationCacheStatus(Frame* frame)
@@ -101,9 +103,9 @@ void InspectorApplicationCacheAgent::networkStateChanged()
     m_frontend->networkStateUpdated(isNowOnline);
 }
 
-void InspectorApplicationCacheAgent::getFramesWithManifests(ErrorString*, RefPtr<InspectorArray>* result)
+void InspectorApplicationCacheAgent::getFramesWithManifests(ErrorString*, RefPtr<InspectorArray>& result)
 {
-    *result = InspectorArray::create();
+    result = InspectorArray::create();
 
     Frame* mainFrame = m_pageAgent->mainFrame();
     for (Frame* frame = mainFrame; frame; frame = frame->tree()->traverseNext(mainFrame)) {
@@ -119,7 +121,7 @@ void InspectorApplicationCacheAgent::getFramesWithManifests(ErrorString*, RefPtr
             value->setString("frameId", m_pageAgent->frameId(frame));
             value->setString("manifestURL", manifestURL);
             value->setNumber("status", host->status());
-            (*result)->pushObject(value);
+            result->pushObject(value);
         }
     }
 }
@@ -143,7 +145,7 @@ void InspectorApplicationCacheAgent::getManifestForFrame(ErrorString* errorStrin
     *manifestURL = info.m_manifest.string();
 }
 
-void InspectorApplicationCacheAgent::getApplicationCacheForFrame(ErrorString* errorString, const String& frameId, RefPtr<InspectorObject>* applicationCache)
+void InspectorApplicationCacheAgent::getApplicationCacheForFrame(ErrorString* errorString, const String& frameId, RefPtr<InspectorObject>& applicationCache)
 {
     DocumentLoader* documentLoader = assertFrameWithDocumentLoader(errorString, frameId);
     if (!documentLoader)
@@ -155,7 +157,7 @@ void InspectorApplicationCacheAgent::getApplicationCacheForFrame(ErrorString* er
     ApplicationCacheHost::ResourceInfoList resources;
     host->fillResourceList(&resources);
 
-    *applicationCache = buildObjectForApplicationCache(resources, info);
+    applicationCache = buildObjectForApplicationCache(resources, info);
 }
 
 PassRefPtr<InspectorObject> InspectorApplicationCacheAgent::buildObjectForApplicationCache(const ApplicationCacheHost::ResourceInfoList& applicationCacheResources, const ApplicationCacheHost::CacheInfo& applicationCacheInfo)

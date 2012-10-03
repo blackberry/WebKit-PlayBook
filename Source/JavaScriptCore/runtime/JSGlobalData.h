@@ -30,15 +30,16 @@
 #define JSGlobalData_h
 
 #include "CachedTranscendentalFunction.h"
-#include "DFGIntrinsic.h"
 #include "DateInstanceCache.h"
 #include "ExecutableAllocator.h"
 #include "Heap.h"
-#include "Strong.h"
+#include "Intrinsic.h"
 #include "JITStubs.h"
 #include "JSValue.h"
+#include "LLIntData.h"
 #include "NumericStrings.h"
 #include "SmallStrings.h"
+#include "Strong.h"
 #include "Terminator.h"
 #include "TimeoutChecker.h"
 #include "WeakRandom.h"
@@ -65,6 +66,7 @@ namespace JSC {
     class JSGlobalObject;
     class JSObject;
     class Keywords;
+    class LLIntOffsetsExtractor;
     class NativeExecutable;
     class ParserArena;
     class RegExpCache;
@@ -103,6 +105,24 @@ namespace JSC {
         ThreadStackTypeSmall
     };
 
+    struct TypedArrayDescriptor {
+        TypedArrayDescriptor()
+            : m_classInfo(0)
+            , m_storageOffset(0)
+            , m_lengthOffset(0)
+        {
+        }
+        TypedArrayDescriptor(const ClassInfo* classInfo, size_t storageOffset, size_t lengthOffset)
+            : m_classInfo(classInfo)
+            , m_storageOffset(storageOffset)
+            , m_lengthOffset(lengthOffset)
+        {
+        }
+        const ClassInfo* m_classInfo;
+        size_t m_storageOffset;
+        size_t m_lengthOffset;
+    };
+    
     class JSGlobalData : public RefCounted<JSGlobalData> {
     public:
         // WebCore has a one-to-one mapping of threads to JSGlobalDatas;
@@ -116,18 +136,18 @@ namespace JSC {
         enum GlobalDataType { Default, APIContextGroup, APIShared };
         
         struct ClientData {
-            virtual ~ClientData() = 0;
+            JS_EXPORT_PRIVATE virtual ~ClientData() = 0;
         };
 
         bool isSharedInstance() { return globalDataType == APIShared; }
         bool usingAPI() { return globalDataType != Default; }
         static bool sharedInstanceExists();
-        static JSGlobalData& sharedInstance();
+        JS_EXPORT_PRIVATE static JSGlobalData& sharedInstance();
 
-        static PassRefPtr<JSGlobalData> create(ThreadStackType, HeapSize = SmallHeap);
-        static PassRefPtr<JSGlobalData> createLeaked(ThreadStackType, HeapSize = SmallHeap);
+        JS_EXPORT_PRIVATE static PassRefPtr<JSGlobalData> create(ThreadStackType, HeapSize = SmallHeap);
+        JS_EXPORT_PRIVATE static PassRefPtr<JSGlobalData> createLeaked(ThreadStackType, HeapSize = SmallHeap);
         static PassRefPtr<JSGlobalData> createContextGroup(ThreadStackType, HeapSize = SmallHeap);
-        ~JSGlobalData();
+        JS_EXPORT_PRIVATE ~JSGlobalData();
 
         void makeUsableFromMultipleThreads() { heap.machineThreads().makeUsableFromMultipleThreads(); }
 
@@ -175,13 +195,6 @@ namespace JSC {
         Strong<Structure> regExpStructure;
         Strong<Structure> structureChainStructure;
 
-        static void storeVPtrs();
-        static JS_EXPORTDATA void* jsFinalObjectVPtr;
-        static JS_EXPORTDATA void* jsArrayVPtr;
-        static JS_EXPORTDATA void* jsByteArrayVPtr;
-        static JS_EXPORTDATA void* jsStringVPtr;
-        static JS_EXPORTDATA void* jsFunctionVPtr;
-
         IdentifierTable* identifierTable;
         CommonIdentifiers* propertyNames;
         const MarkedArgumentBuffer* emptyList; // Lists are supposed to be allocated on the stack to have their elements properly marked, which is not the case here - but this list has nothing to mark.
@@ -200,36 +213,38 @@ namespace JSC {
             codeBlocksBeingCompiled.removeLast();
         }
 
+        void setInDefineOwnProperty(bool inDefineOwnProperty)
+        {
+            m_inDefineOwnProperty = inDefineOwnProperty;
+        }
+
+        bool isInDefineOwnProperty()
+        {
+            return m_inDefineOwnProperty;
+        }
+
 #if ENABLE(ASSEMBLER)
         ExecutableAllocator executableAllocator;
-        ExecutableAllocator regexAllocator;
 #endif
 
 #if !ENABLE(JIT)
         bool canUseJIT() { return false; } // interpreter only
-#elif !ENABLE(INTERPRETER)
+#elif !ENABLE(CLASSIC_INTERPRETER)
         bool canUseJIT() { return true; } // jit only
 #else
         bool canUseJIT() { return m_canUseJIT; }
 #endif
 
-        const StackBounds& stack()
-        {
-            return (globalDataType == Default)
-                ? m_stack
-                : wtfThreadData().stack();
-        }
-
-        ParserArena* parserArena;
-        Keywords* keywords;
+        OwnPtr<ParserArena> parserArena;
+        OwnPtr<Keywords> keywords;
         Interpreter* interpreter;
 #if ENABLE(JIT)
         OwnPtr<JITThunks> jitStubs;
-        MacroAssemblerCodePtr getCTIStub(ThunkGenerator generator)
+        MacroAssemblerCodeRef getCTIStub(ThunkGenerator generator)
         {
             return jitStubs->ctiStub(this, generator);
         }
-        NativeExecutable* getHostFunction(NativeFunction, ThunkGenerator, DFG::Intrinsic);
+        NativeExecutable* getHostFunction(NativeFunction, Intrinsic);
 #endif
         NativeExecutable* getHostFunction(NativeFunction, NativeFunction constructor);
 
@@ -238,9 +253,17 @@ namespace JSC {
         Heap heap;
 
         JSValue exception;
-#if ENABLE(JIT)
+
+        const ClassInfo* const jsArrayClassInfo;
+        const ClassInfo* const jsFinalObjectClassInfo;
+
+        LLInt::Data llintData;
+
         ReturnAddressPtr exceptionLocation;
         JSValue hostCallReturnValue;
+        CallFrame* callFrameForThrow;
+        void* targetMachinePCForThrow;
+        Instruction* targetInterpreterPCForThrow;
 #if ENABLE(DFG_JIT)
         uint32_t osrExitIndex;
         void* osrExitJumpDestination;
@@ -265,9 +288,8 @@ namespace JSC {
             return scratchBuffers.last();
         }
 #endif
-#endif
 
-        HashMap<OpaqueJSClass*, OpaqueJSClassContextData*> opaqueJSClassData;
+        HashMap<OpaqueJSClass*, OwnPtr<OpaqueJSClassContextData> > opaqueJSClassData;
 
         JSGlobalObject* dynamicGlobalObject;
 
@@ -295,21 +317,21 @@ namespace JSC {
 
         CachedTranscendentalFunction<sin> cachedSin;
 
-        void resetDateCache();
+        JS_EXPORT_PRIVATE void resetDateCache();
 
-        void startSampling();
-        void stopSampling();
-        void dumpSampleData(ExecState* exec);
+        JS_EXPORT_PRIVATE void startSampling();
+        JS_EXPORT_PRIVATE void stopSampling();
+        JS_EXPORT_PRIVATE void dumpSampleData(ExecState* exec);
         void recompileAllJSFunctions();
         RegExpCache* regExpCache() { return m_regExpCache; }
 #if ENABLE(REGEXP_TRACING)
         void addRegExpToTrace(PassRefPtr<RegExp> regExp);
 #endif
-        void dumpRegExpTrace();
-        void clearBuiltinStructures();
+        JS_EXPORT_PRIVATE void dumpRegExpTrace();
+        JS_EXPORT_PRIVATE void clearBuiltinStructures();
 
         bool isCollectorBusy() { return heap.isBusy(); }
-        void releaseExecutableMemory();
+        JS_EXPORT_PRIVATE void releaseExecutableMemory();
 
 #if ENABLE(GC_VALIDATION)
         bool isInitializingObject() const; 
@@ -320,17 +342,48 @@ namespace JSC {
         unsigned m_timeoutCount;
 #endif
 
+#define registerTypedArrayFunction(type, capitalizedType) \
+        void registerTypedArrayDescriptor(const capitalizedType##Array*, const TypedArrayDescriptor& descriptor) \
+        { \
+            ASSERT(!m_##type##ArrayDescriptor.m_classInfo || m_##type##ArrayDescriptor.m_classInfo == descriptor.m_classInfo); \
+            m_##type##ArrayDescriptor = descriptor; \
+        } \
+        const TypedArrayDescriptor& type##ArrayDescriptor() const { ASSERT(m_##type##ArrayDescriptor.m_classInfo); return m_##type##ArrayDescriptor; }
+
+        registerTypedArrayFunction(int8, Int8);
+        registerTypedArrayFunction(int16, Int16);
+        registerTypedArrayFunction(int32, Int32);
+        registerTypedArrayFunction(uint8, Uint8);
+        registerTypedArrayFunction(uint8Clamped, Uint8Clamped);
+        registerTypedArrayFunction(uint16, Uint16);
+        registerTypedArrayFunction(uint32, Uint32);
+        registerTypedArrayFunction(float32, Float32);
+        registerTypedArrayFunction(float64, Float64);
+#undef registerTypedArrayFunction
+
     private:
+        friend class LLIntOffsetsExtractor;
+        
         JSGlobalData(GlobalDataType, ThreadStackType, HeapSize);
         static JSGlobalData*& sharedInstanceInternal();
         void createNativeThunk();
-#if ENABLE(JIT) && ENABLE(INTERPRETER)
+#if ENABLE(JIT) && ENABLE(CLASSIC_INTERPRETER)
         bool m_canUseJIT;
 #endif
-        StackBounds m_stack;
 #if ENABLE(GC_VALIDATION)
         bool m_isInitializingObject;
 #endif
+        bool m_inDefineOwnProperty;
+
+        TypedArrayDescriptor m_int8ArrayDescriptor;
+        TypedArrayDescriptor m_int16ArrayDescriptor;
+        TypedArrayDescriptor m_int32ArrayDescriptor;
+        TypedArrayDescriptor m_uint8ArrayDescriptor;
+        TypedArrayDescriptor m_uint8ClampedArrayDescriptor;
+        TypedArrayDescriptor m_uint16ArrayDescriptor;
+        TypedArrayDescriptor m_uint32ArrayDescriptor;
+        TypedArrayDescriptor m_float32ArrayDescriptor;
+        TypedArrayDescriptor m_float64ArrayDescriptor;
     };
 
 #if ENABLE(GC_VALIDATION)

@@ -50,13 +50,6 @@ public:
     Length y() const { return m_y; }
     Length z() const { return m_z; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformOperation %s (%f, %f, %f)]", TransformOperation::toString().latin1().data(), m_x.calcFloatValue(1), m_y.calcFloatValue(1), m_z.calcFloatValue(1));
-    }
-#endif
-
 private:
     virtual bool isIdentity() const { return m_x.calcFloatValue(1) == 0 && m_y.calcFloatValue(1) == 0 && m_z.calcFloatValue(1) == 0; }
 

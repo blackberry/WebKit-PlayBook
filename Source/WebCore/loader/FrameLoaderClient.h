@@ -81,7 +81,11 @@ namespace WebCore {
 #endif
     class HTMLPlugInElement;
     class IntSize;
+#if ENABLE(WEB_INTENTS)
+    class IntentRequest;
+#endif
     class KURL;
+    class MessageEvent;
     class NavigationAction;
     class Page;
     class ProtectionSpace;
@@ -160,6 +164,7 @@ namespace WebCore {
 
         virtual void dispatchDidFirstLayout() = 0;
         virtual void dispatchDidFirstVisuallyNonEmptyLayout() = 0;
+        virtual void dispatchDidNewFirstVisuallyNonEmptyLayout() { }
         virtual void dispatchDidLayout() { }
 
         virtual Frame* dispatchCreatePage(const NavigationAction&) = 0;
@@ -259,7 +264,7 @@ namespace WebCore {
         virtual void dispatchDidBecomeFrameset(bool) = 0; // Can change due to navigation or DOM modification.
 
         virtual bool canCachePage() const = 0;
-        virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceRequest&, const ResourceResponse&) = 0;
+        virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceResponse&) = 0;
 
         virtual PassRefPtr<Frame> createFrame(const KURL& url, const String& name, HTMLFrameOwnerElement* ownerElement,
                                    const String& referrer, bool allowsScrolling, int marginWidth, int marginHeight) = 0;
@@ -285,9 +290,9 @@ namespace WebCore {
         virtual void didPerformFirstNavigation() const = 0; // "Navigation" here means a transition from one page to another that ends up in the back/forward list.
 
 #if USE(V8)
-        virtual void didCreateScriptContext(v8::Handle<v8::Context>, int worldId) = 0;
+        virtual void didCreateScriptContext(v8::Handle<v8::Context>, int extensionGroup, int worldId) = 0;
         virtual void willReleaseScriptContext(v8::Handle<v8::Context>, int worldId) = 0;
-        virtual bool allowScriptExtension(const String& extensionName, int extensionGroup) = 0;
+        virtual bool allowScriptExtension(const String& extensionName, int extensionGroup, int worldId) = 0;
 #endif
 
         virtual void registerForIconNotification(bool listen = true) = 0;
@@ -329,14 +334,22 @@ namespace WebCore {
         virtual PassRefPtr<FrameNetworkingContext> createNetworkingContext() = 0;
 
         virtual bool shouldPaintBrokenImage(const KURL&) const { return true; }
+
+        // Returns true if the embedder intercepted the postMessage call
+        virtual bool willCheckAndDispatchMessageEvent(SecurityOrigin* /*target*/, MessageEvent*) const { return false; }
+
+#if ENABLE(WEB_INTENTS)
+        virtual void dispatchIntent(PassRefPtr<IntentRequest>) = 0;
+#endif
+
 #if PLATFORM(BLACKBERRY)
         virtual void willDeferLoading() { }
         virtual void didResumeLoading() { }
 
         virtual bool shouldLoadIconExternally() { return false; }
         virtual void loadIconExternally(const String& originalPageUrl, const String& finalPageUrl, const String& iconUrl) { }
-        virtual void authenticationChallenge(const String& realm, String& username, String& password) { }
 
+        virtual PassRefPtr<SecurityOrigin> securityOriginForNewDocument(const KURL&) = 0;
 #endif
     };
 

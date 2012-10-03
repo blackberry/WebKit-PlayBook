@@ -33,8 +33,6 @@
 #include "PlatformString.h"
 #if PLATFORM(MAC)
 #include <wtf/RetainPtr.h>
-#elif PLATFORM(QT)
-#include <QMenu>
 #elif PLATFORM(WIN)
 #include <windows.h>
 #endif
@@ -101,7 +99,7 @@ namespace WebCore {
         RetainPtr<NSMutableArray> m_platformDescription;
 #elif PLATFORM(QT)
         QList<ContextMenuItem> m_items;
-#elif PLATFORM(CHROMIUM)
+#elif PLATFORM(CHROMIUM) || PLATFORM(EFL)
         Vector<ContextMenuItem> m_items;
 #else
         PlatformMenuDescription m_platformDescription;

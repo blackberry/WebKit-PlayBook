@@ -48,27 +48,25 @@ function sample1() {
 }
 
 function sample2() {
-    shouldBeCloseEnough("marker.orientAngle.animVal.value", "90", 0.1);
-    shouldBeCloseEnough("marker.orientAngle.baseVal.value", "90", 0.1);
+    shouldBe("marker.orientAngle.animVal.value", "90");
+    shouldBe("marker.orientAngle.baseVal.value", "90");
 }
 
 function sample3() {
-    shouldBeCloseEnough("marker.orientAngle.animVal.value", "180", 0.1);
-    shouldBeCloseEnough("marker.orientAngle.baseVal.value", "180", 0.1);
+    shouldBeCloseEnough("marker.orientAngle.animVal.value", "180");
+    shouldBeCloseEnough("marker.orientAngle.baseVal.value", "180");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,    "marker", sample1],
-        ["animation", 2.0,    "marker", sample2],
-        ["animation", 3.9999, "marker", sample3],
-        ["animation", 4.0 ,   "marker", sample1]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 2.0,   sample2],
+        ["animation", 3.999, sample3],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 50)", 0);
 var successfullyParsed = true;

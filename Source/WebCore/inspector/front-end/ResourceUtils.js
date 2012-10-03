@@ -58,18 +58,19 @@ WebInspector.displayNameForURL = function(url)
     if (resource)
         return resource.displayName;
 
-    if (!WebInspector.mainResource)
+    if (!WebInspector.inspectedPageURL)
         return url.trimURL("");
 
-    var lastPathComponent = WebInspector.mainResource.lastPathComponent;
-    var index = WebInspector.mainResource.url.indexOf(lastPathComponent);
-    if (index !== -1 && index + lastPathComponent.length === WebInspector.mainResource.url.length) {
-        var baseURL = WebInspector.mainResource.url.substring(0, index);
+    var parsedURL = WebInspector.inspectedPageURL.asParsedURL();
+    var lastPathComponent = parsedURL.lastPathComponent;
+    var index = WebInspector.inspectedPageURL.indexOf(lastPathComponent);
+    if (index !== -1 && index + lastPathComponent.length === WebInspector.inspectedPageURL.length) {
+        var baseURL = WebInspector.inspectedPageURL.substring(0, index);
         if (url.indexOf(baseURL) === 0)
             return url.substring(index);
     }
 
-    return url.trimURL(WebInspector.mainResource.domain);
+    return url.trimURL(parsedURL.host);
 }
 
 /**
@@ -134,8 +135,8 @@ WebInspector.linkifyStringAsFragment = function(string)
         var isExternal = !WebInspector.resourceForURL(url);
         var urlNode = WebInspector.linkifyURLAsNode(url, title, undefined, isExternal);
         if (typeof(lineNumber) !== "undefined") {
-            urlNode.setAttribute("line_number", lineNumber);
-            urlNode.setAttribute("preferred_panel", "scripts");
+            urlNode.lineNumber = lineNumber;
+            urlNode.preferredPanel = "scripts";
         }
         
         return urlNode; 
@@ -176,22 +177,6 @@ WebInspector.linkifyURLAsNode = function(url, linkText, classes, isExternal, too
 
 /**
  * @param {string} url
- * @param {string=} linkText
- * @param {string=} classes
- * @param {boolean=} isExternal
- * @param {string=} tooltipText
- * @return {string}
- * @deprecated
- */
-WebInspector.linkifyURL = function(url, linkText, classes, isExternal, tooltipText)
-{
-    // Use the DOM version of this function so as to avoid needing to escape attributes.
-    // FIXME:  Get rid of linkifyURL entirely.
-    return WebInspector.linkifyURLAsNode(url, linkText, classes, isExternal, tooltipText).outerHTML;
-}
-
-/**
- * @param {string} url
  * @param {number=} lineNumber
  * @return {string}
  */
@@ -205,7 +190,7 @@ WebInspector.formatLinkText = function(url, lineNumber)
 
 /**
  * @param {string} url
- * @param {number} lineNumber
+ * @param {number=} lineNumber
  * @param {string=} classes
  * @param {string=} tooltipText
  * @return {Element}
@@ -214,16 +199,34 @@ WebInspector.linkifyResourceAsNode = function(url, lineNumber, classes, tooltipT
 {
     var linkText = WebInspector.formatLinkText(url, lineNumber);
     var anchor = WebInspector.linkifyURLAsNode(url, linkText, classes, false, tooltipText);
-    anchor.setAttribute("preferred_panel", "resources");
-    if (typeof lineNumber !== "undefined")
-        anchor.setAttribute("line_number", lineNumber);
+    anchor.preferredPanel = "resources";
+    anchor.lineNumber = lineNumber;
     return anchor;
 }
 
+/**
+ * @param {WebInspector.Resource} request
+ * @param {string=} classes
+ * @return {Element}
+ */
+WebInspector.linkifyRequestAsNode = function(request, classes)
+{
+    var anchor = WebInspector.linkifyURLAsNode(request.url);
+    anchor.preferredPanel = "network";
+    anchor.requestId  = request.requestId;
+    return anchor;
+}
+
+/**
+ * @return {?string} null if the specified resource MUST NOT have a URL (e.g. "javascript:...")
+ */
 WebInspector.resourceURLForRelatedNode = function(node, url)
 {
     if (!url || url.indexOf("://") > 0)
         return url;
+
+    if (url.trim().indexOf("javascript:") === 0)
+        return null; // Do not provide a resource URL for security.
 
     for (var frameOwnerCandidate = node; frameOwnerCandidate; frameOwnerCandidate = frameOwnerCandidate.parentNode) {
         if (frameOwnerCandidate.documentURL) {
@@ -248,29 +251,6 @@ WebInspector.resourceURLForRelatedNode = function(node, url)
 }
 
 /**
- * @param {WebInspector.ContextMenu} contextMenu
- * @param {Node} contextNode
- * @param {Event} event
- */
-WebInspector.populateHrefContextMenu = function(contextMenu, contextNode, event)
-{
-    var anchorElement = event.target.enclosingNodeOrSelfWithClass("webkit-html-resource-link") || event.target.enclosingNodeOrSelfWithClass("webkit-html-external-link");
-    if (!anchorElement)
-        return false;
-
-    var resourceURL = WebInspector.resourceURLForRelatedNode(contextNode, anchorElement.href);
-    if (!resourceURL)
-        return false;
-
-    // Add resource-related actions.
-    contextMenu.appendItem(WebInspector.openLinkExternallyLabel(), WebInspector.openResource.bind(WebInspector, resourceURL, false));
-    if (WebInspector.resourceForURL(resourceURL))
-        contextMenu.appendItem(WebInspector.UIString(WebInspector.useLowerCaseMenuTitles() ? "Open link in Resources panel" : "Open Link in Resources Panel"), WebInspector.openResource.bind(null, resourceURL, true));
-    contextMenu.appendItem(WebInspector.copyLinkAddressLabel(), InspectorFrontendHost.copyText.bind(InspectorFrontendHost, resourceURL));
-    return true;
-}
-
-/**
  * @param {string} baseURL
  * @param {string} href
  * @return {?string}
@@ -280,7 +260,12 @@ WebInspector.completeURL = function(baseURL, href)
     if (href) {
         // Return absolute URLs as-is.
         var parsedHref = href.asParsedURL();
-        if ((parsedHref && parsedHref.scheme) || href.indexOf("data:") === 0)
+        if (parsedHref && parsedHref.scheme)
+            return href;
+
+        // Return special URLs as-is.
+        var trimmedHref = href.trim();
+        if (trimmedHref.indexOf("data:") === 0 || trimmedHref.indexOf("javascript:") === 0)
             return href;
     }
 
@@ -289,6 +274,11 @@ WebInspector.completeURL = function(baseURL, href)
         var path = href;
         if (path.charAt(0) !== "/") {
             var basePath = parsedURL.path;
+
+            // Trim off the query part of the basePath.
+            var questionMarkIndex = basePath.indexOf("?");
+            if (questionMarkIndex > 0)
+                basePath = basePath.substring(0, questionMarkIndex);
             // A href of "?foo=bar" implies "basePath?foo=bar".
             // With "basePath?a=b" and "?foo=bar" we should get "basePath?foo=bar".
             var prefix;

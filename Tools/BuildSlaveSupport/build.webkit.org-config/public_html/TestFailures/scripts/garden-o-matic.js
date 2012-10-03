@@ -26,25 +26,33 @@
 (function() {
 
 var g_info = null;
+var g_revisionHint = null;
 
 var g_updateTimerId = 0;
 var g_buildersFailing = null;
 
 var g_unexpectedFailuresController = null;
+var g_failuresController = null;
 
-var g_failingBuilders = null;
+var g_losingTestCoverageBuilders = null;
 
 function update()
 {
+    if (g_revisionHint)
+        g_revisionHint.dismiss();
+
     // FIXME: This should be a button with a progress element.
     var numberOfTestsAnalyzed = 0;
     var updating = new ui.notifications.Info('Loading commit data ...');
 
     g_info.add(updating);
 
-    builders.buildersFailingStepRequredForTestCoverage(g_failingBuilders.update.bind(g_failingBuilders));
+    builders.buildersFailingStepRequredForTestCoverage(g_losingTestCoverageBuilders.update.bind(g_losingTestCoverageBuilders));
 
     base.callInParallel([model.updateRecentCommits, model.updateResultsByBuilder], function() {
+        if (g_failuresController)
+            g_failuresController.update();
+
         updating.update('Analyzing test failures ...');
 
         model.analyzeUnexpectedFailures(function(failureAnalysis) {
@@ -56,7 +64,11 @@ function update()
             else
                 $('#onebar').removeClass('partytime');
             g_unexpectedFailuresController.purge();
+
             updating.dismiss();
+
+            g_revisionHint = new ui.notifications.Info('Latest revision processed by every bot: ' + model.latestRevisionWithNoBuildersInFlight());
+            g_info.add(g_revisionHint);
         });
     });
 }
@@ -74,6 +86,7 @@ $(document).ready(function() {
         showResults: function(resultsView)
         {
             var resultsContainer = onebar.results();
+            console.log(resultsContainer);
             $(resultsContainer).empty().append(resultsView);
             onebar.select('results');
         }
@@ -83,17 +96,24 @@ $(document).ready(function() {
     g_unexpectedFailuresController = new controllers.UnexpectedFailures(model.state, unexpectedFailuresView, onebarController);
 
     g_info = new ui.notifications.Stream();
-    g_failingBuilders = new controllers.FailingBuilders(g_info);
+    g_losingTestCoverageBuilders = new controllers.FailingBuilders(g_info, 'Losing test coverage');
 
     // FIXME: This should be an Action object.
     var updateButton = document.body.insertBefore(document.createElement('button'), document.body.firstChild);
     updateButton.addEventListener("click", update);
     updateButton.textContent = 'update';
 
-    var summary = onebar.summary();
-    summary.appendChild(updateButton);
-    summary.appendChild(g_info);
-    summary.appendChild(unexpectedFailuresView);
+    var unexpected = onebar.unexpected();
+    unexpected.appendChild(updateButton);
+    unexpected.appendChild(g_info);
+    unexpected.appendChild(unexpectedFailuresView);
+
+    var failures = onebar.failures();
+    if (failures) {
+        var failuresView = new ui.failures.List();
+        g_failuresController = new controllers.ExpectedFailures(model.state, failuresView, onebarController);
+        failures.appendChild(failuresView);
+    }
 
     update();
 });

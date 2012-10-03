@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,20 +20,14 @@
 #define FrameLoaderClientBlackBerry_h
 
 #include "DocumentLoader.h"
-#include "FormState.h"
 #include "Frame.h"
 #include "FrameLoaderClient.h"
-#include "HTMLFormElement.h"
 #include "NotImplemented.h"
-#include "ResourceError.h"
-#include "ResourceRequest.h"
-#include "Timer.h"
 #include "Widget.h"
 
 namespace BlackBerry {
 namespace WebKit {
-class WebPage;
-class WebPluginClient;
+class WebPagePrivate;
 }
 }
 
@@ -47,7 +41,7 @@ public:
     FrameLoaderClientBlackBerry();
     ~FrameLoaderClientBlackBerry();
 
-    void setFrame(Frame* frame, BlackBerry::WebKit::WebPage* webPage) { m_frame = frame; m_webPage = webPage; }
+    void setFrame(Frame* frame, BlackBerry::WebKit::WebPagePrivate* webPagePrivate) { m_frame = frame; m_webPagePrivate = webPagePrivate; }
 
     int playerId() const;
     bool cookiesEnabled() const;
@@ -93,7 +87,7 @@ public:
     virtual Frame* dispatchCreatePage(const NavigationAction&);
     virtual void dispatchShow() { notImplemented(); }
 
-    virtual void dispatchDecidePolicyForResponse(FramePolicyFunction, const WebCore::ResourceResponse&, const WebCore::ResourceRequest&);
+    virtual void dispatchDecidePolicyForResponse(FramePolicyFunction, const ResourceResponse&, const ResourceRequest&);
     virtual void dispatchDecidePolicyForNewWindowAction(FramePolicyFunction, const NavigationAction&, const ResourceRequest&, PassRefPtr<FormState>, const String& frameName);
     virtual void dispatchDecidePolicyForNavigationAction(FramePolicyFunction, const NavigationAction&, const ResourceRequest&, PassRefPtr<FormState>);
     virtual void cancelPolicyCheck();
@@ -122,14 +116,14 @@ public:
     virtual void dispatchDidLoadFromApplicationCache(const ResourceRequest&);
     virtual void didDisplayInsecureContent() { notImplemented(); }
     virtual void didRunInsecureContent(SecurityOrigin*, const KURL&) { notImplemented(); }
-    virtual ResourceError interruptedForPolicyChangeError(const ResourceRequest&) { notImplemented(); return ResourceError("", 0, "", ""); }
-    virtual ResourceError cancelledError(const ResourceRequest&) { notImplemented(); return ResourceError("", 0, "", ""); }
-    virtual ResourceError blockedError(const ResourceRequest&) { notImplemented(); return ResourceError("", 0, "", ""); }
+    virtual ResourceError interruptedForPolicyChangeError(const ResourceRequest&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
+    virtual ResourceError cancelledError(const ResourceRequest&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
+    virtual ResourceError blockedError(const ResourceRequest&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
     virtual ResourceError cannotShowURLError(const ResourceRequest&);
-    virtual ResourceError interruptForPolicyChangeError(const ResourceRequest&) { notImplemented(); return ResourceError("", 0, "", ""); }
-    virtual ResourceError cannotShowMIMETypeError(const ResourceResponse&) { notImplemented(); return ResourceError("", 0, "", ""); }
-    virtual ResourceError fileDoesNotExistError(const ResourceResponse&) { notImplemented(); return ResourceError("", 0, "", ""); }
-    virtual ResourceError pluginWillHandleLoadError(const ResourceResponse&) { notImplemented(); return ResourceError("", 0, "", ""); }
+    virtual ResourceError interruptForPolicyChangeError(const ResourceRequest&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
+    virtual ResourceError cannotShowMIMETypeError(const ResourceResponse&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
+    virtual ResourceError fileDoesNotExistError(const ResourceResponse&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
+    virtual ResourceError pluginWillHandleLoadError(const ResourceResponse&) { notImplemented(); return ResourceError(emptyString(), 0, emptyString(), emptyString()); }
     virtual bool shouldFallBack(const ResourceError&) { notImplemented(); return false; }
     virtual bool canHandleRequest(const ResourceRequest&) const;
     virtual bool canShowMIMEType(const String&) const;
@@ -142,22 +136,23 @@ public:
     virtual void provisionalLoadStarted();
     virtual void didFinishLoad() { notImplemented(); }
     virtual void prepareForDataSourceReplacement() { notImplemented(); }
-    virtual WTF::PassRefPtr<DocumentLoader> createDocumentLoader(const ResourceRequest&, const SubstituteData&);
+    virtual PassRefPtr<DocumentLoader> createDocumentLoader(const ResourceRequest&, const SubstituteData&);
     virtual void setTitle(const String&, const KURL&) { notImplemented(); }
     virtual String userAgent(const KURL&);
     virtual void savePlatformDataToCachedFrame(CachedFrame*) { notImplemented(); }
     virtual void transitionToCommittedFromCachedFrame(CachedFrame*) { notImplemented(); }
     virtual void transitionToCommittedForNewPage();
     virtual bool canCachePage() const;
-    virtual void didSaveToPageCache() { }
+    virtual void didSaveToPageCache();
     virtual void didRestoreFromPageCache();
     virtual void dispatchDidBecomeFrameset(bool) { }
-    virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceRequest&, const ResourceResponse&);
-    virtual WTF::PassRefPtr<Frame> createFrame(const KURL&, const String&, HTMLFrameOwnerElement*, const String&, bool, int, int);
-    virtual void didTransferChildFrameToNewDocument(WebCore::Page*);
-    virtual WTF::PassRefPtr<Widget> createPlugin(const IntSize&, HTMLPlugInElement*, const KURL&, const WTF::Vector<String, 0u>&, const WTF::Vector<String, 0u>&, const String&, bool);
+    virtual void download(ResourceHandle*, const ResourceRequest&, const ResourceResponse&);
+
+    virtual PassRefPtr<Frame> createFrame(const KURL&, const String&, HTMLFrameOwnerElement*, const String&, bool, int, int);
+    virtual void didTransferChildFrameToNewDocument(Page*);
+    virtual PassRefPtr<Widget> createPlugin(const IntSize&, HTMLPlugInElement*, const KURL&, const Vector<String>&, const Vector<String>&, const String&, bool);
     virtual void redirectDataToPlugin(Widget*);
-    virtual WTF::PassRefPtr<Widget> createJavaAppletWidget(const IntSize&, HTMLAppletElement*, const KURL&, const WTF::Vector<String, 0u>&, const WTF::Vector<String, 0u>&) { notImplemented(); return 0; }
+    virtual PassRefPtr<Widget> createJavaAppletWidget(const IntSize&, HTMLAppletElement*, const KURL&, const Vector<String>&, const Vector<String>&) { notImplemented(); return 0; }
 
     virtual ObjectContentType objectContentType(const KURL&, const String& mimeType, bool shouldPreferPlugInsForImages);
     virtual String overrideMediaType() const { notImplemented(); return String(); }
@@ -173,18 +168,17 @@ public:
     virtual void transferLoadingResourceFromPage(ResourceLoader*, const ResourceRequest&, Page*);
     virtual void didTransferChildFrameToNewDocument() { notImplemented(); };
     virtual void dispatchDidChangeIcons(IconType) { notImplemented(); };
-    virtual void dispatchWillSendSubmitEvent(HTMLFormElement*) { notImplemented(); };
+    virtual void dispatchWillSendSubmitEvent(HTMLFormElement*);
 
     virtual void willDeferLoading();
     virtual void didResumeLoading();
-    virtual void authenticationChallenge(const String& realm, String& username, String& password);
 
     virtual PassRefPtr<FrameNetworkingContext> createNetworkingContext();
 
-    /**
-     * Schedule a script that was loaded manually by the user (eg. a
-     * bookmarklet) while page loading was deferred.
-     */
+    virtual PassRefPtr<SecurityOrigin> securityOriginForNewDocument(const KURL&);
+
+     // Schedule a script that was loaded manually by the user (eg. a
+     // bookmarklet) while page loading was deferred.
     void setDeferredManualScript(const KURL&);
 
     void readyToRender(bool pageIsVisuallyNonEmpty);
@@ -212,7 +206,7 @@ private:
 
     Frame* m_frame;
     ResourceError m_loadError;
-    BlackBerry::WebKit::WebPage* m_webPage;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
 
     Timer<FrameLoaderClientBlackBerry>* m_deferredJobsTimer;
     KURL m_deferredManualScript;
@@ -226,16 +220,18 @@ private:
     bool m_clientRedirectIsPending;
     bool m_childFrameCreationSuppressed;
 
-    // this set includes the original and final urls for server redirects
+    // This set includes the original and final urls for server redirects.
     HashSet<KURL> m_historyNavigationSourceURLs;
     HashSet<KURL> m_redirectURLsToSkipDueToHistoryNavigation;
 
-    // Plugin view to redirect data to
-    WebCore::PluginView* m_pluginView;
+    // Plugin view to redirect data to.
+    PluginView* m_pluginView;
     bool m_hasSentResponseToPlugin;
 
     // Used to stop media files from loading because we don't need to have the entire file loaded by WebKit.
     bool m_cancelLoadOnNextData;
+
+    bool m_wasProvisionalLoadTriggeredByUserGesture;
 };
 
 } // WebCore

@@ -44,6 +44,8 @@
 
 #if (OS(LINUX) || OS(FREEBSD)) && CPU(X86_64)
 #define SYMBOL_STRING_RELOCATION(name) #name "@plt"
+#elif OS(DARWIN) || (CPU(X86_64) && COMPILER(MINGW) && !GCC_VERSION_AT_LEAST(4, 5, 0))
+#define SYMBOL_STRING_RELOCATION(name) "_" #name
 #elif CPU(X86) && COMPILER(MINGW)
 #define SYMBOL_STRING_RELOCATION(name) "@" #name "@4"
 #else
@@ -66,6 +68,13 @@
 #define HIDE_SYMBOL(name) ".hidden " #name
 #else
 #define HIDE_SYMBOL(name)
+#endif
+
+// FIXME: figure out how this works on all the platforms. I know that
+// on Linux, the preferred form is ".Lstuff" as opposed to "Lstuff".
+// Don't know about any of the others.
+#if PLATFORM(MAC)
+#define LOCAL_LABEL_STRING(name) "L" #name
 #endif
 
 #endif // InlineASM_h

@@ -28,27 +28,25 @@ function sample1() {
 }
 
 function sample2() {
-    shouldBeCloseEnough("rect.width.animVal.value", "350", 0.01);
-    shouldBeCloseEnough("rect.width.baseVal.value", "350", 0.01);
+    shouldBeCloseEnough("rect.width.animVal.value", "350");
+    shouldBeCloseEnough("rect.width.baseVal.value", "350");
 }
 
 function sample3() {
-    shouldBeCloseEnough("rect.width.animVal.value", "600", 0.1);
-    shouldBeCloseEnough("rect.width.baseVal.value", "600", 0.1);
+    shouldBeCloseEnough("rect.width.animVal.value", "600", 1);
+    shouldBeCloseEnough("rect.width.baseVal.value", "600", 1);
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,    "rect", sample1],
-        ["animation", 2.0,    "rect", sample2],
-        ["animation", 3.9999, "rect", sample3],
-        ["animation", 4.0 ,   "rect", sample1]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 2.0,   sample2],
+        ["animation", 3.999, sample3],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 30)", 0);
 var successfullyParsed = true;

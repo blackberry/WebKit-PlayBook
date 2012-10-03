@@ -46,8 +46,6 @@ QT_BEGIN_NAMESPACE
 class QSize;
 QT_END_NAMESPACE
 #elif PLATFORM(BLACKBERRY)
-#include "PlatformString.h"
-#include <wtf/text/CString.h>
 namespace BlackBerry {
 namespace Platform {
 class IntSize;
@@ -139,11 +137,6 @@ public:
 #if PLATFORM(BLACKBERRY)
     IntSize(const BlackBerry::Platform::IntSize&);
     operator BlackBerry::Platform::IntSize() const;
-
-    String toString() const
-    {
-        return String::format("(%ix%i)", m_width, m_height);
-    }
 #endif
 
 private:

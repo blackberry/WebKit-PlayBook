@@ -31,10 +31,10 @@
 #ifndef ChromiumDataObject_h
 #define ChromiumDataObject_h
 
-#include "Clipboard.h"
 #include "KURL.h"
 #include "PlatformString.h"
 #include "SharedBuffer.h"
+#include <wtf/HashMap.h>
 #include <wtf/HashSet.h>
 #include <wtf/RefPtr.h>
 #include <wtf/Vector.h>
@@ -47,15 +47,27 @@ namespace WebCore {
 // of and is not specific to a platform.
 class ChromiumDataObject : public RefCounted<ChromiumDataObject> {
 public:
-    static PassRefPtr<ChromiumDataObject> create(Clipboard::ClipboardType clipboardType)
+    enum StorageMode {
+        Buffered,
+        Pasteboard,
+    };
+
+    static PassRefPtr<ChromiumDataObject> createFromPasteboard()
     {
-        return adoptRef(new ChromiumDataObject(clipboardType));
+        return adoptRef(new ChromiumDataObject(Pasteboard));
+    }
+
+    static PassRefPtr<ChromiumDataObject> create()
+    {
+        return adoptRef(new ChromiumDataObject(Buffered));
     }
 
     PassRefPtr<ChromiumDataObject> copy() const
     {
         return adoptRef(new ChromiumDataObject(*this));
     }
+
+    StorageMode storageMode() const { return m_storageMode; }
 
     void clearData(const String& type);
     void clearAll();
@@ -64,9 +76,8 @@ public:
     bool hasData() const;
 
     HashSet<String> types() const;
-    String getData(const String& type, bool& success);
+    String getData(const String& type, bool& success) const;
     bool setData(const String& type, const String& data);
-    uint64_t getSequenceNumber();
 
     // Special handlers for URL/HTML metadata.
     String urlTitle() const { return m_urlTitle; }
@@ -74,10 +85,13 @@ public:
     KURL htmlBaseUrl() const { return m_htmlBaseUrl; }
     void setHtmlBaseUrl(const KURL& url) { m_htmlBaseUrl = url; }
 
-    // Used to handle files being dragged in.
+    // Used to handle files being dragged in and out.
     bool containsFilenames() const;
-    Vector<String> filenames() const { return m_filenames; }
+    const Vector<String>& filenames() const { return m_filenames; }
     void setFilenames(const Vector<String>& filenames) { m_filenames = filenames; }
+
+    // Used to handle files being dragged out.
+    void addFilename(const String& filename) { m_filenames.append(filename); }
 
     // Used to handle files (images) being dragged out.
     String fileExtension() const { return m_fileExtension; }
@@ -86,12 +100,14 @@ public:
     void setFileContentFilename(const String& fileContentFilename) { m_fileContentFilename = fileContentFilename; }
     PassRefPtr<SharedBuffer> fileContent() const { return m_fileContent; }
     void setFileContent(PassRefPtr<SharedBuffer> fileContent) { m_fileContent = fileContent; }
+    const HashMap<String, String>& customData() const { return m_customData; }
+    HashMap<String, String>& customData() { return m_customData; }
 
 private:
-    ChromiumDataObject(Clipboard::ClipboardType);
-    ChromiumDataObject(const ChromiumDataObject&);
+    explicit ChromiumDataObject(StorageMode);
+    explicit ChromiumDataObject(const ChromiumDataObject&);
 
-    Clipboard::ClipboardType m_clipboardType;
+    StorageMode m_storageMode;
 
     String m_urlTitle;
 
@@ -108,6 +124,8 @@ private:
     String m_fileContentFilename;
     RefPtr<SharedBuffer> m_fileContent;
 
+    HashMap<String, String> m_customData;
+
     // These two are linked. Setting m_url will set m_uriList to the same
     // string value; setting m_uriList will cause its contents to be parsed
     // according to RFC 2483 and the first URL found will be set in m_url.
@@ -118,4 +136,3 @@ private:
 } // namespace WebCore
 
 #endif
-

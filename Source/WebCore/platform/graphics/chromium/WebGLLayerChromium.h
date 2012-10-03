@@ -45,13 +45,17 @@ class WebGLLayerChromiumRateLimitTask;
 // A Layer containing a WebGL canvas
 class WebGLLayerChromium : public CanvasLayerChromium {
 public:
-    static PassRefPtr<WebGLLayerChromium> create(CCLayerDelegate* = 0);
+    static PassRefPtr<WebGLLayerChromium> create();
 
     virtual ~WebGLLayerChromium();
 
+    unsigned textureId() const { return m_textureId; }
+    void setTextureId(unsigned textureId) { m_textureId = textureId; }
+
     virtual bool drawsContent() const;
     virtual void updateCompositorResources(GraphicsContext3D*, CCTextureUpdater&);
-    virtual void contentChanged();
+    virtual void pushPropertiesTo(CCLayerImpl*);
+    virtual void setNeedsDisplayRect(const FloatRect&);
     bool paintRenderedResultsToCanvas(ImageBuffer*);
 
     GraphicsContext3D* context() const;
@@ -59,11 +63,14 @@ public:
     void setDrawingBuffer(DrawingBuffer*);
     DrawingBuffer* drawingBuffer() const { return m_drawingBuffer; }
 private:
-    explicit WebGLLayerChromium(CCLayerDelegate*);
+    WebGLLayerChromium();
     friend class WebGLLayerChromiumRateLimitTask;
 
     GraphicsContext3D* layerRendererContext();
 
+    bool m_hasAlpha;
+    bool m_premultipliedAlpha;
+    unsigned m_textureId;
     bool m_textureChanged;
     bool m_textureUpdated;
 

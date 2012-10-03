@@ -25,11 +25,6 @@
 
 #include "FloatPoint.h"
 
-#if PLATFORM(BLACKBERRY)
-#include "PlatformString.h"
-#include <wtf/text/CString.h>
-#endif
-
 #include <math.h>
 
 namespace WebCore {
@@ -129,13 +124,6 @@ public:
     float length() const { return sqrtf(lengthSquared()); }
     
     float distanceTo(const FloatPoint3D& a) const;
-
-#if PLATFORM(BLACKBERRY)
-    String toString() const
-    {
-        return String::format("(%.2f,%.2f,%.2f)", m_x, m_y, m_z);
-    }
-#endif
 
 private:
     float m_x;

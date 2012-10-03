@@ -53,10 +53,12 @@
 #define DFG_ENABLE_CONSISTENCY_CHECK 0
 // Emit a breakpoint into the head of every generated function, to aid debugging in GDB.
 #define DFG_ENABLE_JIT_BREAK_ON_EVERY_FUNCTION 0
-// Emit a breakpoint into the head of every generated node, to aid debugging in GDB.
+// Emit a breakpoint into the head of every generated block, to aid debugging in GDB.
 #define DFG_ENABLE_JIT_BREAK_ON_EVERY_BLOCK 0
 // Emit a breakpoint into the head of every generated node, to aid debugging in GDB.
 #define DFG_ENABLE_JIT_BREAK_ON_EVERY_NODE 0
+// Emit a pair of xorPtr()'s on regT0 with the node index to make it easy to spot node boundaries in disassembled code.
+#define DFG_ENABLE_XOR_DEBUG_AID 0
 // Emit a breakpoint into the speculation failure code.
 #define DFG_ENABLE_JIT_BREAK_ON_SPECULATION_FAILURE 0
 // Log every speculation failure.
@@ -67,8 +69,11 @@
 #define DFG_ENABLE_OSR_ENTRY ENABLE(DFG_JIT)
 // Generate stats on how successful we were in making use of the DFG jit, and remaining on the hot path.
 #define DFG_ENABLE_SUCCESS_STATS 0
-// Used to enable conditionally supported opcodes that currently result in performance regressions.
-#define DFG_ENABLE_RESTRICTIONS 1
+// Enable verification that the DFG is able to insert code for control flow edges.
+#define DFG_ENABLE_EDGE_CODE_VERIFICATION 0
+// Pretend that all variables in the top-level code block got captured. Great
+// for testing code gen for activations.
+#define DFG_ENABLE_ALL_VARIABLES_CAPTURED 0
 
 namespace JSC { namespace DFG {
 
@@ -81,6 +86,18 @@ static const BlockIndex NoBlock = UINT_MAX;
 
 struct NodeIndexTraits {
     static NodeIndex defaultValue() { return NoNode; }
+    static void dump(NodeIndex value, FILE* out)
+    {
+        if (value == NoNode)
+            fprintf(out, "-");
+        else
+            fprintf(out, "@%u", value);
+    }
+};
+
+enum UseKind {
+    UntypedUse,
+    LastUseKind // Must always be the last entry in the enum, as it is used to denote the number of enum elements.
 };
 
 } } // namespace JSC::DFG

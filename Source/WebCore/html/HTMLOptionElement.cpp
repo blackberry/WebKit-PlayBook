@@ -137,17 +137,19 @@ String HTMLOptionElement::text() const
 
 void HTMLOptionElement::setText(const String &text, ExceptionCode& ec)
 {
+    RefPtr<Node> protectFromMutationEvents(this);
+
     // Changing the text causes a recalc of a select's items, which will reset the selected
     // index to the first item if the select is single selection with a menu list. We attempt to
     // preserve the selected item.
-    HTMLSelectElement* select = ownerSelectElement();
+    RefPtr<HTMLSelectElement> select = ownerSelectElement();
     bool selectIsMenuList = select && select->usesMenuList();
     int oldSelectedIndex = selectIsMenuList ? select->selectedIndex() : -1;
 
     // Handle the common special case where there's exactly 1 child node, and it's a text node.
     Node* child = firstChild();
     if (child && child->isTextNode() && !child->nextSibling())
-        static_cast<Text *>(child)->setData(text, ec);
+        toText(child)->setData(text, ec);
     else {
         removeChildren();
         appendChild(Text::create(document(), text), ec);
@@ -187,7 +189,7 @@ int HTMLOptionElement::index() const
     return 0;
 }
 
-void HTMLOptionElement::parseMappedAttribute(Attribute* attr)
+void HTMLOptionElement::parseAttribute(Attribute* attr)
 {
     if (attr->name() == selectedAttr) {
         // FIXME: This doesn't match what the HTML specification says.
@@ -198,7 +200,7 @@ void HTMLOptionElement::parseMappedAttribute(Attribute* attr)
         // case; we'd need to do the other work from the setSelected function.
         m_isSelected = !attr->isNull();
     } else
-        HTMLFormControlElement::parseMappedAttribute(attr);
+        HTMLFormControlElement::parseAttribute(attr);
 }
 
 String HTMLOptionElement::value() const

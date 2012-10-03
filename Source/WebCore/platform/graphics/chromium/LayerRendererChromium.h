@@ -42,7 +42,6 @@
 #include "VideoLayerChromium.h"
 #include "cc/CCCanvasLayerImpl.h"
 #include "cc/CCHeadsUpDisplay.h"
-#include "cc/CCLayerSorter.h"
 #include "cc/CCLayerTreeHostImpl.h"
 #include "cc/CCPluginLayerImpl.h"
 #include "cc/CCVideoLayerImpl.h"
@@ -57,18 +56,14 @@
 #include <wtf/RetainPtr.h>
 #endif
 
-#if USE(SKIA)
-class GrContext;
-#endif
-
 namespace WebCore {
 
 class CCHeadsUpDisplay;
 class CCLayerImpl;
 class CCLayerTreeHostImpl;
+class CCRenderPass;
 class GeometryBinding;
 class GraphicsContext3D;
-class NonCompositedContentHost;
 class TrackingTextureAllocator;
 class LayerRendererSwapBuffersCompleteCallbackAdapter;
 
@@ -98,13 +93,15 @@ public:
 
     void viewportChanged();
 
-    void drawLayers();
+    void beginDrawingFrame();
+    void drawRenderPass(const CCRenderPass*);
+    void finishDrawingFrame();
 
     // waits for rendering to finish
     void finish();
 
     // puts backbuffer onscreen
-    void swapBuffers();
+    void swapBuffers(const IntRect& subBuffer);
 
     static void debugGLCall(GraphicsContext3D*, const char* command, const char* file, int line);
 
@@ -120,14 +117,20 @@ public:
     const CCRenderSurface::MaskProgram* renderSurfaceMaskProgram();
     const CCRenderSurface::MaskProgramAA* renderSurfaceMaskProgramAA();
     const CCTiledLayerImpl::Program* tilerProgram();
+    const CCTiledLayerImpl::ProgramOpaque* tilerProgramOpaque();
     const CCTiledLayerImpl::ProgramAA* tilerProgramAA();
     const CCTiledLayerImpl::ProgramSwizzle* tilerProgramSwizzle();
+    const CCTiledLayerImpl::ProgramSwizzleOpaque* tilerProgramSwizzleOpaque();
     const CCTiledLayerImpl::ProgramSwizzleAA* tilerProgramSwizzleAA();
     const CCCanvasLayerImpl::Program* canvasLayerProgram();
     const CCPluginLayerImpl::Program* pluginLayerProgram();
     const CCPluginLayerImpl::ProgramFlip* pluginLayerProgramFlip();
+    const CCPluginLayerImpl::TexRectProgram* pluginLayerTexRectProgram();
+    const CCPluginLayerImpl::TexRectProgramFlip* pluginLayerTexRectProgramFlip();
     const CCVideoLayerImpl::RGBAProgram* videoLayerRGBAProgram();
     const CCVideoLayerImpl::YUVProgram* videoLayerYUVProgram();
+    const CCVideoLayerImpl::NativeTextureProgram* videoLayerNativeTextureProgram();
+    const CCVideoLayerImpl::StreamTextureProgram* streamTextureLayerProgram();
 
     void getFramebufferPixels(void *pixels, const IntRect&);
 
@@ -147,8 +150,6 @@ public:
 
     GC3Denum bestTextureFormat();
 
-    typedef Vector<RefPtr<CCLayerImpl> > CCLayerList;
-
     static void toGLMatrix(float*, const TransformationMatrix&);
     void drawTexturedQuad(const TransformationMatrix& layerMatrix,
                           float width, float height, float opacity, const FloatQuad&,
@@ -158,20 +159,32 @@ private:
     LayerRendererChromium(CCLayerTreeHostImpl*, PassRefPtr<GraphicsContext3D>);
     bool initialize();
 
-    void drawLayersInternal();
-    void drawLayersOntoRenderSurfaces(CCLayerImpl* rootDrawLayer, const CCLayerList& renderSurfaceLayerList);
-    void drawLayer(CCLayerImpl*, CCRenderSurface*);
+    void drawQuad(const CCDrawQuad*, const FloatRect& surfaceDamageRect);
+    void drawDebugBorderQuad(const CCDebugBorderDrawQuad*);
+    void drawRenderSurfaceQuad(const CCRenderSurfaceDrawQuad*);
+    void drawSolidColorQuad(const CCSolidColorDrawQuad*);
+    void drawTileQuad(const CCTileDrawQuad*);
+    void drawCanvasQuad(const CCCanvasDrawQuad*);
+    void drawVideoQuad(const CCVideoDrawQuad*);
+    void drawPluginQuad(const CCPluginDrawQuad*);
 
     ManagedTexture* getOffscreenLayerTexture();
-    void copyOffscreenTextureToDisplay();
+    void copyPlaneToTexture(const CCVideoDrawQuad*, const void* plane, int index);
+    bool copyFrameToTextures(const CCVideoDrawQuad*);
+    template<class Program> void drawSingleTextureVideoQuad(const CCVideoDrawQuad*, Program*, float widthScaleFactor, Platform3DObject textureId, GC3Denum target);
+    void drawNativeTexture2D(const CCVideoDrawQuad*);
+    void drawStreamTexture(const CCVideoDrawQuad*);
+    void drawRGBA(const CCVideoDrawQuad*);
+    void drawYUV(const CCVideoDrawQuad*);
 
-    bool isLayerVisible(LayerChromium*, const TransformationMatrix&, const IntRect& visibleRect);
+    void copyOffscreenTextureToDisplay();
 
     void setDrawViewportRect(const IntRect&, bool flipY);
 
-    void releaseRenderSurfaceTextures();
-
     bool useRenderSurface(CCRenderSurface*);
+    void clearRenderSurface(CCRenderSurface*, CCRenderSurface* rootRenderSurface, const FloatRect& surfaceDamageRect);
+
+    void releaseRenderSurfaceTextures();
 
     bool makeContextCurrent();
 
@@ -205,18 +218,24 @@ private:
     OwnPtr<LayerChromium::BorderProgram> m_borderProgram;
     OwnPtr<CCHeadsUpDisplay::Program> m_headsUpDisplayProgram;
     OwnPtr<CCTiledLayerImpl::Program> m_tilerProgram;
+    OwnPtr<CCTiledLayerImpl::ProgramOpaque> m_tilerProgramOpaque;
     OwnPtr<CCTiledLayerImpl::ProgramSwizzle> m_tilerProgramSwizzle;
+    OwnPtr<CCTiledLayerImpl::ProgramSwizzleOpaque> m_tilerProgramSwizzleOpaque;
     OwnPtr<CCTiledLayerImpl::ProgramAA> m_tilerProgramAA;
     OwnPtr<CCTiledLayerImpl::ProgramSwizzleAA> m_tilerProgramSwizzleAA;
     OwnPtr<CCCanvasLayerImpl::Program> m_canvasLayerProgram;
     OwnPtr<CCPluginLayerImpl::Program> m_pluginLayerProgram;
     OwnPtr<CCPluginLayerImpl::ProgramFlip> m_pluginLayerProgramFlip;
+    OwnPtr<CCPluginLayerImpl::TexRectProgram> m_pluginLayerTexRectProgram;
+    OwnPtr<CCPluginLayerImpl::TexRectProgramFlip> m_pluginLayerTexRectProgramFlip;
     OwnPtr<CCRenderSurface::MaskProgram> m_renderSurfaceMaskProgram;
     OwnPtr<CCRenderSurface::Program> m_renderSurfaceProgram;
     OwnPtr<CCRenderSurface::MaskProgramAA> m_renderSurfaceMaskProgramAA;
     OwnPtr<CCRenderSurface::ProgramAA> m_renderSurfaceProgramAA;
     OwnPtr<CCVideoLayerImpl::RGBAProgram> m_videoLayerRGBAProgram;
     OwnPtr<CCVideoLayerImpl::YUVProgram> m_videoLayerYUVProgram;
+    OwnPtr<CCVideoLayerImpl::NativeTextureProgram> m_videoLayerNativeTextureProgram;
+    OwnPtr<CCVideoLayerImpl::StreamTextureProgram> m_streamTextureLayerProgram;
 
     OwnPtr<TextureManager> m_renderSurfaceTextureManager;
     OwnPtr<TrackingTextureAllocator> m_contentsTextureAllocator;
@@ -228,9 +247,9 @@ private:
 
     CCRenderSurface* m_defaultRenderSurface;
 
-    CCLayerSorter m_layerSorter;
-
     FloatQuad m_sharedGeometryQuad;
+
+    bool m_isViewportChanged;
 };
 
 // Setting DEBUG_GL_CALLS to 1 will call glGetError() after almost every GL

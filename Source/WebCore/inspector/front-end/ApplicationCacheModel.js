@@ -42,6 +42,8 @@ WebInspector.ApplicationCacheModel = function()
     this._manifestURLsByFrame = {};
 
     this._mainFrameNavigated();
+    
+    this._onLine = true;
 }
 
 WebInspector.ApplicationCacheModel.EventTypes = {
@@ -54,20 +56,22 @@ WebInspector.ApplicationCacheModel.EventTypes = {
 WebInspector.ApplicationCacheModel.prototype = {
     _frameNavigated: function(event)
     {
-        if (event.data.isMainFrame) {
+        var frame = /** @type {WebInspector.ResourceTreeFrame} */ event.data;
+        if (frame.isMainFrame()) {
             this._mainFrameNavigated();
             return;
         }
 
-        var frame = /** @type {PageAgent.Frame} */ event.data["frame"];
-        var frameId = frame.id;
-        ApplicationCacheAgent.getManifestForFrame(frameId, this._manifestForFrameLoaded.bind(this, frameId));
+        ApplicationCacheAgent.getManifestForFrame(frame.id, this._manifestForFrameLoaded.bind(this, frame.id));
     },
     
+    /**
+     * @param {WebInspector.Event} event
+     */
     _frameDetached: function(event)
     {
-        var frameId = event.data;
-        this._frameManifestRemoved(frameId);
+        var frame = /** @type {WebInspector.ResourceTreeFrame} */ event.data;
+        this._frameManifestRemoved(frame.id);
     },
     
     _mainFrameNavigated: function()
@@ -77,7 +81,7 @@ WebInspector.ApplicationCacheModel.prototype = {
 
     /**
      * @param {string} frameId
-     * @param {string} error
+     * @param {?Protocol.Error} error
      * @param {string} manifestURL
      */
     _manifestForFrameLoaded: function(frameId, error, manifestURL)
@@ -92,7 +96,7 @@ WebInspector.ApplicationCacheModel.prototype = {
     },
     
     /**
-     * @param {string} error
+     * @param {?Protocol.Error} error
      * @param {Array.<ApplicationCacheAgent.FrameWithManifest>} framesWithManifests
      */
     _framesWithManifestsLoaded: function(error, framesWithManifests)
@@ -170,6 +174,14 @@ WebInspector.ApplicationCacheModel.prototype = {
     },
     
     /**
+     * @return {boolean}
+     */
+    get onLine()
+    {
+        return this._onLine;
+    },
+    
+    /**
      * @param {string} frameId
      * @param {string} manifestURL
      * @param {number} status
@@ -204,6 +216,7 @@ WebInspector.ApplicationCacheModel.prototype = {
      */
     _networkStateUpdated: function(isNowOnline)
     {
+        this._onLine = isNowOnline;
         this.dispatchEventToListeners(WebInspector.ApplicationCacheModel.EventTypes.NetworkStateChanged, isNowOnline);
     }
 }
@@ -236,5 +249,5 @@ WebInspector.ApplicationCacheDispatcher.prototype = {
     networkStateUpdated: function(isNowOnline)
     {
         this._applicationCacheModel._networkStateUpdated(isNowOnline);
-    },
+    }
 }

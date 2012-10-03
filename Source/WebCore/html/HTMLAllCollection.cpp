@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Apple Inc. All rights reserved.
+ * Copyright (C) 2009, 2011, 2012 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -26,19 +26,17 @@
 #include "config.h"
 #include "HTMLAllCollection.h"
 
-#include "CollectionCache.h"
 #include "Element.h"
 
 namespace WebCore {
 
-PassRefPtr<HTMLAllCollection> HTMLAllCollection::create(PassRefPtr<Node> base)
+PassOwnPtr<HTMLAllCollection> HTMLAllCollection::create(Document* document)
 {
-    return adoptRef(new HTMLAllCollection(base));
+    return adoptPtr(new HTMLAllCollection(document));
 }
 
-HTMLAllCollection::HTMLAllCollection(PassRefPtr<Node> base)
-    : HTMLCollection(base, DocAll)
-    , m_idsDone(false)
+HTMLAllCollection::HTMLAllCollection(Document* document)
+    : HTMLCollection(document, DocAll)
 {
 }
 
@@ -46,29 +44,20 @@ HTMLAllCollection::~HTMLAllCollection()
 {
 }
 
-Node* HTMLAllCollection::nextNamedItem(const AtomicString& name) const
+Node* HTMLAllCollection::namedItemWithIndex(const AtomicString& name, unsigned index) const
 {
-    resetCollectionInfo();
-    info()->checkConsistency();
+    invalidateCacheIfNeeded();
+    updateNameCache();
 
-    for (Element* e = itemAfter(info()->current); e; e = itemAfter(e)) {
-        if (checkForNameMatch(e, m_idsDone, name)) {
-            info()->current = e;
-            return e;
-        }
+    if (Vector<Element*>* idCache = m_cache.idCache.get(name.impl())) {
+        if (index < idCache->size())
+            return idCache->at(index);
+        index -= idCache->size();
     }
 
-    if (m_idsDone) {
-        info()->current = 0;
-        return 0;
-    }
-    m_idsDone = true;
-
-    for (Element* e = itemAfter(info()->current); e; e = itemAfter(e)) {
-        if (checkForNameMatch(e, m_idsDone, name)) {
-            info()->current = e;
-            return e;
-        }
+    if (Vector<Element*>* nameCache = m_cache.nameCache.get(name.impl())) {
+        if (index < nameCache->size())
+            return nameCache->at(index);
     }
 
     return 0;

@@ -46,10 +46,10 @@
 #include "UserGestureIndicator.h"
 #include "WebDocument.h"
 #include "WebNode.h"
-#include "WebPoint.h"
-#include "WebRect.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebPoint.h"
+#include "platform/WebRect.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 
 using namespace WebCore;
 
@@ -397,6 +397,15 @@ bool WebAccessibilityObject::isSelected() const
     return m_private->isSelected();
 }
 
+bool WebAccessibilityObject::isSelectedOptionActive() const
+{
+    if (m_private.isNull())
+        return false;
+
+    m_private->updateBackingStore();
+    return m_private->isSelectedOptionActive();
+}
+
 bool WebAccessibilityObject::isVertical() const
 {
     if (m_private.isNull())
@@ -557,13 +566,13 @@ WebString WebAccessibilityObject::keyboardShortcut() const
         // Follow the same order as Mozilla MSAA implementation:
         // Ctrl+Alt+Shift+Meta+key. MSDN states that keyboard shortcut strings
         // should not be localized and defines the separator as "+".
-        if (modifiers & PlatformKeyboardEvent::CtrlKey)
+        if (modifiers & PlatformEvent::CtrlKey)
             modifierString += "Ctrl+";
-        if (modifiers & PlatformKeyboardEvent::AltKey)
+        if (modifiers & PlatformEvent::AltKey)
             modifierString += "Alt+";
-        if (modifiers & PlatformKeyboardEvent::ShiftKey)
+        if (modifiers & PlatformEvent::ShiftKey)
             modifierString += "Shift+";
-        if (modifiers & PlatformKeyboardEvent::MetaKey)
+        if (modifiers & PlatformEvent::MetaKey)
             modifierString += "Win+";
     }
 
@@ -859,6 +868,24 @@ unsigned WebAccessibilityObject::cellRowSpan() const
     pair<int, int> rowRange;
     static_cast<WebCore::AccessibilityTableCell*>(m_private.get())->rowIndexRange(rowRange);
     return rowRange.second;
+}
+
+void WebAccessibilityObject::scrollToMakeVisible() const
+{
+    m_private->updateBackingStore();
+    m_private->scrollToMakeVisible();
+}
+
+void WebAccessibilityObject::scrollToMakeVisibleWithSubFocus(const WebRect& subfocus) const
+{
+    m_private->updateBackingStore();
+    m_private->scrollToMakeVisibleWithSubFocus(subfocus);
+}
+
+void WebAccessibilityObject::scrollToGlobalPoint(const WebPoint& point) const
+{
+    m_private->updateBackingStore();
+    m_private->scrollToGlobalPoint(point);
 }
 
 WebAccessibilityObject::WebAccessibilityObject(const WTF::PassRefPtr<WebCore::AccessibilityObject>& object)

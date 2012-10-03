@@ -24,16 +24,16 @@
  */
 
 #include "config.h"
-#include "WebContentLayer.h"
+#include "platform/WebContentLayer.h"
 
+#include "platform/WebFloatRect.h"
 #include "WebContentLayerImpl.h"
-#include "WebFloatRect.h"
 
 namespace WebKit {
 
-WebContentLayer WebContentLayer::create(WebLayerClient* client, WebContentLayerClient* contentClient)
+WebContentLayer WebContentLayer::create(WebContentLayerClient* contentClient)
 {
-    return WebContentLayer(WebContentLayerImpl::create(client, contentClient));
+    return WebContentLayer(WebContentLayerImpl::create(contentClient));
 }
 
 void WebContentLayer::setDrawsContent(bool drawsContent)
@@ -48,17 +48,12 @@ bool WebContentLayer::drawsContent() const
 
 void WebContentLayer::invalidateRect(const WebFloatRect& dirtyRect)
 {
-    unwrap<WebContentLayerImpl>()->setNeedsDisplay(dirtyRect);
+    unwrap<WebContentLayerImpl>()->setNeedsDisplayRect(dirtyRect);
 }
 
 void WebContentLayer::invalidate()
 {
     unwrap<WebContentLayerImpl>()->setNeedsDisplay();
-}
-
-WebFloatRect WebContentLayer::invalidRect() const
-{
-    return WebFloatRect(constUnwrap<WebContentLayerImpl>()->dirtyRect());
 }
 
 WebContentLayer::WebContentLayer(const PassRefPtr<WebContentLayerImpl>& node)

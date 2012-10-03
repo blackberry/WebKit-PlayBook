@@ -23,10 +23,12 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "InjectedBundle.h"
 
 #include "ActivateFonts.h"
 #include "InjectedBundlePage.h"
+#include "StringFunctions.h"
 #include <WebKit2/WKBundle.h>
 #include <WebKit2/WKBundlePage.h>
 #include <WebKit2/WKBundlePagePrivate.h>
@@ -46,38 +48,47 @@ InjectedBundle& InjectedBundle::shared()
 
 InjectedBundle::InjectedBundle()
     : m_bundle(0)
-    , m_mainPage(0)
+    , m_topLoadingFrame(0)
     , m_state(Idle)
+    , m_dumpPixels(false)
 {
 }
 
-void InjectedBundle::_didCreatePage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo)
+void InjectedBundle::didCreatePage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo)
 {
     static_cast<InjectedBundle*>(const_cast<void*>(clientInfo))->didCreatePage(page);
 }
 
-void InjectedBundle::_willDestroyPage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo)
+void InjectedBundle::willDestroyPage(WKBundleRef bundle, WKBundlePageRef page, const void* clientInfo)
 {
     static_cast<InjectedBundle*>(const_cast<void*>(clientInfo))->willDestroyPage(page);
 }
 
-void InjectedBundle::_didReceiveMessage(WKBundleRef bundle, WKStringRef messageName, WKTypeRef messageBody, const void *clientInfo)
+void InjectedBundle::didInitializePageGroup(WKBundleRef bundle, WKBundlePageGroupRef pageGroup, const void* clientInfo)
+{
+    static_cast<InjectedBundle*>(const_cast<void*>(clientInfo))->didInitializePageGroup(pageGroup);
+}
+
+void InjectedBundle::didReceiveMessage(WKBundleRef bundle, WKStringRef messageName, WKTypeRef messageBody, const void *clientInfo)
 {
     static_cast<InjectedBundle*>(const_cast<void*>(clientInfo))->didReceiveMessage(messageName, messageBody);
 }
 
-void InjectedBundle::initialize(WKBundleRef bundle)
+void InjectedBundle::initialize(WKBundleRef bundle, WKTypeRef initializationUserData)
 {
     m_bundle = bundle;
 
     WKBundleClient client = {
-        0,
+        kWKBundleClientCurrentVersion,
         this,
-        _didCreatePage,
-        _willDestroyPage,
-        _didReceiveMessage
+        didCreatePage,
+        willDestroyPage,
+        didInitializePageGroup,
+        didReceiveMessage
     };
     WKBundleSetClient(m_bundle, &client);
+
+    platformInitialize(initializationUserData);
 
     activateFonts();
     WKBundleActivateMacFontAscentHack(m_bundle);
@@ -85,32 +96,66 @@ void InjectedBundle::initialize(WKBundleRef bundle)
 
 void InjectedBundle::didCreatePage(WKBundlePageRef page)
 {
-    // FIXME: we really need the main page ref to be sent over from the ui process
-    OwnPtr<InjectedBundlePage> pageWrapper = adoptPtr(new InjectedBundlePage(page));
-    if (!m_mainPage)
-        m_mainPage = pageWrapper.release();
-    else
-        m_otherPages.add(page, pageWrapper.leakPtr());
+    m_pages.append(adoptPtr(new InjectedBundlePage(page)));
 }
 
 void InjectedBundle::willDestroyPage(WKBundlePageRef page)
 {
-    if (m_mainPage && m_mainPage->page() == page)
-        m_mainPage.clear();
-    else
-        delete m_otherPages.take(page);
+    size_t size = m_pages.size();
+    for (size_t i = 0; i < size; ++i) {
+        if (m_pages[i]->page() == page) {
+            m_pages.remove(i);
+            break;
+        }
+    }
+}
+
+void InjectedBundle::didInitializePageGroup(WKBundlePageGroupRef pageGroup)
+{
+    m_pageGroup = pageGroup;
+}
+
+InjectedBundlePage* InjectedBundle::page() const
+{
+    // It might be better to have the UI process send over a reference to the main
+    // page instead of just assuming it's the first one.
+    return m_pages[0].get();
+}
+
+void InjectedBundle::resetLocalSettings()
+{
+    setlocale(LC_ALL, "");
 }
 
 void InjectedBundle::didReceiveMessage(WKStringRef messageName, WKTypeRef messageBody)
 {
     if (WKStringIsEqualToUTF8CString(messageName, "BeginTest")) {
-        ASSERT(!messageBody);
+        ASSERT(messageBody);
+        ASSERT(WKGetTypeID(messageBody) == WKBooleanGetTypeID());
+        m_dumpPixels = WKBooleanGetValue(static_cast<WKBooleanRef>(messageBody));
 
         WKRetainPtr<WKStringRef> ackMessageName(AdoptWK, WKStringCreateWithUTF8CString("Ack"));
         WKRetainPtr<WKStringRef> ackMessageBody(AdoptWK, WKStringCreateWithUTF8CString("BeginTest"));
         WKBundlePostMessage(m_bundle, ackMessageName.get(), ackMessageBody.get());
 
         beginTesting();
+        return;
+    } else if (WKStringIsEqualToUTF8CString(messageName, "Reset")) {
+        ASSERT(messageBody);
+        ASSERT(WKGetTypeID(messageBody) == WKDictionaryGetTypeID());
+        WKDictionaryRef messageBodyDictionary = static_cast<WKDictionaryRef>(messageBody);
+
+        WKRetainPtr<WKStringRef> shouldGCKey(AdoptWK, WKStringCreateWithUTF8CString("ShouldGC"));
+        bool shouldGC = WKBooleanGetValue(static_cast<WKBooleanRef>(WKDictionaryGetItemForKey(messageBodyDictionary, shouldGCKey.get())));
+
+        if (shouldGC)
+            WKBundleGarbageCollectJavaScriptObjects(m_bundle);
+
+        m_state = Idle;
+        m_dumpPixels = false;
+
+        resetLocalSettings();
+
         return;
     }
     if (WKStringIsEqualToUTF8CString(messageName, "CallAddChromeInputFieldCallback")) {
@@ -147,6 +192,7 @@ void InjectedBundle::beginTesting()
     m_gcController = GCController::create();
     m_eventSendingController = EventSendingController::create();
     m_textInputController = TextInputController::create();
+    m_accessibilityController = AccessibilityController::create();
 
     WKBundleSetShouldTrackVisitedLinks(m_bundle, false);
     WKBundleRemoveAllVisitedLinks(m_bundle);
@@ -159,7 +205,7 @@ void InjectedBundle::beginTesting()
 
     WKBundleRemoveAllUserContent(m_bundle, m_pageGroup);
 
-    WKBundleRemoveAllUserContent(m_bundle);
+    page()->reset();
 
     WKBundleClearAllDatabases(m_bundle);
     WKBundleClearApplicationCache(m_bundle);
@@ -170,25 +216,45 @@ void InjectedBundle::done()
 {
     m_state = Stopping;
 
-    m_mainPage->stopLoading();
+    page()->stopLoading();
+    setTopLoadingFrame(0);
 
     WKRetainPtr<WKStringRef> doneMessageName(AdoptWK, WKStringCreateWithUTF8CString("Done"));
-    WKRetainPtr<WKStringRef> doneMessageBody(AdoptWK, WKStringCreateWithUTF8CString(m_outputStream.str().c_str()));
+    WKRetainPtr<WKMutableDictionaryRef> doneMessageBody(AdoptWK, WKMutableDictionaryCreate());
+
+    WKRetainPtr<WKStringRef> textOutputKey(AdoptWK, WKStringCreateWithUTF8CString("TextOutput"));
+    WKRetainPtr<WKStringRef> textOutput(AdoptWK, WKStringCreateWithUTF8CString(m_outputStream.str().c_str()));
+    WKDictionaryAddItem(doneMessageBody.get(), textOutputKey.get(), textOutput.get());
+    
+    WKRetainPtr<WKStringRef> pixelResultKey = adoptWK(WKStringCreateWithUTF8CString("PixelResult"));
+    WKDictionaryAddItem(doneMessageBody.get(), pixelResultKey.get(), m_pixelResult.get());
 
     WKRetainPtr<WKStringRef> repaintRectsKey = adoptWK(WKStringCreateWithUTF8CString("RepaintRects"));
     WKDictionaryAddItem(doneMessageBody.get(), repaintRectsKey.get(), m_repaintRects.get());
 
     WKBundlePostMessage(m_bundle, doneMessageName.get(), doneMessageBody.get());
 
+    closeOtherPages();
+    
     m_state = Idle;
 }
 
 void InjectedBundle::closeOtherPages()
 {
-    Vector<WKBundlePageRef> pages;
-    copyKeysToVector(m_otherPages, pages);
-    for (size_t i = 0; i < pages.size(); ++i)
-        WKBundlePageClose(pages[i]);
+    Vector<WKBundlePageRef> pagesToClose;
+    size_t size = m_pages.size();
+    for (size_t i = 1; i < size; ++i)
+        pagesToClose.append(m_pages[i]->page());
+    size = pagesToClose.size();
+    for (size_t i = 0; i < size; ++i)
+        WKBundlePageClose(pagesToClose[i]);
+}
+
+void InjectedBundle::dumpBackForwardListsForAllPages()
+{
+    size_t size = m_pages.size();
+    for (size_t i = 0; i < size; ++i)
+        m_pages[i]->dumpBackForwardList();
 }
     
 void InjectedBundle::postNewBeforeUnloadReturnValue(bool value)

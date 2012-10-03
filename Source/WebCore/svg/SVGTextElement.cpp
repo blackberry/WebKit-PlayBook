@@ -26,6 +26,7 @@
 #include "AffineTransform.h"
 #include "Attribute.h"
 #include "FloatRect.h"
+#include "NodeRenderingContext.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGText.h"
 #include "SVGElementInstance.h"
@@ -63,10 +64,10 @@ bool SVGTextElement::isSupportedAttribute(const QualifiedName& attrName)
     return supportedAttributes.contains<QualifiedName, SVGAttributeHashTranslator>(attrName);
 }
 
-void SVGTextElement::parseMappedAttribute(Attribute* attr)
+void SVGTextElement::parseAttribute(Attribute* attr)
 {
     if (!isSupportedAttribute(attr->name())) {
-        SVGTextPositioningElement::parseMappedAttribute(attr);
+        SVGTextPositioningElement::parseAttribute(attr);
         return;
     }
 
@@ -111,7 +112,19 @@ AffineTransform SVGTextElement::getScreenCTM(StyleUpdateStrategy styleUpdateStra
 AffineTransform SVGTextElement::animatedLocalTransform() const
 {
     AffineTransform matrix;
-    transform().concatenate(matrix);
+    RenderStyle* style = renderer()->style();
+
+    // if CSS property was set, use that, otherwise fallback to attribute (if set)
+    if (style->hasTransform()) {
+        TransformationMatrix t;
+        // For now, the transform-origin is not taken into account
+        // Also, any percentage values will not be taken into account
+        style->applyTransform(t, IntSize(0, 0), RenderStyle::ExcludeTransformOrigin);
+        // Flatten any 3D transform
+        matrix = t.toAffineTransform();
+    } else
+        transform().concatenate(matrix);
+
     if (m_supplementalTransform)
         return *m_supplementalTransform * matrix;
     return matrix;
@@ -129,16 +142,16 @@ RenderObject* SVGTextElement::createRenderer(RenderArena* arena, RenderStyle*)
     return new (arena) RenderSVGText(this);
 }
 
-bool SVGTextElement::childShouldCreateRenderer(Node* child) const
+bool SVGTextElement::childShouldCreateRenderer(const NodeRenderingContext& childContext) const
 {
-    if (child->isTextNode()
-        || child->hasTagName(SVGNames::aTag)
+    if (childContext.node()->isTextNode()
+        || childContext.node()->hasTagName(SVGNames::aTag)
 #if ENABLE(SVG_FONTS)
-        || child->hasTagName(SVGNames::altGlyphTag)
+        || childContext.node()->hasTagName(SVGNames::altGlyphTag)
 #endif
-        || child->hasTagName(SVGNames::textPathTag)
-        || child->hasTagName(SVGNames::trefTag)
-        || child->hasTagName(SVGNames::tspanTag))
+        || childContext.node()->hasTagName(SVGNames::textPathTag)
+        || childContext.node()->hasTagName(SVGNames::trefTag)
+        || childContext.node()->hasTagName(SVGNames::tspanTag))
         return true;
 
     return false;

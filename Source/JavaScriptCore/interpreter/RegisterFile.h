@@ -38,7 +38,8 @@
 namespace JSC {
 
     class ConservativeRoots;
-    class JettisonedCodeBlocks;
+    class DFGCodeBlocks;
+    class LLIntOffsetsExtractor;
 
     class RegisterFile {
         WTF_MAKE_NONCOPYABLE(RegisterFile);
@@ -54,8 +55,6 @@ namespace JSC {
             CodeBlock = -1,
         };
 
-        enum { ProgramCodeThisRegister = -CallFrameHeaderSize - 1 };
-
         static const size_t defaultCapacity = 512 * 1024;
         static const size_t commitSize = 16 * 1024;
         // Allow 8k of excess registers before we start trying to reap the registerfile
@@ -65,7 +64,7 @@ namespace JSC {
         ~RegisterFile();
         
         void gatherConservativeRoots(ConservativeRoots&);
-        void gatherConservativeRoots(ConservativeRoots&, JettisonedCodeBlocks&);
+        void gatherConservativeRoots(ConservativeRoots&, DFGCodeBlocks&);
 
         Register* begin() const { return static_cast<Register*>(m_reservation.base()); }
         Register* end() const { return m_end; }
@@ -83,6 +82,8 @@ namespace JSC {
         }
 
     private:
+        friend class LLIntOffsetsExtractor;
+        
         bool growSlowCase(Register*);
         void releaseExcessCapacity();
         void addToCommittedByteCount(long);

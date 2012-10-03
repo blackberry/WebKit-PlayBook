@@ -216,10 +216,10 @@ bool SVGPathElement::isSupportedAttribute(const QualifiedName& attrName)
     return supportedAttributes.contains<QualifiedName, SVGAttributeHashTranslator>(attrName);
 }
 
-void SVGPathElement::parseMappedAttribute(Attribute* attr)
+void SVGPathElement::parseAttribute(Attribute* attr)
 {
     if (!isSupportedAttribute(attr->name())) {
-        SVGStyledTransformableElement::parseMappedAttribute(attr);
+        SVGStyledTransformableElement::parseAttribute(attr);
         return;
     }
 
@@ -237,11 +237,11 @@ void SVGPathElement::parseMappedAttribute(Attribute* attr)
         return;
     }
 
-    if (SVGTests::parseMappedAttribute(attr))
+    if (SVGTests::parseAttribute(attr))
         return;
-    if (SVGLangSpace::parseMappedAttribute(attr))
+    if (SVGLangSpace::parseAttribute(attr))
         return;
-    if (SVGExternalResourcesRequired::parseMappedAttribute(attr))
+    if (SVGExternalResourcesRequired::parseAttribute(attr))
         return;
 
     ASSERT_NOT_REACHED();
@@ -271,7 +271,7 @@ void SVGPathElement::svgAttributeChanged(const QualifiedName& attrName)
         }
 
         if (renderer)
-            renderer->setNeedsPathUpdate();
+            renderer->setNeedsShapeUpdate();
     }
 
     if (renderer)
@@ -351,7 +351,7 @@ void SVGPathElement::pathSegListChanged(SVGPathSegRole role)
     if (!renderer)
         return;
 
-    renderer->setNeedsPathUpdate();
+    renderer->setNeedsShapeUpdate();
     RenderSVGResource::markForLayoutAndParentResourceInvalidation(renderer);
 }
 
@@ -372,6 +372,12 @@ FloatRect SVGPathElement::getBBox(StyleUpdateStrategy styleUpdateStrategy)
     }
     
     return m_cachedBBoxRect;
+}
+
+RenderObject* SVGPathElement::createRenderer(RenderArena* arena, RenderStyle*)
+{
+    // By default, any subclass is expected to do path-based drawing
+    return new (arena) RenderSVGPath(this);
 }
 
 }

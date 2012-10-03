@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,10 +20,8 @@
 #define RenderThemeBlackBerry_h
 
 #include "RenderTheme.h"
-#include <BlackBerryPlatformInputEvents.h>
 
 namespace WebCore {
-class Gradient;
 
 class RenderThemeBlackBerry : public RenderTheme {
 public:
@@ -34,6 +32,7 @@ public:
 
 #if ENABLE(VIDEO)
     virtual String extraMediaControlsStyleSheet();
+    virtual String formatMediaControlsRemainingTime(float currentTime, float duration) const;
 #endif
     virtual bool supportsHover(const RenderStyle*) const { return true; }
 
@@ -89,6 +88,10 @@ public:
 
     virtual Color platformActiveSelectionBackgroundColor() const;
 
+    // Highlighting colors for TextMatches.
+    virtual Color platformActiveTextSearchHighlightColor() const;
+    virtual Color platformInactiveTextSearchHighlightColor() const;
+
 private:
     static const String& defaultGUIFont();
 
@@ -103,10 +106,11 @@ private:
     void paintMenuListButtonGradientAndArrow(GraphicsContext*, RenderObject*, IntRect buttonRect, const Path& clipPath);
     bool paintTextFieldOrTextAreaOrSearchField(RenderObject*, const PaintInfo&, const IntRect&);
     bool paintSliderTrackRect(RenderObject*, const PaintInfo&, const IntRect&);
-    bool paintSliderTrackRect(RenderObject*, const PaintInfo&, const IntRect& rect2, RGBA32 strokeColorStart,
+    bool paintSliderTrackRect(RenderObject*, const PaintInfo&, const IntRect&, RGBA32 strokeColorStart,
                 RGBA32 strokeColorEnd, RGBA32 fillColorStart, RGBA32 fillColorEnd);
 
 };
 
-}
+} // namespace WebCore
+
 #endif // RenderThemeBlackBerry_h

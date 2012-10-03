@@ -30,6 +30,9 @@
 
 #include "Animation.h"
 #include "Color.h"
+#if ENABLE(CSS_FILTERS)
+#include "FilterOperations.h"
+#endif
 #include "FloatPoint.h"
 #include "FloatPoint3D.h"
 #include "FloatSize.h"
@@ -41,11 +44,7 @@
 #include <wtf/PassOwnPtr.h>
 
 #if PLATFORM(MAC)
-#ifdef __OBJC__
-@class CALayer;
-#else
-class CALayer;
-#endif
+OBJC_CLASS CALayer;
 typedef CALayer PlatformLayer;
 #elif PLATFORM(WIN)
 typedef struct _CACFLayer PlatformLayer;
@@ -68,6 +67,18 @@ namespace WebCore {
 class LayerChromium;
 typedef LayerChromium PlatformLayer;
 }
+#elif PLATFORM(GTK)
+#if USE(TEXTURE_MAPPER_CAIRO) || USE(TEXTURE_MAPPER_GL)
+namespace WebCore {
+class TextureMapperPlatformLayer;
+typedef TextureMapperPlatformLayer PlatformLayer;
+};
+#elif USE(CLUTTER)
+typedef struct _ClutterActor ClutterActor;
+namespace WebCore {
+typedef ClutterActor PlatformLayer;
+};
+#endif
 #elif PLATFORM(BLACKBERRY)
 namespace WebCore {
 class LayerWebKitThread;
@@ -109,10 +120,6 @@ public:
     const TimingFunction* timingFunction() const { return m_timingFunction.get(); }
     virtual AnimationValue* clone() const = 0;
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const = 0;
-#endif
-
 private:
     float m_keyTime;
     RefPtr<TimingFunction> m_timingFunction;
@@ -129,13 +136,6 @@ public:
     virtual AnimationValue* clone() const { return new FloatAnimationValue(*this); }
 
     float value() const { return m_value; }
-
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[FloatAnimationValue %f]", m_value);
-    }
-#endif
 
 private:
     float m_value;
@@ -154,16 +154,28 @@ public:
 
     const TransformOperations* value() const { return &m_value; }
 
-#if PLATFORM(BLACKBERRY)
-    virtual String toString() const
-    {
-        return String::format("[TransformAnimationValue %s]", m_value.toString().latin1().data());
-    }
-#endif
-
 private:
     TransformOperations m_value;
 };
+
+#if ENABLE(CSS_FILTERS)
+// Used to store one filter value in a keyframe list.
+class FilterAnimationValue : public AnimationValue {
+public:
+    FilterAnimationValue(float keyTime, const FilterOperations* value = 0, PassRefPtr<TimingFunction> timingFunction = 0)
+        : AnimationValue(keyTime, timingFunction)
+    {
+        if (value)
+            m_value = *value;
+    }
+    virtual AnimationValue* clone() const { return new FilterAnimationValue(*this); }
+
+    const FilterOperations* value() const { return &m_value; }
+
+private:
+    FilterOperations m_value;
+};
+#endif
 
 // Used to store a series of values in a keyframe list. Values will all be of the same type,
 // which can be inferred from the property.
@@ -186,7 +198,20 @@ public:
     {
         deleteAllValues(m_values);
     }
-    
+
+    KeyframeValueList& operator=(const KeyframeValueList& other)
+    {
+        KeyframeValueList copy(other);
+        swap(copy);
+        return *this;
+    }
+
+    void swap(KeyframeValueList& other)
+    {
+        std::swap(m_property, other.m_property);
+        m_values.swap(other.m_values);
+    }
+
     AnimatedPropertyID property() const { return m_property; }
 
     size_t size() const { return m_values.size(); }
@@ -253,7 +278,7 @@ public:
 
     // Offset is origin of the renderer minus origin of the graphics layer (so either zero or negative).
     IntSize offsetFromRenderer() const { return m_offsetFromRenderer; }
-    void setOffsetFromRenderer(const IntSize& offset) { m_offsetFromRenderer = offset; }
+    void setOffsetFromRenderer(const IntSize&);
 
     // The position of the layer (the location of its top-left corner in its parent)
     const FloatPoint& position() const { return m_position; }
@@ -320,6 +345,13 @@ public:
     float opacity() const { return m_opacity; }
     virtual void setOpacity(float opacity) { m_opacity = opacity; }
 
+#if ENABLE(CSS_FILTERS)
+    const FilterOperations& filters() const { return m_filters; }
+    
+    // Returns true if filter can be rendered by the compositor
+    virtual bool setFilters(const FilterOperations& filters) { m_filters = filters; return true; }
+#endif
+
     // Some GraphicsLayers paint only the foreground or the background content
     GraphicsLayerPaintingPhase paintingPhase() const { return m_paintingPhase; }
     void setPaintingPhase(GraphicsLayerPaintingPhase phase) { m_paintingPhase = phase; }
@@ -373,8 +405,8 @@ public:
     virtual void setContentsOrientation(CompositingCoordinatesOrientation orientation) { m_contentsOrientation = orientation; }
     CompositingCoordinatesOrientation contentsOrientation() const { return m_contentsOrientation; }
 
-    bool showDebugBorders() const { return m_client ? m_client->showDebugBorders() : false; }
-    bool showRepaintCounter() const { return m_client ? m_client->showRepaintCounter() : false; }
+    bool showDebugBorders() const { return m_client ? m_client->showDebugBorders(this) : false; }
+    bool showRepaintCounter() const { return m_client ? m_client->showRepaintCounter(this) : false; }
     
     void updateDebugIndicators();
     
@@ -411,7 +443,10 @@ public:
 
     bool usingTiledLayer() const { return m_usingTiledLayer; }
 
-#if PLATFORM(QT)
+    // Called whenever the visible rect of the given GraphicsLayer changed.
+    virtual void visibleRectChanged() { }
+
+#if PLATFORM(QT) || PLATFORM(GTK)
     // This allows several alternative GraphicsLayer implementations in the same port,
     // e.g. if a different GraphicsLayer implementation is needed in WebKit1 vs. WebKit2.
     typedef PassOwnPtr<GraphicsLayer> GraphicsLayerFactory(GraphicsLayerClient*);
@@ -419,11 +454,22 @@ public:
 #endif
 
 protected:
+#if ENABLE(CSS_FILTERS)
+    // This method is used by platform GraphicsLayer classes to clear the filters
+    // when compositing is not done in hardware. It is not virtual, so the caller
+    // needs to notifiy the change to the platform layer as needed.
+    void clearFilters() { m_filters.clear(); }
 
-    typedef Vector<TransformOperation::OperationType> TransformOperationList;
-    // Given a list of TransformAnimationValues, return an array of transform operations.
-    // On return, if hasBigRotation is true, functions contain rotations of >= 180 degrees
-    static void fetchTransformOperationList(const KeyframeValueList&, TransformOperationList&, bool& isValid, bool& hasBigRotation);
+    // Given a KeyframeValueList containing filterOperations, return true if the operations are valid.
+    static int validateFilterOperations(const KeyframeValueList&);
+#endif
+
+    // Given a list of TransformAnimationValues, see if all the operations for each keyframe match. If so
+    // return the index of the KeyframeValueList entry that has that list of operations (it may not be
+    // the first entry because some keyframes might have an empty transform and those match any list).
+    // If the lists don't match return -1. On return, if hasBigRotation is true, functions contain 
+    // rotations of >= 180 degrees
+    static int validateTransformOperations(const KeyframeValueList&, bool& hasBigRotation);
 
     virtual void setOpacityInternal(float) { }
 
@@ -453,6 +499,10 @@ protected:
     Color m_backgroundColor;
     float m_opacity;
     float m_zPosition;
+    
+#if ENABLE(CSS_FILTERS)
+    FilterOperations m_filters;
+#endif
 
     bool m_backgroundColorSet : 1;
     bool m_contentsOpaque : 1;
@@ -488,7 +538,7 @@ protected:
 
     int m_repaintCount;
 
-#if PLATFORM(QT)
+#if PLATFORM(QT) || PLATFORM(GTK)
     static GraphicsLayer::GraphicsLayerFactory* s_graphicsLayerFactory;
 #endif
 };

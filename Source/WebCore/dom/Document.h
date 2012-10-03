@@ -30,19 +30,21 @@
 #define Document_h
 
 #include "CheckedRadioButtons.h"
-#include "CollectionCache.h"
 #include "CollectionType.h"
 #include "Color.h"
+#include "ContainerNode.h"
 #include "DOMTimeStamp.h"
 #include "DocumentEventQueue.h"
 #include "DocumentTiming.h"
 #include "IconURL.h"
+#include "InspectorCounters.h"
 #include "IntRect.h"
 #include "LayoutTypes.h"
 #include "PageVisibilityState.h"
 #include "PlatformScreen.h"
 #include "QualifiedName.h"
 #include "ScriptExecutionContext.h"
+#include "SecurityPolicy.h"
 #include "StringWithDirection.h"
 #include "Timer.h"
 #include "TreeScope.h"
@@ -59,10 +61,10 @@ namespace WebCore {
 class AXObjectCache;
 class Attr;
 class CDATASection;
-class CSSPrimitiveValueCache;
 class CSSStyleDeclaration;
 class CSSStyleSelector;
 class CSSStyleSheet;
+class CSSValuePool;
 class CachedCSSStyleSheet;
 class CachedResourceLoader;
 class CachedScript;
@@ -93,11 +95,13 @@ class HTMLCollection;
 class HTMLAllCollection;
 class HTMLDocument;
 class HTMLElement;
+class HTMLFormControlElementWithState;
 class HTMLFormElement;
 class HTMLFrameOwnerElement;
 class HTMLHeadElement;
 class HTMLInputElement;
 class HTMLMapElement;
+class HTMLNameCollection;
 class HitTestRequest;
 class HitTestResult;
 class IntPoint;
@@ -130,6 +134,7 @@ class Text;
 class TextResourceDecoder;
 class DocumentParser;
 class TreeWalker;
+class WebKitNamedFlow;
 class XMLHttpRequest;
 class XPathEvaluator;
 class XPathExpression;
@@ -200,7 +205,7 @@ struct FormElementKeyHash {
 };
 
 struct FormElementKeyHashTraits : WTF::GenericHashTraits<FormElementKey> {
-    static void constructDeletedValue(FormElementKey& slot) { new (&slot) FormElementKey(WTF::HashTableDeletedValue); }
+    static void constructDeletedValue(FormElementKey& slot) { new (NotNull, &slot) FormElementKey(WTF::HashTableDeletedValue); }
     static bool isDeletedValue(const FormElementKey& value) { return value.isHashTableDeletedValue(); }
 };
 
@@ -209,9 +214,9 @@ enum PageshowEventPersistence {
     PageshowEventPersisted = 1
 };
 
-enum StyleSelectorUpdateFlag { RecalcStyleImmediately, DeferRecalcStyle };
+enum StyleSelectorUpdateFlag { RecalcStyleImmediately, DeferRecalcStyle, RecalcStyleIfNeeded };
 
-class Document : public TreeScope, public ScriptExecutionContext {
+class Document : public ContainerNode, public TreeScope, public ScriptExecutionContext {
 public:
     static PassRefPtr<Document> create(Frame* frame, const KURL& url)
     {
@@ -223,13 +228,10 @@ public:
     }
     virtual ~Document();
 
-    typedef ListHashSet<Element*, 64> FormElementListHashSet;
-    const FormElementListHashSet* getFormElements() const { return &m_formElementsWithState; }    
-
     MediaQueryMatcher* mediaQueryMatcher();
 
-    using TreeScope::ref;
-    using TreeScope::deref;
+    using ContainerNode::ref;
+    using ContainerNode::deref;
 
     // Nodes belonging to this document hold guard references -
     // these are enough to keep the document from being destroyed, but
@@ -317,6 +319,7 @@ public:
 #endif
 #if ENABLE(FULLSCREEN_API)
     DEFINE_ATTRIBUTE_EVENT_LISTENER(webkitfullscreenchange);
+    DEFINE_ATTRIBUTE_EVENT_LISTENER(webkitfullscreenerror);
 #endif
 #if ENABLE(PAGE_VISIBILITY_API)
     DEFINE_ATTRIBUTE_EVENT_LISTENER(webkitvisibilitychange);
@@ -324,14 +327,14 @@ public:
 
     ViewportArguments viewportArguments() const { return m_viewportArguments; }
 
+    SecurityPolicy::ReferrerPolicy referrerPolicy() const { return m_referrerPolicy; }
+
     DocumentType* doctype() const { return m_docType.get(); }
 
     DOMImplementation* implementation();
     
     Element* documentElement() const
     {
-        if (!m_documentElement)
-            cacheDocumentElement();
         return m_documentElement.get();
     }
     
@@ -349,6 +352,9 @@ public:
     virtual PassRefPtr<Element> createElementNS(const String& namespaceURI, const String& qualifiedName, ExceptionCode&);
     PassRefPtr<Element> createElement(const QualifiedName&, bool createdByParser);
 
+    bool cssRegionsEnabled() const;
+    PassRefPtr<WebKitNamedFlow> webkitGetFlowByName(const String&);
+
     /**
      * Retrieve all nodes that intersect a rect in the window's document, until it is fully enclosed by
      * the boundaries of a node.
@@ -363,7 +369,7 @@ public:
      *        If false, this method returns null for coordinates outside of the viewport.
      */
     PassRefPtr<NodeList> nodesFromRect(int centerX, int centerY, unsigned topPadding, unsigned rightPadding,
-                                       unsigned bottomPadding, unsigned leftPadding, bool ignoreClipping) const;
+                                       unsigned bottomPadding, unsigned leftPadding, bool ignoreClipping, bool allowShadowContent) const;
     Element* elementFromPoint(int x, int y) const;
     PassRefPtr<Range> caretRangeFromPoint(int x, int y);
 
@@ -384,7 +390,7 @@ public:
     String suggestedMIMEType() const;
 
     String contentLanguage() const { return m_contentLanguage; }
-    void setContentLanguage(const String& lang) { m_contentLanguage = lang; }
+    void setContentLanguage(const String&);
 
     String xmlEncoding() const { return m_xmlEncoding; }
     String xmlVersion() const { return m_xmlVersion; }
@@ -407,30 +413,19 @@ public:
 
     PassRefPtr<Node> adoptNode(PassRefPtr<Node> source, ExceptionCode&);
 
-    PassRefPtr<HTMLCollection> images();
-    PassRefPtr<HTMLCollection> embeds();
-    PassRefPtr<HTMLCollection> plugins(); // an alias for embeds() required for the JS DOM bindings.
-    PassRefPtr<HTMLCollection> applets();
-    PassRefPtr<HTMLCollection> links();
-    PassRefPtr<HTMLCollection> forms();
-    PassRefPtr<HTMLCollection> anchors();
-    PassRefPtr<HTMLCollection> objects();
-    PassRefPtr<HTMLCollection> scripts();
-    PassRefPtr<HTMLCollection> windowNamedItems(const String& name);
-    PassRefPtr<HTMLCollection> documentNamedItems(const String& name);
+    HTMLCollection* images();
+    HTMLCollection* embeds();
+    HTMLCollection* plugins(); // an alias for embeds() required for the JS DOM bindings.
+    HTMLCollection* applets();
+    HTMLCollection* links();
+    HTMLCollection* forms();
+    HTMLCollection* anchors();
+    HTMLCollection* objects();
+    HTMLCollection* scripts();
+    HTMLCollection* windowNamedItems(const AtomicString& name);
+    HTMLCollection* documentNamedItems(const AtomicString& name);
 
-    PassRefPtr<HTMLAllCollection> all();
-
-    CollectionCache* collectionInfo(CollectionType type)
-    {
-        ASSERT(type >= FirstUnnamedDocumentCachedType);
-        unsigned index = type - FirstUnnamedDocumentCachedType;
-        ASSERT(index < NumUnnamedDocumentCachedTypes);
-        m_collectionInfo[index].checkConsistency();
-        return &m_collectionInfo[index]; 
-    }
-
-    CollectionCache* nameCollectionInfo(CollectionType, const AtomicString& name);
+    HTMLAllCollection* all();
 
     // Other methods (not part of DOM)
     bool isHTMLDocument() const { return m_isHTML; }
@@ -447,7 +442,7 @@ public:
     virtual bool isMediaDocument() const { return false; }
     virtual bool isFrameSet() const { return false; }
     
-    PassRefPtr<CSSPrimitiveValueCache> cssPrimitiveValueCache() const;
+    PassRefPtr<CSSValuePool> cssValuePool() const;
     
     CSSStyleSelector* styleSelectorIfExists() const { return m_styleSelector.get(); }
 
@@ -464,7 +459,7 @@ public:
     }
 
     /**
-     * Updates the pending sheet count and then calls updateStyleSelector.
+     * Updates the pending sheet count and then calls updateActiveStylesheets.
      */
     void removePendingSheet();
 
@@ -499,7 +494,6 @@ public:
      * found and is used to calculate the derived styles for all rendering objects.
      */
     void styleSelectorChanged(StyleSelectorUpdateFlag);
-    void recalcStyleSelector();
 
     bool usesSiblingRules() const { return m_usesSiblingRules || m_usesSiblingRulesOverride; }
     void setUsesSiblingRules(bool b) { m_usesSiblingRulesOverride = b; }
@@ -514,12 +508,14 @@ public:
     void setUsesLinkRules(bool b) { m_usesLinkRules = b; }
 
     // Machinery for saving and restoring state when you leave and then go back to a page.
-    void registerFormElementWithState(Element* e) { m_formElementsWithState.add(e); }
-    void unregisterFormElementWithState(Element* e) { m_formElementsWithState.remove(e); }
+    void registerFormElementWithState(HTMLFormControlElementWithState* control) { m_formElementsWithState.add(control); }
+    void unregisterFormElementWithState(HTMLFormControlElementWithState* control) { m_formElementsWithState.remove(control); }
     Vector<String> formElementsState() const;
     void setStateForNewFormElements(const Vector<String>&);
     bool hasStateForNewFormElements() const;
     bool takeStateForFormElement(AtomicStringImpl* name, AtomicStringImpl* type, String& state);
+    typedef ListHashSet<HTMLFormControlElementWithState*, 64> FormElementListHashSet;
+    const FormElementListHashSet* formElements() const { return &m_formElementsWithState; }
 
     void registerFormElementWithFormAttribute(FormAssociatedElement*);
     void unregisterFormElementWithFormAttribute(FormAssociatedElement*);
@@ -550,7 +546,7 @@ public:
     PassRefPtr<RenderStyle> styleForElementIgnoringPendingStylesheets(Element*);
     PassRefPtr<RenderStyle> styleForPage(int pageIndex);
 
-    void registerCustomFont(FontData*);
+    void registerCustomFont(PassOwnPtr<FontData>);
 
     // Returns true if page box (margin boxes and page borders) is visible.
     bool isPageBoxVisible(int pageIndex);
@@ -608,11 +604,17 @@ public:
     const KURL& url() const { return m_url; }
     void setURL(const KURL&);
 
+    // To understand how these concepts relate to one another, please see the
+    // comments surrounding their declaration.
     const KURL& baseURL() const { return m_baseURL; }
+    void setBaseURLOverride(const KURL&);
+    const KURL& baseURLOverride() const { return m_baseURLOverride; }
+    const KURL& baseElementURL() const { return m_baseElementURL; }
     const String& baseTarget() const { return m_baseTarget; }
     void processBaseElement();
 
     KURL completeURL(const String&) const;
+    KURL completeURL(const String&, const KURL& baseURLOverride) const;
 
     virtual String userAgent(const KURL&) const;
 
@@ -733,7 +735,7 @@ public:
     void attachRange(Range*);
     void detachRange(Range*);
 
-    void nodeChildrenChanged(ContainerNode*);
+    void updateRangesAfterChildrenChanged(ContainerNode*);
     // nodeChildrenWillBeRemoved is used when removing all node children at once.
     void nodeChildrenWillBeRemoved(ContainerNode*);
     // nodeWillBeRemoved is only safe when removing one node at a time.
@@ -780,12 +782,12 @@ public:
     void addListenerTypeIfNeeded(const AtomicString& eventType);
 
 #if ENABLE(MUTATION_OBSERVERS)
-    bool hasSubtreeMutationObserverOfType(WebKitMutationObserver::MutationType type) const
+    bool hasMutationObserversOfType(WebKitMutationObserver::MutationType type) const
     {
-        return m_subtreeMutationObserverTypes & type;
+        return m_mutationObserverTypes & type;
     }
-    bool hasSubtreeMutationObserver() const { return m_subtreeMutationObserverTypes; }
-    void addSubtreeMutationObserverTypes(MutationObserverOptions types) { m_subtreeMutationObserverTypes |= types; }
+    bool hasMutationObservers() const { return m_mutationObserverTypes; }
+    void addMutationObserverTypes(MutationObserverOptions types) { m_mutationObserverTypes |= types; }
 #endif
 
     CSSStyleDeclaration* getOverrideStyle(Element*, const String& pseudoElt);
@@ -804,6 +806,8 @@ public:
      */
     void processHttpEquiv(const String& equiv, const String& content);
     void processViewport(const String& features);
+    void updateViewportArguments();
+    void processReferrerPolicy(const String& policy);
 
 #if ENABLE(EVENT_MODE_METATAGS)
     void processCursorEventMode(const String& features);
@@ -870,10 +874,11 @@ public:
     // It also does a validity check, and returns false if the qualified name
     // is invalid.  It also sets ExceptionCode when name is invalid.
     static bool parseQualifiedName(const String& qualifiedName, String& prefix, String& localName, ExceptionCode&);
-    
+
     // Checks to make sure prefix and namespace do not conflict (per DOM Core 3)
-    static bool hasPrefixNamespaceMismatch(const QualifiedName&);
-    
+    static bool hasValidNamespaceForElements(const QualifiedName&);
+    static bool hasValidNamespaceForAttributes(const QualifiedName&);
+
     HTMLElement* body() const;
     void setBody(PassRefPtr<HTMLElement>, ExceptionCode&);
 
@@ -959,7 +964,6 @@ public:
     bool isDNSPrefetchEnabled() const { return m_isDNSPrefetchEnabled; }
     void parseDNSPrefetchControlHeader(const String&);
 
-    virtual void addMessage(MessageSource, MessageType, MessageLevel, const String& message, unsigned lineNumber, const String& sourceURL, PassRefPtr<ScriptCallStack>);
     virtual void postTask(PassOwnPtr<Task>); // Executes the task on context's thread asynchronously.
 
     virtual void suspendScriptedAnimationControllerCallbacks();
@@ -971,13 +975,15 @@ public:
 
     bool inPageCache() const { return m_inPageCache; }
     void setInPageCache(bool flag);
-    
-    // Elements can register themselves for the "documentWillBecomeInactive()" and  
-    // "documentDidBecomeActive()" callbacks
-    void registerForDocumentActivationCallbacks(Element*);
-    void unregisterForDocumentActivationCallbacks(Element*);
+
+    // Elements can register themselves for the "documentWillSuspendForPageCache()" and  
+    // "documentDidResumeFromPageCache()" callbacks
+    void registerForPageCacheSuspensionCallbacks(Element*);
+    void unregisterForPageCacheSuspensionCallbacks(Element*);
+
     void documentWillBecomeInactive();
-    void documentDidBecomeActive();
+    void documentWillSuspendForPageCache();
+    void documentDidResumeFromPageCache();
 
     void registerForMediaVolumeCallbacks(Element*);
     void unregisterForMediaVolumeCallbacks(Element*);
@@ -1024,7 +1030,7 @@ public:
     // Explicitly override the security origin for this document.
     // Note: It is dangerous to change the security origin of a document
     //       that already contains content.
-    void setSecurityOrigin(SecurityOrigin*);
+    void setSecurityOrigin(PassRefPtr<SecurityOrigin>);
 
     void updateURLForPushOrReplaceState(const KURL&);
     void statePopped(SerializedScriptValue*);
@@ -1106,19 +1112,23 @@ public:
 
 #if ENABLE(REQUEST_ANIMATION_FRAME)
     int webkitRequestAnimationFrame(PassRefPtr<RequestAnimationFrameCallback>, Element*);
-    void webkitCancelRequestAnimationFrame(int id);
+    void webkitCancelAnimationFrame(int id);
     void serviceScriptedAnimations(DOMTimeStamp);
 #endif
 
     virtual EventTarget* errorEventTarget();
-    virtual void logExceptionToConsole(const String& errorMessage, int lineNumber, const String& sourceURL, PassRefPtr<ScriptCallStack>);
+    virtual void logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, PassRefPtr<ScriptCallStack>);
 
     void initDNSPrefetch();
 
     unsigned wheelEventHandlerCount() const { return m_wheelEventHandlerCount; }
     void didAddWheelEventHandler();
     void didRemoveWheelEventHandler();
-    
+
+    unsigned touchEventHandlerCount() const { return m_touchEventHandlerCount; }
+    void didAddTouchEventHandler();
+    void didRemoveTouchEventHandler();
+
     bool visualUpdatesAllowed() const;
 
 #if ENABLE(MICRODATA)
@@ -1160,17 +1170,25 @@ private:
     virtual const KURL& virtualURL() const; // Same as url(), but needed for ScriptExecutionContext to implement it without a performance loss for direct calls.
     virtual KURL virtualCompleteURL(const String&) const; // Same as completeURL() for the same reason as above.
 
+    virtual void addMessage(MessageSource, MessageType, MessageLevel, const String& message, const String& sourceURL, unsigned lineNumber, PassRefPtr<ScriptCallStack>);
+
     virtual double minimumTimerInterval() const;
 
     void updateTitle(const StringWithDirection&);
     void updateFocusAppearanceTimerFired(Timer<Document>*);
     void updateBaseURL();
 
-    void cacheDocumentElement() const;
-
     void buildAccessKeyMap(TreeScope* root);
 
     void createStyleSelector();
+    void clearStyleSelector();
+    void combineCSSFeatureFlags();
+    void resetCSSFeatureFlags();
+    
+    bool updateActiveStylesheets(StyleSelectorUpdateFlag);
+    void collectActiveStylesheets(Vector<RefPtr<StyleSheet> >&);
+    bool testAddedStylesheetRequiresStyleRecalc(CSSStyleSheet*);
+    void analyzeStylesheetChange(StyleSelectorUpdateFlag, const Vector<RefPtr<StyleSheet> >& newStylesheets, bool& requiresStyleSelectorReset, bool& requiresFullStyleRecalc);
 
     void deleteCustomFonts();
 
@@ -1186,6 +1204,8 @@ private:
     PageVisibilityState visibilityState() const;
 #endif
 
+    HTMLCollection* cachedCollection(CollectionType);
+
     int m_guardRefCount;
 
     OwnPtr<CSSStyleSelector> m_styleSelector;
@@ -1193,7 +1213,7 @@ private:
     bool m_hasDirtyStyleSelector;
     Vector<OwnPtr<FontData> > m_customFonts;
 
-    mutable RefPtr<CSSPrimitiveValueCache> m_cssPrimitiveValueCache;
+    mutable RefPtr<CSSValuePool> m_cssValuePool;
 
     Frame* m_frame;
     OwnPtr<CachedResourceLoader> m_cachedResourceLoader;
@@ -1203,6 +1223,7 @@ private:
     // Document URLs.
     KURL m_url; // Document.URL: The URL from which this document was retrieved.
     KURL m_baseURL; // Node.baseURI: The URL to use when resolving relative URLs.
+    KURL m_baseURLOverride; // An alternative base URL that takes precedence over m_baseURL (but not m_baseElementURL).
     KURL m_baseElementURL; // The URL set by the <base> element.
     KURL m_cookieURL; // The URL to use for cookie access.
     KURL m_firstPartyForCookies; // The policy URL for third-party cookie blocking.
@@ -1256,7 +1277,7 @@ private:
     RefPtr<Node> m_focusedNode;
     RefPtr<Node> m_hoverNode;
     RefPtr<Node> m_activeNode;
-    mutable RefPtr<Element> m_documentElement;
+    RefPtr<Element> m_documentElement;
 
     uint64_t m_domTreeVersion;
     static uint64_t s_globalTreeVersion;
@@ -1267,10 +1288,11 @@ private:
     unsigned short m_listenerTypes;
 
 #if ENABLE(MUTATION_OBSERVERS)
-    MutationObserverOptions m_subtreeMutationObserverTypes;
+    MutationObserverOptions m_mutationObserverTypes;
 #endif
 
     RefPtr<StyleSheetList> m_styleSheets; // All of the stylesheets that are currently in effect for our media type and stylesheet set.
+    bool m_hadActiveLoadingStylesheet;
     
     typedef ListHashSet<Node*, 32> StyleSheetCandidateListHashSet;
     StyleSheetCandidateListHashSet m_styleSheetCandidateNodes; // All of the nodes that could potentially provide stylesheets to the document (<link>, <style>, <?xml-stylesheet>)
@@ -1365,9 +1387,12 @@ private:
     
     CheckedRadioButtons m_checkedRadioButtons;
 
-    typedef HashMap<AtomicStringImpl*, CollectionCache*> NamedCollectionMap;
-    FixedArray<CollectionCache, NumUnnamedDocumentCachedTypes> m_collectionInfo;
-    FixedArray<NamedCollectionMap, NumNamedDocumentCachedTypes> m_nameCollectionInfo;
+    OwnPtr<HTMLCollection> m_collections[NumUnnamedDocumentCachedTypes];
+    OwnPtr<HTMLAllCollection> m_allCollection;
+
+    typedef HashMap<AtomicStringImpl*, OwnPtr<HTMLNameCollection> > NamedCollectionMap;
+    NamedCollectionMap m_documentNamedItemCollections;
+    NamedCollectionMap m_windowNamedItemCollections;
 
     RefPtr<XPathEvaluator> m_xpathEvaluator;
 
@@ -1387,7 +1412,7 @@ private:
     bool m_inPageCache;
     Vector<IconURL> m_iconURLs;
 
-    HashSet<Element*> m_documentActivationCallbackElements;
+    HashSet<Element*> m_documentSuspensionCallbackElements;
     HashSet<Element*> m_mediaVolumeCallbackElements;
     HashSet<Element*> m_privateBrowsingStateChangedElements;
 
@@ -1418,6 +1443,7 @@ private:
     RenderFullScreen* m_fullScreenRenderer;
     Timer<Document> m_fullScreenChangeDelayTimer;
     Deque<RefPtr<Element> > m_fullScreenChangeEventTargetQueue;
+    Deque<RefPtr<Element> > m_fullScreenErrorEventTargetQueue;
     bool m_isAnimatingFullScreen;
     LayoutRect m_savedPlaceholderFrameRect;
     RefPtr<RenderStyle> m_savedPlaceholderRenderStyle;
@@ -1428,6 +1454,8 @@ private:
 
     ViewportArguments m_viewportArguments;
 
+    SecurityPolicy::ReferrerPolicy m_referrerPolicy;
+
     bool m_directionSetOnDocumentElement;
     bool m_writingModeSetOnDocumentElement;
 
@@ -1437,15 +1465,20 @@ private:
     unsigned m_writeRecursionDepth;
     
     unsigned m_wheelEventHandlerCount;
+    unsigned m_touchEventHandlerCount;
 
 #if ENABLE(REQUEST_ANIMATION_FRAME)
-    OwnPtr<ScriptedAnimationController> m_scriptedAnimationController;
+    RefPtr<ScriptedAnimationController> m_scriptedAnimationController;
 #endif
-
-    RefPtr<ContentSecurityPolicy> m_contentSecurityPolicy;
 
     Timer<Document> m_pendingTasksTimer;
     Vector<OwnPtr<Task> > m_pendingTasks;
+    
+#ifndef NDEBUG
+    bool m_updatingStyleSelector;
+#endif
+
+    RefPtr<ContentSecurityPolicy> m_contentSecurityPolicy;
 };
 
 // Put these methods here, because they require the Document definition, but we really want to inline them.
@@ -1462,11 +1495,12 @@ inline Node::Node(Document* document, ConstructionType type)
     , m_next(0)
     , m_renderer(0)
 {
-    if (m_document)
-        m_document->guardRef();
+    if (document)
+        document->guardRef();
 #if !defined(NDEBUG) || (defined(DUMP_NODE_STATISTICS) && DUMP_NODE_STATISTICS)
     trackForDebugging();
 #endif
+    InspectorCounters::incrementCounter(InspectorCounters::NodeCounter);
 }
 
 } // namespace WebCore

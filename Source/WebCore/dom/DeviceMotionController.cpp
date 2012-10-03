@@ -45,6 +45,11 @@ DeviceMotionController::~DeviceMotionController()
     m_client->deviceMotionControllerDestroyed();
 }
 
+PassOwnPtr<DeviceMotionController> DeviceMotionController::create(DeviceMotionClient* client)
+{
+    return adoptPtr(new DeviceMotionController(client));
+}
+
 void DeviceMotionController::timerFired(Timer<DeviceMotionController>* timer)
 {
     ASSERT_UNUSED(timer, timer == &m_timer);
@@ -128,6 +133,24 @@ void DeviceMotionController::didChangeDeviceMotion(DeviceMotionData* deviceMotio
     copyToVector(m_listeners, listenersVector);
     for (size_t i = 0; i < listenersVector.size(); ++i)
         listenersVector[i]->dispatchEvent(event);
+}
+
+const AtomicString& DeviceMotionController::supplementName()
+{
+    DEFINE_STATIC_LOCAL(AtomicString, name, ("DeviceMotionController"));
+    return name;
+}
+
+bool DeviceMotionController::isActiveAt(Page* page)
+{
+    if (DeviceMotionController* self = DeviceMotionController::from(page))
+        return self->isActive();
+    return false;
+}
+
+void provideDeviceMotionTo(Page* page, DeviceMotionClient* client)
+{
+    DeviceMotionController::provideTo(page, DeviceMotionController::supplementName(), DeviceMotionController::create(client));
 }
 
 } // namespace WebCore

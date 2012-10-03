@@ -59,15 +59,6 @@ String createCanonicalUUIDString()
     appendUnsignedAsHexFixedSize(randomData[2] & 0x0000ffff, builder, 4, Lowercase);
     appendUnsignedAsHexFixedSize(randomData[3], builder, 8, Lowercase);
     return builder.toString();
-#elif OS(QNX)
-    uuid_t uuid;
-    uuid_clear(uuid);
-    uuid_generate(uuid);
-    char uuidStr[37];
-    uuid_unparse(uuid, uuidStr);
-    String canonicalUuidStr = String(uuidStr).lower();
-    ASSERT(canonicalUuidStr[uuidVersionIdentifierIndex] == uuidVersionRequired);
-    return canonicalUuidStr;
 #else
     notImplemented();
     return String();

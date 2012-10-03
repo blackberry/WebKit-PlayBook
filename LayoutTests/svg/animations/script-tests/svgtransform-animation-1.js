@@ -29,35 +29,33 @@ function sample1() {
     // Check initial/end conditions
     shouldBe("rect.transform.animVal.numberOfItems", "1");
     shouldBe("rect.transform.animVal.getItem(0).type", "SVGTransform.SVG_TRANSFORM_SCALE");
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.a", "0.01", 0.01);
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.d", "0.01", 0.01);
+    shouldBe("rect.transform.animVal.getItem(0).matrix.a", "0");
+    shouldBe("rect.transform.animVal.getItem(0).matrix.d", "0");
 }
 
 function sample2() {
     shouldBe("rect.transform.animVal.numberOfItems", "1");
     shouldBe("rect.transform.animVal.getItem(0).type", "SVGTransform.SVG_TRANSFORM_SCALE");
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.a", "1", 0.01);
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.d", "1", 0.01);
+    shouldBe("rect.transform.animVal.getItem(0).matrix.a", "1");
+    shouldBe("rect.transform.animVal.getItem(0).matrix.d", "1");
 }
 
 function sample3() {
     shouldBe("rect.transform.animVal.numberOfItems", "1");
     shouldBe("rect.transform.animVal.getItem(0).type", "SVGTransform.SVG_TRANSFORM_SCALE");
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.a", "2", 0.01);
-    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.d", "2", 0.01);
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.a", "2");
+    shouldBeCloseEnough("rect.transform.animVal.getItem(0).matrix.d", "2");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,    "rect", sample1],
-        ["animation", 2.0,    "rect", sample2],
-        ["animation", 3.9999, "rect", sample3]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 2.0,   sample2],
+        ["animation", 3.999, sample3]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 50)", 0);
 var successfullyParsed = true;

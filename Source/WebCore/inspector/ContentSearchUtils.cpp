@@ -34,6 +34,9 @@
 #include "InspectorValues.h"
 #include "RegularExpression.h"
 
+#include <wtf/BumpPointerAllocator.h>
+#include <yarr/Yarr.h>
+
 using namespace std;
 
 namespace WebCore {
@@ -135,6 +138,36 @@ PassRefPtr<InspectorArray> searchInTextByLines(const String& text, const String&
         result->pushValue(buildObjectForSearchMatch(it->first, it->second));
 
     return result;
+}
+
+static String findMagicComment(const String& content, const String& name)
+{
+    String patternString = "//@[\040\t]" + name + "=[\040\t]*([^\\s\'\"]*)[\040\t]*$";
+    const char* error = 0;
+    JSC::Yarr::YarrPattern pattern(JSC::UString(patternString.impl()), false, true, &error);
+    ASSERT(!error);
+    BumpPointerAllocator regexAllocator;
+    OwnPtr<JSC::Yarr::BytecodePattern> bytecodePattern = JSC::Yarr::byteCompile(pattern, &regexAllocator);
+    ASSERT(bytecodePattern);
+
+    ASSERT(pattern.m_numSubpatterns == 1);
+    Vector<int, 4> matches;
+    matches.resize(4);
+    unsigned result = JSC::Yarr::interpret(bytecodePattern.get(), JSC::UString(content.impl()), 0, content.length(), reinterpret_cast<unsigned*>(matches.data()));
+    if (result == JSC::Yarr::offsetNoMatch)
+        return String();
+    ASSERT(matches[2] > 0 && matches[3] > 0);
+    return content.substring(matches[2], matches[3] - matches[2]);
+}
+
+String findSourceURL(const String& content)
+{
+    return findMagicComment(content, "sourceURL");
+}
+
+String findSourceMapURL(const String& content)
+{
+    return findMagicComment(content, "sourceMappingURL");
 }
 
 } // namespace ContentSearchUtils

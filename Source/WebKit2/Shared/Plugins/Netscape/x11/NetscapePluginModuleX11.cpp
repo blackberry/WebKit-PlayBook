@@ -137,14 +137,14 @@ bool NetscapePluginModule::getPluginInfoForLoadedPlugin(PluginModuleInfo& plugin
     char* buffer;
     NPError error = NPP_GetValue(0, NPPVpluginNameString, &buffer);
     if (error == NPERR_NO_ERROR)
-        plugin.info.name = buffer;
+        plugin.info.name = String::fromUTF8(buffer);
 
     error = NPP_GetValue(0, NPPVpluginDescriptionString, &buffer);
     if (error == NPERR_NO_ERROR)
-        plugin.info.desc = buffer;
+        plugin.info.desc = String::fromUTF8(buffer);
 
-    const char* mimeDescription = NP_GetMIMEDescription();
-    if (!mimeDescription)
+    String mimeDescription = String::fromUTF8(NP_GetMIMEDescription());
+    if (mimeDescription.isNull())
         return false;
 
     setMIMEDescription(mimeDescription, plugin);
@@ -172,6 +172,19 @@ bool NetscapePluginModule::getPluginInfo(const String& pluginPath, PluginModuleI
 
 void NetscapePluginModule::determineQuirks()
 {
+#if CPU(X86_64)
+    PluginModuleInfo plugin;
+    if (!getPluginInfoForLoadedPlugin(plugin))
+        return;
+
+    Vector<MimeClassInfo> mimeTypes = plugin.info.mimes;
+    for (size_t i = 0; i < mimeTypes.size(); ++i) {
+        if (mimeTypes[i].type == "application/x-shockwave-flash") {
+            m_pluginQuirks.add(PluginQuirks::IgnoreRightClickInWindowlessMode);
+            break;
+        }
+    }
+#endif
 }
 
 } // namespace WebKit

@@ -20,7 +20,7 @@
 #ifndef WebLayerTreeInfo_h
 #define WebLayerTreeInfo_h
 
-#if USE(ACCELERATED_COMPOSITING)
+#if USE(UI_SIDE_COMPOSITING)
 
 #include "ArgumentDecoder.h"
 #include "ArgumentEncoder.h"
@@ -29,8 +29,6 @@
 #include "GraphicsLayer.h"
 #include "ShareableBitmap.h"
 
-using namespace WebCore;
-
 namespace WebKit {
 
 typedef uint32_t WebLayerID;
@@ -38,18 +36,54 @@ enum { InvalidWebLayerID = 0 };
 
 struct WebLayerUpdateInfo {
     WebLayerUpdateInfo() { }
-    WebLayerUpdateInfo(const IntRect& r)
-        : rect(r) { }
+    WebLayerUpdateInfo(const WebCore::IntRect& r)
+        : layerID(InvalidWebLayerID)
+        , rect(r) { }
 
     WebLayerID layerID;
-    IntRect rect;
+    WebCore::IntRect rect;
     ShareableBitmap::Handle bitmapHandle;
 
     void encode(CoreIPC::ArgumentEncoder*) const;
     static bool decode(CoreIPC::ArgumentDecoder*, WebLayerUpdateInfo&);
 };
 
+struct WebLayerAnimation {
+    WebLayerAnimation()
+        : operation(InvalidAnimation)
+        , keyframeList(WebCore::AnimatedPropertyInvalid)
+        , startTime(0) { }
+    WebLayerAnimation(const WebCore::KeyframeValueList& valueList)
+        : operation(InvalidAnimation)
+        , keyframeList(valueList)
+        , startTime(0) { }
+
+    String name;
+    enum Operation {
+        AddAnimation,
+        RemoveAnimation,
+        PauseAnimation,
+        InvalidAnimation
+    } operation;
+    WebCore::IntSize boxSize;
+    RefPtr<WebCore::Animation> animation;
+    WebCore::KeyframeValueList keyframeList;
+    double startTime;
+
+    void encode(CoreIPC::ArgumentEncoder*) const;
+    static bool decode(CoreIPC::ArgumentDecoder*, WebLayerAnimation&);
+};
+
 struct WebLayerInfo {
+    WebLayerInfo()
+        : id(InvalidWebLayerID)
+        , parent(InvalidWebLayerID)
+        , replica(InvalidWebLayerID)
+        , mask(InvalidWebLayerID)
+        , imageBackingStoreID(0)
+        , opacity(0)
+        , flags(0) { }
+
     String name;
     WebLayerID id;
     WebLayerID parent;
@@ -57,12 +91,12 @@ struct WebLayerInfo {
     WebLayerID mask;
     int64_t imageBackingStoreID;
 
-    FloatPoint pos;
-    FloatPoint3D anchorPoint;
-    FloatSize size;
-    TransformationMatrix transform;
-    TransformationMatrix childrenTransform;
-    IntRect contentsRect;
+    WebCore::FloatPoint pos;
+    WebCore::FloatPoint3D anchorPoint;
+    WebCore::FloatSize size;
+    WebCore::TransformationMatrix transform;
+    WebCore::TransformationMatrix childrenTransform;
+    WebCore::IntRect contentsRect;
     float opacity;
 
     union {
@@ -79,6 +113,7 @@ struct WebLayerInfo {
         unsigned int flags;
     };
     Vector<WebLayerID> children;
+    Vector<WebLayerAnimation> animations;
     RefPtr<ShareableBitmap> imageBackingStore;
 
     void encode(CoreIPC::ArgumentEncoder*) const;
@@ -86,6 +121,10 @@ struct WebLayerInfo {
 };
 
 struct WebLayerTreeInfo {
+    WebLayerTreeInfo()
+        : rootLayerID(InvalidWebLayerID)
+        , contentScale(0) { }
+
     Vector<WebLayerInfo> layers;
     Vector<WebLayerID> deletedLayerIDs;
     WebLayerID rootLayerID;

@@ -71,6 +71,7 @@ class Color;
 class Cursor;
 class Document;
 class Frame;
+class GamepadList;
 class GeolocationServiceBridge;
 class GeolocationServiceChromium;
 class GraphicsContext;
@@ -81,6 +82,7 @@ class IntRect;
 class KURL;
 class SerializedScriptValue;
 class Widget;
+class WorkerRunLoop;
 
 struct Cookie;
 struct FontRenderStyle;
@@ -95,7 +97,7 @@ public:
     static void cacheMetadata(const KURL&, double responseTime, const Vector<char>&);
 
     // Clipboard ----------------------------------------------------------
-    static uint64_t clipboardGetSequenceNumber();
+    static uint64_t clipboardSequenceNumber(PasteboardPrivate::ClipboardBuffer);
 
     static bool clipboardIsFormatAvailable(PasteboardPrivate::ClipboardFormat, PasteboardPrivate::ClipboardBuffer);
     static HashSet<String> clipboardReadAvailableTypes(PasteboardPrivate::ClipboardBuffer, bool* containsFilenames);
@@ -103,6 +105,7 @@ public:
     static String clipboardReadPlainText(PasteboardPrivate::ClipboardBuffer);
     static void clipboardReadHTML(PasteboardPrivate::ClipboardBuffer, String*, KURL*, unsigned* fragmentStart, unsigned* fragmentEnd);
     static PassRefPtr<SharedBuffer> clipboardReadImage(PasteboardPrivate::ClipboardBuffer);
+    static String clipboardReadCustomData(PasteboardPrivate::ClipboardBuffer, const String& type);
 
     // Only the clipboardRead functions take a buffer argument because
     // Chromium currently uses a different technique to write to alternate
@@ -182,6 +185,9 @@ public:
     // Injects key via keyPath into value. Returns true on success.
     static PassRefPtr<SerializedScriptValue> injectIDBKeyIntoSerializedValue(PassRefPtr<IDBKey>, PassRefPtr<SerializedScriptValue>, const String& keyPath);
 
+    // Gamepad -----------------------------------------------------------
+    static void sampleGamepads(GamepadList* into);
+
     // JavaScript ---------------------------------------------------------
     static void notifyJSOutOfMemory(Frame*);
     static bool allowScriptDespiteSettings(const KURL& documentURL);
@@ -234,6 +240,8 @@ public:
     static bool sandboxEnabled();
 
     // Screen -------------------------------------------------------------
+    static int screenHorizontalDPI(Widget*);
+    static int screenVerticalDPI(Widget*);
     static int screenDepth(Widget*);
     static int screenDepthPerComponent(Widget*);
     static bool screenIsMonochrome(Widget*);
@@ -407,14 +415,26 @@ public:
 #endif
 
     // Trace Event --------------------------------------------------------
-    static bool isTraceEventEnabled();
-    static void traceEventBegin(const char* name, void*, const char* extra);
-    static void traceEventEnd(const char* name, void*, const char* extra);
+    static const unsigned char* getTraceCategoryEnabledFlag(const char* categoryName);
+    static int addTraceEvent(char phase,
+                             const unsigned char* categoryEnabledFlag,
+                             const char* name,
+                             unsigned long long id,
+                             int numArgs,
+                             const char** argNames,
+                             const unsigned char* argTypes,
+                             const unsigned long long* argValues,
+                             int thresholdBeginId,
+                             long long threshold,
+                             unsigned char flags);
 
     // Visited links ------------------------------------------------------
     static LinkHash visitedLinkHash(const UChar* url, unsigned length);
     static LinkHash visitedLinkHash(const KURL& base, const AtomicString& attributeURL);
     static bool isLinkVisited(LinkHash);
+
+    static void didStartWorkerRunLoop(WorkerRunLoop*);
+    static void didStopWorkerRunLoop(WorkerRunLoop*);
 };
 
 } // namespace WebCore

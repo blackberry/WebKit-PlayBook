@@ -94,13 +94,13 @@ public:
     virtual WebCore::KeyboardUIMode keyboardUIMode();
     virtual WebCore::IntRect windowResizerRect() const;
 
-    virtual void invalidateWindow(const WebCore::IntRect&, bool);
-    virtual void invalidateContentsAndWindow(const WebCore::IntRect&, bool);
+    virtual void invalidateRootView(const WebCore::IntRect&, bool);
+    virtual void invalidateContentsAndRootView(const WebCore::IntRect&, bool);
     virtual void invalidateContentsForSlowScroll(const WebCore::IntRect&, bool);
     virtual void scroll(const WebCore::IntSize& scrollDelta, const WebCore::IntRect& rectToScroll, const WebCore::IntRect& clipRect);
 
-    virtual WebCore::IntPoint screenToWindow(const WebCore::IntPoint& p) const;
-    virtual WebCore::IntRect windowToScreen(const WebCore::IntRect& r) const;
+    virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const;
+    virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const;
     virtual PlatformPageClient platformPageClient() const;
     virtual void contentsSizeChanged(WebCore::Frame*, const WebCore::IntSize&) const;
 
@@ -119,10 +119,6 @@ public:
 
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
     virtual void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin*, int64_t totalSpaceNeeded);
-
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() { }
-#endif
 
     virtual void populateVisitedLinks();
 
@@ -165,6 +161,7 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural();
     virtual bool selectItemAlignmentFollowsMenuWritingDirection();
+    virtual bool hasOpenedPopup() const;
     virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const;
     virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const;
 
@@ -176,6 +173,7 @@ public:
 
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const { return true; }
     virtual void numWheelEventHandlersChanged(unsigned) { }
+    virtual void numTouchEventHandlersChanged(unsigned) { }
 
 private:
     COMPtr<IWebUIDelegate> uiDelegate();

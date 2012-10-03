@@ -594,6 +594,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\runtime\CommonSlowPaths.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\runtime\Completion.cpp"
 				>
 			</File>
@@ -731,14 +735,6 @@
 			</File>
 			<File
 				RelativePath="..\..\runtime\GetterSetter.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\runtime\Heuristics.cpp"
-				>
-			</File>
-			<File
-				RelativePath="..\..\runtime\Heuristics.h"
 				>
 			</File>
 			<File
@@ -1035,6 +1031,14 @@
 			</File>
 			<File
 				RelativePath="..\..\runtime\Operations.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\Options.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\runtime\Options.h"
 				>
 			</File>
 			<File
@@ -1443,8 +1447,124 @@
 			</File>
 		</Filter>
 		<Filter
+			Name="tools"
+			>
+			<File
+				RelativePath="..\..\tools\CodeProfile.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\tools\CodeProfile.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\tools\CodeProfiling.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\tools\CodeProfiling.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\tools\ProfileTreeNode.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\tools\TieredMMapArray.h"
+				>
+			</File>
+		</Filter>
+		<Filter
 			Name="bytecode"
 			>
+			<File
+				RelativePath="..\..\bytecode\MethodOfGettingAValueProfile.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\MethodOfGettingAValueProfile.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\LazyOperandValueProfile.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\LazyOperandValueProfile.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\GetByIdStatus.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\PutByIdStatus.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CallLinkStatus.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\MethodCallLinkStatus.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\GetByIdStatus.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\PutByIdStatus.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CallLinkStatus.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\MethodCallLinkStatus.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\HandlerInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CallLinkInfo.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\LineInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\MethodCallLinkInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CallReturnOffsetToBytecodeOffset.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CodeType.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\ExpressionRangeInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\MethodCallLinkInfo.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\CallLinkInfo.h"
+				>
+			</File>
+			<File
+				RelativePath="..\..\bytecode\GlobalResolveInfo.h"
+				>
+			</File>
 			<File
 				RelativePath="..\..\bytecode\CodeBlock.cpp"
 				>
@@ -1482,6 +1602,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\bytecode\PolymorphicPutByIdList.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\..\bytecode\PredictedType.cpp"
 				>
 			</File>
@@ -1503,10 +1627,6 @@
 			</File>
 			<File
 				RelativePath="..\..\bytecode\StructureStubInfo.h"
-				>
-			</File>
-			<File
-				RelativePath="..\..\bytecode\ValueProfile.cpp"
 				>
 			</File>
 			<File
@@ -1654,6 +1774,10 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\jit\HostCallReturnValue.cpp"
+				>
+			</File>
+			<File
 				RelativePath="..\..\jit\JIT.cpp"
 				>
 			</File>
@@ -1706,6 +1830,14 @@
 				>
 			</File>
 			<File
+				RelativePath="..\..\jit\JITExceptions.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\jit\JITExceptions.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\jit\JITStubs.cpp"
 				>
 			</File>
@@ -1731,8 +1863,24 @@
 			</File>
 		</Filter>
 		<Filter
+			Name="llint"
+			>
+			<File
+				RelativePath="..\..\llint\LLIntData.h"
+				>
+			</File>
+		</Filter>
+		<Filter
 			Name="interpreter"
 			>
+			<File
+				RelativePath="..\..\interpreter\AbstractPC.cpp"
+				>
+			</File>
+			<File
+				RelativePath="..\..\interpreter\AbstractPC.h"
+				>
+			</File>
 			<File
 				RelativePath="..\..\interpreter\CachedCall.h"
 				>
@@ -1914,11 +2062,23 @@
 			Name="heap"
 			>
                             <File
-                                    RelativePath="..\..\heap\AllocationSpace.cpp"
+                                    RelativePath="..\..\heap\CopiedAllocator.h"
                                     >
                             </File>
                             <File
-                                    RelativePath="..\..\heap\AllocationSpace.h"
+                                    RelativePath="..\..\heap\CopiedBlock.h"
+                                    >
+                            </File>
+                            <File
+                                    RelativePath="..\..\heap\CopiedSpace.cpp"
+                                    >
+                            </File>
+                            <File
+                                    RelativePath="..\..\heap\CopiedSpace.h"
+                                    >
+                            </File>
+                            <File
+                                    RelativePath="..\..\heap\CopiedSpaceInlineMethods.h"
                                     >
                             </File>
                             <File
@@ -1930,11 +2090,23 @@
                                     >
                             </File>
                             <File
+                                    RelativePath="..\..\heap\GCAssertions.h"
+                                    >
+                            </File>
+                            <File
                                     RelativePath="..\..\heap\MachineStackMarker.cpp"
                                     >
                             </File>
                             <File
                                     RelativePath="..\..\heap\MachineStackMarker.h"
+                                    >
+                            </File>
+                            <File
+                                    RelativePath="..\..\heap\MarkedAllocator.cpp"
+                                    >
+                            </File>
+                            <File
+                                    RelativePath="..\..\heap\MarkedAllocator.h"
                                     >
                             </File>
                             <File
@@ -1974,6 +2146,10 @@
                                     >
                             </File>
                             <File
+                                    RelativePath="..\..\heap\HeapBlock.h"
+                                    >
+                            </File>
+                            <File
                                     RelativePath="..\..\heap\Strong.h"
                                     >
                             </File>
@@ -2002,11 +2178,11 @@
                                     >
                             </File>
                             <File
-                                    RelativePath="..\..\heap\JettisonedCodeBlocks.cpp"
+                                    RelativePath="..\..\heap\DFGCodeBlocks.cpp"
                                     >
                             </File>
                             <File
-                                    RelativePath="..\..\heap\JettisonedCodeBlocks.h"
+                                    RelativePath="..\..\heap\DFGCodeBlocks.h"
                                     >
                             </File>
                             <File

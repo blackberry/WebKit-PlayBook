@@ -31,6 +31,7 @@
 #include "ResourceLoadPriority.h"
 #include "ResourceRequest.h"
 #include "ResourceResponse.h"
+#include "Timer.h"
 #include <wtf/HashCountedSet.h>
 #include <wtf/HashSet.h>
 #include <wtf/OwnPtr.h>
@@ -44,11 +45,11 @@ class CachedMetadata;
 class CachedResourceClient;
 class CachedResourceHandleBase;
 class CachedResourceLoader;
-class CachedResourceRequest;
 class Frame;
 class InspectorResource;
 class PurgeableBuffer;
 class SecurityOrigin;
+class SubresourceLoader;
 
 // A resource that is held in the cache. Classes who want to use this object should derive
 // from CachedResourceClient, to get the function calls in case the requested data has arrived.
@@ -65,6 +66,9 @@ public:
         Script,
         FontResource,
         RawResource
+#if ENABLE(SVG)
+        , SVGDocumentResource
+#endif
 #if ENABLE(XSLT)
         , XSLStyleSheet
 #endif
@@ -75,6 +79,9 @@ public:
 #endif
 #if ENABLE(VIDEO_TRACK)
         , TextTrackResource
+#endif
+#if ENABLE(CSS_SHADERS)
+        , ShaderResource
 #endif
     };
 
@@ -108,7 +115,7 @@ public:
 
     void addClient(CachedResourceClient*);
     void removeClient(CachedResourceClient*);
-    bool hasClients() const { return !m_clients.isEmpty(); }
+    bool hasClients() const { return !m_clients.isEmpty() || !m_clientsAwaitingCallback.isEmpty(); }
     void deleteIfPossible();
 
     enum PreloadResult {
@@ -187,7 +194,7 @@ public:
     // Returns cached metadata of the given type associated with this resource.
     CachedMetadata* cachedMetadata(unsigned dataTypeID) const;
 
-    bool canDelete() const { return !hasClients() && !m_request && !m_preloadCount && !m_handleCount && !m_resourceToRevalidate && !m_proxyResource; }
+    bool canDelete() const { return !hasClients() && !m_loader && !m_preloadCount && !m_handleCount && !m_resourceToRevalidate && !m_proxyResource; }
     bool hasOneHandle() const { return m_handleCount == 1; }
 
     bool isExpired() const;
@@ -251,9 +258,25 @@ protected:
     
     HashCountedSet<CachedResourceClient*> m_clients;
 
+    class CachedResourceCallback {
+    public:
+        static PassOwnPtr<CachedResourceCallback> schedule(CachedResource* resource, CachedResourceClient* client) { return adoptPtr(new CachedResourceCallback(resource, client)); }
+        void cancel();
+    private:
+        CachedResourceCallback(CachedResource*, CachedResourceClient*);
+        void timerFired(Timer<CachedResourceCallback>*);
+
+        CachedResource* m_resource;
+        CachedResourceClient* m_client;
+        Timer<CachedResourceCallback> m_callbackTimer;
+    };
+    HashMap<CachedResourceClient*, OwnPtr<CachedResourceCallback> > m_clientsAwaitingCallback;
+
+    bool hasClient(CachedResourceClient* client) { return m_clients.contains(client) || m_clientsAwaitingCallback.contains(client); }
+
     ResourceRequest m_resourceRequest;
     String m_accept;
-    OwnPtr<CachedResourceRequest> m_request;
+    RefPtr<SubresourceLoader> m_loader;
     ResourceLoaderOptions m_options;
     ResourceLoadPriority m_loadPriority;
 
@@ -264,7 +287,7 @@ protected:
     OwnPtr<PurgeableBuffer> m_purgeableData;
 
 private:
-    void addClientToSet(CachedResourceClient*);
+    bool addClientToSet(CachedResourceClient*);
 
     virtual PurgePriority purgePriority() const { return PurgeDefault; }
 
@@ -289,6 +312,8 @@ private:
 
     bool m_inCache : 1;
     bool m_loading : 1;
+
+    bool m_switchingClientsToRevalidatedResource : 1;
 
     unsigned m_type : 4; // Type
     unsigned m_status : 3; // Status

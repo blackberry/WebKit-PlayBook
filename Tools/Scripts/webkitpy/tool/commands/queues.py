@@ -27,29 +27,33 @@
 # (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
 # OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
-from __future__ import with_statement
-
 import codecs
+import os
+import sys
 import time
 import traceback
-import os
 
 from datetime import datetime
 from optparse import make_option
 from StringIO import StringIO
 
-from webkitpy.common.net.bugzilla import CommitterValidator
-from webkitpy.common.net.layouttestresults import path_for_layout_test, LayoutTestResults
+from webkitpy.common.config.committervalidator import CommitterValidator
+from webkitpy.common.net.bugzilla import Attachment
 from webkitpy.common.net.statusserver import StatusServer
-from webkitpy.common.system.executive import ScriptError
 from webkitpy.common.system.deprecated_logging import error, log
-from webkitpy.tool.commands.stepsequence import StepSequenceErrorHandler
+from webkitpy.common.system.executive import ScriptError
+from webkitpy.tool.bot.botinfo import BotInfo
 from webkitpy.tool.bot.commitqueuetask import CommitQueueTask, CommitQueueTaskDelegate
+from webkitpy.tool.bot.expectedfailures import ExpectedFailures
 from webkitpy.tool.bot.feeders import CommitQueueFeeder, EWSFeeder
-from webkitpy.tool.bot.patchcollection import PersistentPatchCollection, PersistentPatchCollectionDelegate
+from webkitpy.tool.bot.flakytestreporter import FlakyTestReporter
+from webkitpy.tool.bot.layouttestresultsreader import LayoutTestResultsReader
+from webkitpy.tool.bot.patchanalysistask import UnableToApplyPatch
 from webkitpy.tool.bot.queueengine import QueueEngine, QueueEngineDelegate
-from webkitpy.tool.grammar import pluralize
+from webkitpy.tool.bot.stylequeuetask import StyleQueueTask, StyleQueueTaskDelegate
+from webkitpy.tool.commands.stepsequence import StepSequenceErrorHandler
 from webkitpy.tool.multicommandtool import Command, TryAgain
+
 
 class AbstractQueue(Command, QueueEngineDelegate):
     watchers = [
@@ -87,10 +91,15 @@ class AbstractQueue(Command, QueueEngineDelegate):
         if self._options.port:
             webkit_patch_args += ["--port=%s" % self._options.port]
         webkit_patch_args.extend(args)
-        return self._tool.executive.run_and_throw_if_fail(webkit_patch_args)
+        # FIXME: There is probably no reason to use run_and_throw_if_fail anymore.
+        # run_and_throw_if_fail was invented to support tee'd output
+        # (where we write both to a log file and to the console at once),
+        # but the queues don't need live-progress, a dump-of-output at the
+        # end should be sufficient.
+        return self._tool.executive.run_and_throw_if_fail(webkit_patch_args, cwd=self._tool.scm().checkout_root)
 
     def _log_directory(self):
-        return "%s-logs" % self.name
+        return os.path.join("..", "%s-logs" % self.name)
 
     # QueueEngineDelegate methods
 
@@ -117,9 +126,6 @@ class AbstractQueue(Command, QueueEngineDelegate):
         return not self._options.iterations or self._iteration_count <= self._options.iterations
 
     def next_work_item(self):
-        raise NotImplementedError, "subclasses must implement"
-
-    def should_proceed_with_work_item(self, work_item):
         raise NotImplementedError, "subclasses must implement"
 
     def process_work_item(self, work_item):
@@ -161,7 +167,7 @@ class FeederQueue(AbstractQueue):
 
     _sleep_duration = 30  # seconds
 
-    # AbstractPatchQueue methods
+    # AbstractQueue methods
 
     def begin_work_queue(self):
         AbstractQueue.begin_work_queue(self)
@@ -175,9 +181,6 @@ class FeederQueue(AbstractQueue):
         # understand work items, but the base class in the heirarchy currently
         # understands work items.
         return "synthetic-work-item"
-
-    def should_proceed_with_work_item(self, work_item):
-        return True
 
     def process_work_item(self, work_item):
         for feeder in self.feeders:
@@ -196,24 +199,57 @@ class AbstractPatchQueue(AbstractQueue):
     def _update_status(self, message, patch=None, results_file=None):
         return self._tool.status_server.update_status(self.name, message, patch, results_file)
 
-    def _fetch_next_work_item(self):
-        return self._tool.status_server.next_work_item(self.name)
+    def _next_patch(self):
+        patch_id = self._tool.status_server.next_work_item(self.name)
+        if not patch_id:
+            return None
+        patch = self._tool.bugs.fetch_attachment(patch_id)
+        if not patch:
+            # FIXME: Using a fake patch because release_work_item has the wrong API.
+            # We also don't really need to release the lock (although that's fine),
+            # mostly we just need to remove this bogus patch from our queue.
+            # If for some reason bugzilla is just down, then it will be re-fed later.
+            patch = Attachment({'id': patch_id}, None)
+            self._release_work_item(patch)
+            return None
+        return patch
 
     def _release_work_item(self, patch):
         self._tool.status_server.release_work_item(self.name, patch)
 
     def _did_pass(self, patch):
         self._update_status(self._pass_status, patch)
+        self._release_work_item(patch)
 
     def _did_fail(self, patch):
         self._update_status(self._fail_status, patch)
+        self._release_work_item(patch)
 
     def _did_retry(self, patch):
         self._update_status(self._retry_status, patch)
+        self._release_work_item(patch)
 
     def _did_error(self, patch, reason):
         message = "%s: %s" % (self._error_status, reason)
         self._update_status(message, patch)
+        self._release_work_item(patch)
+
+    # FIXME: This probably belongs at a layer below AbstractPatchQueue, but shared by CommitQueue and the EarlyWarningSystem.
+    def _upload_results_archive_for_patch(self, patch, results_archive_zip):
+        bot_id = self._tool.status_server.bot_id or "bot"
+        description = "Archive of layout-test-results from %s" % bot_id
+        # results_archive is a ZipFile object, grab the File object (.fp) to pass to Mechanize for uploading.
+        results_archive_file = results_archive_zip.fp
+        # Rewind the file object to start (since Mechanize won't do that automatically)
+        # See https://bugs.webkit.org/show_bug.cgi?id=54593
+        results_archive_file.seek(0)
+        # FIXME: This is a small lie to always say run-webkit-tests since Chromium uses new-run-webkit-tests.
+        # We could make this code look up the test script name off the port.
+        comment_text = "The attached test failures were seen while running run-webkit-tests on the %s.\n" % (self.name)
+        # FIXME: We could easily list the test failures from the archive here,
+        # currently callers do that separately.
+        comment_text += BotInfo(self._tool).summary_text()
+        self._tool.bugs.add_attachment_to_bug(patch.bug_id(), results_archive_file, description, filename="layout-test-results.zip", comment_text=comment_text)
 
     def work_item_log_path(self, patch):
         return os.path.join(self._log_directory(), "%s.log" % patch.bug_id())
@@ -226,18 +262,12 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler, CommitQueueTaskD
 
     def begin_work_queue(self):
         AbstractPatchQueue.begin_work_queue(self)
-        self.committer_validator = CommitterValidator(self._tool.bugs)
+        self.committer_validator = CommitterValidator(self._tool)
+        self._expected_failures = ExpectedFailures()
+        self._layout_test_results_reader = LayoutTestResultsReader(self._tool, self._log_directory())
 
     def next_work_item(self):
-        patch_id = self._fetch_next_work_item()
-        if not patch_id:
-            return None
-        return self._tool.bugs.fetch_attachment(patch_id)
-
-    def should_proceed_with_work_item(self, patch):
-        patch_text = "rollout patch" if patch.is_rollout() else "patch"
-        self._update_status("Processing %s" % patch_text, patch)
-        return True
+        return self._next_patch()
 
     def process_work_item(self, patch):
         self._cc_watchers(patch.bug_id())
@@ -248,13 +278,12 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler, CommitQueueTaskD
                 return True
             self._did_retry(patch)
         except ScriptError, e:
-            validator = CommitterValidator(self._tool.bugs)
+            validator = CommitterValidator(self._tool)
             validator.reject_patch_from_commit_queue(patch.id(), self._error_message_for_bug(task, patch, e))
             results_archive = task.results_archive_from_patch_test_run(patch)
             if results_archive:
                 self._upload_results_archive_for_patch(patch, results_archive)
             self._did_fail(patch)
-        self._release_work_item(patch)
 
     def _failing_tests_message(self, task, patch):
         results = task.results_from_patch_test_run(patch)
@@ -285,36 +314,24 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler, CommitQueueTaskD
         failure_log = self._log_from_script_error_for_upload(script_error)
         return self._update_status(message, patch=patch, results_file=failure_log)
 
-    # FIXME: This exists for mocking, but should instead be mocked via
-    # some sort of tool.filesystem() object.
-    def _read_file_contents(self, path):
-        try:
-            with codecs.open(path, "r", "utf-8") as open_file:
-                return open_file.read()
-        except OSError, e:  # File does not exist or can't be read.
-            return None
+    def expected_failures(self):
+        return self._expected_failures
 
-    # FIXME: This may belong on the Port object.
     def layout_test_results(self):
-        results_path = self._tool.port().layout_tests_results_path()
-        results_html = self._read_file_contents(results_path)
-        if not results_html:
-            return None
-        return LayoutTestResults.results_from_string(results_html)
+        return self._layout_test_results_reader.results()
+
+    def archive_last_layout_test_results(self, patch):
+        return self._layout_test_results_reader.archive(patch)
+
+    def build_style(self):
+        return "both"
 
     def refetch_patch(self, patch):
         return self._tool.bugs.fetch_attachment(patch.id())
 
-    def _author_emails_for_tests(self, flaky_tests):
-        test_paths = map(path_for_layout_test, flaky_tests)
-        commit_infos = self._tool.checkout().recent_commit_infos_for_files(test_paths)
-        return [commit_info.author().bugzilla_email() for commit_info in commit_infos if commit_info.author()]
-
-    def report_flaky_tests(self, patch, flaky_tests):
-        authors = self._author_emails_for_tests(flaky_tests)
-        cc_explaination = "  The author(s) of the test(s) have been CCed on this bug." if authors else ""
-        message = "The %s encountered the following flaky tests while processing attachment %s:\n\n%s\n\nPlease file bugs against the tests.%s  The commit-queue is continuing to process your patch." % (self.name, patch.id(), "\n".join(flaky_tests), cc_explaination)
-        self._tool.bugs.post_comment_to_bug(patch.bug_id(), message, cc=authors)
+    def report_flaky_tests(self, patch, flaky_test_results, results_archive=None):
+        reporter = FlakyTestReporter(self._tool, self.name)
+        reporter.report_flaky_tests(patch, flaky_test_results, results_archive)
 
     # StepSequenceErrorHandler methods
 
@@ -338,86 +355,21 @@ class CommitQueue(AbstractPatchQueue, StepSequenceErrorHandler, CommitQueueTaskD
         raise TryAgain()
 
 
-class RietveldUploadQueue(AbstractPatchQueue, StepSequenceErrorHandler):
-    name = "rietveld-upload-queue"
-
-    def __init__(self):
-        AbstractPatchQueue.__init__(self)
-
-    # AbstractPatchQueue methods
-
-    def next_work_item(self):
-        patch_id = self._tool.bugs.queries.fetch_first_patch_from_rietveld_queue()
-        if patch_id:
-            return patch_id
-        self._update_status("Empty queue")
-
-    def should_proceed_with_work_item(self, patch):
-        self._update_status("Uploading patch", patch)
-        return True
-
-    def process_work_item(self, patch):
-        try:
-            self.run_webkit_patch(["post-attachment-to-rietveld", "--force-clean", "--non-interactive", "--parent-command=rietveld-upload-queue", patch.id()])
-            self._did_pass(patch)
-            return True
-        except ScriptError, e:
-            if e.exit_code != QueueEngine.handled_error_code:
-                self._did_fail(patch)
-            raise e
-
-    @classmethod
-    def _reject_patch(cls, tool, patch_id):
-        tool.bugs.set_flag_on_attachment(patch_id, "in-rietveld", "-")
-
-    def handle_unexpected_error(self, patch, message):
-        log(message)
-        self._reject_patch(self._tool, patch.id())
-
-    # StepSequenceErrorHandler methods
-
-    @classmethod
-    def handle_script_error(cls, tool, state, script_error):
-        log(script_error.message_with_output())
-        cls._update_status_for_script_error(tool, state, script_error)
-        cls._reject_patch(tool, state["patch"].id())
-
-
-class AbstractReviewQueue(AbstractPatchQueue, PersistentPatchCollectionDelegate, StepSequenceErrorHandler):
+class AbstractReviewQueue(AbstractPatchQueue, StepSequenceErrorHandler):
     """This is the base-class for the EWS queues and the style-queue."""
     def __init__(self, options=None):
         AbstractPatchQueue.__init__(self, options)
 
     def review_patch(self, patch):
-        raise NotImplementedError, "subclasses must implement"
-
-    # PersistentPatchCollectionDelegate methods
-
-    def collection_name(self):
-        return self.name
-
-    def fetch_potential_patch_ids(self):
-        return self._tool.bugs.queries.fetch_attachment_ids_from_review_queue()
-
-    def status_server(self):
-        return self._tool.status_server
-
-    def is_terminal_status(self, status):
-        return status == "Pass" or status == "Fail" or status.startswith("Error:")
+        raise NotImplementedError("subclasses must implement")
 
     # AbstractPatchQueue methods
 
     def begin_work_queue(self):
         AbstractPatchQueue.begin_work_queue(self)
-        self._patches = PersistentPatchCollection(self)
 
     def next_work_item(self):
-        patch_id = self._patches.next()
-        if patch_id:
-            return self._tool.bugs.fetch_attachment(patch_id)
-
-    def should_proceed_with_work_item(self, patch):
-        raise NotImplementedError, "subclasses must implement"
+        return self._next_patch()
 
     def process_work_item(self, patch):
         try:
@@ -428,6 +380,10 @@ class AbstractReviewQueue(AbstractPatchQueue, PersistentPatchCollectionDelegate,
         except ScriptError, e:
             if e.exit_code != QueueEngine.handled_error_code:
                 self._did_fail(patch)
+            else:
+                # The subprocess handled the error, but won't have released the patch, so we do.
+                # FIXME: We need to simplify the rules by which _release_work_item is called.
+                self._release_work_item(patch)
             raise e
 
     def handle_unexpected_error(self, patch, message):
@@ -437,38 +393,46 @@ class AbstractReviewQueue(AbstractPatchQueue, PersistentPatchCollectionDelegate,
 
     @classmethod
     def handle_script_error(cls, tool, state, script_error):
-        log(script_error.message_with_output())
+        log(script_error.output)
 
 
-class StyleQueue(AbstractReviewQueue):
+class StyleQueue(AbstractReviewQueue, StyleQueueTaskDelegate):
     name = "style-queue"
+
     def __init__(self):
         AbstractReviewQueue.__init__(self)
 
-    def should_proceed_with_work_item(self, patch):
-        self._update_status("Checking style", patch)
-        return True
-
     def review_patch(self, patch):
+        task = StyleQueueTask(self, patch)
+        if not task.validate():
+            self._did_error(patch, "%s did not process patch." % self.name)
+            return False
         try:
-            # Run the style checks.
-            self.run_webkit_patch(["check-style", "--force-clean", "--non-interactive", "--parent-command=style-queue", patch.id()])
-        finally:
-            # Apply the watch list.
-            try:
-                self.run_webkit_patch(["apply-watchlist-local", patch.bug_id()])
-            except ScriptError, e:
-                # Don't turn the style bot block red due to watchlist errors.
-                pass
-
+            return task.run()
+        except UnableToApplyPatch, e:
+            self._did_error(patch, "%s unable to apply patch." % self.name)
+            return False
+        except ScriptError, e:
+            message = "Attachment %s did not pass %s:\n\n%s\n\nIf any of these errors are false positives, please file a bug against check-webkit-style." % (patch.id(), self.name, e.output)
+            self._tool.bugs.post_comment_to_bug(patch.bug_id(), message, cc=self.watchers)
+            self._did_fail(patch)
+            return False
         return True
 
-    @classmethod
-    def handle_script_error(cls, tool, state, script_error):
-        is_svn_apply = script_error.command_name() == "svn-apply"
-        status_id = cls._update_status_for_script_error(tool, state, script_error, is_error=is_svn_apply)
-        if is_svn_apply:
-            QueueEngine.exit_after_handled_error(script_error)
-        message = "Attachment %s did not pass %s:\n\n%s\n\nIf any of these errors are false positives, please file a bug against check-webkit-style." % (state["patch"].id(), cls.name, script_error.message_with_output(output_limit=3*1024))
-        tool.bugs.post_comment_to_bug(state["patch"].bug_id(), message, cc=cls.watchers)
-        exit(1)
+    # StyleQueueTaskDelegate methods
+
+    def run_command(self, command):
+        self.run_webkit_patch(command)
+
+    def command_passed(self, message, patch):
+        self._update_status(message, patch=patch)
+
+    def command_failed(self, message, script_error, patch):
+        failure_log = self._log_from_script_error_for_upload(script_error)
+        return self._update_status(message, patch=patch, results_file=failure_log)
+
+    def expected_failures(self):
+        return None
+
+    def refetch_patch(self, patch):
+        return self._tool.bugs.fetch_attachment(patch.id())

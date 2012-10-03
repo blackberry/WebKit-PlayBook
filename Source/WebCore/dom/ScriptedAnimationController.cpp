@@ -61,6 +61,10 @@ ScriptedAnimationController::ScriptedAnimationController(Document* document, Pla
     windowScreenDidChange(displayID);
 }
 
+ScriptedAnimationController::~ScriptedAnimationController()
+{
+}
+
 void ScriptedAnimationController::suspend()
 {
     ++m_suspendCount;
@@ -81,7 +85,7 @@ ScriptedAnimationController::CallbackId ScriptedAnimationController::registerCal
     callback->m_element = animationElement;
     m_callbacks.append(callback);
 
-    InspectorInstrumentation::didRegisterAnimationFrameCallback(m_document, id);
+    InspectorInstrumentation::didRequestAnimationFrame(m_document, id);
 
     if (!m_suspendCount)
         scheduleAnimation();
@@ -93,7 +97,7 @@ void ScriptedAnimationController::cancelCallback(CallbackId id)
     for (size_t i = 0; i < m_callbacks.size(); ++i) {
         if (m_callbacks[i]->m_id == id) {
             m_callbacks[i]->m_firedOrCancelled = true;
-            InspectorInstrumentation::didCancelAnimationFrameCallback(m_document, id);
+            InspectorInstrumentation::didCancelAnimationFrame(m_document, id);
             m_callbacks.remove(i);
             return;
         }
@@ -119,8 +123,17 @@ void ScriptedAnimationController::serviceScriptedAnimations(DOMTimeStamp time)
     // missing any callbacks, we keep iterating through the list of candiate callbacks and firing
     // them until nothing new becomes visible.
     bool firedCallback;
+
+    // Invoking callbacks may detach elements from our document, which clear's the document's
+    // reference to us, so take a defensive reference.
+    RefPtr<ScriptedAnimationController> protector(this);
     do {
         firedCallback = false;
+        // A previous iteration may have detached this Document from the DOM tree.
+        // If so, then we do not need to process any more callbacks.
+        if (!m_document)
+            continue;
+
         // A previous iteration may have invalidated style (or layout).  Update styles for each iteration
         // for now since all we check is the existence of a renderer.
         m_document->updateStyleIfNeeded();
@@ -128,9 +141,9 @@ void ScriptedAnimationController::serviceScriptedAnimations(DOMTimeStamp time)
             RequestAnimationFrameCallback* callback = callbacks[i].get();
             if (!callback->m_firedOrCancelled && (!callback->m_element || callback->m_element->renderer())) {
                 callback->m_firedOrCancelled = true;
-                InspectorInstrumentationCookie cookie = InspectorInstrumentation::willFireAnimationFrameEvent(m_document, callback->m_id);
+                InspectorInstrumentationCookie cookie = InspectorInstrumentation::willFireAnimationFrame(m_document, callback->m_id);
                 callback->handleEvent(time);
-                InspectorInstrumentation::didFireAnimationFrameEvent(cookie);
+                InspectorInstrumentation::didFireAnimationFrame(cookie);
                 firedCallback = true;
                 callbacks.remove(i);
                 break;
@@ -161,6 +174,9 @@ void ScriptedAnimationController::windowScreenDidChange(PlatformDisplayID displa
 
 void ScriptedAnimationController::scheduleAnimation()
 {
+    if (!m_document)
+        return;
+
 #if USE(REQUEST_ANIMATION_FRAME_TIMER)
 #if USE(REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR)
     if (!m_useTimer) {

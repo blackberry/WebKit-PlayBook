@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Apple Inc. All rights reserved.
+ * Copyright (C) 2010, 2011 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -23,6 +23,7 @@
  * THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include "config.h"
 #include "EventSendingController.h"
 
 #include "InjectedBundle.h"
@@ -110,13 +111,7 @@ JSClassRef EventSendingController::wrapperClass()
     return JSEventSendingController::eventSendingControllerClass();
 }
 
-static void setExceptionForString(JSContextRef context, JSValueRef* exception, const char* string)
-{
-    JSRetainPtr<JSStringRef> exceptionString(Adopt, JSStringCreateWithUTF8CString(string));
-    *exception = JSValueMakeString(context, exceptionString.get());
-}
-
-void EventSendingController::mouseDown(JSContextRef context, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+void EventSendingController::mouseDown(int button, JSValueRef modifierArray)
 {
     WKBundlePageRef page = InjectedBundle::shared().page()->page();
     WKBundleFrameRef frame = WKBundlePageGetMainFrame(page);
@@ -146,7 +141,7 @@ void EventSendingController::mouseDown(JSContextRef context, size_t argumentCoun
 #endif
 }
 
-void EventSendingController::mouseUp(JSContextRef context, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+void EventSendingController::mouseUp(int button, JSValueRef modifierArray)
 {
     WKBundlePageRef page = InjectedBundle::shared().page()->page();
     WKBundleFrameRef frame = WKBundlePageGetMainFrame(page);
@@ -176,7 +171,7 @@ void EventSendingController::mouseUp(JSContextRef context, size_t argumentCount,
 #endif
 }
 
-void EventSendingController::mouseMoveTo(JSContextRef context, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+void EventSendingController::mouseMoveTo(int x, int y)
 {
 #ifdef USE_WEBPROCESS_EVENT_SIMULATION
     m_position.x = x;
@@ -202,7 +197,7 @@ void EventSendingController::mouseMoveTo(JSContextRef context, size_t argumentCo
 #endif
 }
 
-void EventSendingController::keyDown(JSContextRef context, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
+void EventSendingController::leapForward(int milliseconds)
 {
 #ifdef USE_WEBPROCESS_EVENT_SIMULATION
     m_time += milliseconds / 1000.0;
@@ -273,12 +268,16 @@ void EventSendingController::mouseScrollBy(int x, int y)
 #ifdef USE_WEBPROCESS_EVENT_SIMULATION
 void EventSendingController::updateClickCount(WKEventMouseButton button)
 {
-    setExceptionForString(context, exception, "EventSender.contextClick is not yet supported.");
-}
+    if (m_time - m_clickTime < 1 && m_position == m_clickPosition && button == m_clickButton) {
+        ++m_clickCount;
+        m_clickTime = m_time;
+        return;
+    }
 
-void EventSendingController::leapForward(JSContextRef context, size_t argumentCount, const JSValueRef arguments[], JSValueRef* exception)
-{
-    setExceptionForString(context, exception, "EventSender.leapForward is not yet supported.");
+    m_clickCount = 1;
+    m_clickTime = m_time;
+    m_clickPosition = m_position;
+    m_clickButton = button;
 }
 #endif
 
@@ -435,6 +434,18 @@ void EventSendingController::touchEnd()
     WKBundlePostSynchronousMessage(InjectedBundle::shared().bundle(), EventSenderMessageName.get(), EventSenderMessageBody.get(), 0);
 }
 
+void EventSendingController::touchCancel()
+{
+    WKRetainPtr<WKStringRef> EventSenderMessageName(AdoptWK, WKStringCreateWithUTF8CString("EventSender"));
+    WKRetainPtr<WKMutableDictionaryRef> EventSenderMessageBody(AdoptWK, WKMutableDictionaryCreate());
+
+    WKRetainPtr<WKStringRef> subMessageKey(AdoptWK, WKStringCreateWithUTF8CString("SubMessage"));
+    WKRetainPtr<WKStringRef> subMessageName(AdoptWK, WKStringCreateWithUTF8CString("TouchCancel"));
+    WKDictionaryAddItem(EventSenderMessageBody.get(), subMessageKey.get(), subMessageName.get());
+
+    WKBundlePostSynchronousMessage(InjectedBundle::shared().bundle(), EventSenderMessageName.get(), EventSenderMessageBody.get(), 0);
+}
+
 void EventSendingController::clearTouchPoints()
 {
     WKRetainPtr<WKStringRef> EventSenderMessageName(AdoptWK, WKStringCreateWithUTF8CString("EventSender"));
@@ -454,6 +465,22 @@ void EventSendingController::releaseTouchPoint(int index)
 
     WKRetainPtr<WKStringRef> subMessageKey(AdoptWK, WKStringCreateWithUTF8CString("SubMessage"));
     WKRetainPtr<WKStringRef> subMessageName(AdoptWK, WKStringCreateWithUTF8CString("ReleaseTouchPoint"));
+    WKDictionaryAddItem(EventSenderMessageBody.get(), subMessageKey.get(), subMessageName.get());
+
+    WKRetainPtr<WKStringRef> indexKey = adoptWK(WKStringCreateWithUTF8CString("Index"));
+    WKRetainPtr<WKUInt64Ref> indexRef = WKUInt64Create(index);
+    WKDictionaryAddItem(EventSenderMessageBody.get(), indexKey.get(), indexRef.get());
+
+    WKBundlePostSynchronousMessage(InjectedBundle::shared().bundle(), EventSenderMessageName.get(), EventSenderMessageBody.get(), 0);
+}
+
+void EventSendingController::cancelTouchPoint(int index)
+{
+    WKRetainPtr<WKStringRef> EventSenderMessageName(AdoptWK, WKStringCreateWithUTF8CString("EventSender"));
+    WKRetainPtr<WKMutableDictionaryRef> EventSenderMessageBody(AdoptWK, WKMutableDictionaryCreate());
+
+    WKRetainPtr<WKStringRef> subMessageKey(AdoptWK, WKStringCreateWithUTF8CString("SubMessage"));
+    WKRetainPtr<WKStringRef> subMessageName(AdoptWK, WKStringCreateWithUTF8CString("CancelTouchPoint"));
     WKDictionaryAddItem(EventSenderMessageBody.get(), subMessageKey.get(), subMessageName.get());
 
     WKRetainPtr<WKStringRef> indexKey = adoptWK(WKStringCreateWithUTF8CString("Index"));

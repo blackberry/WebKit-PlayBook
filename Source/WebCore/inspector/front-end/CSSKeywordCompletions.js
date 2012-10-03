@@ -47,6 +47,13 @@ WebInspector.CSSKeywordCompletions.isColorAwareProperty = function(propertyName)
     return WebInspector.CSSKeywordCompletions._colorAwareProperties[propertyName] === true;
 }
 
+WebInspector.CSSKeywordCompletions.colors = function()
+{
+    if (!WebInspector.CSSKeywordCompletions._colorsKeySet)
+        WebInspector.CSSKeywordCompletions._colorsKeySet = WebInspector.CSSKeywordCompletions._colors.keySet();
+    return WebInspector.CSSKeywordCompletions._colorsKeySet;
+}
+
 // Taken from http://www.w3.org/TR/CSS21/propidx.html.
 WebInspector.CSSKeywordCompletions.InheritedProperties = [
     "azimuth", "border-collapse", "border-spacing", "caption-side", "color", "cursor", "direction", "elevation",
@@ -79,9 +86,9 @@ WebInspector.CSSKeywordCompletions._colors = [
 
 WebInspector.CSSKeywordCompletions._colorAwareProperties = [
     "background", "background-color", "background-image", "border", "border-color", "border-top", "border-right", "border-bottom",
-    "border-left", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "color",
+    "border-left", "border-top-color", "border-right-color", "border-bottom-color", "border-left-color", "box-shadow", "color",
     "outline", "outline-color", "text-line-through", "text-line-through-color", "text-overline", "text-overline-color",
-    "text-shadow", "text-underline", "text-underline-color", "-webkit-text-emphasis", "-webkit-text-emphasis-color"
+    "text-shadow", "text-underline", "text-underline-color", "-webkit-box-shadow", "-webkit-text-emphasis", "-webkit-text-emphasis-color"
 ].keySet();
 
 WebInspector.CSSKeywordCompletions._propertyKeywordMap = {
@@ -448,5 +455,9 @@ WebInspector.CSSKeywordCompletions._propertyKeywordMap = {
     ],
     "-webkit-text-emphasis-style": [
         "circle", "filled", "open", "dot", "double-circle", "triangle", "sesame"
+    ],
+    "-webkit-transform": [
+        "scale", "scaleX", "scaleY", "scale3d", "rotate", "rotateX", "rotateY", "rotateZ", "rotate3d", "skew", "skewX", "skewY", 
+        "translate", "translateX", "translateY", "translateZ", "translate3d", "matrix", "matrix3d", "perspective"
     ]
 }

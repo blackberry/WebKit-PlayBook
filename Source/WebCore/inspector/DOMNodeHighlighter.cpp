@@ -221,9 +221,8 @@ TOOLTIP_FONT_FAMILIES(1, new AtomicString("dejavu sans mono"))
     }
 }
 
-void drawElementTitle(GraphicsContext& context, Node* node, RenderObject* renderer, const LayoutRect& boundingBox, const LayoutRect& anchorBox, const FloatRect& overlayRect, WebCore::Settings* settings)
+void drawElementTitle(GraphicsContext& context, Node* node, RenderObject* renderer, const LayoutRect& boundingBox, const LayoutRect& anchorBox, const FloatRect& visibleRect, WebCore::Settings* settings)
 {
-
     DEFINE_STATIC_LOCAL(Color, backgroundColor, (255, 255, 194));
     DEFINE_STATIC_LOCAL(Color, tagColor, (136, 18, 128)); // Same as .webkit-html-tag.
     DEFINE_STATIC_LOCAL(Color, attrColor, (26, 26, 166)); // Same as .webkit-html-attribute-value.
@@ -289,28 +288,28 @@ void drawElementTitle(GraphicsContext& context, Node* node, RenderObject* render
     titleRect.inflate(rectInflatePx);
 
     // The initial offsets needed to compensate for a 1px-thick border stroke (which is not a part of the rectangle).
-    LayoutUnit dx = -borderWidthPx;
-    LayoutUnit dy = borderWidthPx;
+    int dx = -borderWidthPx;
+    int dy = borderWidthPx;
 
-    // If the tip sticks beyond the right of overlayRect, right-align the tip with the said boundary.
-    if (titleRect.maxX() + dx > overlayRect.maxX())
-        dx = overlayRect.maxX() - titleRect.maxX();
+    // If the tip sticks beyond the right of visibleRect, right-align the tip with the said boundary.
+    if (titleRect.maxX() + dx > visibleRect.maxX())
+        dx = visibleRect.maxX() - titleRect.maxX();
 
-    // If the tip sticks beyond the left of overlayRect, left-align the tip with the said boundary.
-    if (titleRect.x() + dx < overlayRect.x())
-        dx = overlayRect.x() - titleRect.x() - borderWidthPx;
+    // If the tip sticks beyond the left of visibleRect, left-align the tip with the said boundary.
+    if (titleRect.x() + dx < visibleRect.x())
+        dx = visibleRect.x() - titleRect.x() - borderWidthPx;
 
-    // If the tip sticks beyond the bottom of overlayRect, show the tip at top of bounding box.
-    if (titleRect.maxY() + dy > overlayRect.maxY()) {
+    // If the tip sticks beyond the bottom of visibleRect, show the tip at top of bounding box.
+    if (titleRect.maxY() + dy > visibleRect.maxY()) {
         dy = anchorBox.y() - titleRect.maxY() - borderWidthPx;
-        // If the tip still sticks beyond the bottom of overlayRect, bottom-align the tip with the said boundary.
-        if (titleRect.maxY() + dy > overlayRect.maxY())
-            dy = overlayRect.maxY() - titleRect.maxY();
+        // If the tip still sticks beyond the bottom of visibleRect, bottom-align the tip with the said boundary.
+        if (titleRect.maxY() + dy > visibleRect.maxY())
+            dy = visibleRect.maxY() - titleRect.maxY();
     }
 
-    // If the tip sticks beyond the top of overlayRect, show the tip at top of overlayRect.
-    if (titleRect.y() + dy < overlayRect.y())
-        dy = overlayRect.y() - titleRect.y() + borderWidthPx;
+    // If the tip sticks beyond the top of visibleRect, show the tip at top of visibleRect.
+    if (titleRect.y() + dy < visibleRect.y())
+        dy = visibleRect.y() - titleRect.y() + borderWidthPx;
 
     titleRect.move(dx, dy);
 
@@ -359,7 +358,7 @@ void drawElementTitle(GraphicsContext& context, Node* node, RenderObject* render
     drawSubstring(nodeTitleRun, currentPos, pxString.length(), pxAndBorderColor, font, context, titleRect);
 }
 
-void drawNodeHighlight(GraphicsContext& context, HighlightData* highlightData)
+static void getOrDrawNodeHighlight(GraphicsContext* context, HighlightData* highlightData, Highlight* highlight)
 {
     Node* node = highlightData->node.get();
     RenderObject* renderer = node->renderer();
@@ -376,10 +375,10 @@ void drawNodeHighlight(GraphicsContext& context, HighlightData* highlightData)
     LayoutRect titleAnchorBox = boundingBox;
 
     FrameView* view = containingFrame->page()->mainFrame()->view();
-    FloatRect overlayRect = view->visibleContentRect();
-    if (!overlayRect.contains(boundingBox) && !boundingBox.contains(enclosingLayoutRect(overlayRect)))
-        overlayRect = view->visibleContentRect();
-    context.translate(-overlayRect.x(), -overlayRect.y());
+    FloatRect visibleRect = view->visibleContentRect();
+    // Don't translate the context if the frame is rendered in page coordinates.
+    if (context && !view->delegatesScrolling())
+        context->translate(-visibleRect.x(), -visibleRect.y());
 
     // RenderSVGRoot should be highlighted through the isBox() code path, all other SVG elements should just dump their absoluteQuads().
 #if ENABLE(SVG)
@@ -389,12 +388,13 @@ void drawNodeHighlight(GraphicsContext& context, HighlightData* highlightData)
 #endif
 
     if (isSVGRenderer) {
-        Vector<FloatQuad> absoluteQuads;
-        renderer->absoluteQuads(absoluteQuads);
-        for (unsigned i = 0; i < absoluteQuads.size(); ++i)
-            absoluteQuads[i] += mainFrameOffset;
+        highlight->type = HighlightTypeRects;
+        renderer->absoluteQuads(highlight->quads);
+        for (size_t i = 0; i < highlight->quads.size(); ++i)
+            highlight->quads[i] += mainFrameOffset;
 
-        drawHighlightForSVGRenderer(context, absoluteQuads, highlightData);
+        if (context)
+            drawHighlightForSVGRenderer(*context, highlight->quads, highlightData);
     } else if (renderer->isBox() || renderer->isRenderInline()) {
         LayoutRect contentBox;
         LayoutRect paddingBox;
@@ -441,7 +441,14 @@ void drawNodeHighlight(GraphicsContext& context, HighlightData* highlightData)
 
         titleAnchorBox = absMarginQuad.enclosingBoundingBox();
 
-        drawHighlightForBox(context, absContentQuad, absPaddingQuad, absBorderQuad, absMarginQuad, highlightData);
+        highlight->type = HighlightTypeNode;
+        highlight->quads.append(absMarginQuad);
+        highlight->quads.append(absBorderQuad);
+        highlight->quads.append(absPaddingQuad);
+        highlight->quads.append(absContentQuad);
+
+        if (context)
+            drawHighlightForBox(*context, absContentQuad, absPaddingQuad, absBorderQuad, absMarginQuad, highlightData);
     }
 
     // Draw node title if necessary.
@@ -449,39 +456,29 @@ void drawNodeHighlight(GraphicsContext& context, HighlightData* highlightData)
     if (!node->isElementNode())
         return;
 
-    if (highlightData->showInfo)
-        drawElementTitle(context, node, renderer, boundingBox, titleAnchorBox, overlayRect, containingFrame->settings());
+    if (context && highlightData->showInfo)
+        drawElementTitle(*context, node, renderer, boundingBox, titleAnchorBox, visibleRect, containingFrame->settings());
 }
 
-void drawRectHighlight(GraphicsContext& context, Document* document, HighlightData* highlightData)
+static void getOrDrawRectHighlight(GraphicsContext* context, Document* document, HighlightData* highlightData, Highlight *highlight)
 {
     if (!document)
         return;
-    FrameView* view = document->frame()->view();
 
-    FloatRect overlayRect = view->visibleContentRect();
-    context.translate(-overlayRect.x(), -overlayRect.y());
+    FloatRect highlightRect(*(highlightData->rect));
 
-    static const int outlineThickness = 2;
+    highlight->type = HighlightTypeRects;
+    highlight->quads.append(highlightRect);
 
-    Path quadPath = quadToPath(FloatRect(*(highlightData->rect)));
+    if (context) {
+        FrameView* view = document->frame()->view();
+        if (!view->delegatesScrolling()) {
+            FloatRect visibleRect = view->visibleContentRect();
+            context->translate(-visibleRect.x(), -visibleRect.y());
+        }
 
-    // Clip out the quad, then draw with a 2px stroke to get a pixel
-    // of outline (because inflating a quad is hard)
-    {
-        context.save();
-        context.clipOut(quadPath);
-
-        context.setStrokeThickness(outlineThickness);
-        context.setStrokeColor(highlightData->contentOutline, ColorSpaceDeviceRGB);
-        context.strokePath(quadPath);
-
-        context.restore();
+        drawOutlinedQuad(*context, highlightRect, highlightData->content, highlightData->contentOutline);
     }
-
-    // Now do the fill
-    context.setFillColor(highlightData->content, ColorSpaceDeviceRGB);
-    context.fillPath(quadPath);
 }
 
 } // anonymous namespace
@@ -493,10 +490,34 @@ void drawHighlight(GraphicsContext& context, Document* document, HighlightData* 
     if (!highlightData)
         return;
 
+    Highlight highlight;
     if (highlightData->node)
-        drawNodeHighlight(context, highlightData);
+        getOrDrawNodeHighlight(&context, highlightData, &highlight);
     else if (highlightData->rect)
-        drawRectHighlight(context, document, highlightData);
+        getOrDrawRectHighlight(&context, document, highlightData, &highlight);
+}
+
+void getHighlight(Document* document, HighlightData* highlightData, Highlight* highlight)
+{
+    if (!highlightData)
+        return;
+
+    highlight->contentColor = highlightData->content;
+    highlight->paddingColor = highlightData->padding;
+    highlight->borderColor = highlightData->border;
+    highlight->marginColor = highlightData->margin;
+    highlight->type = HighlightTypeRects;
+
+    if (highlightData->node)
+        getOrDrawNodeHighlight(0, highlightData, highlight);
+    else if (highlightData->rect)
+        getOrDrawRectHighlight(0, document, highlightData, highlight);
+}
+
+void drawOutline(GraphicsContext& context, const LayoutRect& rect, const Color& color)
+{
+    FloatRect outlineRect = rect;
+    drawOutlinedQuad(context, outlineRect, Color(), color);
 }
 
 } // namespace DOMNodeHighlighter

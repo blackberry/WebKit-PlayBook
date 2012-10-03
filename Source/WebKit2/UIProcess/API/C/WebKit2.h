@@ -32,6 +32,7 @@
 #include <WebKit2/WKArray.h>
 #include <WebKit2/WKBackForwardList.h>
 #include <WebKit2/WKBackForwardListItem.h>
+#include <WebKit2/WKConnectionRef.h>
 #include <WebKit2/WKContext.h>
 #include <WebKit2/WKData.h>
 #include <WebKit2/WKDictionary.h>
@@ -60,7 +61,7 @@
 
 #if defined(__OBJC__) && __OBJC__
 #import <WebKit2/WKView.h>
-#elif !(defined(__APPLE__) && __APPLE__)
+#elif !((defined(__APPLE__) && __APPLE__) || defined(BUILDING_QT__))
 #include <WebKit2/WKView.h>
 #endif
 

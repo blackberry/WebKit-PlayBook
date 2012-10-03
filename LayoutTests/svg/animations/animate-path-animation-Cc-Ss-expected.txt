@@ -61,7 +61,7 @@ PASS path.pathSegList.getItem(1).y1 is 40
 PASS path.pathSegList.getItem(1).x2 is 0
 PASS path.pathSegList.getItem(1).y2 is 40
 PASS path.pathSegList.getItem(2).pathSegTypeAsLetter is 's'
-PASS path.pathSegList.getItem(2).x is 0
+PASS path.pathSegList.getItem(2).x is -0
 PASS path.pathSegList.getItem(2).y is -40
 PASS path.pathSegList.getItem(2).x2 is 40
 PASS path.pathSegList.getItem(2).y2 is 0

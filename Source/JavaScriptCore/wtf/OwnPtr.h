@@ -21,10 +21,10 @@
 #ifndef WTF_OwnPtr_h
 #define WTF_OwnPtr_h
 
-#include "Assertions.h"
-#include "NullPtr.h"
-#include "OwnPtrCommon.h"
-#include "TypeTraits.h"
+#include <wtf/Assertions.h>
+#include <wtf/NullPtr.h>
+#include <wtf/OwnPtrCommon.h>
+#include <wtf/TypeTraits.h>
 #include <algorithm>
 #include <memory>
 
@@ -41,6 +41,7 @@ namespace WTF {
         typedef ValueType* PtrType;
 
         OwnPtr() : m_ptr(0) { }
+        OwnPtr(std::nullptr_t) : m_ptr(0) { }
 
         // See comment in PassOwnPtr.h for why this takes a const reference.
         template<typename U> OwnPtr(const PassOwnPtr<U>& o);

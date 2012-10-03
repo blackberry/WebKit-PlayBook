@@ -3,6 +3,7 @@ var initialize_DetailedHeapshotTest = function() {
 InspectorTest.startProfilerTest = function(callback)
 {
     WebInspector.showPanel("profiles");
+    WebInspector.settings.showHeapSnapshotObjectsHiddenProperties.set(true);
 
     function profilerEnabled()
     {
@@ -11,14 +12,9 @@ InspectorTest.startProfilerTest = function(callback)
         // and test share the same heap. Taking a snapshot takes too long for a test,
         // so we provide synthetic snapshots.
         InspectorTest._panelReset = InspectorTest.override(WebInspector.panels.profiles, "_reset", function(){}, true);
-        InspectorTest.addSniffer(WebInspector.DetailedHeapshotView.prototype, "_updatePercentButton", InspectorTest._snapshotViewShown, true);
+        InspectorTest.addSniffer(WebInspector.DetailedHeapshotView.prototype, "_loadProfile", InspectorTest._snapshotViewShown, true);
 
-        if (Preferences.detailedHeapProfiles)
-            detailedHeapProfilesEnabled();
-        else {
-            InspectorTest.addSniffer(WebInspector.panels.profiles, "_populateProfiles", detailedHeapProfilesEnabled);
-            WebInspector.panels.profiles._enableDetailedHeapProfiles(true);
-        }
+        detailedHeapProfilesEnabled();
     }
 
     function detailedHeapProfilesEnabled()
@@ -62,7 +58,7 @@ InspectorTest.completeProfilerTest = function()
 
 InspectorTest.runDetailedHeapshotTestSuite = function(testSuite)
 {
-    if (!Preferences.heapProfilerPresent) {
+    if (!Capabilities.heapProfilerPresent) {
         InspectorTest.addResult("Heap profiler is disabled");
         InspectorTest.completeTest();
         return;
@@ -126,12 +122,9 @@ InspectorTest.checkArrayIsSorted = function(contents, sortType, sortOrder)
     function extractId(data)
     {
         data = JSON.parse(data);
-        if (!data.value)
-            InspectorTest.addResult("No value field in " + JSON.stringify(data));
-        var indexOfAt = data.value.indexOf("@");
-        if (indexOfAt === -1)
-            InspectorTest.addResult("Can't find @ in " + data.value);
-        return parseInt(data.value.substring(indexOfAt + 1), 10);
+        if (!data.nodeId)
+            InspectorTest.addResult("No nodeId field in " + JSON.stringify(data));
+        return parseInt(data.nodeId, 10);
     }
     var comparator = {
         text: simpleComparator,
@@ -309,7 +302,7 @@ InspectorTest.findAndExpandGCRoots = function(callback)
     callback = InspectorTest.safeWrap(callback);
     function propertyMatcher(data)
     {
-        return data.value === "(GC roots) @3";
+        return data.value === "(GC roots)";
     }
     var gcRoots = InspectorTest.findRow("object", propertyMatcher);
     InspectorTest.assertEquals(true, !!gcRoots, "GC roots row");
@@ -373,7 +366,7 @@ InspectorTest.takeAndOpenSnapshot = function(generator, callback)
     }
     InspectorTest.override(ProfilerAgent, "getProfile", pushGeneratedSnapshot);
     InspectorTest._takeAndOpenSnapshotCallback = callback;
-    WebInspector.panels.profiles._addProfileHeader(profile);
+    WebInspector.panels.profiles.addProfileHeader(profile);
     WebInspector.panels.profiles.showProfile(profile);
 };
 

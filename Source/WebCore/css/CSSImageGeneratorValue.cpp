@@ -31,14 +31,12 @@
 #include "CSSGradientValue.h"
 #include "Image.h"
 #include "RenderObject.h"
-#include "StyleGeneratedImage.h"
 #include <wtf/text/WTFString.h>
 
 namespace WebCore {
 
 CSSImageGeneratorValue::CSSImageGeneratorValue(ClassType classType)
     : CSSValue(classType)
-    , m_accessedImage(false)
 {
 }
 
@@ -110,15 +108,6 @@ void CSSImageGeneratorValue::putImage(const IntSize& size, PassRefPtr<Image> ima
     m_images.add(size, image);
 }
 
-StyleGeneratedImage* CSSImageGeneratorValue::generatedImage()
-{
-    if (!m_accessedImage) {
-        m_accessedImage = true;
-        m_image = StyleGeneratedImage::create(this, isFixedSize());
-    }
-    return m_image.get();
-}
-
 PassRefPtr<Image> CSSImageGeneratorValue::image(RenderObject* renderer, const IntSize& size)
 {
     switch (classType()) {
@@ -168,6 +157,43 @@ IntSize CSSImageGeneratorValue::fixedSize(const RenderObject* renderer)
         ASSERT_NOT_REACHED();
     }
     return IntSize();
+}
+
+bool CSSImageGeneratorValue::isPending() const
+{
+    switch (classType()) {
+    case CrossfadeClass:
+        return static_cast<const CSSCrossfadeValue*>(this)->isPending();
+    case CanvasClass:
+        return static_cast<const CSSCanvasValue*>(this)->isPending();
+    case LinearGradientClass:
+        return static_cast<const CSSLinearGradientValue*>(this)->isPending();
+    case RadialGradientClass:
+        return static_cast<const CSSRadialGradientValue*>(this)->isPending();
+    default:
+        ASSERT_NOT_REACHED();
+    }
+    return false;
+}
+
+void CSSImageGeneratorValue::loadSubimages(CachedResourceLoader* cachedResourceLoader)
+{
+    switch (classType()) {
+    case CrossfadeClass:
+        static_cast<CSSCrossfadeValue*>(this)->loadSubimages(cachedResourceLoader);
+        break;
+    case CanvasClass:
+        static_cast<CSSCanvasValue*>(this)->loadSubimages(cachedResourceLoader);
+        break;
+    case LinearGradientClass:
+        static_cast<CSSLinearGradientValue*>(this)->loadSubimages(cachedResourceLoader);
+        break;
+    case RadialGradientClass:
+        static_cast<CSSRadialGradientValue*>(this)->loadSubimages(cachedResourceLoader);
+        break;
+    default:
+        ASSERT_NOT_REACHED();
+    }
 }
 
 } // namespace WebCore

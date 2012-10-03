@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,11 +19,12 @@
 #ifndef WebPage_h
 #define WebPage_h
 
-#include "BlackBerryContext.h"
 #include "BlackBerryGlobal.h"
 #include "WebString.h"
+
 #include <BlackBerryPlatformGuardedPointer.h>
 #include <BlackBerryPlatformInputEvents.h>
+#include <BlackBerryPlatformWebContext.h>
 #include <imf/input_data.h>
 #include <network/NetworkRequest.h>
 
@@ -35,17 +36,8 @@ typedef const struct OpaqueJSValue* JSValueRef;
 
 namespace WebCore {
 class ChromeClientBlackBerry;
-class EditorClientBlackBerry;
-class Element;
 class Frame;
 class FrameLoaderClientBlackBerry;
-class GeolocationControllerClientBlackBerry;
-class IconDatabaseClientBlackBerry;
-class InspectorClientBlackBerry;
-class JavaScriptDebuggerBlackBerry;
-class Node;
-class RenderObject;
-class VisibleSelection;
 }
 
 class WebDOMDocument;
@@ -68,10 +60,9 @@ namespace WebKit {
 class BackingStore;
 class BackingStoreClient;
 class BackingStorePrivate;
-class DumpRenderTreeClient;
 class RenderQueue;
-class ResourceHolder;
 class WebPageClient;
+class WebPageCompositor;
 class WebPageGroupLoadDeferrer;
 class WebPagePrivate;
 class WebSettings;
@@ -82,7 +73,7 @@ enum ActivationStateType { ActivationActive, ActivationInactive, ActivationStand
 
 enum TargetDetectionStrategy {PointBased, RectBased};
 
-class BLACKBERRY_EXPORT WebPage : public BlackBerry::Platform::GuardedPointerBase {
+class BLACKBERRY_EXPORT WebPage : public Platform::GuardedPointerBase {
 public:
     WebPage(WebPageClient*, const WebString& pageGroupName, const Platform::IntRect&);
     void destroy();
@@ -95,7 +86,7 @@ public:
 
     void loadFile(const char* path, const char* overrideContentType = "");
 
-    void loadString(const char* string, const char* baseURL, const char* contentType = "text/html");
+    void loadString(const char* string, const char* baseURL, const char* contentType = "text/html", const char* failingURL = 0);
 
     void download(const Platform::NetworkRequest&);
 
@@ -134,20 +125,18 @@ public:
     // Used for default layout size unless overridden by web content or by other APIs.
     void setDefaultLayoutSize(int width, int height);
 
-    bool mouseEvent(const BlackBerry::Platform::MouseEvent&, bool* wheelDeltaAccepted = 0);
+    bool mouseEvent(const Platform::MouseEvent&, bool* wheelDeltaAccepted = 0);
 
     // Handles native javascript touch events.
-    bool touchEvent(const BlackBerry::Platform::TouchEvent&);
+    bool touchEvent(const Platform::TouchEvent&);
 
     // For conversion to mouse events.
     void touchEventCancel();
     void touchEventCancelAndClearFocusedNode();
-    bool touchPointAsMouseEvent(const BlackBerry::Platform::TouchPoint&);
+    bool touchPointAsMouseEvent(const Platform::TouchPoint&);
 
     // Returns true if the key stroke was handled by WebKit.
-    bool keyEvent(const BlackBerry::Platform::KeyboardEvent&);
-
-    void navigationMoveEvent(const unsigned short character, bool shiftDown, bool altDown);
+    bool keyEvent(const Platform::KeyboardEvent&);
 
     WebString title() const;
     WebString selectedText() const;
@@ -170,7 +159,7 @@ public:
     void setScrollPosition(const Platform::IntPoint&);
     bool scrollBy(const Platform::IntSize&, bool scrollMainFrame = true);
     void notifyInRegionScrollStatusChanged(bool status);
-    void setScrollOriginPoint(const BlackBerry::Platform::IntPoint&);
+    void setScrollOriginPoint(const Platform::IntPoint&);
 
     BackingStore* backingStore() const;
 
@@ -194,40 +183,23 @@ public:
     double maximumScale() const;
     void setMaximumScale(double);
 
-    void assignFocus(BlackBerry::Platform::FocusDirection);
+    void assignFocus(Platform::FocusDirection);
 
-    bool moveToNextField(BlackBerry::Platform::ScrollDirection, int desiredScrollAmount);
-    Platform::IntRect focusNodeRect();
-    // FIXME: setFocused and focusField seem to be be doing similar stuff.
-    // They should be redesigned and possibly unified. See PR #120398.
     void setFocused(bool);
-    bool focusField(bool focus);
-    bool linkToLinkOnClick();
 
     void clearBrowsingData();
     void clearHistory();
     void clearCookies();
     void clearCache();
     void clearLocalStorage();
+    void clearCredentials();
+    void clearNeverRememberSites();
 
     void runLayoutTests();
-    /**
-     * Finds and selects the next utf8 string that is a case sensitive
-     * match in the web page. It will wrap the web page if it reaches
-     * the end. An empty string will result in no match and no selection.
-     *
-     * Returns true if the string matched and false if not.
-     */
-    bool findNextString(const char*, bool forward = true);
 
-    /**
-     * Finds and selects the next unicode string. This is a case
-     * sensitive search that will wrap if it reaches the end. An empty
-     * string will result in no match and no selection.
-     *
-     * Returns true if the string matched and false if not.
-     */
-    bool findNextUnicodeString(const unsigned short*, bool forward = true);
+    // Find the next utf8 string in the given direction.
+    // Case sensitivity, wrapping, and highlighting all matches are also toggleable.
+    bool findNextString(const char*, bool forward, bool caseSensitive, bool wrap, bool highlightAllMatches);
 
     // JavaScriptDebugger interface.
     bool enableScriptDebugger();
@@ -235,10 +207,6 @@ public:
 
     JSContextRef scriptContext() const;
     JSValueRef windowObject() const;
-
-#if defined(ENABLE_WEBDOM) && ENABLE_WEBDOM
-    WebDOMDocument document() const;
-#endif
 
     void addBreakpoint(const unsigned short* url, unsigned urlLength, int lineNumber, const unsigned short* condition, unsigned conditionLength);
     void updateBreakpoint(const unsigned short* url, unsigned urlLength, int lineNumber, const unsigned short* condition, unsigned conditionLength);
@@ -273,7 +241,7 @@ public:
     int32_t setComposingText(spannable_string_t*, int32_t relativeCursorPosition);
     int32_t commitText(spannable_string_t*, int32_t relativeCursorPosition);
 
-    void spellCheckingEnabled(bool);
+    void setSpellCheckingEnabled(bool);
 
     void setSelection(const Platform::IntPoint& startPoint, const Platform::IntPoint& endPoint);
     void setCaretPosition(const Platform::IntPoint&);
@@ -292,7 +260,7 @@ public:
 
     WebString textHasAttribute(const WebString& query) const;
 
-    ActiveNodeContext activeNodeContext(TargetDetectionStrategy) const;
+    Platform::WebContext webContext(TargetDetectionStrategy) const;
 
     typedef intptr_t BackForwardId;
     struct BackForwardEntry {
@@ -315,11 +283,10 @@ public:
     void releaseBackForwardEntry(BackForwardId) const;
     void clearBackForwardList(bool keepCurrentPage) const;
 
-    ResourceHolder* getImageFromContext();
-
     void addVisitedLink(const unsigned short* url, unsigned length);
 
 #if defined(ENABLE_WEBDOM) && ENABLE_WEBDOM
+    WebDOMDocument document() const;
     WebDOMNode nodeAtPoint(int x, int y);
     bool getNodeRect(const WebDOMNode&, Platform::IntRect& result);
     bool setNodeFocus(const WebDOMNode&, bool on);
@@ -331,17 +298,15 @@ public:
 
     bool willFireTimer();
 
-    void clearStorage();
-
     bool isEnableLocalAccessToAllCookies() const;
     void setEnableLocalAccessToAllCookies(bool);
 
     void enableWebInspector();
     void disableWebInspector();
+    bool isWebInspectorEnabled();
     void enablePasswordEcho();
     void disablePasswordEcho();
-    void dispatchInspectorMessage(const char* message, int length);
-    WebCore::Frame* mainFrame() const;
+    void dispatchInspectorMessage(const std::string& message);
 
     // FIXME: Needs API review on this header. See PR #120402.
     void notifyPagePause();
@@ -356,7 +321,6 @@ public:
     void notifyScreenPowerStateChanged(bool powered);
     void notifyFullScreenVideoExited(bool done);
     void clearPluginSiteData();
-    void setVirtualKeyboardVisible(bool);
     void setJavaScriptCanAccessClipboard(bool);
     bool isWebGLEnabled() const;
     void setWebGLEnabled(bool);
@@ -364,20 +328,17 @@ public:
     void destroyWebPageCompositor();
 
 private:
-    ~WebPage();
+    virtual ~WebPage();
 
-    friend class BlackBerry::WebKit::BackingStore;
-    friend class BlackBerry::WebKit::BackingStoreClient;
-    friend class BlackBerry::WebKit::BackingStorePrivate;
-    friend class BlackBerry::WebKit::RenderQueue;
-    friend class BlackBerry::WebKit::WebPageGroupLoadDeferrer;
+    friend class WebKit::BackingStore;
+    friend class WebKit::BackingStoreClient;
+    friend class WebKit::BackingStorePrivate;
+    friend class WebKit::RenderQueue;
+    friend class WebKit::WebPageCompositor;
+    friend class WebKit::WebPageGroupLoadDeferrer;
+    friend class WebKit::WebPagePrivate;
     friend class WebCore::ChromeClientBlackBerry;
-    friend class WebCore::EditorClientBlackBerry;
     friend class WebCore::FrameLoaderClientBlackBerry;
-    friend class WebCore::IconDatabaseClientBlackBerry;
-    friend class WebCore::InspectorClientBlackBerry;
-    friend class WebCore::JavaScriptDebuggerBlackBerry;
-    friend class WebCore::GeolocationControllerClientBlackBerry;
     WebPagePrivate* d;
 };
 }

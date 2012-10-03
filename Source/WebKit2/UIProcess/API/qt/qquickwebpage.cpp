@@ -19,26 +19,27 @@
  */
 
 #include "config.h"
-#include "qquickwebpage.h"
-
-#include "QtWebPageProxy.h"
-#include "TransformationMatrix.h"
 #include "qquickwebpage_p.h"
-#include "qquickwebview.h"
-#include <QtCore/QUrl>
-#include <QtDeclarative/QQuickCanvas>
-#include <QtDeclarative/QSGEngine>
 
-QQuickWebPage::QQuickWebPage(QQuickItem* parent)
-    : QQuickItem(parent)
-    , d(new QQuickWebPagePrivate(this))
+#include "LayerTreeHostProxy.h"
+#include "QtWebPageEventHandler.h"
+#include "TransformationMatrix.h"
+#include "qquickwebpage_p_p.h"
+#include "qquickwebview_p.h"
+#include <QtQuick/QQuickCanvas>
+#include <QtQuick/QSGGeometryNode>
+#include <QtQuick/QSGMaterial>
+#include <private/qsgrendernode_p.h>
+
+QQuickWebPage::QQuickWebPage(QQuickWebView* viewportItem)
+    : QQuickItem(viewportItem)
+    , d(new QQuickWebPagePrivate(this, viewportItem))
 {
     setFlag(ItemHasContents);
 
     // We do the transform from the top left so the viewport can assume the position 0, 0
     // is always where rendering starts.
     setTransformOrigin(TopLeft);
-    d->initializeSceneGraphConnections();
 }
 
 QQuickWebPage::~QQuickWebPage()
@@ -46,146 +47,20 @@ QQuickWebPage::~QQuickWebPage()
     delete d;
 }
 
-void QQuickWebPage::keyPressEvent(QKeyEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::keyReleaseEvent(QKeyEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::inputMethodEvent(QInputMethodEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::focusInEvent(QFocusEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::focusOutEvent(QFocusEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::mousePressEvent(QMouseEvent* event)
-{
-    forceActiveFocus();
-    this->event(event);
-}
-
-void QQuickWebPage::mouseMoveEvent(QMouseEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::mouseReleaseEvent(QMouseEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::mouseDoubleClickEvent(QMouseEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::wheelEvent(QWheelEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::hoverEnterEvent(QHoverEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::hoverMoveEvent(QHoverEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::hoverLeaveEvent(QHoverEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::dragMoveEvent(QDragMoveEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::dragEnterEvent(QDragEnterEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::dragLeaveEvent(QDragLeaveEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::dropEvent(QDropEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::geometryChanged(const QRectF& newGeometry, const QRectF& oldGeometry)
-{
-    QQuickItem::geometryChanged(newGeometry, oldGeometry);
-    if (newGeometry.size() != oldGeometry.size())
-        d->pageProxy->setDrawingAreaSize(newGeometry.size().toSize());
-}
-
-bool QQuickWebPage::event(QEvent* ev)
-{
-    if (d->pageProxy->handleEvent(ev))
-        return true;
-    if (ev->type() == QEvent::InputMethod)
-        return false; // This is necessary to avoid an endless loop in connection with QQuickItem::event().
-    return QQuickItem::event(ev);
-}
-
-void QQuickWebPage::touchEvent(QTouchEvent* event)
-{
-    this->event(event);
-}
-
-void QQuickWebPage::itemChange(ItemChange change, const ItemChangeData& data)
-{
-    if (change == ItemSceneChange)
-        d->initializeSceneGraphConnections();
-    QQuickItem::itemChange(change, data);
-}
-
-QQuickWebPagePrivate::QQuickWebPagePrivate(QQuickWebPage* view)
-    : q(view)
-    , pageProxy(0)
-    , sgUpdateQueue(view)
+QQuickWebPagePrivate::QQuickWebPagePrivate(QQuickWebPage* q, QQuickWebView* viewportItem)
+    : q(q)
+    , viewportItem(viewportItem)
+    , webPageProxy(0)
     , paintingIsInitialized(false)
+    , m_paintNode(0)
+    , contentsScale(1)
 {
 }
 
-void QQuickWebPagePrivate::initializeSceneGraphConnections()
+void QQuickWebPagePrivate::initialize(WebKit::WebPageProxy* webPageProxy)
 {
-    if (paintingIsInitialized)
-        return;
-    if (!q->canvas())
-        return;
-    paintingIsInitialized = true;
-    if (q->sceneGraphEngine())
-        _q_onSceneGraphInitialized();
-    else
-        QObject::connect(q->canvas(), SIGNAL(sceneGraphInitialized()), q, SLOT(_q_onSceneGraphInitialized()));
-}
-
-void QQuickWebPagePrivate::setPageProxy(QtWebPageProxy* pageProxy)
-{
-    ASSERT(!this->pageProxy);
-    ASSERT(pageProxy);
-    this->pageProxy = pageProxy;
+    this->webPageProxy = webPageProxy;
+    eventHandler.reset(new QtWebPageEventHandler(toAPI(webPageProxy), q, viewportItem));
 }
 
 static float computeEffectiveOpacity(const QQuickItem* item)
@@ -200,47 +75,148 @@ static float computeEffectiveOpacity(const QQuickItem* item)
     return opacity * computeEffectiveOpacity(item->parentItem());
 }
 
+void QQuickWebPagePrivate::setDrawingAreaSize(const QSize& size)
+{
+    DrawingAreaProxy* drawingArea = webPageProxy->drawingArea();
+    if (!drawingArea)
+        return;
+    drawingArea->setSize(WebCore::IntSize(size), WebCore::IntSize());
+}
+
+void QQuickWebPagePrivate::paint(QPainter* painter)
+{
+    if (webPageProxy->drawingArea())
+        webPageProxy->drawingArea()->paintLayerTree(painter);
+}
+
 void QQuickWebPagePrivate::paintToCurrentGLContext()
 {
     if (!q->isVisible())
         return;
 
     QTransform transform = q->itemTransform(0, 0);
+    transform.scale(contentsScale, contentsScale);
 
     float opacity = computeEffectiveOpacity(q);
-    QRectF clipRect = q->parentItem()->mapRectToScene(q->parentItem()->boundingRect());
+    QRectF clipRect = viewportItem->mapRectToScene(viewportItem->boundingRect());
 
     if (!clipRect.isValid())
         return;
 
-    // Make sure that no GL error code stays from previous QT operations.
-    glGetError();
+    DrawingAreaProxy* drawingArea = webPageProxy->drawingArea();
+    if (!drawingArea)
+        return;
 
-    glEnable(GL_SCISSOR_TEST);
-    ASSERT(!glGetError());
-    const int left = clipRect.left();
-    const int width = clipRect.width();
-    const int bottom = q->canvas()->height() - (clipRect.bottom() + 1);
-    const int height = clipRect.height();
-
-    glScissor(left, bottom, width, height);
-    ASSERT(!glGetError());
-
-    pageProxy->renderToCurrentGLContext(transform, opacity);
-    glDisable(GL_SCISSOR_TEST);
-    ASSERT(!glGetError());
+    drawingArea->paintToCurrentGLContext(transform, opacity, clipRect);
 }
 
-void QQuickWebPagePrivate::_q_onAfterSceneRender()
+struct PageProxyNode : public QSGRenderNode {
+    PageProxyNode(QQuickWebPagePrivate* page)
+        : m_pagePrivate(page)
+    {
+    }
+
+    virtual StateFlags changedStates()
+    {
+        return StateFlags(DepthState) | StencilState | ScissorState | ColorState | BlendState
+               | CullState | ViewportState;
+    }
+
+    virtual void render(const RenderState &)
+    {
+        if (m_pagePrivate)
+            m_pagePrivate->paintToCurrentGLContext();
+    }
+
+    ~PageProxyNode()
+    {
+        if (m_pagePrivate)
+            m_pagePrivate->resetPaintNode();
+    }
+
+    QQuickWebPagePrivate* m_pagePrivate;
+};
+
+QSGNode* QQuickWebPage::updatePaintNode(QSGNode* oldNode, UpdatePaintNodeData*)
 {
-    // TODO: Allow painting before the scene or in the middle of the scene with an FBO.
-    paintToCurrentGLContext();
+    if (!(flags() & ItemHasContents)) {
+        if (oldNode)
+            delete oldNode;
+        return 0;
+    }
+
+    PageProxyNode* proxyNode = static_cast<PageProxyNode*>(oldNode);
+    if (!proxyNode) {
+        proxyNode = new PageProxyNode(d);
+        d->m_paintNode = proxyNode;
+    }
+
+    return proxyNode;
 }
 
-void QQuickWebPagePrivate::_q_onSceneGraphInitialized()
+QtWebPageEventHandler* QQuickWebPage::eventHandler() const
 {
-    QSGEngine* engine = q->sceneGraphEngine();
-    QObject::connect(engine, SIGNAL(afterRendering()), q, SLOT(_q_onAfterSceneRender()), Qt::DirectConnection);
+    return d->eventHandler.data();
 }
 
-#include "moc_qquickwebpage.cpp"
+void QQuickWebPage::setContentsSize(const QSizeF& size)
+{
+    if (size.isEmpty() || d->contentsSize == size)
+        return;
+
+    d->contentsSize = size;
+    d->updateSize();
+    d->setDrawingAreaSize(d->contentsSize.toSize());
+}
+
+const QSizeF& QQuickWebPage::contentsSize() const
+{
+    return d->contentsSize;
+}
+
+void QQuickWebPage::setContentsScale(qreal scale)
+{
+    ASSERT(scale > 0);
+    d->contentsScale = scale;
+    d->updateSize();
+}
+
+qreal QQuickWebPage::contentsScale() const
+{
+    ASSERT(d->contentsScale > 0);
+    return d->contentsScale;
+}
+
+QTransform QQuickWebPage::transformFromItem() const
+{
+    return transformToItem().inverted();
+}
+
+QTransform QQuickWebPage::transformToItem() const
+{
+    QPointF pos = d->viewportItem->pageItemPos();
+    return QTransform(d->contentsScale, 0, 0, 0, d->contentsScale, 0, pos.x(), pos.y(), 1);
+}
+
+void QQuickWebPagePrivate::updateSize()
+{
+    QSizeF scaledSize = contentsSize * contentsScale;
+    q->setSize(scaledSize);
+    viewportItem->updateContentsSize(scaledSize);
+}
+
+void QQuickWebPagePrivate::resetPaintNode()
+{
+    m_paintNode = 0;
+    DrawingAreaProxy* drawingArea = webPageProxy->drawingArea();
+    if (drawingArea && drawingArea->layerTreeHostProxy())
+        drawingArea->layerTreeHostProxy()->purgeGLResources();
+}
+
+QQuickWebPagePrivate::~QQuickWebPagePrivate()
+{
+    if (m_paintNode)
+        static_cast<PageProxyNode*>(m_paintNode)->m_pagePrivate = 0;
+}
+
+#include "moc_qquickwebpage_p.cpp"

@@ -44,6 +44,7 @@
 #include "V8IsolatedContext.h"
 #include "V8Node.h"
 #include "V8Proxy.h"
+#include <wtf/OwnArrayPtr.h>
 #include <wtf/RefPtr.h>
 #include <wtf/StdLibExtras.h>
 
@@ -78,7 +79,7 @@ v8::Handle<v8::Value> V8HTMLDocument::GetNamedProperty(HTMLDocument* htmlDocumen
     if (!htmlDocument->hasNamedItem(key.impl()) && !htmlDocument->hasExtraNamedItem(key.impl()))
         return v8::Handle<v8::Value>();
 
-    RefPtr<HTMLCollection> items = htmlDocument->documentNamedItems(key);
+    HTMLCollection* items = htmlDocument->documentNamedItems(key);
     if (!items->length())
         return v8::Handle<v8::Value>();
 
@@ -91,7 +92,7 @@ v8::Handle<v8::Value> V8HTMLDocument::GetNamedProperty(HTMLDocument* htmlDocumen
         return toV8(node);
     }
 
-    return toV8(items.release());
+    return toV8(items);
 }
 
 // HTMLDocument ----------------------------------------------------------------
@@ -147,7 +148,7 @@ v8::Handle<v8::Value> V8HTMLDocument::openCallback(const v8::Arguments& args)
                 return v8::Undefined();
             }
             // Wrap up the arguments and call the function.
-            v8::Local<v8::Value>* params = new v8::Local<v8::Value>[args.Length()];
+            OwnArrayPtr<v8::Local<v8::Value> > params = adoptArrayPtr(new v8::Local<v8::Value>[args.Length()]);
             for (int i = 0; i < args.Length(); i++)
                 params[i] = args[i];
 
@@ -155,8 +156,7 @@ v8::Handle<v8::Value> V8HTMLDocument::openCallback(const v8::Arguments& args)
             if (!proxy)
                 return v8::Undefined();
 
-            v8::Local<v8::Value> result = proxy->callFunction(v8::Local<v8::Function>::Cast(function), global, args.Length(), params);
-            delete[] params;
+            v8::Local<v8::Value> result = proxy->callFunction(v8::Local<v8::Function>::Cast(function), global, args.Length(), params.get());
             return result;
         }
     }

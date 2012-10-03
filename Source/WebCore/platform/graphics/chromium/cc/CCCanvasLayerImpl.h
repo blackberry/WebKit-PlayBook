@@ -34,18 +34,19 @@ namespace WebCore {
 
 class CCCanvasLayerImpl : public CCLayerImpl {
 public:
-    static PassRefPtr<CCCanvasLayerImpl> create(int id)
+    static PassOwnPtr<CCCanvasLayerImpl> create(int id)
     {
-        return adoptRef(new CCCanvasLayerImpl(id));
+        return adoptPtr(new CCCanvasLayerImpl(id));
     }
     virtual ~CCCanvasLayerImpl();
 
-    typedef ProgramBinding<VertexShaderPosTex, FragmentShaderRGBATexFlipAlpha> Program;
+    virtual void appendQuads(CCQuadList&, const CCSharedQuadState*);
 
-    virtual void draw(LayerRendererChromium*);
+    typedef ProgramBinding<VertexShaderPosTex, FragmentShaderRGBATexFlipAlpha> Program;
 
     virtual void dumpLayerProperties(TextStream&, int indent) const;
 
+    unsigned textureId() const { return m_textureId; }
     void setTextureId(unsigned id) { m_textureId = id; }
     void setHasAlpha(bool hasAlpha) { m_hasAlpha = hasAlpha; }
     void setPremultipliedAlpha(bool premultipliedAlpha) { m_premultipliedAlpha = premultipliedAlpha; }

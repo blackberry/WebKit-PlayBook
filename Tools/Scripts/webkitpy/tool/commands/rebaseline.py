@@ -37,11 +37,10 @@ from webkitpy.common.net.buildbot import BuildBot
 from webkitpy.common.net.layouttestresults import LayoutTestResults
 from webkitpy.common.system.executive import ScriptError
 from webkitpy.common.system.user import User
-from webkitpy.layout_tests.layout_package.test_result_writer import TestResultWriter
+from webkitpy.layout_tests.controllers.test_result_writer import TestResultWriter
 from webkitpy.layout_tests.models import test_failures
 from webkitpy.layout_tests.models.test_expectations import TestExpectations
 from webkitpy.layout_tests.port import builders
-from webkitpy.layout_tests.port import test_files
 from webkitpy.tool.grammar import pluralize
 from webkitpy.tool.multicommandtool import AbstractDeclarativeCommand
 
@@ -112,14 +111,11 @@ class OptimizeBaselines(AbstractDeclarativeCommand):
             if not self._baseline_optimizer.optimize(baseline_name):
                 print "Hueristics failed to optimize %s" % baseline_name
 
-    def _to_test_name(self, file_name): 
-        return self._tool.filesystem.relpath(file_name, self._port.layout_tests_dir())
-
     def execute(self, options, args, tool):
         self._baseline_optimizer = BaselineOptimizer(tool)
         self._port = tool.port_factory.get("chromium-win-win7")  # FIXME: This should be selectable.
 
-        for test_name in map(self._to_test_name, test_files.find(self._port, args)):
+        for test_name in self._port.tests(args):
             print "Optimizing %s." % test_name
             self._optimize_baseline(test_name)
 
@@ -142,14 +138,11 @@ class AnalyzeBaselines(AbstractDeclarativeCommand):
             directories_by_result = self._baseline_optimizer.directories_by_result(baseline_name)
             self._print(baseline_name, directories_by_result)
 
-    def _to_test_name(self, file_name): 
-        return self._tool.filesystem.relpath(file_name, self._port.layout_tests_dir())
-
     def execute(self, options, args, tool):
         self._baseline_optimizer = BaselineOptimizer(tool)
         self._port = tool.port_factory.get("chromium-win-win7")  # FIXME: This should be selectable.
 
-        for test_name in map(self._to_test_name, test_files.find(self._port, args)):
+        for test_name in self._port.tests(args):
             self._analyze_baseline(test_name)
 
 

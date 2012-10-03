@@ -24,8 +24,9 @@
 #include "config.h"
 #include "ewk_frame.h"
 
+#include "Assertions.h"
+#include "DocumentLoader.h"
 #include "DocumentMarkerController.h"
-#include "EWebKit.h"
 #include "EventHandler.h"
 #include "FocusController.h"
 #include "FrameLoaderClientEfl.h"
@@ -39,6 +40,7 @@
 #include "HitTestResult.h"
 #include "IntSize.h"
 #include "KURL.h"
+#include "PlatformEvent.h"
 #include "PlatformKeyboardEvent.h"
 #include "PlatformMouseEvent.h"
 #include "PlatformTouchEvent.h"
@@ -50,11 +52,10 @@
 #include "SharedBuffer.h"
 #include "SubstituteData.h"
 #include "WindowsKeyboardCodes.h"
+#include "ewk_logging.h"
 #include "ewk_private.h"
-
 #include <Eina.h>
 #include <Evas.h>
-#include <algorithm>
 #include <eina_safety_checks.h>
 #include <wtf/text/CString.h>
 
@@ -71,7 +72,9 @@ struct Ewk_Frame_Smart_Data {
     const char* title;
     const char* uri;
     const char* name;
-    Eina_Bool editable : 1;
+    bool editable : 1;
+    bool hasDisplayedMixedContent : 1;
+    bool hasRunMixedContent : 1;
 };
 
 struct Eina_Iterator_Ewk_Frame {
@@ -83,28 +86,28 @@ struct Eina_Iterator_Ewk_Frame {
 #ifndef EWK_TYPE_CHECK
 #define EWK_FRAME_TYPE_CHECK(ewkFrame, ...) do { } while (0)
 #else
-#define EWK_FRAME_TYPE_CHECK(ewkFrame, ...)                                    \
-    do {                                                                \
-        const char* _tmp_otype = evas_object_type_get(ewkFrame);               \
-        if (EINA_UNLIKELY(_tmp_otype != EWK_FRAME_TYPE_STR)) {          \
-            EINA_LOG_CRIT                                               \
-                ("%p (%s) is not of an ewk_frame!", ewkFrame,                  \
-                _tmp_otype ? _tmp_otype : "(null)");                    \
-            return __VA_ARGS__;                                         \
-        }                                                               \
+#define EWK_FRAME_TYPE_CHECK(ewkFrame, ...) \
+    do { \
+        const char* _tmp_otype = evas_object_type_get(ewkFrame); \
+        if (EINA_UNLIKELY(_tmp_otype != EWK_FRAME_TYPE_STR)) { \
+            EINA_LOG_CRIT \
+                ("%p (%s) is not of an ewk_frame!", ewkFrame, \
+                _tmp_otype ? _tmp_otype : "(null)"); \
+            return __VA_ARGS__; \
+        } \
     } while (0)
 #endif
 
-#define EWK_FRAME_SD_GET(ewkFrame, ptr)                                \
-    Ewk_Frame_Smart_Data* ptr = static_cast<Ewk_Frame_Smart_Data*>(evas_object_smart_data_get(ewkFrame))
+#define EWK_FRAME_SD_GET(ewkFrame, pointer) \
+    Ewk_Frame_Smart_Data* pointer = static_cast<Ewk_Frame_Smart_Data*>(evas_object_smart_data_get(ewkFrame))
 
-#define EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, ptr, ...)         \
-    EWK_FRAME_TYPE_CHECK(ewkFrame, __VA_ARGS__);               \
-    EWK_FRAME_SD_GET(ewkFrame, ptr);                           \
-    if (!ptr) {                                         \
-        CRITICAL("no smart data for object %p (%s)",    \
-                 ewkFrame, evas_object_type_get(ewkFrame));           \
-        return __VA_ARGS__;                             \
+#define EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, pointer, ...) \
+    EWK_FRAME_TYPE_CHECK(ewkFrame, __VA_ARGS__); \
+    EWK_FRAME_SD_GET(ewkFrame, pointer); \
+    if (!pointer) { \
+        CRITICAL("no smart data for object %p (%s)", \
+                 ewkFrame, evas_object_type_get(ewkFrame)); \
+        return __VA_ARGS__; \
     }
 
 static Evas_Smart_Class _parent_sc = EVAS_SMART_CLASS_INIT_NULL;
@@ -433,7 +436,8 @@ char* ewk_frame_script_execute(Evas_Object* ewkFrame, const char* script)
         return 0;
 
     JSC::JSLock lock(JSC::SilenceAssertionsOnly);
-    resultString = WebCore::ustringToString(result.toString(smartData->frame->script()->globalObject(WebCore::mainThreadNormalWorld())->globalExec()));
+    JSC::ExecState* exec = smartData->frame->script()->globalObject(WebCore::mainThreadNormalWorld())->globalExec();
+    resultString = WebCore::ustringToString(result.toString(exec)->value(exec));
     return strdup(resultString.utf8().data());
 #else
     notImplemented();
@@ -455,6 +459,7 @@ Eina_Bool ewk_frame_editable_set(Evas_Object* ewkFrame, Eina_Bool editable)
     editable = !!editable;
     if (smartData->editable == editable)
         return true;
+    smartData->editable = editable;
     if (editable)
         smartData->frame->editor()->applyEditingStyleToBodyElement();
     return true;
@@ -464,10 +469,10 @@ char* ewk_frame_selection_get(const Evas_Object* ewkFrame)
 {
     EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, 0);
     EINA_SAFETY_ON_NULL_RETURN_VAL(smartData->frame, 0);
-    WTF::CString s = smartData->frame->editor()->selectedText().utf8();
-    if (s.isNull())
+    WTF::CString selectedText = smartData->frame->editor()->selectedText().utf8();
+    if (selectedText.isNull())
         return 0;
-    return strdup(s.data());
+    return strdup(selectedText.data());
 }
 
 Eina_Bool ewk_frame_text_search(const Evas_Object* ewkFrame, const char* text, Eina_Bool caseSensitive, Eina_Bool forward, Eina_Bool wrap)
@@ -654,7 +659,7 @@ void ewk_frame_hit_test_free(Ewk_Hit_Test* hitTest)
     eina_stringshare_del(hitTest->link.title);
     eina_stringshare_del(hitTest->image_uri);
     eina_stringshare_del(hitTest->media_uri);
-    free(hitTest);
+    delete hitTest;
 }
 
 Ewk_Hit_Test* ewk_frame_hit_test_new(const Evas_Object* ewkFrame, int x, int y)
@@ -675,12 +680,7 @@ Ewk_Hit_Test* ewk_frame_hit_test_new(const Evas_Object* ewkFrame, int x, int y)
     if (!result.innerNode())
         return 0;
 
-    Ewk_Hit_Test* hitTest = static_cast<Ewk_Hit_Test*>(calloc(1, sizeof(Ewk_Hit_Test)));
-    if (!hitTest) {
-        CRITICAL("Could not allocate memory for hit test.");
-        return 0;
-    }
-
+    Ewk_Hit_Test* hitTest = new Ewk_Hit_Test;
     hitTest->x = result.point().x();
     hitTest->y = result.point().y();
 #if 0
@@ -830,8 +830,8 @@ Eina_Bool ewk_frame_feed_focus_in(Evas_Object* ewkFrame)
 {
     EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, false);
     EINA_SAFETY_ON_NULL_RETURN_VAL(smartData->frame, false);
-    WebCore::FocusController* c = smartData->frame->page()->focusController();
-    c->setFocusedFrame(smartData->frame);
+    WebCore::FocusController* focusController = smartData->frame->page()->focusController();
+    focusController->setFocusedFrame(smartData->frame);
     return true;
 }
 
@@ -935,8 +935,6 @@ Eina_Bool ewk_frame_feed_mouse_move(Evas_Object* ewkFrame, const Evas_Event_Mous
 
 Eina_Bool ewk_frame_feed_touch_event(Evas_Object* ewkFrame, Ewk_Touch_Event_Type action, Eina_List* points, int metaState)
 {
-    Eina_Bool result = false;
-
 #if ENABLE(TOUCH_EVENTS)
     EINA_SAFETY_ON_NULL_RETURN_VAL(points, false);
     EWK_FRAME_SD_GET(ewkFrame, smartData);
@@ -947,28 +945,30 @@ Eina_Bool ewk_frame_feed_touch_event(Evas_Object* ewkFrame, Ewk_Touch_Event_Type
     Evas_Coord x, y;
     evas_object_geometry_get(smartData->view, &x, &y, 0, 0);
 
-    WebCore::TouchEventType type = WebCore::TouchStart;
+    WebCore::PlatformEvent::Type type;
     switch (action) {
     case EWK_TOUCH_START:
-        type = WebCore::TouchStart;
-        break;
-    case EWK_TOUCH_END:
-        type = WebCore::TouchEnd;
+        type = WebCore::PlatformEvent::TouchStart;
         break;
     case EWK_TOUCH_MOVE:
-        type = WebCore::TouchMove;
+        type = WebCore::PlatformEvent::TouchMove;
+        break;
+    case EWK_TOUCH_END:
+        type = WebCore::PlatformEvent::TouchEnd;
         break;
     case EWK_TOUCH_CANCEL:
-        type = WebCore::TouchCancel;
+        type = WebCore::PlatformEvent::TouchCancel;
         break;
     default:
+        ASSERT_NOT_REACHED();
         return false;
     }
 
     WebCore::PlatformTouchEvent touchEvent(points, WebCore::IntPoint(x, y), type, metaState);
-    result = smartData->frame->eventHandler()->handleTouchEvent(touchEvent);
+    return smartData->frame->eventHandler()->handleTouchEvent(touchEvent);
+#else
+    return false;
 #endif
-    return result;
 }
 
 static inline Eina_Bool _ewk_frame_handle_key_scrolling(WebCore::Frame* frame, const WebCore::PlatformKeyboardEvent& keyEvent)
@@ -1073,14 +1073,7 @@ Ewk_Text_Selection_Type ewk_frame_text_selection_type_get(const Evas_Object* ewk
     if (!controller)
         return EWK_TEXT_SELECTION_NONE;
 
-    switch (controller->selectionType()) {
-    case WebCore::VisibleSelection::CaretSelection:
-        return EWK_TEXT_SELECTION_CARET;
-    case WebCore::VisibleSelection::RangeSelection:
-        return EWK_TEXT_SELECTION_RANGE;
-    default:
-        return EWK_TEXT_SELECTION_NONE;
-    }
+    return static_cast<Ewk_Text_Selection_Type>(controller->selectionType());
 }
 
 /* internal methods ****************************************************/
@@ -1479,6 +1472,9 @@ void ewk_frame_view_create_for_view(Evas_Object* ewkFrame, Evas_Object* view)
     const char* theme = ewk_view_theme_get(view);
     smartData->frame->view()->setEdjeTheme(theme);
     smartData->frame->view()->setEvasObject(ewkFrame);
+
+    ewk_frame_mixed_content_displayed_set(ewkFrame, false);
+    ewk_frame_mixed_content_run_set(ewkFrame, false);
 }
 
 ssize_t ewk_frame_source_get(const Evas_Object* ewkFrame, char** frameSource)
@@ -1591,6 +1587,41 @@ char* ewk_frame_plain_text_get(const Evas_Object* ewkFrame)
     return strdup(documentElement->innerText().utf8().data());
 }
 
+Eina_Bool ewk_frame_mixed_content_displayed_get(const Evas_Object* ewkFrame)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, false);
+    return smartData->hasDisplayedMixedContent;
+}
+
+Eina_Bool ewk_frame_mixed_content_run_get(const Evas_Object* ewkFrame)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, false);
+    return smartData->hasRunMixedContent;
+}
+
+Ewk_Certificate_Status ewk_frame_certificate_status_get(Evas_Object* ewkFrame)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, EWK_CERTIFICATE_STATUS_NO_CERTIFICATE);
+    EINA_SAFETY_ON_NULL_RETURN_VAL(smartData->frame, EWK_CERTIFICATE_STATUS_NO_CERTIFICATE);
+
+    const WebCore::FrameLoader* frameLoader = smartData->frame->loader();
+    const WebCore::DocumentLoader* documentLoader = frameLoader->documentLoader();
+    const WebCore::KURL documentURL = documentLoader->requestURL();
+
+    if (!documentURL.protocolIs("https"))
+        return EWK_CERTIFICATE_STATUS_NO_CERTIFICATE;
+
+    if (frameLoader->subframeIsLoading())
+        return EWK_CERTIFICATE_STATUS_NO_CERTIFICATE;
+
+    SoupMessage* soupMessage = documentLoader->request().toSoupMessage();
+
+    if (soupMessage && (soup_message_get_flags(soupMessage) & SOUP_MESSAGE_CERTIFICATE_TRUSTED))
+        return EWK_CERTIFICATE_STATUS_TRUSTED;
+
+    return EWK_CERTIFICATE_STATUS_UNTRUSTED;
+}
+
 /**
  * @internal
  * Reports uri changed and swap internal string reference.
@@ -1636,6 +1667,24 @@ void ewk_frame_force_layout(Evas_Object* ewkFrame)
  */
 WTF::PassRefPtr<WebCore::Widget> ewk_frame_plugin_create(Evas_Object* ewkFrame, const WebCore::IntSize& pluginSize, WebCore::HTMLPlugInElement* element, const WebCore::KURL& url, const WTF::Vector<WTF::String>& paramNames, const WTF::Vector<WTF::String>& paramValues, const WTF::String& mimeType, bool loadManually)
 {
+#if ENABLE(NETSCAPE_PLUGIN_API)
+    DBG("ewkFrame=%p, size=%dx%d, element=%p, url=%s, mimeType=%s",
+        ewkFrame, pluginSize.width(), pluginSize.height(), element,
+        url.string().utf8().data(), mimeType.utf8().data());
+
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, sd, 0);
+
+    // TODO: emit signal and ask webkit users if something else should be done.
+    // like creating another x window (see gtk, it allows users to create
+    // GtkPluginWidget.
+
+    WTF::RefPtr<WebCore::PluginView> pluginView = WebCore::PluginView::create
+        (sd->frame, pluginSize, element, url, paramNames, paramValues,
+        mimeType, loadManually);
+
+    if (pluginView->status() == WebCore::PluginStatusLoadedSuccessfully)
+        return pluginView.release();
+#endif // #if ENABLE(NETSCAPE_PLUGIN_API)
     return 0;
 }
 
@@ -1669,9 +1718,55 @@ void ewk_frame_editor_client_contents_changed(Evas_Object* ewkFrame)
     ewk_view_editor_client_contents_changed(smartData->view);
 }
 
+/**
+ * @internal
+ * Defines whether the frame has displayed mixed content.
+ *
+ * When a frame has displayed mixed content, the currently loaded URI is secure (HTTPS) but it has
+ * loaded and displayed a resource, such as an image, from an insecure (HTTP) source.
+ *
+ * @param hasDisplayed Do or do not clear the flag from the frame. If @c true, the container view
+ *                     is also notified and it then emits the "mixedcontent,displayed" signal.
+ *
+ * Emits signal: "mixedcontent,displayed" with no parameters when @p hasDisplayed is @c true.
+ */
+void ewk_frame_mixed_content_displayed_set(Evas_Object* ewkFrame, bool hasDisplayed)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData);
+    smartData->hasDisplayedMixedContent = hasDisplayed;
+
+    if (hasDisplayed) {
+        ewk_view_mixed_content_displayed_set(smartData->view, true);
+        evas_object_smart_callback_call(ewkFrame, "mixedcontent,displayed", 0);
+    }
+}
+
+/**
+ * @internal
+ * Defines whether the frame has run mixed content.
+ *
+ * When a frame has run mixed content, the currently loaded URI is secure (HTTPS) but it has
+ * loaded and run a resource, such as a script, from an insecure (HTTP) source.
+ *
+ * @param hasDisplayed Do or do not clear the flag from the frame. If @c true, the container view
+ *                     is also notified and it then emits the "mixedcontent,run" signal.
+ *
+ * Emits signal: "mixedcontent,run" with no parameters when @p hasRun is @c true.
+ */
+void ewk_frame_mixed_content_run_set(Evas_Object* ewkFrame, bool hasRun)
+{
+    EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData);
+    smartData->hasRunMixedContent = hasRun;
+
+    if (hasRun) {
+        ewk_view_mixed_content_run_set(smartData->view, true);
+        evas_object_smart_callback_call(ewkFrame, "mixedcontent,run", 0);
+    }
+}
+
 namespace EWKPrivate {
 
-WebCore::Frame *coreFrame(const Evas_Object *ewkFrame)
+WebCore::Frame* coreFrame(const Evas_Object* ewkFrame)
 {
     EWK_FRAME_SD_GET_OR_RETURN(ewkFrame, smartData, 0);
     return smartData->frame;

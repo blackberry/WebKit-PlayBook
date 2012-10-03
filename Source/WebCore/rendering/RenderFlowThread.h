@@ -1,5 +1,5 @@
 /*
- * Copyright 2011 Adobe Systems Incorporated. All Rights Reserved.
+ * Copyright (C) 2011 Adobe Systems Incorporated. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -13,7 +13,7 @@
  *    disclaimer in the documentation and/or other materials
  *    provided with the distribution.
  * 
- * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER “AS IS” AND ANY
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDER "AS IS" AND ANY
  * EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR
  * PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER BE
@@ -43,6 +43,7 @@ namespace WebCore {
 class RenderFlowThread;
 class RenderStyle;
 class RenderRegion;
+class WebKitNamedFlow;
 
 typedef ListHashSet<RenderFlowThread*> RenderFlowThreadList;
 typedef HashCountedSet<RenderFlowThread*> RenderFlowThreadCountedSet;
@@ -57,7 +58,6 @@ typedef ListHashSet<RenderRegion*> RenderRegionList;
 class RenderFlowThread: public RenderBlock {
 public:
     RenderFlowThread(Node*, const AtomicString& flowThread);
-    ~RenderFlowThread();
 
     virtual bool isRenderFlowThread() const { return true; }
 
@@ -74,6 +74,12 @@ public:
     
     void addFlowChild(RenderObject* newChild, RenderObject* beforeChild = 0);
     void removeFlowChild(RenderObject*);
+    void removeFlowChildInfo(RenderObject*);
+    bool hasChildren() const { return !m_flowThreadChildList.isEmpty(); }
+#ifndef NDEBUG
+    bool hasChild(RenderObject* child) const { return m_flowThreadChildList.contains(child); }
+    bool hasChildInfo(RenderObject* child) const { return child && child->isBox() && m_regionRangeMap.contains(toRenderBox(child)); }
+#endif
 
     void addRegionToThread(RenderRegion*);
     void removeRegionFromThread(RenderRegion*);
@@ -89,6 +95,7 @@ public:
     bool hasValidRegions() const { ASSERT(!m_regionsInvalidated); return m_hasValidRegions; }
 
     void invalidateRegions() { m_regionsInvalidated = true; setNeedsLayout(true); }
+    bool hasValidRegionInfo() const { return !m_regionsInvalidated && hasValidRegions(); }
 
     static PassRefPtr<RenderStyle> createFlowThreadStyle(RenderStyle* parentStyle);
 
@@ -98,6 +105,7 @@ public:
 
     void repaintRectangleInRegions(const LayoutRect&, bool immediate);
 
+    LayoutUnit regionLogicalTopForLine(LayoutUnit position) const;
     LayoutUnit regionLogicalWidthForLine(LayoutUnit position) const;
     LayoutUnit regionLogicalHeightForLine(LayoutUnit position) const;
     LayoutUnit regionRemainingLogicalHeightForLine(LayoutUnit position, PageBoundaryRule = IncludePageBoundary) const;
@@ -121,6 +129,17 @@ public:
     void setRegionRangeForBox(const RenderBox*, LayoutUnit offsetFromLogicalTopOfFirstPage);
     void getRegionRangeForBox(const RenderBox*, RenderRegion*& startRegion, RenderRegion*& endRegion) const;
 
+    void clearRenderBoxCustomStyle(const RenderBox*,
+                                      const RenderRegion* oldStartRegion = 0, const RenderRegion* oldEndRegion = 0,
+                                      const RenderRegion* newStartRegion = 0, const RenderRegion* newEndRegion = 0);
+    WebKitNamedFlow* ensureNamedFlow();
+    void computeOverflowStateForRegions(LayoutUnit oldClientAfterEdge);
+
+    bool overflow() const { return m_overflow; }
+
+    // Check if the object is in region and the region is part of this flow thread.
+    bool objectInFlowRegion(const RenderObject*, const RenderRegion*) const;
+
 private:
     virtual const char* renderName() const { return "RenderFlowThread"; }
 
@@ -131,6 +150,8 @@ private:
 
     bool shouldRepaint(const LayoutRect&) const;
 
+    bool regionInRange(const RenderRegion* targetRegion, const RenderRegion* startRegion, const RenderRegion* endRegion) const;
+
     typedef ListHashSet<RenderObject*> FlowThreadChildList;
     FlowThreadChildList m_flowThreadChildList;
 
@@ -139,6 +160,11 @@ private:
 
     class RenderRegionRange {
     public:
+        RenderRegionRange()
+        {
+            setRange(0, 0);
+        }
+
         RenderRegionRange(RenderRegion* start, RenderRegion* end)
         {
             setRange(start, end);
@@ -169,13 +195,15 @@ private:
     RenderFlowThreadCountedSet m_layoutBeforeThreadsSet;
 
     // A maps from RenderBox
-    typedef HashMap<const RenderBox*, RenderRegionRange*> RenderRegionRangeMap;
+    typedef HashMap<const RenderBox*, RenderRegionRange> RenderRegionRangeMap;
     RenderRegionRangeMap m_regionRangeMap;
 
     bool m_hasValidRegions;
     bool m_regionsInvalidated;
     bool m_regionsHaveUniformLogicalWidth;
     bool m_regionsHaveUniformLogicalHeight;
+    bool m_overflow;
+    RefPtr<WebKitNamedFlow> m_namedFlow;
 };
 
 inline RenderFlowThread* toRenderFlowThread(RenderObject* object)

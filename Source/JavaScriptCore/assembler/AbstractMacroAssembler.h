@@ -538,9 +538,7 @@ public:
     void beginUninterruptedSequence() { }
     void endUninterruptedSequence() { }
 
-#ifndef NDEBUG
     unsigned debugOffset() { return m_assembler.debugOffset(); }
-#endif
 
 protected:
     AssemblerType m_assembler;
@@ -596,6 +594,18 @@ protected:
     static void* readPointer(CodeLocationDataLabelPtr dataLabelPtr)
     {
         return AssemblerType::readPointer(dataLabelPtr.dataLocation());
+    }
+    
+    static void unreachableForPlatform()
+    {
+#if COMPILER(CLANG)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wmissing-noreturn"
+        ASSERT_NOT_REACHED();
+#pragma clang diagnostic pop
+#else
+        ASSERT_NOT_REACHED();
+#endif
     }
 #ifdef OPT_FASTACCESS
     void repatchLoadOffset(CodeLocationInstruct  instruction, int32_t new_offset)

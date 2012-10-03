@@ -64,7 +64,7 @@ static const char allowDatabaseMode[] = "allowDatabaseMode";
 // call back to the worker context.
 class AllowDatabaseMainThreadBridge : public ThreadSafeRefCounted<AllowDatabaseMainThreadBridge> {
 public:
-    static PassRefPtr<AllowDatabaseMainThreadBridge> create(WebCore::WorkerLoaderProxy* workerLoaderProxy, const WTF::String& mode, NewWebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String& name, const WTF::String& displayName, unsigned long estimatedSize)
+    static PassRefPtr<AllowDatabaseMainThreadBridge> create(WebCore::WorkerLoaderProxy* workerLoaderProxy, const String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const String& name, const String& displayName, unsigned long estimatedSize)
     {
         return adoptRef(new AllowDatabaseMainThreadBridge(workerLoaderProxy, mode, commonClient, frame, name, displayName, estimatedSize));
     }
@@ -82,33 +82,29 @@ public:
     }
 
     // This method is invoked on the main thread.
-    void signalCompleted(bool result)
+    void signalCompleted(const String& mode, bool result)
     {
         MutexLocker locker(m_mutex);
-        if (m_workerLoaderProxy)
-            m_workerLoaderProxy->postTaskForModeToWorkerContext(
-                createCallbackTask(&didComplete, WebCore::AllowCrossThreadAccess(this), result), 
-                m_mode);
+        if (!m_workerLoaderProxy)
+            return;
+        m_workerLoaderProxy->postTaskForModeToWorkerContext(createCallbackTask(&didComplete, this, result), mode);
     }
 
 private:
-    AllowDatabaseMainThreadBridge(WebCore::WorkerLoaderProxy* workerLoaderProxy, const WTF::String& mode, NewWebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String& name, const WTF::String& displayName, unsigned long estimatedSize)
+    AllowDatabaseMainThreadBridge(WebCore::WorkerLoaderProxy* workerLoaderProxy, const String& mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const String& name, const String& displayName, unsigned long estimatedSize)
         : m_workerLoaderProxy(workerLoaderProxy)
-        , m_mode(mode)
     {
         WebWorkerBase::dispatchTaskToMainThread(
-            createCallbackTask(&allowDatabaseTask, WebCore::AllowCrossThreadAccess(commonClient),
+            createCallbackTask(&allowDatabaseTask, mode, WebCore::AllowCrossThreadAccess(commonClient),
                                WebCore::AllowCrossThreadAccess(frame),
-                               String(name), String(displayName), estimatedSize,
-                               WebCore::AllowCrossThreadAccess(this)));
+                               name, displayName, estimatedSize,
+                               this));
     }
 
-    static void allowDatabaseTask(WebCore::ScriptExecutionContext* context, NewWebCommonWorkerClient* commonClient, WebFrame* frame, const WTF::String name, const WTF::String displayName, unsigned long estimatedSize, PassRefPtr<AllowDatabaseMainThreadBridge> bridge)
+    static void allowDatabaseTask(WebCore::ScriptExecutionContext* context, const String mode, WebCommonWorkerClient* commonClient, WebFrame* frame, const String name, const String displayName, unsigned long estimatedSize, PassRefPtr<AllowDatabaseMainThreadBridge> bridge)
     {
-        if (commonClient)
-            bridge->signalCompleted(commonClient->allowDatabase(frame, name, displayName, estimatedSize));
-        else
-            bridge->signalCompleted(false);
+        bool allowDatabase = commonClient ? commonClient->allowDatabase(frame, name, displayName, estimatedSize) : false;
+        bridge->signalCompleted(mode, allowDatabase);
     }
 
     static void didComplete(WebCore::ScriptExecutionContext* context, PassRefPtr<AllowDatabaseMainThreadBridge> bridge, bool result)
@@ -119,10 +115,9 @@ private:
     bool m_result;
     Mutex m_mutex;
     WebCore::WorkerLoaderProxy* m_workerLoaderProxy;
-    WTF::String m_mode;
 };
 
-bool allowDatabaseForWorker(NewWebCommonWorkerClient* commonClient, WebFrame* frame, const WebString& name, const WebString& displayName, unsigned long estimatedSize)
+bool allowDatabaseForWorker(WebCommonWorkerClient* commonClient, WebFrame* frame, const WebString& name, const WebString& displayName, unsigned long estimatedSize)
 {
     WebCore::WorkerScriptController* controller = WebCore::WorkerScriptController::controllerForContext();
     WebCore::WorkerContext* workerContext = controller->workerContext();
@@ -134,7 +129,7 @@ bool allowDatabaseForWorker(NewWebCommonWorkerClient* commonClient, WebFrame* fr
     String mode = allowDatabaseMode;
     mode.append(String::number(runLoop.createUniqueId()));
 
-    RefPtr<AllowDatabaseMainThreadBridge> bridge = AllowDatabaseMainThreadBridge::create(workerLoaderProxy, mode, commonClient, frame, String(name), String(displayName), estimatedSize);
+    RefPtr<AllowDatabaseMainThreadBridge> bridge = AllowDatabaseMainThreadBridge::create(workerLoaderProxy, mode, commonClient, frame, name, displayName, estimatedSize);
 
     // Either the bridge returns, or the queue gets terminated.
     if (runLoop.runInMode(workerContext, mode) == MessageQueueTerminated) {
@@ -169,8 +164,11 @@ bool DatabaseObserver::canEstablishDatabase(ScriptExecutionContext* scriptExecut
 #if ENABLE(WORKERS)
         WorkerContext* workerContext = static_cast<WorkerContext*>(scriptExecutionContext);
         WorkerLoaderProxy* workerLoaderProxy = &workerContext->thread()->workerLoaderProxy();
-        NewWebWorkerBase* webWorker = static_cast<NewWebWorkerBase*>(workerLoaderProxy);
-        return allowDatabaseForWorker(webWorker->newCommonClient(), webWorker->view()->mainFrame(), name, displayName, estimatedSize);
+        WebWorkerBase* webWorker = static_cast<WebWorkerBase*>(workerLoaderProxy);
+        WebView* view = webWorker->view();
+        if (!view)
+            return false;
+        return allowDatabaseForWorker(webWorker->commonClient(), view->mainFrame(), name, displayName, estimatedSize);
 #else
         ASSERT_NOT_REACHED();
 #endif
@@ -195,6 +193,36 @@ void DatabaseObserver::databaseClosed(AbstractDatabase* database)
 {
     ASSERT(database->scriptExecutionContext()->isContextThread());
     WebDatabase::observer()->databaseClosed(WebDatabase(database));
+}
+
+void DatabaseObserver::reportOpenDatabaseResult(AbstractDatabase* database, int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportOpenDatabaseResult(WebDatabase(database), errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void DatabaseObserver::reportChangeVersionResult(AbstractDatabase* database, int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportChangeVersionResult(WebDatabase(database), errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void DatabaseObserver::reportStartTransactionResult(AbstractDatabase* database, int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportStartTransactionResult(WebDatabase(database), errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void DatabaseObserver::reportCommitTransactionResult(AbstractDatabase* database, int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportCommitTransactionResult(WebDatabase(database), errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void DatabaseObserver::reportExecuteStatementResult(AbstractDatabase* database, int errorSite, int webSqlErrorCode, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportExecuteStatementResult(WebDatabase(database), errorSite, webSqlErrorCode, sqliteErrorCode);
+}
+
+void DatabaseObserver::reportVacuumDatabaseResult(AbstractDatabase* database, int sqliteErrorCode)
+{
+    WebDatabase::observer()->reportVacuumDatabaseResult(WebDatabase(database), sqliteErrorCode);
 }
 
 } // namespace WebCore

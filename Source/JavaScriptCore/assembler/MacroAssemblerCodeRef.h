@@ -27,11 +27,9 @@
 #define MacroAssemblerCodeRef_h
 
 #include "ExecutableAllocator.h"
-#include "PassRefPtr.h"
-#include "RefPtr.h"
-#include "UnusedParam.h"
-
-#if ENABLE(ASSEMBLER)
+#include <wtf/PassRefPtr.h>
+#include <wtf/RefPtr.h>
+#include <wtf/UnusedParam.h>
 
 // ASSERT_VALID_CODE_POINTER checks that ptr is a non-null pointer, and that it is a valid
 // instruction address on the platform (for example, check any alignment requirements).
@@ -52,7 +50,7 @@
 #define ASSERT_VALID_CODE_OFFSET(offset) // Anything goes!
 #endif
 
-#if CPU(X86) && OS(WIN)
+#if CPU(X86) && OS(WINDOWS)
 #define CALLING_CONVENTION_IS_STDCALL 1
 #ifndef CDECL
 #if COMPILER(MSVC)
@@ -126,7 +124,9 @@ public:
         ASSERT_VALID_CODE_POINTER(m_value);
     }
 
-#if CALLING_CONVENTION_IS_STDCALL
+// MSVC doesn't seem to treat functions with different calling conventions as
+// different types; these methods already defined for fastcall, below.
+#if CALLING_CONVENTION_IS_STDCALL && !OS(WINDOWS)
 
     template<typename returnType>
     FunctionPtr(returnType (CDECL *value)())
@@ -271,6 +271,14 @@ public:
     {
         ASSERT_VALID_CODE_POINTER(m_value);
     }
+    
+    static MacroAssemblerCodePtr createFromExecutableAddress(void* value)
+    {
+        ASSERT_VALID_CODE_POINTER(value);
+        MacroAssemblerCodePtr result;
+        result.m_value = value;
+        return result;
+    }
 
     explicit MacroAssemblerCodePtr(ReturnAddressPtr ra)
         : m_value(ra.value())
@@ -301,26 +309,61 @@ private:
 // pointer to the code, and a ref pointer to the pool from within which it
 // was allocated.
 class MacroAssemblerCodeRef {
+private:
+    // This is private because it's dangerous enough that we want uses of it
+    // to be easy to find - hence the static create method below.
+    explicit MacroAssemblerCodeRef(MacroAssemblerCodePtr codePtr)
+        : m_codePtr(codePtr)
+    {
+        ASSERT(m_codePtr);
+    }
+
 public:
     MacroAssemblerCodeRef()
-        : m_size(0)
     {
     }
 
-    MacroAssemblerCodeRef(void* code, PassRefPtr<ExecutablePool> executablePool, size_t size)
-        : m_code(code)
-        , m_executablePool(executablePool)
-        , m_size(size)
+    MacroAssemblerCodeRef(PassRefPtr<ExecutableMemoryHandle> executableMemory)
+        : m_codePtr(executableMemory->start())
+        , m_executableMemory(executableMemory)
     {
+        ASSERT(m_executableMemory->isManaged());
+        ASSERT(m_executableMemory->start());
+        ASSERT(m_codePtr);
     }
+    
+    // Use this only when you know that the codePtr refers to code that is
+    // already being kept alive through some other means. Typically this means
+    // that codePtr is immortal.
+    static MacroAssemblerCodeRef createSelfManagedCodeRef(MacroAssemblerCodePtr codePtr)
+    {
+        return MacroAssemblerCodeRef(codePtr);
+    }
+    
+    ExecutableMemoryHandle* executableMemory() const
+    {
+        return m_executableMemory.get();
+    }
+    
+    MacroAssemblerCodePtr code() const
+    {
+        return m_codePtr;
+    }
+    
+    size_t size() const
+    {
+        if (!m_executableMemory)
+            return 0;
+        return m_executableMemory->sizeInBytes();
+    }
+    
+    bool operator!() const { return !m_codePtr; }
 
-    MacroAssemblerCodePtr m_code;
-    RefPtr<ExecutablePool> m_executablePool;
-    size_t m_size;
+private:
+    MacroAssemblerCodePtr m_codePtr;
+    RefPtr<ExecutableMemoryHandle> m_executableMemory;
 };
 
 } // namespace JSC
-
-#endif // ENABLE(ASSEMBLER)
 
 #endif // MacroAssemblerCodeRef_h

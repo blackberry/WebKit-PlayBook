@@ -414,11 +414,6 @@ private:
 
 class ARMv7Assembler {
 public:
-    ~ARMv7Assembler()
-    {
-        ASSERT(m_jumpsToLink.isEmpty());
-    }
-
     typedef ARMRegisters::RegisterID RegisterID;
     typedef ARMRegisters::FPSingleRegisterID FPSingleRegisterID;
     typedef ARMRegisters::FPDoubleRegisterID FPDoubleRegisterID;
@@ -534,6 +529,7 @@ private:
         OP_BLX              = 0x4700,
         OP_BX               = 0x4700,
         OP_STR_reg_T1       = 0x5000,
+        OP_STRH_reg_T1      = 0x5200,
         OP_STRB_reg_T1      = 0x5400,
         OP_LDR_reg_T1       = 0x5800,
         OP_LDRH_reg_T1      = 0x5A00,
@@ -542,6 +538,7 @@ private:
         OP_LDR_imm_T1       = 0x6800,
         OP_STRB_imm_T1      = 0x7000,
         OP_LDRB_imm_T1      = 0x7800,
+        OP_STRH_imm_T1      = 0x8000,
         OP_LDRH_imm_T1      = 0x8800,
         OP_STR_imm_T2       = 0x9000,
         OP_LDR_imm_T2       = 0x9800,
@@ -587,6 +584,7 @@ private:
         OP_VMOV_T2      = 0xEEB0,
         OP_VMOV_IMM_T2  = 0xEEB0,
         OP_VMRS         = 0xEEB0,
+        OP_VNEG_T2      = 0xEEB0,
         OP_VSQRT_T1     = 0xEEB0,
         OP_B_T3a        = 0xF000,
         OP_B_T4a        = 0xF000,
@@ -604,6 +602,7 @@ private:
         OP_SUB_S_imm_T3 = 0xF1B0,
         OP_CMP_imm_T2   = 0xF1B0,
         OP_RSB_imm_T2   = 0xF1C0,
+        OP_RSB_S_imm_T2 = 0xF1D0,
         OP_ADD_imm_T4   = 0xF200,
         OP_MOV_imm_T3   = 0xF240,
         OP_SUB_imm_T4   = 0xF2A0,
@@ -614,6 +613,8 @@ private:
         OP_STRB_reg_T2  = 0xF800,
         OP_LDRB_imm_T3  = 0xF810,
         OP_LDRB_reg_T2  = 0xF810,
+        OP_STRH_imm_T3  = 0xF820,
+        OP_STRH_reg_T2  = 0xF820,
         OP_LDRH_reg_T2  = 0xF830,
         OP_LDRH_imm_T3  = 0xF830,
         OP_STR_imm_T4   = 0xF840,
@@ -622,6 +623,7 @@ private:
         OP_LDR_reg_T2   = 0xF850,
         OP_STRB_imm_T2  = 0xF880,
         OP_LDRB_imm_T2  = 0xF890,
+        OP_STRH_imm_T2  = 0xF8A0,
         OP_LDRH_imm_T2  = 0xF8B0,
         OP_STR_imm_T3   = 0xF8C0,
         OP_LDR_imm_T3   = 0xF8D0,
@@ -649,6 +651,7 @@ private:
         OP_VABS_T2b     = 0x0A40,
         OP_VCMPb        = 0x0A40,
         OP_VCVT_FPIVFPb = 0x0A40,
+        OP_VNEG_T2b     = 0x0A40,
         OP_VSUB_T2b     = 0x0A40,
         OP_VSQRT_T1b    = 0x0A40,
         OP_NOP_T2b      = 0x8000,
@@ -1439,6 +1442,65 @@ public:
         else
             m_formatter.twoWordOp12Reg4FourFours(OP_STRB_reg_T2, rn, FourFours(rt, 0, shift, rm));
     }
+    
+    // rt == ARMRegisters::pc only allowed if last instruction in IT (if then) block.
+    ALWAYS_INLINE void strh(RegisterID rt, RegisterID rn, ARMThumbImmediate imm)
+    {
+        ASSERT(rt != ARMRegisters::pc);
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(imm.isUInt12());
+        
+        if (!((rt | rn) & 8) && imm.isUInt7())
+            m_formatter.oneWordOp5Imm5Reg3Reg3(OP_STRH_imm_T1, imm.getUInt7() >> 2, rn, rt);
+        else
+            m_formatter.twoWordOp12Reg4Reg4Imm12(OP_STRH_imm_T2, rn, rt, imm.getUInt12());
+    }
+    
+    // If index is set, this is a regular offset or a pre-indexed store;
+    // if index is not set then is is a post-index store.
+    //
+    // If wback is set rn is updated - this is a pre or post index store,
+    // if wback is not set this is a regular offset memory access.
+    //
+    // (-255 <= offset <= 255)
+    // _reg = REG[rn]
+    // _tmp = _reg + offset
+    // MEM[index ? _tmp : _reg] = REG[rt]
+    // if (wback) REG[rn] = _tmp
+    ALWAYS_INLINE void strh(RegisterID rt, RegisterID rn, int offset, bool index, bool wback)
+    {
+        ASSERT(rt != ARMRegisters::pc);
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(index || wback);
+        ASSERT(!wback | (rt != rn));
+        
+        bool add = true;
+        if (offset < 0) {
+            add = false;
+            offset = -offset;
+        }
+        ASSERT(!(offset & ~0xff));
+        
+        offset |= (wback << 8);
+        offset |= (add   << 9);
+        offset |= (index << 10);
+        offset |= (1 << 11);
+        
+        m_formatter.twoWordOp12Reg4Reg4Imm12(OP_STRH_imm_T3, rn, rt, offset);
+    }
+    
+    // rt == ARMRegisters::pc only allowed if last instruction in IT (if then) block.
+    ALWAYS_INLINE void strh(RegisterID rt, RegisterID rn, RegisterID rm, unsigned shift = 0)
+    {
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(!BadReg(rm));
+        ASSERT(shift <= 3);
+        
+        if (!shift && !((rt | rn | rm) & 8))
+            m_formatter.oneWordOp7Reg3Reg3Reg3(OP_STRH_reg_T1, rm, rn, rt);
+        else
+            m_formatter.twoWordOp12Reg4FourFours(OP_STRH_reg_T2, rn, FourFours(rt, 0, shift, rm));
+    }
 
     ALWAYS_INLINE void sub(RegisterID rd, RegisterID rn, ARMThumbImmediate imm)
     {
@@ -1525,6 +1587,16 @@ public:
         m_formatter.twoWordOp5i6Imm4Reg4EncodedImm(OP_SUB_S_imm_T3, rn, rd, imm);
     }
 
+    ALWAYS_INLINE void sub_S(RegisterID rd, ARMThumbImmediate imm, RegisterID rn)
+    {
+        ASSERT(rd != ARMRegisters::pc);
+        ASSERT(rn != ARMRegisters::pc);
+        ASSERT(imm.isValid());
+        ASSERT(imm.isUInt12());
+
+        m_formatter.twoWordOp5i6Imm4Reg4EncodedImm(OP_RSB_S_imm_T2, rn, rd, imm);
+    }
+
     // Not allowed in an IT (if then) block?
     ALWAYS_INLINE void sub_S(RegisterID rd, RegisterID rn, RegisterID rm, ShiftTypeAndAmount shift)
     {
@@ -1601,6 +1673,12 @@ public:
         // boolean values are 64bit (toInt, unsigned, roundZero)
         m_formatter.vfpOp(OP_VCVT_FPIVFP, OP_VCVT_FPIVFPb, true, vcvtOp(true, false, true), rd, rm);
     }
+    
+    void vcvt_floatingPointToUnsigned(FPSingleRegisterID rd, FPDoubleRegisterID rm)
+    {
+        // boolean values are 64bit (toInt, unsigned, roundZero)
+        m_formatter.vfpOp(OP_VCVT_FPIVFP, OP_VCVT_FPIVFPb, true, vcvtOp(true, true, true), rd, rm);
+    }
 
     void vdiv(FPDoubleRegisterID rd, FPDoubleRegisterID rn, FPDoubleRegisterID rm)
     {
@@ -1667,6 +1745,11 @@ public:
     void vabs(FPDoubleRegisterID rd, FPDoubleRegisterID rm)
     {
         m_formatter.vfpOp(OP_VABS_T2, OP_VABS_T2b, true, VFPOperand(16), rd, rm);
+    }
+
+    void vneg(FPDoubleRegisterID rd, FPDoubleRegisterID rm)
+    {
+        m_formatter.vfpOp(OP_VNEG_T2, OP_VNEG_T2b, true, VFPOperand(1), rd, rm);
     }
 
     void vsqrt(FPDoubleRegisterID rd, FPDoubleRegisterID rm)
@@ -1744,29 +1827,29 @@ public:
         
         if (jumpType == JumpCondition) {
             // 2-byte conditional T1
-            const uint16_t* jumpT1Location = reinterpret_cast<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT1)));
+            const uint16_t* jumpT1Location = reinterpret_cast_ptr<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT1)));
             if (canBeJumpT1(jumpT1Location, to))
                 return LinkJumpT1;
             // 4-byte conditional T3
-            const uint16_t* jumpT3Location = reinterpret_cast<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT3)));
+            const uint16_t* jumpT3Location = reinterpret_cast_ptr<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT3)));
             if (canBeJumpT3(jumpT3Location, to, mayTriggerErrata)) {
                 if (!mayTriggerErrata)
                     return LinkJumpT3;
             }
             // 4-byte conditional T4 with IT
             const uint16_t* conditionalJumpT4Location = 
-            reinterpret_cast<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkConditionalJumpT4)));
+            reinterpret_cast_ptr<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkConditionalJumpT4)));
             if (canBeJumpT4(conditionalJumpT4Location, to, mayTriggerErrata)) {
                 if (!mayTriggerErrata)
                     return LinkConditionalJumpT4;
             }
         } else {
             // 2-byte unconditional T2
-            const uint16_t* jumpT2Location = reinterpret_cast<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT2)));
+            const uint16_t* jumpT2Location = reinterpret_cast_ptr<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT2)));
             if (canBeJumpT2(jumpT2Location, to))
                 return LinkJumpT2;
             // 4-byte unconditional T4
-            const uint16_t* jumpT4Location = reinterpret_cast<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT4)));
+            const uint16_t* jumpT4Location = reinterpret_cast_ptr<const uint16_t*>(from - (paddingSize - JUMP_ENUM_SIZE(LinkJumpT4)));
             if (canBeJumpT4(jumpT4Location, to, mayTriggerErrata)) {
                 if (!mayTriggerErrata)
                     return LinkJumpT4;
@@ -1805,25 +1888,25 @@ public:
     {
         switch (record.linkType()) {
         case LinkJumpT1:
-            linkJumpT1(record.condition(), reinterpret_cast<uint16_t*>(from), to);
+            linkJumpT1(record.condition(), reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkJumpT2:
-            linkJumpT2(reinterpret_cast<uint16_t*>(from), to);
+            linkJumpT2(reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkJumpT3:
-            linkJumpT3(record.condition(), reinterpret_cast<uint16_t*>(from), to);
+            linkJumpT3(record.condition(), reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkJumpT4:
-            linkJumpT4(reinterpret_cast<uint16_t*>(from), to);
+            linkJumpT4(reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkConditionalJumpT4:
-            linkConditionalJumpT4(record.condition(), reinterpret_cast<uint16_t*>(from), to);
+            linkConditionalJumpT4(record.condition(), reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkConditionalBX:
-            linkConditionalBX(record.condition(), reinterpret_cast<uint16_t*>(from), to);
+            linkConditionalBX(record.condition(), reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         case LinkBX:
-            linkBX(reinterpret_cast<uint16_t*>(from), to);
+            linkBX(reinterpret_cast_ptr<uint16_t*>(from), to);
             break;
         default:
             ASSERT_NOT_REACHED();
@@ -1894,6 +1977,11 @@ public:
 
         setPointer(reinterpret_cast<uint16_t*>(from) - 1, to);
     }
+    
+    static void* readCallTarget(void* from)
+    {
+        return readPointer(reinterpret_cast<uint16_t*>(from) - 1);
+    }
 
     static void repatchInt32(void* where, int32_t value)
     {
@@ -1921,9 +2009,7 @@ public:
         return reinterpret_cast<void*>(readInt32(where));
     }
 
-#ifndef NDEBUG
     unsigned debugOffset() { return m_formatter.debugOffset(); }
-#endif
 
 private:
     // VFP operations commonly take one or more 5-bit operands, typically representing a
@@ -2420,9 +2506,7 @@ private:
         bool isAligned(int alignment) const { return m_buffer.isAligned(alignment); }
         void* data() const { return m_buffer.data(); }
 
-#ifndef NDEBUG
         unsigned debugOffset() { return m_buffer.debugOffset(); }
-#endif
 
     private:
         AssemblerBuffer m_buffer;

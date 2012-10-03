@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -28,11 +28,10 @@
 #include <wtf/Vector.h>
 
 namespace WebCore {
-class Frame;
+class Credential;
 class DOMWrapperWorld;
+class Frame;
 class Range;
-class ResourceResponse;
-class SecurityOrigin;
 }
 
 extern WebCore::Frame* mainFrame;
@@ -53,15 +52,11 @@ public:
 
     static DumpRenderTree* currentInstance() { return s_currentInstance; }
 
-    void runTest(const WTF::String& url);
-    void runTests();
     void dump();
 
     void setWaitToDumpWatchdog(double interval);
-    void processWork(WebCore::Timer<DumpRenderTree>*);
 
     WebPage* page() { return m_page; }
-    WTF::String pageGroupName() const;
 
     bool loadFinished() const { return m_loadFinished; }
 
@@ -107,6 +102,13 @@ public:
 
     bool isSelectTrailingWhitespaceEnabled() const { return s_selectTrailingWhitespaceEnabled; }
     void setSelectTrailingWhitespaceEnabled(bool enabled) { s_selectTrailingWhitespaceEnabled = enabled; }
+    bool didReceiveAuthenticationChallenge(WebCore::Credential&);
+
+private:
+    void runTest(const WTF::String& url);
+    void runTests();
+
+    void processWork(WebCore::Timer<DumpRenderTree>*);
 
 private:
     static DumpRenderTree* s_currentInstance;
@@ -125,7 +127,6 @@ private:
 
     Vector<WTF::String> m_tests;
     Vector<WTF::String>::iterator m_currentTest;
-
 
     WTF::String m_resultsDir;
     WTF::String m_indexFile;

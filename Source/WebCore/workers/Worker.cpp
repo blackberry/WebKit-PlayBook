@@ -74,6 +74,8 @@ PassRefPtr<Worker> Worker::create(ScriptExecutionContext* context, const String&
 
     RefPtr<Worker> worker = adoptRef(new Worker(context));
 
+    worker->suspendIfNeeded();
+
     KURL scriptURL = worker->resolveURL(url, ec);
     if (scriptURL.isEmpty())
         return 0;
@@ -82,7 +84,7 @@ PassRefPtr<Worker> Worker::create(ScriptExecutionContext* context, const String&
     worker->setPendingActivity(worker.get());
 
     worker->m_scriptLoader = WorkerScriptLoader::create();
-#if PLATFORM(CHROMIUM)
+#if PLATFORM(CHROMIUM) || PLATFORM(BLACKBERRY)
     worker->m_scriptLoader->setTargetType(ResourceRequest::TargetIsWorker);
 #endif
     worker->m_scriptLoader->loadAsynchronously(context, scriptURL, DenyCrossOriginRequests, worker.get());

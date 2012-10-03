@@ -21,8 +21,10 @@
 #include "config.h"
 #include "JSTestEventConstructor.h"
 
+#include "JSDictionary.h"
 #include "KURL.h"
 #include "TestEventConstructor.h"
+#include <runtime/Error.h>
 #include <runtime/JSString.h>
 #include <wtf/GetPtr.h>
 
@@ -31,49 +33,26 @@ using namespace JSC;
 namespace WebCore {
 
 ASSERT_CLASS_FITS_IN_CELL(JSTestEventConstructor);
-
 /* Hash table for constructor */
-#if ENABLE(JIT)
-#define THUNK_GENERATOR(generator) , generator
-#else
-#define THUNK_GENERATOR(generator)
-#endif
-#if ENABLE(DFG_JIT)
-#define INTRINSIC(intrinsic) , intrinsic
-#else
-#define INTRINSIC(intrinsic)
-#endif
 
 static const HashTableValue JSTestEventConstructorTableValues[] =
 {
-    { "attr1", DontDelete | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorAttr1), (intptr_t)0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) },
-    { "attr2", DontDelete | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorAttr2), (intptr_t)0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) },
-    { "constructor", DontEnum | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorConstructor), (intptr_t)0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) },
-    { 0, 0, 0, 0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) }
+    { "attr1", DontDelete | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorAttr1), (intptr_t)0, NoIntrinsic },
+    { "attr2", DontDelete | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorAttr2), (intptr_t)0, NoIntrinsic },
+    { "constructor", DontEnum | ReadOnly, (intptr_t)static_cast<PropertySlot::GetValueFunc>(jsTestEventConstructorConstructor), (intptr_t)0, NoIntrinsic },
+    { 0, 0, 0, 0, NoIntrinsic }
 };
 
-#undef THUNK_GENERATOR
 static const HashTable JSTestEventConstructorTable = { 9, 7, JSTestEventConstructorTableValues, 0 };
 /* Hash table for constructor */
-#if ENABLE(JIT)
-#define THUNK_GENERATOR(generator) , generator
-#else
-#define THUNK_GENERATOR(generator)
-#endif
-#if ENABLE(DFG_JIT)
-#define INTRINSIC(intrinsic) , intrinsic
-#else
-#define INTRINSIC(intrinsic)
-#endif
 
 static const HashTableValue JSTestEventConstructorConstructorTableValues[] =
 {
-    { 0, 0, 0, 0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) }
+    { 0, 0, 0, 0, NoIntrinsic }
 };
 
-#undef THUNK_GENERATOR
 static const HashTable JSTestEventConstructorConstructorTable = { 1, 0, JSTestEventConstructorConstructorTableValues, 0 };
-const ClassInfo JSTestEventConstructorConstructor::s_info = { "TestEventConstructorConstructor", &DOMConstructorObject::s_info, &JSTestEventConstructorConstructorTable, 0, CREATE_METHOD_TABLE(JSTestEventConstructorConstructor) };
+const ClassInfo JSTestEventConstructorConstructor::s_info = { "TestEventConstructorConstructor", &Base::s_info, &JSTestEventConstructorConstructorTable, 0, CREATE_METHOD_TABLE(JSTestEventConstructorConstructor) };
 
 JSTestEventConstructorConstructor::JSTestEventConstructorConstructor(Structure* structure, JSDOMGlobalObject* globalObject)
     : DOMConstructorObject(structure, globalObject)
@@ -85,6 +64,7 @@ void JSTestEventConstructorConstructor::finishCreation(ExecState* exec, JSDOMGlo
     Base::finishCreation(exec->globalData());
     ASSERT(inherits(&s_info));
     putDirect(exec->globalData(), exec->propertyNames().prototype, JSTestEventConstructorPrototype::self(exec, globalObject), DontDelete | ReadOnly);
+    putDirect(exec->globalData(), exec->propertyNames().length, jsNumber(2), ReadOnly | DontDelete | DontEnum);
 }
 
 bool JSTestEventConstructorConstructor::getOwnPropertySlot(JSCell* cell, ExecState* exec, const Identifier& propertyName, PropertySlot& slot)
@@ -97,6 +77,44 @@ bool JSTestEventConstructorConstructor::getOwnPropertyDescriptor(JSObject* objec
     return getStaticValueDescriptor<JSTestEventConstructorConstructor, JSDOMWrapper>(exec, &JSTestEventConstructorConstructorTable, static_cast<JSTestEventConstructorConstructor*>(object), propertyName, descriptor);
 }
 
+EncodedJSValue JSC_HOST_CALL JSTestEventConstructorConstructor::constructJSTestEventConstructor(ExecState* exec)
+{
+    JSTestEventConstructorConstructor* jsConstructor = static_cast<JSTestEventConstructorConstructor*>(exec->callee());
+
+    ScriptExecutionContext* executionContext = jsConstructor->scriptExecutionContext();
+    if (!executionContext)
+        return throwVMError(exec, createReferenceError(exec, "Constructor associated execution context is unavailable"));
+
+    AtomicString eventType = ustringToAtomicString(exec->argument(0).toString(exec)->value(exec));
+    if (exec->hadException())
+        return JSValue::encode(jsUndefined());
+
+    TestEventConstructorInit eventInit;
+
+    JSValue initializerValue = exec->argument(1);
+    if (!initializerValue.isUndefinedOrNull()) {
+        // Given the above test, this will always yield an object.
+        JSObject* initializerObject = initializerValue.toObject(exec);
+
+        // Create the dictionary wrapper from the initializer object.
+        JSDictionary dictionary(exec, initializerObject);
+
+        // Attempt to fill in the EventInit.
+        if (!fillTestEventConstructorInit(eventInit, dictionary))
+            return JSValue::encode(jsUndefined());
+    }
+
+    RefPtr<TestEventConstructor> event = TestEventConstructor::create(eventType, eventInit);
+    return JSValue::encode(toJS(exec, jsConstructor->globalObject(), event.get()));
+}
+
+bool fillTestEventConstructorInit(TestEventConstructorInit& eventInit, JSDictionary& dictionary)
+{
+    if (!dictionary.tryGetProperty("attr2", eventInit.attr2))
+        return false;
+    return true;
+}
+
 ConstructType JSTestEventConstructorConstructor::getConstructData(JSCell*, ConstructData& constructData)
 {
     constructData.native.function = constructJSTestEventConstructor;
@@ -104,36 +122,25 @@ ConstructType JSTestEventConstructorConstructor::getConstructData(JSCell*, Const
 }
 
 /* Hash table for prototype */
-#if ENABLE(JIT)
-#define THUNK_GENERATOR(generator) , generator
-#else
-#define THUNK_GENERATOR(generator)
-#endif
-#if ENABLE(DFG_JIT)
-#define INTRINSIC(intrinsic) , intrinsic
-#else
-#define INTRINSIC(intrinsic)
-#endif
 
 static const HashTableValue JSTestEventConstructorPrototypeTableValues[] =
 {
-    { 0, 0, 0, 0 THUNK_GENERATOR(0) INTRINSIC(DFG::NoIntrinsic) }
+    { 0, 0, 0, 0, NoIntrinsic }
 };
 
-#undef THUNK_GENERATOR
 static const HashTable JSTestEventConstructorPrototypeTable = { 1, 0, JSTestEventConstructorPrototypeTableValues, 0 };
-const ClassInfo JSTestEventConstructorPrototype::s_info = { "TestEventConstructorPrototype", &JSC::JSNonFinalObject::s_info, &JSTestEventConstructorPrototypeTable, 0, CREATE_METHOD_TABLE(JSTestEventConstructorPrototype) };
+const ClassInfo JSTestEventConstructorPrototype::s_info = { "TestEventConstructorPrototype", &Base::s_info, &JSTestEventConstructorPrototypeTable, 0, CREATE_METHOD_TABLE(JSTestEventConstructorPrototype) };
 
 JSObject* JSTestEventConstructorPrototype::self(ExecState* exec, JSGlobalObject* globalObject)
 {
     return getDOMPrototype<JSTestEventConstructor>(exec, globalObject);
 }
 
-const ClassInfo JSTestEventConstructor::s_info = { "TestEventConstructor", &JSDOMWrapper::s_info, &JSTestEventConstructorTable, 0 , CREATE_METHOD_TABLE(JSTestEventConstructor) };
+const ClassInfo JSTestEventConstructor::s_info = { "TestEventConstructor", &Base::s_info, &JSTestEventConstructorTable, 0 , CREATE_METHOD_TABLE(JSTestEventConstructor) };
 
 JSTestEventConstructor::JSTestEventConstructor(Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestEventConstructor> impl)
     : JSDOMWrapper(structure, globalObject)
-    , m_impl(impl)
+    , m_impl(impl.leakRef())
 {
 }
 
@@ -146,6 +153,17 @@ void JSTestEventConstructor::finishCreation(JSGlobalData& globalData)
 JSObject* JSTestEventConstructor::createPrototype(ExecState* exec, JSGlobalObject* globalObject)
 {
     return JSTestEventConstructorPrototype::create(exec->globalData(), globalObject, JSTestEventConstructorPrototype::createStructure(globalObject->globalData(), globalObject, globalObject->objectPrototype()));
+}
+
+void JSTestEventConstructor::destroy(JSC::JSCell* cell)
+{
+    JSTestEventConstructor* thisObject = jsCast<JSTestEventConstructor*>(cell);
+    thisObject->JSTestEventConstructor::~JSTestEventConstructor();
+}
+
+JSTestEventConstructor::~JSTestEventConstructor()
+{
+    releaseImplIfNotNull();
 }
 
 bool JSTestEventConstructor::getOwnPropertySlot(JSCell* cell, ExecState* exec, const Identifier& propertyName, PropertySlot& slot)
@@ -166,8 +184,8 @@ JSValue jsTestEventConstructorAttr1(ExecState* exec, JSValue slotBase, const Ide
 {
     JSTestEventConstructor* castedThis = static_cast<JSTestEventConstructor*>(asObject(slotBase));
     UNUSED_PARAM(exec);
-    TestEventConstructor* imp = static_cast<TestEventConstructor*>(castedThis->impl());
-    JSValue result = jsString(exec, imp->attr1());
+    TestEventConstructor* impl = static_cast<TestEventConstructor*>(castedThis->impl());
+    JSValue result = jsString(exec, impl->attr1());
     return result;
 }
 
@@ -176,8 +194,8 @@ JSValue jsTestEventConstructorAttr2(ExecState* exec, JSValue slotBase, const Ide
 {
     JSTestEventConstructor* castedThis = static_cast<JSTestEventConstructor*>(asObject(slotBase));
     UNUSED_PARAM(exec);
-    TestEventConstructor* imp = static_cast<TestEventConstructor*>(castedThis->impl());
-    JSValue result = jsString(exec, imp->attr2());
+    TestEventConstructor* impl = static_cast<TestEventConstructor*>(castedThis->impl());
+    JSValue result = jsString(exec, impl->attr2());
     return result;
 }
 
@@ -191,6 +209,30 @@ JSValue jsTestEventConstructorConstructor(ExecState* exec, JSValue slotBase, con
 JSValue JSTestEventConstructor::getConstructor(ExecState* exec, JSGlobalObject* globalObject)
 {
     return getDOMConstructor<JSTestEventConstructorConstructor>(exec, static_cast<JSDOMGlobalObject*>(globalObject));
+}
+
+static inline bool isObservable(JSTestEventConstructor* jsTestEventConstructor)
+{
+    if (jsTestEventConstructor->hasCustomProperties())
+        return true;
+    return false;
+}
+
+bool JSTestEventConstructorOwner::isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown> handle, void*, SlotVisitor& visitor)
+{
+    JSTestEventConstructor* jsTestEventConstructor = static_cast<JSTestEventConstructor*>(handle.get().asCell());
+    if (!isObservable(jsTestEventConstructor))
+        return false;
+    UNUSED_PARAM(visitor);
+    return false;
+}
+
+void JSTestEventConstructorOwner::finalize(JSC::Handle<JSC::Unknown> handle, void* context)
+{
+    JSTestEventConstructor* jsTestEventConstructor = static_cast<JSTestEventConstructor*>(handle.get().asCell());
+    DOMWrapperWorld* world = static_cast<DOMWrapperWorld*>(context);
+    uncacheWrapper(world, jsTestEventConstructor->impl(), jsTestEventConstructor);
+    jsTestEventConstructor->releaseImpl();
 }
 
 JSC::JSValue toJS(JSC::ExecState* exec, JSDOMGlobalObject* globalObject, TestEventConstructor* impl)

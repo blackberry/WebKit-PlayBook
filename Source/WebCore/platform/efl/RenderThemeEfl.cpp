@@ -822,7 +822,7 @@ bool RenderThemeEfl::controlSupportsTints(const RenderObject* object) const
     return isEnabled(object);
 }
 
-int RenderThemeEfl::baselinePosition(const RenderObject* object) const
+LayoutUnit RenderThemeEfl::baselinePosition(const RenderObject* object) const
 {
     if (!object->isBox())
         return 0;
@@ -1202,8 +1202,7 @@ bool RenderThemeEfl::paintMediaPlayButton(RenderObject* object, const PaintInfo&
     if (!node || !node->isMediaControlElement())
         return false;
 
-    MediaControlPlayButtonElement* button = static_cast<MediaControlPlayButtonElement*>(node);
-    if (!emitMediaButtonSignal(PlayPauseButton, button->displayType(), rect))
+    if (!emitMediaButtonSignal(PlayPauseButton, mediaControlElementType(node), rect))
         return false;
 
     return paintThemePart(object, PlayPauseButton, info, rect);
@@ -1215,8 +1214,7 @@ bool RenderThemeEfl::paintMediaSeekBackButton(RenderObject* object, const PaintI
     if (!node || !node->isMediaControlElement())
         return 0;
 
-    MediaControlSeekButtonElement* button = static_cast<MediaControlSeekButtonElement*>(node);
-    if (!emitMediaButtonSignal(SeekBackwardButton, button->displayType(), rect))
+    if (!emitMediaButtonSignal(SeekBackwardButton, mediaControlElementType(node), rect))
         return false;
 
     return paintThemePart(object, SeekBackwardButton, info, rect);
@@ -1228,8 +1226,7 @@ bool RenderThemeEfl::paintMediaSeekForwardButton(RenderObject* object, const Pai
     if (!node || !node->isMediaControlElement())
         return 0;
 
-    MediaControlSeekButtonElement* button = static_cast<MediaControlSeekButtonElement*>(node);
-    if (!emitMediaButtonSignal(SeekForwardButton, button->displayType(), rect))
+    if (!emitMediaButtonSignal(SeekForwardButton, mediaControlElementType(node), rect))
         return false;
 
     return paintThemePart(object, SeekForwardButton, info, rect);

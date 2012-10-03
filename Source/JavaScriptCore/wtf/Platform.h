@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2006, 2007, 2008, 2009 Apple Inc. All rights reserved.
  * Copyright (C) 2007-2009 Torch Mobile, Inc.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,7 +29,7 @@
 #define WTF_Platform_h
 
 /* Include compiler specific macros */
-#include "Compiler.h"
+#include <wtf/Compiler.h>
 
 /* ==== PLATFORM handles OS, operating environment, graphics API, and
    CPU. This macro will be phased out in favor of platform adaptation
@@ -351,6 +351,11 @@
 #define WTF_OS_FREEBSD 1
 #endif
 
+/* OS(HURD) - GNU/Hurd */
+#ifdef __GNU__
+#define WTF_OS_HURD 1
+#endif
+
 /* OS(LINUX) - Linux */
 #ifdef __linux__
 #define WTF_OS_LINUX 1
@@ -386,11 +391,15 @@
 #define WTF_OS_WINDOWS 1
 #endif
 
+#define WTF_OS_WIN ERROR "USE WINDOWS WITH OS NOT WIN"
+#define WTF_OS_MAC ERROR "USE MAC_OS_X WITH OS NOT MAC"
+
 /* OS(UNIX) - Any Unix-like system */
 #if   OS(AIX)              \
     || OS(ANDROID)          \
     || OS(DARWIN)           \
     || OS(FREEBSD)          \
+    || OS(HURD)             \
     || OS(LINUX)            \
     || OS(NETBSD)           \
     || OS(OPENBSD)          \
@@ -409,6 +418,7 @@
 /* PLATFORM(QT) */
 /* PLATFORM(WX) */
 /* PLATFORM(GTK) */
+/* PLATFORM(BLACKBERRY) */
 /* PLATFORM(MAC) */
 /* PLATFORM(WIN) */
 #if defined(BUILDING_CHROMIUM__)
@@ -425,14 +435,6 @@
 #define WTF_PLATFORM_MAC 1
 #elif OS(WINDOWS)
 #define WTF_PLATFORM_WIN 1
-#endif
-
-#if PLATFORM(BLACKBERRY)
-#define WTF_USE_SKIA 1
-
-/* enable the JSObjectGetClassName API */
-#define JSC_API_CLASSNAME
-
 #endif
 
 /* PLATFORM(IOS) */
@@ -463,7 +465,7 @@
 #define WTF_USE_CA 1
 #endif
 
-/* USE(SKIA) for Win/Linux, CG for Mac, unless enabled */
+/* USE(SKIA) for Win/Linux/Mac/Android */
 #if PLATFORM(CHROMIUM)
 #if OS(DARWIN)
 #if USE(SKIA_ON_MAC_CHROMIUM)
@@ -474,10 +476,22 @@
 #define WTF_USE_ATSUI 1
 #define WTF_USE_CORE_TEXT 1
 #define WTF_USE_ICCJPEG 1
+#elif OS(ANDROID)
+#define WTF_USE_SKIA 1
+#define WTF_USE_GLES2_RENDERING 0
 #else
 #define WTF_USE_SKIA 1
 #define WTF_USE_CHROMIUM_NET 1
 #endif
+#endif
+
+#if PLATFORM(BLACKBERRY)
+#define ENABLE_DRAG_SUPPORT 0
+#define USE_SYSTEM_MALLOC 1
+#define WTF_USE_MERSENNE_TWISTER_19937 1
+#define WTF_USE_SKIA 1
+/* enable the JSObjectGetClassName API */
+#define JSC_API_CLASSNAME
 #endif
 
 #if PLATFORM(GTK)
@@ -488,10 +502,6 @@
 #if OS(WINCE)
 #include <ce_time.h>
 #define WTF_USE_MERSENNE_TWISTER_19937 1
-#endif
-
-#if PLATFORM(QT) && OS(UNIX) && !OS(DARWIN)
-#define WTF_USE_PTHREAD_BASED_QT 1
 #endif
 
 /* On Windows, use QueryPerformanceCounter by default */
@@ -547,6 +557,9 @@
 #define ENABLE_SMOOTH_SCROLLING 1
 #define ENABLE_WEB_ARCHIVE 1
 #define ENABLE_WEB_AUDIO 1
+#if defined(ENABLE_VIDEO)
+#define ENABLE_VIDEO_TRACK 1
+#endif
 #endif /* PLATFORM(MAC) && !PLATFORM(IOS) */
 
 #if PLATFORM(CHROMIUM) && OS(DARWIN)
@@ -563,6 +576,7 @@
 
 #if PLATFORM(QT) && OS(DARWIN)
 #define WTF_USE_CF 1
+#define HAVE_DISPATCH_H 1
 #endif
 
 #if OS(DARWIN) && !PLATFORM(GTK) && !PLATFORM(QT)
@@ -591,14 +605,12 @@
 #define WTF_USE_PTHREADS 1
 
 #if PLATFORM(IOS_SIMULATOR)
-    #define ENABLE_INTERPRETER 1
+    #define ENABLE_CLASSIC_INTERPRETER 1
     #define ENABLE_JIT 0
-    #define ENABLE_YARR 0
     #define ENABLE_YARR_JIT 0
 #else
-    #define ENABLE_INTERPRETER 1
+    #define ENABLE_CLASSIC_INTERPRETER 1
     #define ENABLE_JIT 1
-    #define ENABLE_YARR 1
     #define ENABLE_YARR_JIT 1
 #endif
 
@@ -632,6 +644,7 @@
 #define ENABLE_JIT 1
 #endif
 #define ENABLE_GLOBAL_FASTMALLOC_NEW 0
+#define ENABLE_LLINT 0
 #if OS(DARWIN)
 #define WTF_USE_CF 1
 #define WTF_USE_CORE_TEXT 1
@@ -644,6 +657,9 @@
 #define WTF_USE_PTHREADS 1
 #define HAVE_PTHREAD_RWLOCK 1
 #endif
+#elif PLATFORM(QT) && OS(UNIX)
+#define WTF_USE_PTHREADS 1
+#define HAVE_PTHREAD_RWLOCK 1
 #endif
 
 #if !defined(HAVE_ACCESSIBILITY)
@@ -736,6 +752,7 @@
 #define ENABLE_DRAG_SUPPORT 0
 #define USE_SYSTEM_MALLOC 1
 #define WTF_USE_MERSENNE_TWISTER_19937 1
+#define JCS_ALPHA_EXTENSIONS 1
 #endif
 
 #elif OS(ANDROID)
@@ -862,8 +879,8 @@
 #define ENABLE_GEOLOCATION 0
 #endif
 
-#if !defined(ENABLE_GESTURE_RECOGNIZER)
-#define ENABLE_GESTURE_RECOGNIZER 0
+#if !defined(ENABLE_VIEWPORT)
+#define ENABLE_VIEWPORT 0
 #endif
 
 #if !defined(ENABLE_NOTIFICATIONS)
@@ -913,13 +930,19 @@
 #define ENABLE_JIT 0
 #endif
 
-/* The JIT is enabled by default on all x86, x64-64, ARM & MIPS platforms. */
+/* The JIT is enabled by default on all x86, x86-64, ARM & MIPS platforms. */
 #if !defined(ENABLE_JIT) \
     && (CPU(X86) || CPU(X86_64) || CPU(ARM) || CPU(MIPS)) \
     && (OS(DARWIN) || !COMPILER(GCC) || GCC_VERSION_AT_LEAST(4, 1, 0)) \
     && !OS(WINCE) \
     && !OS(QNX)
 #define ENABLE_JIT 1
+#endif
+
+/* On some of the platforms where we have a JIT, we want to also have the 
+   low-level interpreter. */
+#if !defined(ENABLE_LLINT) && ENABLE(JIT) && OS(DARWIN) && (CPU(X86) || CPU(ARM_THUMB2)) && USE(JSVALUE32_64)
+#define ENABLE_LLINT 1
 #endif
 
 #if !defined(ENABLE_DFG_JIT) && ENABLE(JIT)
@@ -956,10 +979,10 @@
 #endif
 
 /* Ensure that either the JIT or the interpreter has been enabled. */
-#if !defined(ENABLE_INTERPRETER) && !ENABLE(JIT)
-#define ENABLE_INTERPRETER 1
+#if !defined(ENABLE_CLASSIC_INTERPRETER) && !ENABLE(JIT)
+#define ENABLE_CLASSIC_INTERPRETER 1
 #endif
-#if !(ENABLE(JIT) || ENABLE(INTERPRETER))
+#if !(ENABLE(JIT) || ENABLE(CLASSIC_INTERPRETER))
 #error You have to have at least one execution model enabled to build JSC
 #endif
 
@@ -970,6 +993,12 @@
 /* Configure the JIT */
 #if CPU(ARM)
 #if !defined(ENABLE_JIT_USE_SOFT_MODULO) && WTF_ARM_ARCH_AT_LEAST(5)
+#define ENABLE_JIT_USE_SOFT_MODULO 1
+#endif
+#endif
+
+#if CPU(X86) || CPU(X86_64) || CPU(MIPS)
+#if !defined(ENABLE_JIT_USE_SOFT_MODULO)
 #define ENABLE_JIT_USE_SOFT_MODULO 1
 #endif
 #endif
@@ -986,8 +1015,8 @@
 #if COMPILER(GCC) || (RVCT_VERSION_AT_LEAST(4, 0, 0, 0) && defined(__GNUC__))
 #define HAVE_COMPUTED_GOTO 1
 #endif
-#if HAVE(COMPUTED_GOTO) && ENABLE(INTERPRETER)
-#define ENABLE_COMPUTED_GOTO_INTERPRETER 1
+#if HAVE(COMPUTED_GOTO) && ENABLE(CLASSIC_INTERPRETER)
+#define ENABLE_COMPUTED_GOTO_CLASSIC_INTERPRETER 1
 #endif
 
 /* Regular Expression Tracing - Set to 1 to trace RegExp's in jsc.  Results dumped at exit */
@@ -1015,14 +1044,6 @@
 #define ENABLE_EXECUTABLE_ALLOCATOR_FIXED 1
 #else
 #define ENABLE_EXECUTABLE_ALLOCATOR_DEMAND 1
-#endif
-#endif
-
-#ifndef ENABLE_LARGE_HEAP
-#if CPU(X86) || CPU(X86_64)
-#define ENABLE_LARGE_HEAP 1
-#else
-#define ENABLE_LARGE_HEAP 0
 #endif
 #endif
 
@@ -1063,12 +1084,21 @@
 #define WTF_USE_ACCELERATED_COMPOSITING 1
 #endif
 
+/* Compositing on the UI-process in WebKit2 */
+#if PLATFORM(QT)
+#define WTF_USE_UI_SIDE_COMPOSITING 1
+#endif
+
 #if (PLATFORM(MAC) && !defined(BUILDING_ON_LEOPARD)) || PLATFORM(IOS)
 #define WTF_USE_PROTECTION_SPACE_AUTH_CALLBACK 1
 #endif
 
-#if !ENABLE(NETSCAPE_PLUGIN_API) || (ENABLE(NETSCAPE_PLUGIN_API) && ((OS(UNIX) && (PLATFORM(QT) || PLATFORM(WX))) || PLATFORM(GTK)))
+#if !ENABLE(NETSCAPE_PLUGIN_API) || (ENABLE(NETSCAPE_PLUGIN_API) && ((OS(UNIX) && (PLATFORM(QT) || PLATFORM(WX))) || PLATFORM(GTK) || PLATFORM(EFL)))
 #define ENABLE_PLUGIN_PACKAGE_SIMPLE_HASH 1
+#endif
+
+#if PLATFORM(MAC) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+#define ENABLE_THREADED_SCROLLING 1
 #endif
 
 /* Set up a define for a common error that is intended to cause a build error -- thus the space after Error. */
@@ -1083,6 +1113,10 @@
 #define WTF_USE_CROSS_PLATFORM_CONTEXT_MENUS 1
 #endif
 
+#if PLATFORM(MAC) && HAVE(ACCESSIBILITY)
+#define WTF_USE_ACCESSIBILITY_CONTEXT_MENUS 1
+#endif
+
 /* Geolocation request policy. pre-emptive policy is to acquire user permission before acquiring location.
    Client based implementations will have option to choose between pre-emptive and nonpre-emptive permission policy.
    pre-emptive permission policy is enabled by default for all client-based implementations. */
@@ -1094,33 +1128,37 @@
 #define ENABLE_BRANCH_COMPACTION 1
 #endif
 
-#if !defined(ENABLE_THREADING_OPENMP) && defined(_OPENMP)
+#if !defined(ENABLE_THREADING_LIBDISPATCH) && HAVE(DISPATCH_H)
+#define ENABLE_THREADING_LIBDISPATCH 1
+#elif !defined(ENABLE_THREADING_OPENMP) && defined(_OPENMP)
 #define ENABLE_THREADING_OPENMP 1
-#endif
-
-#if !defined(ENABLE_PARALLEL_JOBS) && (ENABLE(THREADING_GENERIC) || ENABLE(THREADING_LIBDISPATCH) || ENABLE(THREADING_OPENMP))
-#define ENABLE_PARALLEL_JOBS 1
+#elif !defined(THREADING_GENERIC)
+#define ENABLE_THREADING_GENERIC 1
 #endif
 
 #if ENABLE(GLIB_SUPPORT)
-#include "GTypedefs.h"
+#include <wtf/gobject/GTypedefs.h>
 #endif
 
 /* FIXME: This define won't be needed once #27551 is fully landed. However, 
    since most ports try to support sub-project independence, adding new headers
    to WTF causes many ports to break, and so this way we can address the build
    breakages one port at a time. */
+#if PLATFORM(MAC) || PLATFORM(QT)
+#define WTF_USE_EXPORT_MACROS 1
+#else
 #define WTF_USE_EXPORT_MACROS 0
+#endif
 
-#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
+#if (PLATFORM(QT) && !OS(DARWIN)) || PLATFORM(GTK) || PLATFORM(EFL)
 #define WTF_USE_UNIX_DOMAIN_SOCKETS 1
 #endif
 
-#if !defined(ENABLE_COMPARE_AND_SWAP) && COMPILER(GCC) && (CPU(X86) || CPU(X86_64))
+#if !defined(ENABLE_COMPARE_AND_SWAP) && COMPILER(GCC) && (CPU(X86) || CPU(X86_64) || CPU(ARM_THUMB2))
 #define ENABLE_COMPARE_AND_SWAP 1
 #endif
 
-#if !defined(ENABLE_PARALLEL_GC) && PLATFORM(MAC) && ENABLE(COMPARE_AND_SWAP)
+#if !defined(ENABLE_PARALLEL_GC) && (PLATFORM(MAC) || PLATFORM(IOS) || PLATFORM(QT)) && ENABLE(COMPARE_AND_SWAP)
 #define ENABLE_PARALLEL_GC 1
 #endif
 
@@ -1134,11 +1172,15 @@
 #define WTF_USE_AVFOUNDATION 1
 #endif
 
-#if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(EFL) || (PLATFORM(WIN) && !OS(WINCE) && !PLATFORM(WIN_CAIRO))
+#if PLATFORM(MAC) && !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+#define WTF_USE_COREMEDIA 1
+#endif
+
+#if PLATFORM(MAC) || PLATFORM(GTK) || PLATFORM(EFL) || (PLATFORM(WIN) && !OS(WINCE) && !PLATFORM(WIN_CAIRO)) || PLATFORM(QT) || PLATFORM(BLACKBERRY)
 #define WTF_USE_REQUEST_ANIMATION_FRAME_TIMER 1
 #endif
 
-#if PLATFORM(MAC)
+#if PLATFORM(MAC) || PLATFORM(BLACKBERRY)
 #define WTF_USE_REQUEST_ANIMATION_FRAME_DISPLAY_MONITOR 1
 #endif
 
@@ -1148,6 +1190,27 @@
 
 #if PLATFORM(MAC)
 #define WTF_USE_COREAUDIO 1
+#endif
+
+#if PLATFORM(CHROMIUM)
+#if !defined(WTF_USE_V8)
+#define WTF_USE_V8 1
+#endif
+#endif /* PLATFORM(CHROMIUM) */
+
+#if !defined(WTF_USE_V8)
+#define WTF_USE_V8 0
+#endif /* !defined(WTF_USE_V8) */
+
+/* Using V8 implies not using JSC and vice versa */
+#define WTF_USE_JSC !WTF_USE_V8
+
+#if ENABLE(NOTIFICATIONS) && PLATFORM(MAC)
+#define ENABLE_TEXT_NOTIFICATIONS_ONLY 1
+#endif
+
+#if !defined(WTF_USE_WTFURL)
+#define WTF_USE_WTFURL 0
 #endif
 
 #endif /* WTF_Platform_h */

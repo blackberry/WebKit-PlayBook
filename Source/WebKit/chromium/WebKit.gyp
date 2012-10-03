@@ -30,9 +30,8 @@
 
 {
     'includes': [
+        'WinPrecompile.gypi',
         '../../WebCore/WebCore.gypi',
-        '../../../Tools/DumpRenderTree/DumpRenderTree.gypi',
-        '../../../Tools/TestWebKitAPI/TestWebKitAPI.gypi',
         'WebKit.gypi',
         'features.gypi',
     ],
@@ -67,9 +66,9 @@
             'target_name': 'webkit',
             'type': 'static_library',
             'variables': { 'enable_wexit_time_destructors': 1, },
-            'msvs_guid': '5ECEC9E5-8F23-47B6-93E0-C3B328B3BE65',
             'dependencies': [
                 '../../WebCore/WebCore.gyp/WebCore.gyp:webcore',
+                '../../Platform/Platform.gyp/Platform.gyp:webkit_platform', # actually WebCore should depend on this
                 '<(chromium_src_dir)/skia/skia.gyp:skia',
                 '<(chromium_src_dir)/third_party/icu/icu.gyp:icuuc',
                 '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
@@ -92,57 +91,37 @@
                 'WEBKIT_IMPLEMENTATION=1',
             ],
             'sources': [
+                'bridge/MediaStreamCenter.cpp',
+                'bridge/MediaStreamCenterInternal.cpp',
+                'bridge/MediaStreamCenterInternal.h',
                 'bridge/PeerConnectionHandler.cpp',
                 'bridge/PeerConnectionHandlerInternal.cpp',
                 'bridge/PeerConnectionHandlerInternal.h',
-                'public/android/WebSandboxSupport.h',
-                'public/android/WebThemeEngine.h',
-                'public/gtk/WebInputEventFactory.h',
-                'public/linux/WebFontRendering.h',
-                'public/linux/WebFontRenderStyle.h',
-                'public/linux/WebRenderTheme.h',
-                'public/linux/WebThemeEngine.h',
-                'public/x11/WebScreenInfoFactory.h',
-                'public/mac/WebInputEventFactory.h',
-                'public/mac/WebSandboxSupport.h',
-                'public/mac/WebScreenInfoFactory.h',
-                'public/mac/WebSubstringUtil.h',
-                'public/mac/WebThemeEngine.h',
                 'public/WebAccessibilityNotification.h',
                 'public/WebAccessibilityObject.h',
                 'public/WebAccessibilityRole.h',
                 'public/WebAnimationController.h',
-                'public/WebApplicationCacheHost.h',
                 'public/WebApplicationCacheHostClient.h',
-                'public/WebArrayBufferView.h',
+                'public/WebArrayBuffer.h',
                 'public/WebAttribute.h',
-                'public/WebAudioBus.h',
-                'public/WebAudioDevice.h',
                 'public/WebAudioSourceProvider.h',
                 'public/WebAudioSourceProviderClient.h',
                 'public/WebAutofillClient.h',
                 'public/WebBindings.h',
                 'public/WebBlob.h',
-                'public/WebBlobData.h',
-                'public/WebBlobRegistry.h',
                 'public/WebCache.h',
-                'public/WebCanvas.h',
-                'public/WebClipboard.h',
-                'public/WebColor.h',
+                'public/WebColorChooser.h',
+                'public/WebColorChooserClient.h',
                 'public/WebColorName.h',
-                'public/WebCommon.h',
                 'public/WebCommonWorkerClient.h',
                 'public/WebCompositionUnderline.h',
-                'public/WebCompositorClient.h',
                 'public/WebCompositor.h',
+                'public/WebCompositorClient.h',
+                'public/WebCompositorInputHandler.h',
+                'public/WebCompositorInputHandlerClient.h',
                 'public/WebConsoleMessage.h',
-                'public/WebContentLayer.h',
-                'public/WebContentLayerClient.h',
                 'public/WebContextMenuData.h',
-                'public/WebCookie.h',
-                'public/WebCookieJar.h',
                 'public/WebCrossOriginPreflightResultCache.h',
-                'public/WebCString.h',
                 'public/WebCursorInfo.h',
                 'public/WebDOMEvent.h',
                 'public/WebDOMEventListener.h',
@@ -150,10 +129,9 @@
                 'public/WebDOMMouseEvent.h',
                 'public/WebDOMMutationEvent.h',
                 'public/WebDOMStringList.h',
-                'public/WebData.h',
+                'public/WebDataSource.h',
                 'public/WebDatabase.h',
                 'public/WebDatabaseObserver.h',
-                'public/WebDataSource.h',
                 'public/WebDevToolsAgent.h',
                 'public/WebDevToolsAgentClient.h',
                 'public/WebDevToolsFrontend.h',
@@ -164,34 +142,28 @@
                 'public/WebDeviceOrientationController.h',
                 'public/WebDocument.h',
                 'public/WebDocumentType.h',
-                'public/WebDragData.h',
                 'public/WebEditingAction.h',
                 'public/WebElement.h',
                 'public/WebExceptionCode.h',
                 'public/WebExternalPopupMenu.h',
                 'public/WebExternalPopupMenuClient.h',
-                'public/WebExternalTextureLayer.h',
                 'public/WebFileChooserCompletion.h',
                 'public/WebFileChooserParams.h',
                 'public/WebFileError.h',
                 'public/WebFileInfo.h',
-                'public/WebFileSystem.h',
                 'public/WebFileSystemCallbacks.h',
                 'public/WebFileSystemEntry.h',
                 'public/WebFileUtilities.h',
                 'public/WebFileWriter.h',
                 'public/WebFileWriterClient.h',
                 'public/WebFindOptions.h',
-                'public/WebFloatPoint.h',
-                'public/WebFloatQuad.h',
-                'public/WebFloatRect.h',
                 'public/WebFont.h',
-                'public/WebFontDescription.h',
-                'public/WebFrame.h',
-                'public/WebFrameClient.h',
                 'public/WebFontCache.h',
+                'public/WebFontDescription.h',
                 'public/WebFormControlElement.h',
                 'public/WebFormElement.h',
+                'public/WebFrame.h',
+                'public/WebFrameClient.h',
                 'public/WebGeolocationClient.h',
                 'public/WebGeolocationClientMock.h',
                 'public/WebGeolocationController.h',
@@ -200,136 +172,191 @@
                 'public/WebGeolocationPermissionRequestManager.h',
                 'public/WebGeolocationPosition.h',
                 'public/WebGlyphCache.h',
-                'public/WebGraphicsContext3D.h',
                 'public/WebHistoryItem.h',
-                'public/WebHTTPBody.h',
-                'public/WebHTTPLoadInfo.h',
-                'public/WebIconLoadingCompletion.h',
-                'public/WebIconURL.h',
-                'public/WebImage.h',
-                'public/WebImageDecoder.h',
                 'public/WebIDBCallbacks.h',
                 'public/WebIDBCursor.h',
                 'public/WebIDBDatabase.h',
                 'public/WebIDBDatabaseCallbacks.h',
                 'public/WebIDBDatabaseError.h',
                 'public/WebIDBFactory.h',
-                'public/WebIDBKeyRange.h',
                 'public/WebIDBIndex.h',
                 'public/WebIDBKey.h',
                 'public/WebIDBKeyPath.h',
+                'public/WebIDBKeyRange.h',
                 'public/WebIDBObjectStore.h',
                 'public/WebIDBTransaction.h',
                 'public/WebIDBTransactionCallbacks.h',
+                'public/WebIconLoadingCompletion.h',
+                'public/WebIconURL.h',
+                'public/WebImageDecoder.h',
                 'public/WebInputElement.h',
                 'public/WebInputEvent.h',
+                'public/WebIntent.h',
+                'public/WebIntentRequest.h',
+                'public/WebIntentServiceInfo.h',
                 'public/WebKit.h',
-                'public/WebKitPlatformSupport.h',
                 'public/WebLabelElement.h',
-                'public/WebLayer.h',
-                'public/WebLayerClient.h',
-                'public/WebLayerTreeView.h',
-                'public/WebLayerTreeViewClient.h',
-                'public/WebLocalizedString.h',
                 'public/WebMediaElement.h',
                 'public/WebMediaPlayer.h',
                 'public/WebMediaPlayerAction.h',
                 'public/WebMediaPlayerClient.h',
-                'public/WebMediaStreamDescriptor.h',
                 'public/WebMediaStreamRegistry.h',
-                'public/WebMediaStreamSource.h',
                 'public/WebMenuItemInfo.h',
                 'public/WebMessagePortChannel.h',
                 'public/WebMessagePortChannelClient.h',
-                'public/WebMimeRegistry.h',
                 'public/WebNamedNodeMap.h',
                 'public/WebNavigationType.h',
                 'public/WebNetworkStateNotifier.h',
                 'public/WebNode.h',
                 'public/WebNodeCollection.h',
                 'public/WebNodeList.h',
-                'public/WebNonCopyable.h',
                 'public/WebNotification.h',
-                'public/WebNotificationPresenter.h',
                 'public/WebNotificationPermissionCallback.h',
+                'public/WebNotificationPresenter.h',
                 'public/WebOptionElement.h',
+                'public/WebPageOverlay.h',
                 'public/WebPageSerializer.h',
                 'public/WebPageSerializerClient.h',
                 'public/WebPageVisibilityState.h',
                 'public/WebPasswordFormData.h',
-                'public/WebPeerConnectionHandler.h',
-                'public/WebPeerConnectionHandlerClient.h',
                 'public/WebPerformance.h',
                 'public/WebPermissionClient.h',
                 'public/WebPlugin.h',
+                'public/WebPluginAction.h',
                 'public/WebPluginContainer.h',
                 'public/WebPluginDocument.h',
                 'public/WebPluginListBuilder.h',
-                'public/WebPoint.h',
                 'public/WebPopupMenu.h',
                 'public/WebPopupMenuInfo.h',
                 'public/WebPopupType.h',
-                'public/WebPrivatePtr.h',
-                'public/WebPrivateOwnPtr.h',
                 'public/WebRange.h',
-                'public/WebRect.h',
+                'public/WebReferrerPolicy.h',
                 'public/WebRegularExpression.h',
                 'public/WebRuntimeFeatures.h',
-                'public/WebScrollbar.h',
-                'public/WebScrollbarClient.h',
+                'public/WebScopedUserGesture.h',
                 'public/WebScreenInfo.h',
                 'public/WebScriptController.h',
                 'public/WebScriptSource.h',
+                'public/WebScrollbar.h',
+                'public/WebScrollbarClient.h',
                 'public/WebSearchableFormData.h',
                 'public/WebSecurityOrigin.h',
                 'public/WebSecurityPolicy.h',
                 'public/WebSelectElement.h',
-                'public/WebSerializedScriptValue.h',
                 'public/WebSettings.h',
+                'public/WebSharedWorkerClient.h',
                 'public/WebSharedWorker.h',
                 'public/WebSharedWorkerRepository.h',
-                'public/WebSize.h',
-                'public/WebSocketStreamError.h',
-                'public/WebSocketStreamHandle.h',
-                'public/WebSocketStreamHandleClient.h',
+                'public/WebSocket.h',
+                'public/WebSocketClient.h',
                 'public/WebSpeechInputController.h',
-                'public/WebSpeechInputControllerMock.h',
                 'public/WebSpeechInputListener.h',
                 'public/WebSpeechInputResult.h',
                 'public/WebSpellCheckClient.h',
                 'public/WebStorageArea.h',
                 'public/WebStorageEventDispatcher.h',
+                'public/WebStorageNamespace.h',
                 'public/WebStorageQuotaCallbacks.h',
                 'public/WebStorageQuotaType.h',
-                'public/WebStorageNamespace.h',
-                'public/WebString.h',
+                'public/WebStreamTextureClient.h',
                 'public/WebTextAffinity.h',
                 'public/WebTextCaseSensitivity.h',
-                'public/WebTextCheckingResult.h',
                 'public/WebTextCheckingCompletion.h',
+                'public/WebTextCheckingResult.h',
                 'public/WebTextDirection.h',
                 'public/WebTextInputType.h',
                 'public/WebTextRun.h',
-                'public/WebThreadSafeData.h',
-                'public/WebURL.h',
-                'public/WebURLError.h',
-                'public/WebURLLoader.h',
                 'public/WebURLLoaderOptions.h',
-                'public/WebURLLoadTiming.h',
-                'public/WebURLLoaderClient.h',
-                'public/WebURLRequest.h',
-                'public/WebURLResponse.h',
-                'public/WebVector.h',
+                'public/WebUserMediaClient.h',
+                'public/WebUserMediaRequest.h',
                 'public/WebView.h',
                 'public/WebViewClient.h',
                 'public/WebWidget.h',
                 'public/WebWidgetClient.h',
-                'public/WebWorker.h',
-                'public/WebWorkerClient.h',
+                'public/WebWorkerInfo.h',
+                'public/WebWorkerRunLoop.h',
+                'public/android/WebInputEventFactory.h',
+                'public/android/WebSandboxSupport.h',
+                'public/gtk/WebInputEventFactory.h',
+                'public/linux/WebFontRenderStyle.h',
+                'public/linux/WebFontRendering.h',
+                'public/linux/WebRenderTheme.h',
+                'public/mac/WebInputEventFactory.h',
+                'public/mac/WebSandboxSupport.h',
+                'public/mac/WebScreenInfoFactory.h',
+                'public/mac/WebSubstringUtil.h',
+                'public/platform/WebArrayBufferView.h',
+                'public/platform/WebAudioBus.h',
+                'public/platform/WebAudioDevice.h',
+                'public/platform/WebBlobData.h',
+                'public/platform/WebBlobRegistry.h',
+                'public/platform/WebCanvas.h',
+                'public/platform/WebClipboard.h',
+                'public/platform/WebColor.h',
+                'public/platform/WebCommon.h',
+                'public/platform/WebContentLayer.h',
+                'public/platform/WebContentLayerClient.h',
+                'public/platform/WebCookie.h',
+                'public/platform/WebCookieJar.h',
+                'public/platform/WebData.h',
+                'public/platform/WebDragData.h',
+                'public/platform/WebExternalTextureLayer.h',
+                'public/platform/WebFileSystem.h',
+                'public/platform/WebFloatPoint.h',
+                'public/platform/WebFloatQuad.h',
+                'public/platform/WebFloatRect.h',
+                'public/platform/WebGamepad.h',
+                'public/platform/WebGamepads.h',
+                'public/platform/WebGraphicsContext3D.h',
+                'public/platform/WebHTTPBody.h',
+                'public/platform/WebHTTPHeaderVisitor.h',
+                'public/platform/WebHTTPLoadInfo.h',
+                'public/platform/WebImage.h',
+                'public/platform/WebKitPlatformSupport.h',
+                'public/platform/WebLayer.h',
+                'public/platform/WebLayerTreeView.h',
+                'public/platform/WebLayerTreeViewClient.h',
+                'public/platform/WebLocalizedString.h',
+                'public/platform/WebMediaStreamCenter.h',
+                'public/platform/WebMediaStreamComponent.h',
+                'public/platform/WebMediaStreamDescriptor.h',
+                'public/platform/WebMediaStreamSource.h',
+                'public/platform/WebMediaStreamSourcesRequest.h',
+                'public/platform/WebNonCopyable.h',
+                'public/platform/WebPeerConnectionHandler.h',
+                'public/platform/WebPeerConnectionHandlerClient.h',
+                'public/platform/WebPoint.h',
+                'public/platform/WebPrivateOwnPtr.h',
+                'public/platform/WebPrivatePtr.h',
+                'public/platform/WebRect.h',
+                'public/platform/WebSerializedScriptValue.h',
+                'public/platform/WebSize.h',
+                'public/platform/WebSocketStreamError.h',
+                'public/platform/WebSocketStreamHandle.h',
+                'public/platform/WebSocketStreamHandleClient.h',
+                'public/platform/WebSolidColorLayer.h',
+                'public/platform/WebString.h',
+                'public/platform/WebThread.h',
+                'public/platform/WebThreadSafeData.h',
+                'public/platform/WebURL.h',
+                'public/platform/WebURLError.h',
+                'public/platform/WebURLLoadTiming.h',
+                'public/platform/WebURLLoader.h',
+                'public/platform/WebURLLoaderClient.h',
+                'public/platform/WebURLRequest.h',
+                'public/platform/WebURLResponse.h',
+                'public/platform/WebVector.h',
+                'public/platform/android/WebSandboxSupport.h',
+                'public/platform/android/WebThemeEngine.h',
+                'public/platform/linux/WebThemeEngine.h',
+                'public/platform/mac/WebSandboxSupport.h',
+                'public/platform/mac/WebThemeEngine.h',
+                'public/platform/win/WebSandboxSupport.h',
+                'public/platform/win/WebThemeEngine.h',
                 'public/win/WebInputEventFactory.h',
                 'public/win/WebSandboxSupport.h',
                 'public/win/WebScreenInfoFactory.h',
-                'public/win/WebThemeEngine.h',
+                'public/x11/WebScreenInfoFactory.h',
                 'src/ApplicationCacheHost.cpp',
                 'src/ApplicationCacheHostInternal.h',
                 'src/AssertMatchingEnums.cpp',
@@ -347,13 +374,12 @@
                 'src/BackForwardListChromium.h',
                 'src/BlobRegistryProxy.cpp',
                 'src/BlobRegistryProxy.h',
-                'src/BoundObject.cpp',
-                'src/BoundObject.h',
-                'src/CCMainThreadImpl.cpp',
                 'src/CCThreadImpl.cpp',
                 'src/CCThreadImpl.h',
                 'src/ChromeClientImpl.cpp',
                 'src/ChromeClientImpl.h',
+                'src/ColorChooserProxy.cpp',
+                'src/ColorChooserProxy.h',
                 'src/ChromiumCurrentTime.cpp',
                 'src/ChromiumOSRandomSource.cpp',
                 'src/ChromiumThreading.cpp',
@@ -363,10 +389,6 @@
                 'src/ContextMenuClientImpl.cpp',
                 'src/ContextMenuClientImpl.h',
                 'src/DatabaseObserver.cpp',
-                'src/DebuggerAgentImpl.cpp',
-                'src/DebuggerAgentImpl.h',
-                'src/DebuggerAgentManager.cpp',
-                'src/DebuggerAgentManager.h',
                 'src/DeviceOrientationClientProxy.cpp',
                 'src/DeviceOrientationClientProxy.h',
                 'src/DOMUtilitiesPrivate.cpp',
@@ -412,6 +434,9 @@
                 'src/InspectorClientImpl.h',
                 'src/InspectorFrontendClientImpl.cpp',
                 'src/InspectorFrontendClientImpl.h',
+                'src/NonCompositedContentHost.cpp',
+                'src/NonCompositedContentHost.h',
+                'src/android/WebInputEventFactory.cpp',
                 'src/linux/WebFontInfo.cpp',
                 'src/linux/WebFontRendering.cpp',
                 'src/linux/WebFontRenderStyle.cpp',
@@ -426,8 +451,12 @@
                 'src/NotificationPresenterImpl.h',
                 'src/NotificationPresenterImpl.cpp',
                 'src/painting/GraphicsContextBuilder.h',
+                'src/painting/PaintAggregator.h',
+                'src/painting/PaintAggregator.cpp',
                 'src/PageOverlay.cpp',
                 'src/PageOverlay.h',
+                'src/PageOverlayList.cpp',
+                'src/PageOverlayList.h',
                 'src/PlatformMessagePortChannel.cpp',
                 'src/PlatformMessagePortChannel.h',
                 'src/PlatformSupport.cpp',
@@ -436,6 +465,7 @@
                 'src/ScrollbarGroup.h',
                 'src/SharedWorkerRepository.cpp',
                 'src/SocketStreamHandle.cpp',
+                'src/SocketStreamHandleInternal.h',
                 'src/SpeechInputClientImpl.cpp',
                 'src/SpeechInputClientImpl.h',
                 'src/StorageAreaProxy.cpp',
@@ -446,13 +476,17 @@
                 'src/StorageInfoChromium.cpp',
                 'src/StorageNamespaceProxy.cpp',
                 'src/StorageNamespaceProxy.h',
+                'src/UserMediaClientImpl.h',
+                'src/UserMediaClientImpl.cpp',
                 'src/WebTextCheckingCompletionImpl.h',
                 'src/WebTextCheckingCompletionImpl.cpp',
+                'src/WebTextCheckingResult.cpp',
                 'src/VideoFrameChromiumImpl.cpp',
                 'src/VideoFrameChromiumImpl.h',
                 'src/WebAccessibilityObject.cpp',
                 'src/WebAnimationControllerImpl.cpp',
                 'src/WebAnimationControllerImpl.h',
+                'src/WebArrayBuffer.cpp',
                 'src/WebArrayBufferView.cpp',
                 'src/WebAttribute.cpp',
                 'src/WebAudioBus.cpp',
@@ -460,15 +494,18 @@
                 'src/WebBlob.cpp',
                 'src/WebBlobData.cpp',
                 'src/WebCache.cpp',
-                'src/WebColor.cpp',
+                'src/WebColorChooserClientImpl.cpp',
+                'src/WebColorChooserClientImpl.h',
+                'src/WebColorName.cpp',
                 'src/WebCommon.cpp',
                 'src/WebCompositorImpl.cpp',
                 'src/WebCompositorImpl.h',
+                'src/WebCompositorInputHandlerImpl.cpp',
+                'src/WebCompositorInputHandlerImpl.h',
                 'src/WebContentLayer.cpp',
                 'src/WebContentLayerImpl.cpp',
                 'src/WebContentLayerImpl.h',
                 'src/WebCrossOriginPreflightResultCache.cpp',
-                'src/WebCString.cpp',
                 'src/WebCursorInfo.cpp',
                 'src/WebDOMEvent.cpp',
                 'src/WebDOMEventListener.cpp',
@@ -502,7 +539,6 @@
                 'src/WebFileChooserCompletionImpl.h',
                 'src/WebFileSystemCallbacksImpl.cpp',
                 'src/WebFileSystemCallbacksImpl.h',
-                'src/WebFloatQuad.cpp',
                 'src/WebFontCache.cpp',
                 'src/WebFontDescription.cpp',
                 'src/WebFontImpl.cpp',
@@ -553,6 +589,9 @@
                 'src/WebInputEvent.cpp',
                 'src/WebInputEventConversion.cpp',
                 'src/WebInputEventConversion.h',
+                'src/WebIntent.cpp',
+                'src/WebIntentRequest.cpp',
+                'src/WebIntentServiceInfo.cpp',
                 'src/WebKit.cpp',
                 'src/WebLabelElement.cpp',
                 'src/WebLayer.cpp',
@@ -564,9 +603,11 @@
                 'src/WebMediaElement.cpp',
                 'src/WebMediaPlayerClientImpl.cpp',
                 'src/WebMediaPlayerClientImpl.h',
+                'src/WebMediaStreamComponent.cpp',
                 'src/WebMediaStreamDescriptor.cpp',
                 'src/WebMediaStreamRegistry.cpp',
                 'src/WebMediaStreamSource.cpp',
+                'src/WebMediaStreamSourcesRequest.cpp',
                 'src/WebNamedNodeMap.cpp',
                 'src/WebNetworkStateNotifier.cpp',
                 'src/WebNode.cpp',
@@ -593,6 +634,7 @@
                 'src/WebRange.cpp',
                 'src/WebRegularExpression.cpp',
                 'src/WebRuntimeFeatures.cpp',
+                'src/WebScopedUserGesture.cpp',
                 'src/WebScriptController.cpp',
                 'src/WebScrollbarImpl.cpp',
                 'src/WebScrollbarImpl.h',
@@ -605,8 +647,11 @@
                 'src/WebSettingsImpl.h',
                 'src/WebSharedWorkerImpl.cpp',
                 'src/WebSharedWorkerImpl.h',
-                'src/WebSpeechInputControllerMockImpl.cpp',
-                'src/WebSpeechInputControllerMockImpl.h',
+                'src/WebSocket.cpp',
+                'src/WebSocketImpl.cpp',
+                'src/WebSocketImpl.h',
+                'src/WebSolidColorLayer.cpp',
+                'src/WebSolidColorLayerImpl.cpp',
                 'src/WebSpeechInputResult.cpp',
                 'src/WebStorageAreaImpl.cpp',
                 'src/WebStorageAreaImpl.h',
@@ -616,7 +661,6 @@
                 'src/WebStorageNamespaceImpl.h',
                 'src/WebStorageQuotaCallbacksImpl.cpp',
                 'src/WebStorageQuotaCallbacksImpl.h',
-                'src/WebString.cpp',
                 'src/WebTextRun.cpp',
                 'src/WebThreadSafeData.cpp',
                 'src/WebURL.cpp',
@@ -626,14 +670,16 @@
                 'src/WebURLResponse.cpp',
                 'src/WebURLResponsePrivate.h',
                 'src/WebURLError.cpp',
+                'src/WebScopedUserGesture.cpp',
+                'src/WebUserMediaRequest.cpp',
                 'src/WebViewImpl.cpp',
                 'src/WebViewImpl.h',
                 'src/WebWorkerBase.cpp',
                 'src/WebWorkerBase.h',
                 'src/WebWorkerClientImpl.cpp',
                 'src/WebWorkerClientImpl.h',
-                'src/WebWorkerImpl.cpp',
-                'src/WebWorkerImpl.h',
+                'src/WebWorkerInfo.cpp',
+                'src/WebWorkerRunLoop.cpp',
                 'src/WorkerAsyncFileSystemChromium.cpp',
                 'src/WorkerAsyncFileSystemChromium.h',
                 'src/WorkerAsyncFileWriterChromium.cpp',
@@ -696,11 +742,9 @@
                             ],
                             'sources!': [
                                 # We should not include files depending on webkit_support.
-                                'tests/CCThreadTest.cpp',
                                 # These tests depend on webkit_support and
                                 # functions defined only in !WEBKIT_IMPLEMENTATION.
                                 'tests/AssociatedURLLoaderTest.cpp',
-                                'tests/CCLayerTreeHostTest.cpp',
                                 'tests/FrameTestHelpers.cpp',
                                 'tests/PopupMenuTest.cpp',
                                 'tests/RenderTableCellTest.cpp',
@@ -715,6 +759,16 @@
                                         '<(chromium_src_dir)/third_party/nss/nss.gyp:*',
                                     ],
                                 }],
+                                ['clang==1', {
+                                    # FIXME: It would be nice to enable this in shared builds too,
+                                    # but the test files have global constructors from the GTEST macro
+                                    # and we pull in the test files into the webkit target in the
+                                    # shared build.
+                                    'cflags!': ['-Wglobal-constructors'],
+                                    'xcode_settings': {
+                                      'WARNING_CFLAGS!': ['-Wglobal-constructors'],
+                                    },
+                                }],
                             ],
                             'msvs_settings': {
                               'VCLinkerTool': {
@@ -727,6 +781,12 @@
                             },
                         }],
                     ],
+                }, { # else: inside_chromium_build==0
+                    'direct_dependent_settings': {
+                        'include_dirs': [
+                            '<(SHARED_INTERMEDIATE_DIR)/webkit', # in a chromium-inside-WebKit build, headers in the public WebKit API are copied beneath this directory so includes referencing third_party/WebKit work.
+                        ],
+                    },
                 }],
                 ['use_x11 == 1', {
                     'dependencies': [
@@ -758,6 +818,10 @@
                 ['OS=="android"', {
                     'include_dirs': [
                         'public/android',
+                    ],
+                }, { # else: OS!="android"
+                    'sources/': [
+                        ['exclude', '/android/'],
                     ],
                 }],
                 ['OS=="mac"', {
@@ -797,11 +861,18 @@
                         ['OS=="mac"', {
                             'link_settings': {
                                 'libraries': [
+                                    '$(SDKROOT)/System/Library/Frameworks/Accelerate.framework',
                                     '$(SDKROOT)/System/Library/Frameworks/OpenGL.framework',
                                 ],
                             },
                         }],
                     ],
+                }],
+                ['clang==1', {
+                    'cflags': ['-Wglobal-constructors'],
+                    'xcode_settings': {
+                        'WARNING_CFLAGS': ['-Wglobal-constructors'],
+                    },
                 }],
             ],
         },
@@ -879,10 +950,10 @@
                 'script_name': 'scripts/generate_devtools_extension_api.py',
                 'inputs': [
                     '<@(_script_name)',
-                    '<@(webinspector_extension_api_files)',
+                    '<@(devtools_extension_api_files)',
                 ],
                 'outputs': ['<(PRODUCT_DIR)/resources/inspector/devtools_extension_api.js'],
-                'action': ['python', '<@(_script_name)', '<@(_outputs)', '<@(webinspector_extension_api_files)'],
+                'action': ['python', '<@(_script_name)', '<@(_outputs)', '<@(devtools_extension_api_files)'],
             }],
         },
         {
@@ -961,7 +1032,7 @@
                     '<@(_workers_files)',
                     '<@(webinspector_image_files)',
                     '<@(devtools_image_files)',
-                    '<@(webinspector_extension_api_files)',
+                    '<@(devtools_extension_api_files)',
                 ],
                 'search_path': [
                     '../../WebCore/inspector/front-end',
@@ -974,403 +1045,14 @@
                 'action': ['python', '<@(_script_name)', '<@(_inspector_html)',
                                      '--devtools-files', '<@(devtools_files)',
                                      '--workers-files', '<@(_workers_files)',
-                                     '--extension-api-files', '<@(webinspector_extension_api_files)',
+                                     '--extension-api-files', '<@(devtools_extension_api_files)',
                                      '--search-path', '<@(_search_path)',
                                      '--js-search-path', '<@(_js_search_path)',
                                      '--output', '<@(_outputs)'],
             }],
         },
-        {
-            'target_name': 'webkit_unit_tests',
-            'type': 'executable',
-            'msvs_guid': '7CEFE800-8403-418A-AD6A-2D52C6FC3EAD',
-            'dependencies': [
-                'webkit',
-                '../../WebCore/WebCore.gyp/WebCore.gyp:webcore',
-                '<(chromium_src_dir)/testing/gtest.gyp:gtest',
-                '<(chromium_src_dir)/testing/gmock.gyp:gmock',
-                '<(chromium_src_dir)/base/base.gyp:base',
-                '<(chromium_src_dir)/base/base.gyp:base_i18n',
-                '<(chromium_src_dir)/base/base.gyp:test_support_base',
-                '<(chromium_src_dir)/webkit/support/webkit_support.gyp:webkit_support',
-            ],
-            'sources': [
-                'tests/RunAllTests.cpp',
-            ],
-            'include_dirs': [
-                'public',
-                'src',
-            ],
-            'conditions': [
-                ['inside_chromium_build==1 and component=="shared_library"', {
-                    'defines': [
-                        'WEBKIT_DLL_UNITTEST',
-                    ],
-                }, {
-                    'sources': [
-                        '<@(webkit_unittest_files)',
-                    ],
-                    'conditions': [
-                        ['toolkit_uses_gtk == 1', {
-                            'include_dirs': [
-                                'public/gtk',
-                            ],
-                            'variables': {
-                              # FIXME: Enable warnings on other platforms.
-                              'chromium_code': 1,
-                            },
-                        }],
-                    ],
-                }],
-                ['inside_chromium_build==1 and OS=="win" and component!="shared_library"', {
-                    'configurations': {
-                        'Debug_Base': {
-                            'msvs_settings': {
-                                'VCLinkerTool': {
-                                    'LinkIncremental': '<(msvs_large_module_debug_link_mode)',
-                                },
-                            },
-                        },
-                    },
-                }],
-            ],
-        },
-        {
-            'target_name': 'ImageDiff',
-            'type': 'executable',
-            'dependencies': [
-                '<(chromium_src_dir)/webkit/support/webkit_support.gyp:webkit_support_gfx',
-            ],
-            'include_dirs': [
-                '../../JavaScriptCore',
-                '<(DEPTH)',
-            ],
-            'sources': [
-                '../../../Tools/DumpRenderTree/chromium/ImageDiff.cpp',
-            ],
-            'conditions': [
-                ['OS=="android"', {
-                    'toolsets': ['host'],
-                }],
-            ],
-        },
-        {
-            'target_name': 'DumpRenderTree',
-            'type': 'executable',
-            'mac_bundle': 1,
-            'dependencies': [
-                'inspector_resources',
-                'webkit',
-                '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf_config',
-                '<(chromium_src_dir)/build/temp_gyp/googleurl.gyp:googleurl',
-                '<(chromium_src_dir)/third_party/icu/icu.gyp:icuuc',
-                '<(chromium_src_dir)/v8/tools/gyp/v8.gyp:v8',
-                '<(chromium_src_dir)/webkit/support/webkit_support.gyp:blob',
-                '<(chromium_src_dir)/webkit/support/webkit_support.gyp:webkit_support',
-            ],
-            'include_dirs': [
-                '<(chromium_src_dir)',
-                'public',
-                '../../JavaScriptCore',
-                '../../JavaScriptCore/wtf', # wtf/text/*.h refers headers in wtf/ without wtf/.
-                '<(DEPTH)',
-            ],
-            'defines': [
-                # Technically not a unit test but require functions available only to
-                # unit tests.
-                'UNIT_TEST',
-            ],
-            'sources': [
-                '<@(drt_files)',
-            ],
-            'conditions': [
-                ['OS=="win"', {
-                    'dependencies': [
-                        'LayoutTestHelper',
-                        '<(chromium_src_dir)/third_party/angle/src/build_angle.gyp:libEGL',
-                        '<(chromium_src_dir)/third_party/angle/src/build_angle.gyp:libGLESv2',
-                    ],
-
-                    'resource_include_dirs': ['<(SHARED_INTERMEDIATE_DIR)/webkit'],
-                    'sources': [
-                        '<(SHARED_INTERMEDIATE_DIR)/net/net_resources.rc',
-                        '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_chromium_resources.rc',
-                        '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_resources.rc',
-                        '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_strings_en-US.rc',
-                    ],
-                    'conditions': [
-                        ['inside_chromium_build==1', {
-                            'configurations': {
-                                'Debug_Base': {
-                                    'msvs_settings': {
-                                        'VCLinkerTool': {
-                                            'LinkIncremental': '<(msvs_large_module_debug_link_mode)',
-                                        },
-                                    },
-                                },
-                            },
-                        }],
-                    ],
-                    'copies': [{
-                        'destination': '<(PRODUCT_DIR)',
-                        'files': ['<(ahem_path)'],
-                    }],
-                },{ # OS!="win"
-                    'sources/': [
-                        ['exclude', 'Win\\.cpp$'],
-                    ],
-                    'actions': [
-                        {
-                            'action_name': 'repack_locale',
-                            'variables': {
-                                'repack_path': '<(chromium_src_dir)/tools/grit/grit/format/repack.py',
-                                'pak_inputs': [
-                                    '<(SHARED_INTERMEDIATE_DIR)/net/net_resources.pak',
-                                    '<(SHARED_INTERMEDIATE_DIR)/ui/gfx/gfx_resources.pak',
-                                    '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_chromium_resources.pak',
-                                    '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_strings_en-US.pak',
-                                    '<(SHARED_INTERMEDIATE_DIR)/webkit/webkit_resources.pak',
-                            ]},
-                            'inputs': [
-                                '<(repack_path)',
-                                '<@(pak_inputs)',
-                            ],
-                            'outputs': [
-                                '<(INTERMEDIATE_DIR)/repack/DumpRenderTree.pak',
-                            ],
-                            'action': ['python', '<(repack_path)', '<@(_outputs)', '<@(pak_inputs)'],
-                            'process_outputs_as_mac_bundle_resources': 1,
-                        },
-                    ], # actions
-                }],
-                ['OS=="mac"', {
-                    'dependencies': [
-                        'copy_mesa',
-                        'LayoutTestHelper',
-                    ],
-                    'mac_bundle_resources': [
-                        '<(ahem_path)',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher100.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher200.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher300.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher400.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher500.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher600.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher700.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher800.ttf',
-                        '../../../Tools/DumpRenderTree/fonts/WebKitWeightWatcher900.ttf',
-                        '<(SHARED_INTERMEDIATE_DIR)/webkit/textAreaResizeCorner.png',
-                    ],
-                },{ # OS!="mac"
-                    'sources/': [
-                        # .mm is already excluded by common.gypi
-                        ['exclude', 'Mac\\.cpp$'],
-                    ],
-                }],
-                ['use_x11 == 1', {
-                    'dependencies': [
-                        '<(chromium_src_dir)/build/linux/system.gyp:fontconfig',
-                    ],
-                    'copies': [{
-                        'destination': '<(PRODUCT_DIR)',
-                        'files': [
-                            '<(ahem_path)',
-                            '../../../Tools/DumpRenderTree/chromium/fonts.conf',
-                            '<(INTERMEDIATE_DIR)/repack/DumpRenderTree.pak',
-                        ]
-                    }],
-                    'variables': {
-                        # FIXME: Enable warnings on other platforms.
-                        'chromium_code': 1,
-                    },
-                    'conditions': [
-                        ['linux_use_tcmalloc == 1', {
-                            'dependencies': [
-                                '<(chromium_src_dir)/base/allocator/allocator.gyp:allocator',
-                            ],
-                        }],
-                    ],
-                },{ # use_x11 != 1
-                    'sources/': [
-                        ['exclude', 'Linux\\.cpp$']
-                    ]
-                }],
-                ['toolkit_uses_gtk == 1', {
-                    'dependencies': [
-                        '<(chromium_src_dir)/build/linux/system.gyp:gtk',
-                    ],
-                    'include_dirs': [
-                        'public/gtk',
-                    ],
-                },{ # toolkit_uses_gtk != 1
-                    'sources/': [
-                        ['exclude', 'Gtk\\.cpp$']
-                    ]
-                }],
-                ['OS=="android"', {
-                    'dependencies': [
-                        'ImageDiff#host',
-                    ],
-                },{ # OS!="android"
-                    'sources/': [
-                        ['exclude', '(Android)\\.cpp$']
-                    ],
-                    'dependencies': [
-                        'ImageDiff',
-                        'copy_TestNetscapePlugIn',
-                        '<(chromium_src_dir)/third_party/mesa/mesa.gyp:osmesa',
-                    ],
-                }],
-                ['inside_chromium_build==1 and component=="shared_library"', {
-                    'sources': [
-                        'src/ChromiumCurrentTime.cpp',
-                        'src/ChromiumThreading.cpp',
-                    ],
-                    'include_dirs': [
-                        'public',
-                    ],
-                    'dependencies': [
-                        '../../JavaScriptCore/JavaScriptCore.gyp/JavaScriptCore.gyp:wtf',
-                    ],
-                }],
-                ['inside_chromium_build==0', {
-                    'dependencies': [
-                        '<(chromium_src_dir)/webkit/support/setup_third_party.gyp:third_party_headers',
-                    ]
-                }],
-                ['inside_chromium_build==0 or component!="shared_library"', {
-                    'dependencies': [
-                        '../../WebCore/WebCore.gyp/WebCore.gyp:webcore_test_support',
-                    ],
-                    'include_dirs': [
-                        # WARNING: Do not view this particular case as a precedent for
-                        # including WebCore headers in DumpRenderTree project.
-                        '../../WebCore/testing/v8', # for WebCoreTestSupport.h, needed to link in window.internals code.
-                    ],
-                    'sources': [
-                        'src/WebTestingSupport.cpp',
-                        'public/WebTestingSupport.h',
-                    ],
-                }],
-            ],
-        },
-        {
-            'target_name': 'TestNetscapePlugIn',
-            'type': 'loadable_module',
-            'sources': [ '<@(test_plugin_files)' ],
-            'dependencies': [
-                '<(chromium_src_dir)/third_party/npapi/npapi.gyp:npapi',
-            ],
-            'include_dirs': [
-                '<(chromium_src_dir)',
-                '../../../Tools/DumpRenderTree/TestNetscapePlugIn',
-                '../../../Tools/DumpRenderTree/chromium/TestNetscapePlugIn/ForwardingHeaders',
-            ],
-            'conditions': [
-                ['OS=="mac"', {
-                    'mac_bundle': 1,
-                    'product_extension': 'plugin',
-                    'link_settings': {
-                        'libraries': [
-                            '$(SDKROOT)/System/Library/Frameworks/Carbon.framework',
-                            '$(SDKROOT)/System/Library/Frameworks/Cocoa.framework',
-                            '$(SDKROOT)/System/Library/Frameworks/QuartzCore.framework',
-                        ]
-                    },
-                    'xcode_settings': {
-                        'GCC_SYMBOLS_PRIVATE_EXTERN': 'NO',
-                        'INFOPLIST_FILE': '../../../Tools/DumpRenderTree/TestNetscapePlugIn/mac/Info.plist',
-                    },
-                }],
-                ['os_posix == 1 and OS != "mac"', {
-                    'cflags': [
-                        '-fvisibility=default',
-                    ],
-                }],
-                ['OS=="win"', {
-                    'defines': [
-                        # This seems like a hack, but this is what Safari Win does.
-                        'snprintf=_snprintf',
-                    ],
-                    'sources': [
-                        '../../../Tools/DumpRenderTree/TestNetscapePlugIn/win/TestNetscapePlugin.def',
-                        '../../../Tools/DumpRenderTree/TestNetscapePlugIn/win/TestNetscapePlugin.rc',
-                    ],
-                    # The .rc file requires that the name of the dll is npTestNetscapePlugin.dll.
-                    'product_name': 'npTestNetscapePlugin',
-                }],
-            ],
-        },
-        {
-            'target_name': 'copy_TestNetscapePlugIn',
-            'type': 'none',
-            'dependencies': [
-                'TestNetscapePlugIn',
-            ],
-            'conditions': [
-                ['OS=="win"', {
-                    'copies': [{
-                        'destination': '<(PRODUCT_DIR)/plugins',
-                        'files': ['<(PRODUCT_DIR)/npTestNetscapePlugIn.dll'],
-                    }],
-                }],
-                ['OS=="mac"', {
-                    'dependencies': ['TestNetscapePlugIn'],
-                    'copies': [{
-                        'destination': '<(PRODUCT_DIR)/plugins/',
-                        'files': ['<(PRODUCT_DIR)/TestNetscapePlugIn.plugin/'],
-                    }],
-                }],
-                ['os_posix == 1 and OS != "mac"', {
-                    'copies': [{
-                        'destination': '<(PRODUCT_DIR)/plugins',
-                        'files': ['<(PRODUCT_DIR)/libTestNetscapePlugIn.so'],
-                    }],
-                }],
-            ],
-        },
-        {
-            'target_name': 'TestWebKitAPI',
-            'type': 'executable',
-            'dependencies': [
-                'webkit',
-                '../../WebCore/WebCore.gyp/WebCore.gyp:webcore',
-                '<(chromium_src_dir)/base/base.gyp:test_support_base',
-                '<(chromium_src_dir)/testing/gtest.gyp:gtest',
-                '<(chromium_src_dir)/testing/gmock.gyp:gmock',
-                '<(chromium_src_dir)/webkit/support/webkit_support.gyp:webkit_support',
-            ],
-            'include_dirs': [
-                '../../../Tools/TestWebKitAPI',
-                # Needed by tests/RunAllTests.cpp, as well as ChromiumCurrentTime.cpp and
-                # ChromiumThreading.cpp in chromium shared library configuration.
-                'public',
-            ],
-            'sources': [
-                # Reuse the same testing driver of Chromium's webkit_unit_tests.
-                'tests/RunAllTests.cpp',
-                '<@(TestWebKitAPI_files)',
-            ],
-            'conditions': [
-                ['inside_chromium_build==1 and component=="shared_library"', {
-                    'sources': [
-                        # To satisfy linking of WTF::currentTime() etc. in shared library configuration,
-                        # as the symbols are not exported from the DLLs.
-                        'src/ChromiumCurrentTime.cpp',
-                        'src/ChromiumThreading.cpp',
-                    ],
-                }],
-            ],
-        },
     ], # targets
     'conditions': [
-        ['OS=="win"', {
-            'targets': [{
-                'target_name': 'LayoutTestHelper',
-                'type': 'executable',
-                'sources': ['../../../Tools/DumpRenderTree/chromium/LayoutTestHelperWin.cpp'],
-            }],
-        }],
         ['os_posix==1 and OS!="mac" and OS!="android" and gcc_version==46', {
             'target_defaults': {
                 # Disable warnings about c++0x compatibility, as some names (such
@@ -1380,16 +1062,6 @@
         }],
         ['OS=="mac"', {
             'targets': [
-                {
-                    'target_name': 'LayoutTestHelper',
-                    'type': 'executable',
-                    'sources': ['../../../Tools/DumpRenderTree/chromium/LayoutTestHelper.mm'],
-                    'link_settings': {
-                        'libraries': [
-                            '$(SDKROOT)/System/Library/Frameworks/AppKit.framework',
-                        ],
-                    },
-                },
                 {
                     'target_name': 'copy_mesa',
                     'type': 'none',
@@ -1501,9 +1173,3 @@
         }],
     ], # conditions
 }
-
-# Local Variables:
-# tab-width:2
-# indent-tabs-mode:nil
-# End:
-# vim: set expandtab tabstop=2 shiftwidth=2:

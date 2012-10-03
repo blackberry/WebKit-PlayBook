@@ -34,7 +34,7 @@ public:
     typedef JSDOMWrapper Base;
     static JSTestMediaQueryListListener* create(JSC::Structure* structure, JSDOMGlobalObject* globalObject, PassRefPtr<TestMediaQueryListListener> impl)
     {
-        JSTestMediaQueryListListener* ptr = new (JSC::allocateCell<JSTestMediaQueryListListener>(globalObject->globalData().heap)) JSTestMediaQueryListListener(structure, globalObject, impl);
+        JSTestMediaQueryListListener* ptr = new (NotNull, JSC::allocateCell<JSTestMediaQueryListListener>(globalObject->globalData().heap)) JSTestMediaQueryListListener(structure, globalObject, impl);
         ptr->finishCreation(globalObject->globalData());
         return ptr;
     }
@@ -42,6 +42,8 @@ public:
     static JSC::JSObject* createPrototype(JSC::ExecState*, JSC::JSGlobalObject*);
     static bool getOwnPropertySlot(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertySlot&);
     static bool getOwnPropertyDescriptor(JSC::JSObject*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertyDescriptor&);
+    static void destroy(JSC::JSCell*);
+    ~JSTestMediaQueryListListener();
     static const JSC::ClassInfo s_info;
 
     static JSC::Structure* createStructure(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::JSValue prototype)
@@ -50,15 +52,34 @@ public:
     }
 
     static JSC::JSValue getConstructor(JSC::ExecState*, JSC::JSGlobalObject*);
-    TestMediaQueryListListener* impl() const { return m_impl.get(); }
+    TestMediaQueryListListener* impl() const { return m_impl; }
+    void releaseImpl() { m_impl->deref(); m_impl = 0; }
+
+    void releaseImplIfNotNull() { if (m_impl) { m_impl->deref(); m_impl = 0; } }
 
 private:
-    RefPtr<TestMediaQueryListListener> m_impl;
+    TestMediaQueryListListener* m_impl;
 protected:
     JSTestMediaQueryListListener(JSC::Structure*, JSDOMGlobalObject*, PassRefPtr<TestMediaQueryListListener>);
     void finishCreation(JSC::JSGlobalData&);
     static const unsigned StructureFlags = JSC::OverridesGetOwnPropertySlot | Base::StructureFlags;
 };
+
+class JSTestMediaQueryListListenerOwner : public JSC::WeakHandleOwner {
+    virtual bool isReachableFromOpaqueRoots(JSC::Handle<JSC::Unknown>, void* context, JSC::SlotVisitor&);
+    virtual void finalize(JSC::Handle<JSC::Unknown>, void* context);
+};
+
+inline JSC::WeakHandleOwner* wrapperOwner(DOMWrapperWorld*, TestMediaQueryListListener*)
+{
+    DEFINE_STATIC_LOCAL(JSTestMediaQueryListListenerOwner, jsTestMediaQueryListListenerOwner, ());
+    return &jsTestMediaQueryListListenerOwner;
+}
+
+inline void* wrapperContext(DOMWrapperWorld* world, TestMediaQueryListListener*)
+{
+    return world;
+}
 
 JSC::JSValue toJS(JSC::ExecState*, JSDOMGlobalObject*, TestMediaQueryListListener*);
 TestMediaQueryListListener* toTestMediaQueryListListener(JSC::JSValue);
@@ -69,7 +90,7 @@ public:
     static JSC::JSObject* self(JSC::ExecState*, JSC::JSGlobalObject*);
     static JSTestMediaQueryListListenerPrototype* create(JSC::JSGlobalData& globalData, JSC::JSGlobalObject* globalObject, JSC::Structure* structure)
     {
-        JSTestMediaQueryListListenerPrototype* ptr = new (JSC::allocateCell<JSTestMediaQueryListListenerPrototype>(globalData.heap)) JSTestMediaQueryListListenerPrototype(globalData, globalObject, structure);
+        JSTestMediaQueryListListenerPrototype* ptr = new (NotNull, JSC::allocateCell<JSTestMediaQueryListListenerPrototype>(globalData.heap)) JSTestMediaQueryListListenerPrototype(globalData, globalObject, structure);
         ptr->finishCreation(globalData);
         return ptr;
     }
@@ -97,7 +118,7 @@ public:
     typedef DOMConstructorObject Base;
     static JSTestMediaQueryListListenerConstructor* create(JSC::ExecState* exec, JSC::Structure* structure, JSDOMGlobalObject* globalObject)
     {
-        JSTestMediaQueryListListenerConstructor* ptr = new (JSC::allocateCell<JSTestMediaQueryListListenerConstructor>(*exec->heap())) JSTestMediaQueryListListenerConstructor(structure, globalObject);
+        JSTestMediaQueryListListenerConstructor* ptr = new (NotNull, JSC::allocateCell<JSTestMediaQueryListListenerConstructor>(*exec->heap())) JSTestMediaQueryListListenerConstructor(structure, globalObject);
         ptr->finishCreation(exec, globalObject);
         return ptr;
     }

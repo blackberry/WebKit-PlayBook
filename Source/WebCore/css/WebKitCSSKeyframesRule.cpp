@@ -26,9 +26,9 @@
 #include "config.h"
 #include "WebKitCSSKeyframesRule.h"
 
-#include "CSSMutableStyleDeclaration.h"
 #include "CSSParser.h"
 #include "CSSRuleList.h"
+#include "StylePropertySet.h"
 #include "StyleSheet.h"
 #include "WebKitCSSKeyframeRule.h"
 
@@ -44,8 +44,6 @@ WebKitCSSKeyframesRule::~WebKitCSSKeyframesRule()
 {
     for (unsigned i = 0; i < length(); ++i) {
         WebKitCSSKeyframeRule* rule = item(i);
-        if (CSSMutableStyleDeclaration* style = rule->style())
-            style->setParentRule(0);
         rule->setParentRule(0);
     }
 }
@@ -81,9 +79,6 @@ void WebKitCSSKeyframesRule::append(WebKitCSSKeyframeRule* rule)
 
     m_lstCSSRules->append(rule);
     rule->setParentRule(this);
-
-    if (CSSMutableStyleDeclaration* style = rule->style())
-        style->setParentRule(this);
 }
 
 void WebKitCSSKeyframesRule::insertRule(const String& rule)
@@ -101,9 +96,6 @@ void WebKitCSSKeyframesRule::deleteRule(const String& s)
         return;
 
     WebKitCSSKeyframeRule* rule = item(i);
-    if (CSSMutableStyleDeclaration* style = rule->style())
-        style->setParentRule(0);
-
     rule->setParentRule(0);
     m_lstCSSRules->deleteRule(i);
 }

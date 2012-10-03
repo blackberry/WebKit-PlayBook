@@ -64,24 +64,25 @@ public:
     virtual void scroll(const WebCore::IntRect& scrollRect, const WebCore::IntSize& scrollOffset) = 0;
 
     // FIXME: These should be pure virtual.
-    virtual void enableDisplayThrottling() { }
-    virtual void disableDisplayThrottling() { }
     virtual void pageBackgroundTransparencyChanged() { }
     virtual void forceRepaint() { }
     virtual void setLayerTreeStateIsFrozen(bool) { }
+    virtual bool layerTreeStateIsFrozen() const { return false; }
 
     virtual void didInstallPageOverlay() { }
     virtual void didUninstallPageOverlay() { }
     virtual void setPageOverlayNeedsDisplay(const WebCore::IntRect&) { }
+    virtual void pageCustomRepresentationChanged() { }
 
     virtual void setPaintingEnabled(bool) { }
 
 #if USE(ACCELERATED_COMPOSITING)
     virtual void setRootCompositingLayer(WebCore::GraphicsLayer*) = 0;
     virtual void scheduleCompositingLayerSync() = 0;
-#if USE(TEXTURE_MAPPER)
-    virtual void didReceiveLayerTreeHostMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*) = 0;
 #endif
+
+#if USE(UI_SIDE_COMPOSITING)
+    virtual void didReceiveLayerTreeHostMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*) = 0;
 #endif
 
 #if PLATFORM(WIN)
@@ -105,15 +106,7 @@ private:
 #if PLATFORM(MAC)
     // Used by TiledCoreAnimationDrawingArea.
     virtual void updateGeometry(const WebCore::IntSize& viewSize) { }
-#endif
-
-#if USE(TILED_BACKING_STORE)
-    virtual void setSize(const WebCore::IntSize& viewSize) { }
-    virtual void setVisibleContentRectAndScale(const WebCore::IntRect&, float) { }
-    virtual void setVisibleContentRectTrajectoryVector(const WebCore::FloatPoint&) { }
-    virtual void setContentsScale(float scale) { }
-    virtual void renderNextFrame() { }
-    virtual void takeSnapshot(const WebCore::IntSize& targetSize, const WebCore::IntRect& contentsRect) { }
+    virtual void setDeviceScaleFactor(float deviceScaleFactor) { }
 #endif
 };
 

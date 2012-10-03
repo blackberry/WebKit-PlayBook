@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -23,25 +23,19 @@
 #include "DOMSupport.h"
 #include "DumpRenderTreeClient.h"
 #include "EditCommand.h"
-#include "FocusController.h"
 #include "Frame.h"
-#include "HTMLElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
-#include "HTMLTextAreaElement.h"
 #include "InputHandler.h"
 #include "KeyboardEvent.h"
-#include "Node.h"
 #include "NotImplemented.h"
 #include "Page.h"
 #include "PlatformKeyboardEvent.h"
-#include "RenderObject.h"
 #include "SelectionHandler.h"
-#include "WebPage.h"
-#include "WebPageClient.h"
 #include "WebPage_p.h"
 #include "WindowsKeyboardCodes.h"
-#include <BlackBerryPlatformLog.h>
+
+using namespace BlackBerry::WebKit;
 
 namespace WebCore {
 
@@ -52,8 +46,8 @@ namespace WebCore {
 // triggered by replaceText calls.
 static const size_t maximumUndoStackDepth = 1000;
 
-EditorClientBlackBerry::EditorClientBlackBerry(BlackBerry::WebKit::WebPage* page)
-    : m_page(page)
+EditorClientBlackBerry::EditorClientBlackBerry(WebPagePrivate* webPagePrivate)
+    : m_webPagePrivate(webPagePrivate)
     , m_waitingForCursorFocus(false)
     , m_spellCheckState(SpellCheckDefault)
     , m_inRedo(false)
@@ -67,8 +61,8 @@ void EditorClientBlackBerry::pageDestroyed()
 
 bool EditorClientBlackBerry::shouldDeleteRange(Range* range)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldDeleteDOMRange(range);
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldDeleteDOMRange(range);
     return true;
 }
 
@@ -86,8 +80,8 @@ bool EditorClientBlackBerry::smartInsertDeleteEnabled()
 
 bool EditorClientBlackBerry::isSelectTrailingWhitespaceEnabled()
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->isSelectTrailingWhitespaceEnabled();
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->isSelectTrailingWhitespaceEnabled();
     return false;
 }
 
@@ -98,7 +92,7 @@ void EditorClientBlackBerry::enableSpellChecking(bool enable)
 
 bool EditorClientBlackBerry::shouldSpellCheckFocusedField()
 {
-    const Frame* frame = m_page->d->focusedOrMainFrame();
+    const Frame* frame = m_webPagePrivate->focusedOrMainFrame();
     if (!frame || !frame->document() || !frame->editor())
         return false;
 
@@ -116,11 +110,11 @@ bool EditorClientBlackBerry::shouldSpellCheckFocusedField()
     // If the field does not support autocomplete, do not do spellchecking.
     if (node->isElementNode()) {
         const Element* element = static_cast<const Element*>(node);
-        if (element->hasTagName(HTMLNames::inputTag) && !BlackBerry::WebKit::DOMSupport::elementSupportsAutocomplete(element))
+        if (element->hasTagName(HTMLNames::inputTag) && !DOMSupport::elementSupportsAutocomplete(element))
             return false;
     }
 
-    // Check if the node disables spell checking
+    // Check if the node disables spell checking directly.
     return frame->editor()->isSpellCheckingEnabledInFocusedNode();
 }
 
@@ -162,54 +156,52 @@ int EditorClientBlackBerry::spellCheckerDocumentTag()
 
 bool EditorClientBlackBerry::shouldBeginEditing(Range* range)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldBeginEditingInDOMRange(range);
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldBeginEditingInDOMRange(range);
 
-    return m_page->d->m_inputHandler->shouldAcceptInputFocus();
+    return true;
 }
 
 bool EditorClientBlackBerry::shouldEndEditing(Range* range)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldEndEditingInDOMRange(range);
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldEndEditingInDOMRange(range);
     return true;
 }
 
 bool EditorClientBlackBerry::shouldInsertNode(Node* node, Range* range, EditorInsertAction insertAction)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldInsertNode(node, range, static_cast<int>(insertAction));
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldInsertNode(node, range, static_cast<int>(insertAction));
     return true;
 }
 
 bool EditorClientBlackBerry::shouldInsertText(const WTF::String& text, Range* range, EditorInsertAction insertAction)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldInsertText(text, range, static_cast<int>(insertAction));
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldInsertText(text, range, static_cast<int>(insertAction));
     return true;
 }
 
 bool EditorClientBlackBerry::shouldChangeSelectedRange(Range* fromRange, Range* toRange, EAffinity affinity, bool stillSelecting)
 {
-    if (m_page->d->m_dumpRenderTree)
-        return m_page->d->m_dumpRenderTree->shouldChangeSelectedDOMRangeToDOMRangeAffinityStillSelecting(fromRange, toRange, static_cast<int>(affinity), stillSelecting);
+    if (m_webPagePrivate->m_dumpRenderTree)
+        return m_webPagePrivate->m_dumpRenderTree->shouldChangeSelectedDOMRangeToDOMRangeAffinityStillSelecting(fromRange, toRange, static_cast<int>(affinity), stillSelecting);
 
-    Frame* frame = m_page->d->m_page->focusController()->focusedOrMainFrame();
+    Frame* frame = m_webPagePrivate->focusedOrMainFrame();
     if (frame && frame->document()) {
         if (frame->document()->focusedNode() && frame->document()->focusedNode()->hasTagName(HTMLNames::selectTag))
             return false;
 
-        // Update the focus state to re-show the keyboard if needed.
-        // FIXME, this should be removed and strictly be a show keyboard call if
-        // focus is active.
-        if (m_page->d->m_inputHandler->isInputMode())
-            m_page->d->m_inputHandler->nodeFocused(frame->document()->focusedNode());
+        // Check if this change does not represent a focus change and input is active and if so ensure the keyboard is visible.
+        if (m_webPagePrivate->m_inputHandler->isInputMode() && fromRange && toRange && (fromRange->startContainer() == toRange->startContainer()))
+            m_webPagePrivate->m_inputHandler->notifyClientOfKeyboardVisibilityChange(true);
     }
 
     return true;
 }
 
-bool EditorClientBlackBerry::shouldApplyStyle(CSSStyleDeclaration*, Range*)
+bool EditorClientBlackBerry::shouldApplyStyle(StylePropertySet*, Range*)
 {
     notImplemented();
     return true;
@@ -223,14 +215,14 @@ bool EditorClientBlackBerry::shouldMoveRangeAfterDelete(Range*, Range*)
 
 void EditorClientBlackBerry::didBeginEditing()
 {
-    if (m_page->d->m_dumpRenderTree)
-        m_page->d->m_dumpRenderTree->didBeginEditing();
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->didBeginEditing();
 }
 
 void EditorClientBlackBerry::respondToChangedContents()
 {
-    if (m_page->d->m_dumpRenderTree)
-        m_page->d->m_dumpRenderTree->didChange();
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->didChange();
 }
 
 void EditorClientBlackBerry::respondToChangedSelection(Frame* frame)
@@ -238,21 +230,21 @@ void EditorClientBlackBerry::respondToChangedSelection(Frame* frame)
     if (m_waitingForCursorFocus)
         m_waitingForCursorFocus = false;
     else
-        m_page->d->selectionChanged(frame);
+        m_webPagePrivate->selectionChanged(frame);
 
-    if (m_page->d->m_dumpRenderTree)
-        m_page->d->m_dumpRenderTree->didChangeSelection();
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->didChangeSelection();
 }
 
 void EditorClientBlackBerry::didEndEditing()
 {
-    if (m_page->d->m_dumpRenderTree)
-        m_page->d->m_dumpRenderTree->didEndEditing();
+    if (m_webPagePrivate->m_dumpRenderTree)
+        m_webPagePrivate->m_dumpRenderTree->didEndEditing();
 }
 
 void EditorClientBlackBerry::respondToSelectionAppearanceChange()
 {
-    m_page->d->m_selectionHandler->selectionPositionChanged();
+    m_webPagePrivate->m_selectionHandler->selectionPositionChanged();
 }
 
 void EditorClientBlackBerry::didWriteSelectionToPasteboard()
@@ -265,18 +257,21 @@ void EditorClientBlackBerry::didSetSelectionTypesForPasteboard()
     notImplemented();
 }
 
-void EditorClientBlackBerry::registerCommandForUndo(PassRefPtr<EditCommand> command)
+void EditorClientBlackBerry::registerUndoStep(PassRefPtr<UndoStep> step)
 {
+    // Remove the oldest item if we've reached the maximum capacity for the stack.
     if (m_undoStack.size() == maximumUndoStackDepth)
-        m_undoStack.removeFirst(); // drop oldest item off the far end
+        m_undoStack.removeFirst();
+
     if (!m_inRedo)
         m_redoStack.clear();
-    m_undoStack.append(command);
+
+    m_undoStack.append(step);
 }
 
-void EditorClientBlackBerry::registerCommandForRedo(PassRefPtr<EditCommand> command)
+void EditorClientBlackBerry::registerRedoStep(PassRefPtr<UndoStep> step)
 {
-    m_redoStack.append(command);
+    m_redoStack.append(step);
 }
 
 void EditorClientBlackBerry::clearUndoRedoOperations()
@@ -309,11 +304,11 @@ void EditorClientBlackBerry::undo()
 {
     if (canUndo()) {
         EditCommandStack::iterator back = --m_undoStack.end();
-        RefPtr<EditCommand> command(*back);
+        RefPtr<UndoStep> command(*back);
         m_undoStack.remove(back);
 
+        // Unapply will call us back to push this command onto the redo stack.
         command->unapply();
-        // unapply will call us back to push this command onto the redo stack.
     }
 }
 
@@ -321,13 +316,14 @@ void EditorClientBlackBerry::redo()
 {
     if (canRedo()) {
         EditCommandStack::iterator back = --m_redoStack.end();
-        RefPtr<EditCommand> command(*back);
+        RefPtr<UndoStep> command(*back);
         m_redoStack.remove(back);
 
         ASSERT(!m_inRedo);
         m_inRedo = true;
+
+        // Reapply will call us back to push this command onto the undo stack.
         command->reapply();
-        // reapply will call us back to push this command onto the undo stack.
         m_inRedo = false;
     }
 }
@@ -338,6 +334,12 @@ static const unsigned ShiftKey = 1 << 2;
 
 struct KeyDownEntry {
     unsigned virtualKey;
+    unsigned modifiers;
+    const char* name;
+};
+
+struct KeyPressEntry {
+    unsigned charCode;
     unsigned modifiers;
     const char* name;
 };
@@ -370,32 +372,64 @@ static const KeyDownEntry keyDownEntries[] = {
 
     { 'B',       CtrlKey,            "ToggleBold"                                  },
     { 'I',       CtrlKey,            "ToggleItalic"                                },
+    { 'U',       CtrlKey,            "ToggleUnderline"                             },
 
-#if OS(QNX)
+    { VK_BACK,   0,                  "DeleteBackward"                              },
+    { VK_BACK,   ShiftKey,           "DeleteBackward"                              },
+    { VK_DELETE, 0,                  "DeleteForward"                               },
+    { VK_BACK,   CtrlKey,            "DeleteWordBackward"                          },
+    { VK_DELETE, CtrlKey,            "DeleteWordForward"                           },
+
     { 'C',       CtrlKey,            "Copy"                                        },
     { 'V',       CtrlKey,            "Paste"                                       },
+    { 'V',       CtrlKey | ShiftKey, "PasteAndMatchStyle"                          },
     { 'X',       CtrlKey,            "Cut"                                         },
     { VK_INSERT, CtrlKey,            "Copy"                                        },
     { VK_DELETE, ShiftKey,           "Cut"                                         },
     { VK_INSERT, ShiftKey,           "Paste"                                       },
-#endif
 
     { 'A',       CtrlKey,            "SelectAll"                                   },
     { 'Z',       CtrlKey,            "Undo"                                        },
     { 'Z',       CtrlKey | ShiftKey, "Redo"                                        },
+    { 'Y',       CtrlKey,            "Redo"                                        },
+
+    { VK_TAB,    0,                  "InsertTab"                                   },
+    { VK_TAB,    ShiftKey,           "InsertBacktab"                               },
+    { VK_RETURN, 0,                  "InsertNewline"                               },
+    { VK_RETURN, CtrlKey,            "InsertNewline"                               },
+    { VK_RETURN, AltKey,             "InsertNewline"                               },
+    { VK_RETURN, ShiftKey,           "InsertLineBreak"                             },
+    { VK_RETURN, AltKey | ShiftKey,  "InsertNewline"                               },
+
 };
+
+static const KeyPressEntry keyPressEntries[] = {
+    { '\t',   0,                  "InsertTab"                                   },
+    { '\t',   ShiftKey,           "InsertBacktab"                               },
+    { '\r',   0,                  "InsertNewline"                               },
+    { '\r',   CtrlKey,            "InsertNewline"                               },
+    { '\r',   AltKey,             "InsertNewline"                               },
+    { '\r',   ShiftKey,           "InsertLineBreak"                             },
+    { '\r',   AltKey | ShiftKey,  "InsertNewline"                               },
+};
+
 
 const char* EditorClientBlackBerry::interpretKeyEvent(const KeyboardEvent* event)
 {
-    ASSERT(event->type() == eventNames().keydownEvent);
+    ASSERT(event->type() == eventNames().keydownEvent || event->type() == eventNames().keypressEvent);
 
     static HashMap<int, const char*>* keyDownCommandsMap = 0;
+    static HashMap<int, const char*>* keyPressCommandsMap = 0;
 
     if (!keyDownCommandsMap) {
         keyDownCommandsMap = new HashMap<int, const char*>;
+        keyPressCommandsMap = new HashMap<int, const char*>;
 
-        for (unsigned i = 0; i < WTF_ARRAY_LENGTH(keyDownEntries); i++)
+        for (size_t i = 0; i < WTF_ARRAY_LENGTH(keyDownEntries); ++i)
             keyDownCommandsMap->set(keyDownEntries[i].modifiers << 16 | keyDownEntries[i].virtualKey, keyDownEntries[i].name);
+
+        for (size_t i = 0; i < WTF_ARRAY_LENGTH(keyPressEntries); ++i)
+            keyPressCommandsMap->set(keyPressEntries[i].modifiers << 16 | keyPressEntries[i].charCode, keyPressEntries[i].name);
     }
 
     unsigned modifiers = 0;
@@ -406,77 +440,58 @@ const char* EditorClientBlackBerry::interpretKeyEvent(const KeyboardEvent* event
     if (event->ctrlKey())
         modifiers |= CtrlKey;
 
-    int mapKey = modifiers << 16 | event->keyCode();
-    return mapKey ? keyDownCommandsMap->get(mapKey) : 0;
+    if (event->type() == eventNames().keydownEvent) {
+        int mapKey = modifiers << 16 | event->keyCode();
+        return mapKey ? keyDownCommandsMap->get(mapKey) : 0;
+    }
+
+    int mapKey = modifiers << 16 | event->charCode();
+    return mapKey ? keyPressCommandsMap->get(mapKey) : 0;
 }
 
 void EditorClientBlackBerry::handleKeyboardEvent(KeyboardEvent* event)
 {
-    Node* node = event->target()->toNode();
-    ASSERT(node);
-    Frame* frame = node->document()->frame();
-    ASSERT(frame);
-
-    ASSERT(m_page->d->m_inputHandler);
+    ASSERT(event);
 
     const PlatformKeyboardEvent* platformEvent = event->keyEvent();
     if (!platformEvent)
         return;
 
-    Node* start = frame->selection()->start().anchorNode();
-    if (!start)
+    ASSERT(event->target()->toNode());
+    Frame* frame = event->target()->toNode()->document()->frame();
+    ASSERT(frame);
+
+    String commandName = interpretKeyEvent(event);
+
+    if (!commandName.isEmpty()) {
+        // Hot key handling. Cancel processing mode.
+        m_webPagePrivate->m_inputHandler->setProcessingChange(false);
+        if (frame->editor()->command(commandName).execute())
+            event->setDefaultHandled();
+        return;
+    }
+
+    if (!frame->editor()->canEdit())
         return;
 
-    if (start->isContentEditable()) {
+    // Text insertion commands should only be triggered from keypressEvent.
+    // There is an assert guaranteeing this in
+    // EventHandler::handleTextInputEvent. Note that windowsVirtualKeyCode
+    // is not set for keypressEvent: special keys should have been already
+    // handled in keydownEvent, which is called first.
+    if (event->type() != eventNames().keypressEvent)
+        return;
 
-        // Text insertion commands should only be triggered from keypressEvent.
-        // There is an assert guaranteeing this in
-        // EventHandler::handleTextInputEvent. Note that windowsVirtualKeyCode
-        // is not set for keypressEvent: special keys should have been already
-        // handled in keydownEvent, which is called first.
-        if (event->type() == eventNames().keypressEvent) {
-            if (event->charCode() == '\r') { // \n has been converted to \r in PlatformKeyboardEventBlackBerry
-                if (frame->editor()->command("InsertNewline").execute(event))
-                    event->setDefaultHandled();
-            } else if ((event->charCode() >= ' ' || event->charCode() == '\t') // Don't insert null or control characters as they can result in unexpected behaviour
-                    && !platformEvent->text().isEmpty()) {
-                if (frame->editor()->insertText(platformEvent->text(), event))
-                    event->setDefaultHandled();
-            }
-            return;
-        }
+    // Don't insert null or control characters as they can result in unexpected behaviour.
+    if (event->charCode() < ' ')
+        return;
 
-        if (event->type() != eventNames().keydownEvent)
-            return;
+    // Don't insert anything if a modifier is pressed.
+    if (event->ctrlKey() || event->altKey())
+        return;
 
-        bool handledEvent = false;
-        String commandName = interpretKeyEvent(event);
-
-        if (!commandName.isEmpty())
-            handledEvent = frame->editor()->command(commandName).execute();
-        else {
-            switch (platformEvent->windowsVirtualKeyCode()) {
-            case VK_BACK:
-                if (platformEvent->ctrlKey())
-                    handledEvent = frame->editor()->deleteWithDirection(DirectionBackward, WordGranularity, false, true);
-                else
-                    handledEvent = frame->editor()->deleteWithDirection(DirectionBackward, CharacterGranularity, false, true);
-                break;
-            case VK_DELETE:
-                if (platformEvent->ctrlKey())
-                    handledEvent = frame->editor()->deleteWithDirection(DirectionForward, WordGranularity, false, true);
-                else
-                    handledEvent = frame->editor()->deleteWithDirection(DirectionForward, CharacterGranularity, false, true);
-                break;
-            case VK_ESCAPE:
-                handledEvent = frame->page()->focusController()->setFocusedNode(0, frame);
-                break;
-            case VK_TAB:
-            default:
-                return;
-            }
-        }
-        if (handledEvent)
+    if (!platformEvent->text().isEmpty()) {
+        if (frame->editor()->insertText(platformEvent->text(), event))
             event->setDefaultHandled();
     }
 }
@@ -529,21 +544,21 @@ void EditorClientBlackBerry::learnWord(const WTF::String&)
 
 void EditorClientBlackBerry::checkSpellingOfString(const UChar* text, int textLength, int* misspellLocation, int* misspellLength)
 {
-    m_page->client()->checkSpellingOfString(text, textLength, *misspellLocation, *misspellLength);
+    m_webPagePrivate->m_client->checkSpellingOfString(text, textLength, *misspellLocation, *misspellLength);
 }
 
 WTF::String EditorClientBlackBerry::getAutoCorrectSuggestionForMisspelledWord(const WTF::String& misspelledWord)
 {
     notImplemented();
     return WTF::String();
-};
+}
 
 void EditorClientBlackBerry::checkGrammarOfString(const UChar*, int, WTF::Vector<GrammarDetail, 0u>&, int*, int*)
 {
     notImplemented();
 }
 
-void EditorClientBlackBerry::requestCheckingOfString(SpellChecker*, int, TextCheckingTypeMask, const String&)
+void EditorClientBlackBerry::requestCheckingOfString(SpellChecker*, const TextCheckingRequest&)
 {
     notImplemented();
 }
@@ -589,25 +604,9 @@ void EditorClientBlackBerry::willSetInputMethodState()
     notImplemented();
 }
 
-void EditorClientBlackBerry::setInputMethodState(bool active)
+void EditorClientBlackBerry::setInputMethodState(bool)
 {
-    Frame* frame = m_page->d->m_page->focusController()->focusedOrMainFrame();
-    // Determines whether or not to provide input assistance. Password fields
-    // do not have this flag active, so it needs to be overridden.
-    if (frame && frame->document()) {
-        if (Node* focusNode = frame->document()->focusedNode()) {
-            if (!active && focusNode->hasTagName(HTMLNames::inputTag)
-                && static_cast<HTMLInputElement*>(focusNode)->isPasswordField())
-                    active = true;
-
-            if (active) {
-                m_page->d->m_inputHandler->nodeFocused(focusNode);
-                return;
-            }
-        }
-    }
-    // No frame or document or a node that doesn't support IME.
-    m_page->d->m_inputHandler->nodeFocused(0);
+    m_webPagePrivate->m_inputHandler->focusedNodeChanged();
 }
 
 } // namespace WebCore

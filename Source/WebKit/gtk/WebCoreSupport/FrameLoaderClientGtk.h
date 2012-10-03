@@ -75,6 +75,7 @@ namespace WebKit {
         virtual void dispatchDidCancelClientRedirect();
         virtual void dispatchWillPerformClientRedirect(const WebCore::KURL&, double, double);
         virtual void dispatchDidChangeLocationWithinPage();
+        virtual void dispatchDidNavigateWithinPage();
         virtual void dispatchDidPushStateWithinPage();
         virtual void dispatchDidReplaceStateWithinPage();
         virtual void dispatchDidPopStateWithinPage();
@@ -186,7 +187,7 @@ namespace WebKit {
         virtual void dispatchDidBecomeFrameset(bool);
 
         virtual bool canCachePage() const;
-        virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
+        virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&);
 
         virtual PassRefPtr<WebCore::FrameNetworkingContext> createNetworkingContext();
 

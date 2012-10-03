@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -57,23 +57,23 @@ void AccessibilityController::setLogValueChangeEvents(bool)
     notImplemented();
 }
 
-AccessibilityUIElement AccessibilityController::elementAtPoint(int x, int y)
+AccessibilityUIElement AccessibilityController::elementAtPoint(int, int)
 {
     notImplemented();
     return 0;
 }
 
-void AccessibilityController::setLogAccessibilityEvents(bool logAccessibilityEvents)
+void AccessibilityController::setLogAccessibilityEvents(bool)
 {
     notImplemented();
 }
 
-void AccessibilityController::addNotificationListener(PlatformUIElement, JSObjectRef)
+bool AccessibilityController::addNotificationListener(JSObjectRef)
 {
-    notImplemented();
+    return false;
 }
 
-void AccessibilityController::notificationReceived(PlatformUIElement, const std::string&)
+void AccessibilityController::removeNotificationListener()
 {
-    notImplemented();
 }
+

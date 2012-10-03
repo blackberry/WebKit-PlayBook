@@ -25,9 +25,10 @@
  */
 
 #include "config.h"
-#include "RunLoop.h"
-#include <runtime/InitializeThreading.h>
+
 #include "WebProcess.h"
+#include <WebCore/RunLoop.h>
+#include <runtime/InitializeThreading.h>
 #include <wtf/MainThread.h>
 
 #include <QApplication>
@@ -50,6 +51,12 @@
 
 #ifndef NDEBUG
 #include <QDebug>
+#endif
+
+#if !USE(UNIX_DOMAIN_SOCKETS)
+#include <servers/bootstrap.h>
+
+extern "C" kern_return_t bootstrap_look_up2(mach_port_t, const name_t, mach_port_t*, pid_t, uint64_t);
 #endif
 
 using namespace WebCore;
@@ -155,7 +162,7 @@ Q_DECL_EXPORT int WebProcessMainQt(int argc, char** argv)
     QApplication::setGraphicsSystem(QLatin1String("raster"));
     QApplication* app = new QApplication(argc, argv);
 #ifndef NDEBUG
-    if (!qgetenv("WEBKIT2_PAUSE_WEB_PROCESS_ON_LAUNCH").isEmpty()) {
+    if (qgetenv("QT_WEBKIT2_DEBUG") == "1") {
         qDebug() << "Waiting 3 seconds for debugger";
         sleep(3);
     }
@@ -175,13 +182,24 @@ Q_DECL_EXPORT int WebProcessMainQt(int argc, char** argv)
         return 1;
     }
 
+#if OS(DARWIN)
+    QString serviceName = app->arguments().value(1);
+
+    // Get the server port.
+    mach_port_t identifier;
+    kern_return_t kr = bootstrap_look_up2(bootstrap_port, serviceName.toUtf8().data(), &identifier, 0, 0);
+    if (kr) {
+        printf("bootstrap_look_up2 result: %x", kr);
+        return 2;
+    }
+#else
     bool wasNumber = false;
     int identifier = app->arguments().at(1).toInt(&wasNumber, 10);
     if (!wasNumber) {
         qDebug() << "Error: connection identifier wrong.";
         return 1;
     }
-
+#endif
 #if USE(ACCELERATED_COMPOSITING)
     WebGraphicsLayer::initFactory();
 #endif

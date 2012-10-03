@@ -1,6 +1,6 @@
 /*
  * Copyright (C) Julien Chaffraix <julien.chaffraix@gmail.com>
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -51,19 +51,16 @@ public:
     CookieMap(const String& name = "");
     ~CookieMap();
 
-    unsigned int count() const { return m_cookieMap.size(); }
+    unsigned int count() const { return m_cookieVector.size(); }
     const String& getName() const { return m_name; }
 
-    void addCookie(ParsedCookie*);
+    // Returning the original cookie object so manager can keep a reference to the updates in the database queue.
+    ParsedCookie* addOrReplaceCookie(ParsedCookie*);
 
-    // Returning the original cookie object so manager can keep a reference to the updates in the database queue
-    ParsedCookie* updateCookie(ParsedCookie*);
-
-    // Need to return the reference to the removed cookie so manager can deal with it (garbage collect)
+    // Need to return the reference to the removed cookie so manager can deal with it (garbage collect).
     ParsedCookie* removeCookie(const ParsedCookie*);
-    bool existsCookie(const ParsedCookie*) const;
 
-    // Returns a map with that given subdomain
+    // Returns a map with that given subdomain.
     CookieMap* getSubdomainMap(const String&);
     void addSubdomainMap(const String&, CookieMap*);
     void deleteAllCookiesAndDomains();
@@ -74,21 +71,19 @@ public:
 
 private:
     void updateOldestCookie();
+    ParsedCookie* removeCookieAtIndex(int position, const ParsedCookie*);
 
-    // The key is the tuple (name, path)
-    // The spec asks to have also domain, which is implied by choosing the CookieMap relevant to the domain
-    HashMap<String, ParsedCookie*> m_cookieMap;
-
+    Vector<ParsedCookie*> m_cookieVector;
     // The key is a subsection of the domain.
     // ex: if inserting accounts.google.com & this cookiemap is "com", this subdomain map will contain "google"
-    // The "google" cookiemap will contain "accounts" in its subdomain map
+    // the "google" cookiemap will contain "accounts" in its subdomain map.
     HashMap<String, CookieMap*> m_subdomains;
 
-    // Store the oldest cookie to speed up LRU checks
+    // Store the oldest cookie to speed up LRU checks.
     ParsedCookie* m_oldestCookie;
     const String m_name;
 
-    // FIXME : should have a m_shouldUpdate flag to update the network layer only when the map has changed
+    // FIXME : should have a m_shouldUpdate flag to update the network layer only when the map has changed.
 };
 
 } // namespace WebCore

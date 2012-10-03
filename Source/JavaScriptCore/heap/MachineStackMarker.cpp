@@ -30,10 +30,6 @@
 #include <stdlib.h>
 #include <wtf/StdLibExtras.h>
 
-#if USE(PTHREAD_BASED_QT) && !defined(WTF_USE_PTHREADS)
-#define WTF_USE_PTHREADS 1
-#endif
-
 #if OS(DARWIN)
 
 #include <mach/mach_init.h>
@@ -100,6 +96,7 @@ typedef HANDLE PlatformThread;
 typedef pthread_t PlatformThread;
 static const int SigThreadSuspendResume = SIGUSR2;
 
+#if defined(SA_RESTART)
 static void pthreadSignalHandlerSuspendResume(int signo)
 {
     sigset_t signalSet;
@@ -107,6 +104,7 @@ static void pthreadSignalHandlerSuspendResume(int signo)
     sigaddset(&signalSet, SigThreadSuspendResume);
     sigsuspend(&signalSet);
 }
+#endif
 #endif
 
 class MachineThreads::Thread {
@@ -197,7 +195,7 @@ void MachineThreads::addCurrentThread()
         return;
 
     pthread_setspecific(m_threadSpecific, this);
-    Thread* thread = new Thread(getCurrentPlatformThread(), m_heap->globalData()->stack().origin());
+    Thread* thread = new Thread(getCurrentPlatformThread(), wtfThreadData().stack().origin());
 
     MutexLocker lock(m_registeredThreadsMutex);
 
@@ -261,7 +259,7 @@ void MachineThreads::gatherFromCurrentThread(ConservativeRoots& conservativeRoot
     conservativeRoots.add(registersBegin, registersEnd);
 
     void* stackBegin = stackCurrent;
-    void* stackEnd = m_heap->globalData()->stack().origin();
+    void* stackEnd = wtfThreadData().stack().origin();
     swapIfBackwards(stackBegin, stackEnd);
     conservativeRoots.add(stackBegin, stackEnd);
 }
@@ -358,13 +356,18 @@ static size_t getPlatformThreadRegisters(const PlatformThread& platformThread, P
     return sizeof(CONTEXT);
 #elif OS(QNX)
     memset(&regs, 0, sizeof(regs));
-    regs.tid = pthread_self();
-    int fd = open("/proc/self", O_RDONLY);
+    regs.tid = platformThread;
+    // FIXME: If we find this hurts performance, we can consider caching the fd and keeping it open.
+    int fd = open("/proc/self/as", O_RDONLY);
     if (fd == -1) {
-        LOG_ERROR("Unable to open /proc/self (errno: %d)", errno);
+        LOG_ERROR("Unable to open /proc/self/as (errno: %d)", errno);
         CRASH();
     }
-    devctl(fd, DCMD_PROC_TIDSTATUS, &regs, sizeof(regs), 0);
+    int rc = devctl(fd, DCMD_PROC_TIDSTATUS, &regs, sizeof(regs), 0);
+    if (rc != EOK) {
+        LOG_ERROR("devctl(DCMD_PROC_TIDSTATUS) failed (error: %d)", rc);
+        CRASH();
+    }
     close(fd);
     return sizeof(struct _debug_thread_info);
 #elif USE(PTHREADS)

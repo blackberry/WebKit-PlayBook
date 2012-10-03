@@ -10,7 +10,7 @@ InspectorTest.startDebuggerTest = function(callback, quiet)
         startTest();
     else {
         InspectorTest.addSniffer(WebInspector.debuggerModel, "_debuggerWasEnabled", startTest);
-        WebInspector.panels.scripts._toggleDebugging(false);
+        WebInspector.panels.scripts.toggleDebugging(false);
     }
 
     function startTest()
@@ -35,7 +35,7 @@ InspectorTest.completeDebuggerTest = function()
             completeTest();
         else {
             InspectorTest.addSniffer(WebInspector.debuggerModel, "_debuggerWasDisabled", completeTest);
-            scriptsPanel._toggleDebugging(false);
+            scriptsPanel.toggleDebugging(false);
         }
     }
 
@@ -153,14 +153,13 @@ InspectorTest._resumedScript = function()
     }
 };
 
-InspectorTest.showScriptSource = function(scriptName, callback)
+InspectorTest.showScriptSourceOnScriptsPanel = function(panel, scriptName, callback)
 {
-    var filesSelect = document.getElementById("scripts-files");
-    for (var i = 0; i < filesSelect.length; ++i) {
-        if (filesSelect[i].displayName === scriptName) {
-            filesSelect.selectedIndex = i;
-            WebInspector.panels.scripts._filesSelectChanged();
-            var sourceFrame = WebInspector.panels.scripts.visibleView;
+    var uiSourceCodes = panel._presentationModel.uiSourceCodes();
+    for (var i = 0; i < uiSourceCodes.length; ++i) {
+        if (uiSourceCodes[i].fileName === scriptName) {
+            panel.showUISourceCode(uiSourceCodes[i]);
+            var sourceFrame = panel.visibleView;
             if (sourceFrame.loaded)
                 callback(sourceFrame);
             else
@@ -168,7 +167,47 @@ InspectorTest.showScriptSource = function(scriptName, callback)
             return;
         }
     }
-    InspectorTest.addSniffer(WebInspector.panels.scripts, "_addOptionToFilesSelect", InspectorTest.showScriptSource.bind(InspectorTest, scriptName, callback));
+    InspectorTest.addSniffer(panel, "_addUISourceCode", InspectorTest.showScriptSource.bind(InspectorTest, scriptName, callback));
+};
+
+InspectorTest.showScriptSource = function(scriptName, callback)
+{
+    InspectorTest.showScriptSourceOnScriptsPanel(WebInspector.panels.scripts, scriptName, callback)
+};
+
+InspectorTest.dumpScriptsNavigator = function(navigator)
+{
+    InspectorTest.addResult("Dumping ScriptsNavigator 'Scripts' tab:");
+    dumpNavigatorTreeOutline(navigator._navigatorScriptsTree);
+    InspectorTest.addResult("Dumping ScriptsNavigator 'Content scripts' tab:");
+    dumpNavigatorTreeOutline(navigator._navigatorContentScriptsTree);
+
+    function dumpNavigatorTreeElement(prefix, treeElement)
+    {
+        InspectorTest.addResult(prefix + treeElement.titleText);
+        for (var i = 0; i < treeElement.children.length; ++i)
+            dumpNavigatorTreeElement(prefix + "  ", treeElement.children[i]);
+    }
+
+    function dumpNavigatorTreeOutline(treeOutline)
+    {
+        for (var i = 0; i < treeOutline.children.length; ++i)
+            dumpNavigatorTreeElement("  ", treeOutline.children[i]);
+    }
+};
+
+InspectorTest.dumpComboBoxFileSelector = function(comboBoxFileSelector)
+{
+    var rootURL = "http://localhost:8080/LayoutTests/inspector/debugger/";
+    InspectorTest.addResult("Dumping ComboBoxFileSelector:");
+    var select = comboBoxFileSelector._filesSelectElement;
+    for (var i = 0; i < select.length; ++i) {
+        var option = select[i];
+        var text = option.text.replace(/.*LayoutTests/, "LayoutTests");
+        text = text.replace(/\u00a0/g, " ").replace(/\u2026/g, "...");
+        var tooltip = option.title.replace(rootURL, "<root>/");
+        InspectorTest.addResult(text + (tooltip ? "(" + tooltip + ")" : ""));
+    }
 };
 
 InspectorTest.setBreakpoint = function(sourceFrame, lineNumber, condition, enabled)

@@ -42,10 +42,11 @@
 #include "WebDOMEvent.h"
 #include "WebDOMEventListener.h"
 #include "WebDocument.h"
+#include "WebElement.h"
 #include "WebFrameImpl.h"
 #include "WebNodeList.h"
-#include "WebString.h"
-#include "WebVector.h"
+#include "platform/WebString.h"
+#include "platform/WebVector.h"
 
 #include "markup.h"
 
@@ -166,6 +167,11 @@ bool WebNode::isElementNode() const
     return m_private->isElementNode();
 }
 
+bool WebNode::hasEventListeners(const WebString& eventType) const
+{
+    return m_private->hasEventListeners(eventType);
+}
+
 void WebNode::addEventListener(const WebString& eventType, WebDOMEventListener* listener, bool useCapture)
 {
     EventListenerWrapper* listenerWrapper =
@@ -200,6 +206,11 @@ void WebNode::simulateClick()
 WebNodeList WebNode::getElementsByTagName(const WebString& tag) const
 {
     return WebNodeList(m_private->getElementsByTagName(tag));
+}
+
+WebElement WebNode::rootEditableElement() const
+{
+    return WebElement(m_private->rootEditableElement());
 }
 
 bool WebNode::hasNonEmptyBoundingBox() const

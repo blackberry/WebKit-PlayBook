@@ -23,7 +23,7 @@
  */
 
 // FIXME: This is temporary until all ports switch to using this file.
-#if PLATFORM(CHROMIUM) && !OS(DARWIN)
+#if (PLATFORM(CHROMIUM) && !OS(DARWIN)) || PLATFORM(BLACKBERRY)
 #include "chromium/FontPlatformData.h"
 #elif PLATFORM(QT)
 #include "qt/FontPlatformData.h"
@@ -35,8 +35,6 @@
 #include "freetype/FontPlatformData.h"
 #elif (PLATFORM(EFL) || PLATFORM(GTK)) && USE(PANGO)
 #include "pango/FontPlatformData.h"
-#elif PLATFORM(BLACKBERRY)
-#include "chromium/FontPlatformData.h"
 #else
 
 #ifndef FontPlatformData_h
@@ -57,11 +55,7 @@
 #endif
 
 #if OS(DARWIN)
-#ifdef __OBJC__
-@class NSFont;
-#else
-class NSFont;
-#endif
+OBJC_CLASS NSFont;
 
 typedef struct CGFont* CGFontRef;
 typedef const struct __CTFont* CTFontRef;

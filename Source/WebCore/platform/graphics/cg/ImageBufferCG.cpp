@@ -38,7 +38,6 @@
 #include <math.h>
 #include <wtf/Assertions.h>
 #include <wtf/CheckedArithmetic.h>
-#include <wtf/CurrentTime.h>
 #include <wtf/MainThread.h>
 #include <wtf/OwnArrayPtr.h>
 #include <wtf/RetainPtr.h>
@@ -51,6 +50,10 @@
 
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
 #include <IOSurface/IOSurface.h>
+#endif
+
+#if defined(BUILDING_ON_LION)
+#include <wtf/CurrentTime.h>
 #endif
 
 using namespace std;
@@ -104,8 +107,8 @@ static void releaseImageData(void*, const void* data, size_t)
     fastFree(const_cast<void*>(data));
 }
 
-ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace imageColorSpace, RenderingMode renderingMode, bool& success)
-    : m_data(size)
+ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace imageColorSpace, RenderingMode renderingMode, DeferralMode, bool& success)
+    : m_data(size) // NOTE: The input here isn't important as ImageBufferDataCG's constructor just ignores it.
     , m_size(size)
 {
     success = false;  // Make early return mean failure.
@@ -118,8 +121,8 @@ ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace imageColorSpace, Render
 
     // Prevent integer overflows
     m_data.m_bytesPerRow = 4 * width;
-    Checked<size_t, RecordOverflow> dataSize = height * m_data.m_bytesPerRow;
-    if (dataSize.hasOverflowed())
+    Checked<size_t, RecordOverflow> numBytes = height * m_data.m_bytesPerRow;
+    if (numBytes.hasOverflowed())
         return;
 
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
@@ -159,7 +162,7 @@ ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace imageColorSpace, Render
         m_data.m_bitmapInfo = kCGImageAlphaPremultipliedLast;
         cgContext.adoptCF(CGBitmapContextCreate(m_data.m_data, width.unsafeGet(), height.unsafeGet(), 8, m_data.m_bytesPerRow.unsafeGet(), m_data.m_colorSpace, m_data.m_bitmapInfo));
         // Create a live image that wraps the data.
-        m_data.m_dataProvider.adoptCF(CGDataProviderCreateWithData(0, m_data.m_data, dataSize.unsafeGet(), releaseImageData));
+        m_data.m_dataProvider.adoptCF(CGDataProviderCreateWithData(0, m_data.m_data, numBytes.unsafeGet(), releaseImageData));
     }
 
     if (!cgContext)
@@ -169,7 +172,9 @@ ImageBuffer::ImageBuffer(const IntSize& size, ColorSpace imageColorSpace, Render
     m_context->scale(FloatSize(1, -1));
     m_context->translate(0, -height.unsafeGet());
     m_context->setIsAcceleratedContext(accelerateRendering);
+#if defined(BUILDING_ON_LION)
     m_data.m_lastFlushTime = currentTimeMS();
+#endif
     success = true;
 }
 
@@ -177,13 +182,9 @@ ImageBuffer::~ImageBuffer()
 {
 }
 
-size_t ImageBuffer::dataSize() const
-{
-    return m_size.height() * m_data.m_bytesPerRow.unsafeGet();
-}
-
 GraphicsContext* ImageBuffer::context() const
 {
+#if defined(BUILDING_ON_LION)
     // Force a flush if last flush was more than 20ms ago
     if (m_context->isAcceleratedContext()) {
         double elapsedTime = currentTimeMS() - m_data.m_lastFlushTime;
@@ -195,6 +196,7 @@ GraphicsContext* ImageBuffer::context() const
             m_data.m_lastFlushTime = currentTimeMS();
         }
     }
+#endif
 
     return m_context.get();
 }
@@ -215,7 +217,7 @@ NativeImagePtr ImageBuffer::copyNativeImage(BackingStoreCopy copyBehavior) const
     if (!m_context->isAcceleratedContext()) {
         switch (copyBehavior) {
         case DontCopyBackingStore:
-            image = CGImageCreate(m_size.width(), m_size.height(), 8, 32, m_data.m_bytesPerRow.unsafeGet(), m_data.m_colorSpace, m_data.m_bitmapInfo, m_data.m_dataProvider.get(), 0, true, kCGRenderingIntentDefault);
+            image = CGImageCreate(internalSize().width(), internalSize().height(), 8, 32, m_data.m_bytesPerRow.unsafeGet(), m_data.m_colorSpace, m_data.m_bitmapInfo, m_data.m_dataProvider.get(), 0, true, kCGRenderingIntentDefault);
             break;
         case CopyBackingStore:
             image = CGBitmapContextCreateImage(context()->platformContext());
@@ -228,7 +230,9 @@ NativeImagePtr ImageBuffer::copyNativeImage(BackingStoreCopy copyBehavior) const
 #if USE(IOSURFACE_CANVAS_BACKING_STORE)
     else {
         image = wkIOSurfaceContextCreateImage(context()->platformContext());
+#if defined(BUILDING_ON_LION)
         m_data.m_lastFlushTime = currentTimeMS();
+#endif
     }
 #endif
 
@@ -241,33 +245,39 @@ void ImageBuffer::draw(GraphicsContext* destContext, ColorSpace styleColorSpace,
     ColorSpace colorSpace = (destContext == m_context) ? ColorSpaceDeviceRGB : styleColorSpace;
 
     RetainPtr<CGImageRef> image;
-    if (destContext == m_context)
+    if (destContext == m_context || destContext->isAcceleratedContext())
         image.adoptCF(copyNativeImage(CopyBackingStore)); // Drawing into our own buffer, need to deep copy.
     else
         image.adoptCF(copyNativeImage(DontCopyBackingStore));
 
-    destContext->drawNativeImage(image.get(), m_size, colorSpace, destRect, srcRect, op);
+    FloatRect adjustedSrcRect = srcRect;
+    adjustedSrcRect.scale(m_resolutionScale, m_resolutionScale);
+    destContext->drawNativeImage(image.get(), internalSize(), colorSpace, destRect, adjustedSrcRect, op);
 }
 
-void ImageBuffer::drawPattern(GraphicsContext* context, const FloatRect& srcRect, const AffineTransform& patternTransform, const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
+void ImageBuffer::drawPattern(GraphicsContext* destContext, const FloatRect& srcRect, const AffineTransform& patternTransform, const FloatPoint& phase, ColorSpace styleColorSpace, CompositeOperator op, const FloatRect& destRect)
 {
+    FloatRect adjustedSrcRect = srcRect;
+    adjustedSrcRect.scale(m_resolutionScale, m_resolutionScale);
+
     if (!m_context->isAcceleratedContext()) {
-        if (context == m_context) {
+        if (destContext == m_context || destContext->isAcceleratedContext()) {
             RefPtr<Image> copy = copyImage(CopyBackingStore); // Drawing into our own buffer, need to deep copy.
-            copy->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
+            copy->drawPattern(destContext, adjustedSrcRect, patternTransform, phase, styleColorSpace, op, destRect);
         } else {
             RefPtr<Image> imageForRendering = copyImage(DontCopyBackingStore);
-            imageForRendering->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
+            imageForRendering->drawPattern(destContext, adjustedSrcRect, patternTransform, phase, styleColorSpace, op, destRect);
         }
     } else {
         RefPtr<Image> copy = copyImage(CopyBackingStore);
-        copy->drawPattern(context, srcRect, patternTransform, phase, styleColorSpace, op, destRect);
+        copy->drawPattern(destContext, adjustedSrcRect, patternTransform, phase, styleColorSpace, op, destRect);
     }
 }
 
 void ImageBuffer::clip(GraphicsContext* contextToClip, const FloatRect& rect) const
 {
     CGContextRef platformContextToClip = contextToClip->platformContext();
+    // FIXME: This image needs to be grayscale to be used as an alpha mask here.
     RetainPtr<CGImageRef> image(AdoptCF, copyNativeImage(DontCopyBackingStore));
     CGContextTranslateCTM(platformContextToClip, rect.x(), rect.y() + rect.height());
     CGContextScaleCTM(platformContextToClip, 1, -1);
@@ -280,36 +290,57 @@ PassRefPtr<ByteArray> ImageBuffer::getUnmultipliedImageData(const IntRect& rect)
 {
     if (m_context->isAcceleratedContext()) {
         CGContextFlush(context()->platformContext());
+#if defined(BUILDING_ON_LION)
         m_data.m_lastFlushTime = currentTimeMS();
+#endif
     }
-    return m_data.getData(rect, m_size, m_context->isAcceleratedContext(), true);
+    return m_data.getData(rect, internalSize(), m_context->isAcceleratedContext(), true);
 }
 
 PassRefPtr<ByteArray> ImageBuffer::getPremultipliedImageData(const IntRect& rect) const
 {
     if (m_context->isAcceleratedContext()) {
         CGContextFlush(context()->platformContext());
+#if defined(BUILDING_ON_LION)
         m_data.m_lastFlushTime = currentTimeMS();
+#endif
     }
-    return m_data.getData(rect, m_size, m_context->isAcceleratedContext(), false);
+    return m_data.getData(rect, internalSize(), m_context->isAcceleratedContext(), false);
 }
 
-void ImageBuffer::putUnmultipliedImageData(ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
+void ImageBuffer::putByteArray(Multiply multiplied, ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
 {
-    if (m_context->isAcceleratedContext()) {
-        CGContextFlush(context()->platformContext());
-        m_data.m_lastFlushTime = currentTimeMS();
+    if (!m_context->isAcceleratedContext()) {
+        m_data.putData(source, sourceSize, sourceRect, destPoint, internalSize(), m_context->isAcceleratedContext(), multiplied == Unmultiplied);
+        return;
     }
-    m_data.putData(source, sourceSize, sourceRect, destPoint, m_size, m_context->isAcceleratedContext(), true);
-}
 
-void ImageBuffer::putPremultipliedImageData(ByteArray* source, const IntSize& sourceSize, const IntRect& sourceRect, const IntPoint& destPoint)
-{
-    if (m_context->isAcceleratedContext()) {
-        CGContextFlush(context()->platformContext());
-        m_data.m_lastFlushTime = currentTimeMS();
-    }
-    m_data.putData(source, sourceSize, sourceRect, destPoint, m_size, m_context->isAcceleratedContext(), false);
+#if USE(IOSURFACE_CANVAS_BACKING_STORE)
+    // Make a copy of the source to ensure the bits don't change before being drawn
+    IntSize sourceCopySize(sourceRect.width(), sourceRect.height());
+    OwnPtr<ImageBuffer> sourceCopy = ImageBuffer::create(sourceCopySize, 1, ColorSpaceDeviceRGB, Unaccelerated);
+    if (!sourceCopy)
+        return;
+
+    sourceCopy->m_data.putData(source, sourceSize, sourceRect, IntPoint(-sourceRect.x(), -sourceRect.y()), sourceCopy->internalSize(), sourceCopy->context()->isAcceleratedContext(), multiplied == Unmultiplied);
+
+    // Set up context for using drawImage as a direct bit copy
+    CGContextRef destContext = context()->platformContext();
+    CGContextSaveGState(destContext);
+    CGContextConcatCTM(destContext, AffineTransform(CGContextGetCTM(destContext)).inverse());
+    wkCGContextResetClip(destContext);
+    CGContextSetInterpolationQuality(destContext, kCGInterpolationNone);
+    CGContextSetAlpha(destContext, 1.0);
+    CGContextSetBlendMode(destContext, kCGBlendModeCopy);
+    CGContextSetShadowWithColor(destContext, CGSizeZero, 0, 0);
+
+    // Draw the image in CG coordinate space
+    IntPoint destPointInCGCoords(destPoint.x() + sourceRect.x(), internalSize().height() - (destPoint.y()+sourceRect.y()) - sourceRect.height());
+    IntRect destRectInCGCoords(destPointInCGCoords, sourceCopySize);
+    RetainPtr<CGImageRef> sourceCopyImage(AdoptCF, sourceCopy->copyNativeImage());
+    CGContextDrawImage(destContext, destRectInCGCoords, sourceCopyImage.get());
+    CGContextRestoreGState(destContext);
+#endif
 }
 
 static inline CFStringRef jpegUTI()
@@ -389,21 +420,20 @@ String ImageBuffer::toDataURL(const String& mimeType, const double* quality) con
 
     if (CFEqual(uti.get(), jpegUTI())) {
         // JPEGs don't have an alpha channel, so we have to manually composite on top of black.
-        arr = getPremultipliedImageData(IntRect(IntPoint(0, 0), m_size));
+        arr = getPremultipliedImageData(IntRect(IntPoint(0, 0), internalSize()));
 
         unsigned char *data = arr->data();
-        for (int i = 0; i < width() * height(); i++)
+        for (int i = 0; i < internalSize().width() * internalSize().height(); i++)
             data[i * 4 + 3] = 255; // The image is already premultiplied, so we just need to make it opaque.
 
         RetainPtr<CGDataProviderRef> dataProvider;
     
-        dataProvider.adoptCF(CGDataProviderCreateWithData(0, data,
-                                                          4 * width() * height(), 0));
+        dataProvider.adoptCF(CGDataProviderCreateWithData(0, data, 4 * internalSize().width() * internalSize().height(), 0));
     
         if (!dataProvider)
             return "data:,";
 
-        image.adoptCF(CGImageCreate(width(), height(), 8, 32, 4 * width(),
+        image.adoptCF(CGImageCreate(internalSize().width(), internalSize().height(), 8, 32, 4 * internalSize().width(),
                                     CGColorSpaceCreateDeviceRGB(), kCGBitmapByteOrderDefault | kCGImageAlphaLast,
                                     dataProvider.get(), 0, false, kCGRenderingIntentDefault));
     } else

@@ -26,15 +26,13 @@
 # - The "new" 2.0 format has "leaks Report Version:  2.0" after the two header sections.
 
 use strict;
-use diagnostics;
 use warnings;
 
-use File::Slurp qw(read_file);
 use File::Spec;
 use FindBin;
+use lib File::Spec->catdir($FindBin::Bin, "..");
 use Test::More;
-
-eval "package RunLeaks; sub {" . read_file(File::Spec->catfile($FindBin::Bin, "..", "..", "run-leaks")) . "}";
+use LoadAsModule qw(RunLeaks run-leaks);
 
 my @input = split(/\n/, <<EOF);
 Process:         DumpRenderTree [29903]
@@ -122,7 +120,7 @@ EOF
   },
 ];
 
-my $actualOutput = RunLeaks::parseLeaksOutput(\@input);
+my $actualOutput = RunLeaks::parseLeaksOutput(@input);
 
 plan(tests => 1);
-is_deeply($actualOutput, $expectedOutput, "leaks Report Version 2.0 (old)");
+is_deeply($actualOutput, $expectedOutput, "leaks Report Version 2.0 (new)");

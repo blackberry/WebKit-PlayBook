@@ -29,16 +29,16 @@
  */
 
 #include "config.h"
-#include "WebURLResponse.h"
+#include "platform/WebURLResponse.h"
 
 #include "ResourceResponse.h"
 #include "ResourceLoadTiming.h"
 
-#include "WebHTTPHeaderVisitor.h"
-#include "WebHTTPLoadInfo.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLLoadTiming.h"
+#include "platform/WebHTTPHeaderVisitor.h"
+#include "platform/WebHTTPLoadInfo.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLLoadTiming.h"
 #include "WebURLResponsePrivate.h"
 
 #include <wtf/RefPtr.h>
@@ -46,6 +46,27 @@
 using namespace WebCore;
 
 namespace WebKit {
+
+namespace {
+
+class ExtraDataContainer : public ResourceResponse::ExtraData {
+public:
+    static PassRefPtr<ExtraDataContainer> create(WebURLResponse::ExtraData* extraData) { return adoptRef(new ExtraDataContainer(extraData)); }
+
+    virtual ~ExtraDataContainer() { }
+
+    WebURLResponse::ExtraData* extraData() const { return m_extraData.get(); }
+
+private:
+    explicit ExtraDataContainer(WebURLResponse::ExtraData* extraData)
+        : m_extraData(adoptPtr(extraData))
+    {
+    }
+
+    OwnPtr<WebURLResponse::ExtraData> m_extraData;
+};
+
+} // namespace
 
 // The standard implementation of WebURLResponsePrivate, which maintains
 // ownership of a ResourceResponse instance.
@@ -397,6 +418,19 @@ unsigned short WebURLResponse::remotePort() const
 void WebURLResponse::setRemotePort(unsigned short remotePort)
 {
     m_private->m_resourceResponse->setRemotePort(remotePort);
+}
+
+WebURLResponse::ExtraData* WebURLResponse::extraData() const
+{
+    RefPtr<ResourceResponse::ExtraData> data = m_private->m_resourceResponse->extraData();
+    if (!data)
+        return 0;
+    return static_cast<ExtraDataContainer*>(data.get())->extraData();
+}
+
+void WebURLResponse::setExtraData(WebURLResponse::ExtraData* extraData)
+{
+    m_private->m_resourceResponse->setExtraData(ExtraDataContainer::create(extraData));
 }
 
 void WebURLResponse::assign(WebURLResponsePrivate* p)

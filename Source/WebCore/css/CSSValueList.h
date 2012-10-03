@@ -33,11 +33,15 @@ class CSSValueList : public CSSValue {
 public:
     static PassRefPtr<CSSValueList> createCommaSeparated()
     {
-        return adoptRef(new CSSValueList(false));
+        return adoptRef(new CSSValueList(CommaSeparator));
     }
     static PassRefPtr<CSSValueList> createSpaceSeparated()
     {
-        return adoptRef(new CSSValueList(true));
+        return adoptRef(new CSSValueList(SpaceSeparator));
+    }
+    static PassRefPtr<CSSValueList> createSlashSeparated()
+    {
+        return adoptRef(new CSSValueList(SlashSeparator));
     }
     static PassRefPtr<CSSValueList> createFromParserValueList(CSSParserValueList* list)
     {
@@ -59,14 +63,13 @@ public:
     void addSubresourceStyleURLs(ListHashSet<KURL>&, const CSSStyleSheet*);
 
 protected:
-    CSSValueList(ClassType, bool isSpaceSeparated);
+    CSSValueList(ClassType, ValueListSeparator);
 
 private:
-    explicit CSSValueList(bool isSpaceSeparated);
+    explicit CSSValueList(ValueListSeparator);
     explicit CSSValueList(CSSParserValueList*);
 
     Vector<RefPtr<CSSValue> > m_values;
-    bool m_isSpaceSeparated;
 };
 
 // Objects of this class are intended to be stack-allocated and scoped to a single function.
@@ -90,6 +93,7 @@ public:
     CSSValueListIterator(CSSValue* value) : m_inspector(value), m_position(0) { }
     bool hasMore() const { return m_position < m_inspector.length(); }
     CSSValue* value() const { return m_inspector.item(m_position); }
+    bool isPrimitiveValue() const { return value()->isPrimitiveValue(); }
     void advance() { m_position++; ASSERT(m_position <= m_inspector.length());}
     size_t index() const { return m_position; }
 private:

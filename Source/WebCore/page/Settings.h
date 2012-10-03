@@ -69,7 +69,7 @@ namespace WebCore {
     class Settings {
         WTF_MAKE_NONCOPYABLE(Settings); WTF_MAKE_FAST_ALLOCATED;
     public:
-        Settings(Page*);
+        static PassOwnPtr<Settings> create(Page*);
 
         void setStandardFontFamily(const AtomicString&, UScriptCode = USCRIPT_COMMON);
         const AtomicString& standardFontFamily(UScriptCode = USCRIPT_COMMON) const;
@@ -103,6 +103,9 @@ namespace WebCore {
 
         void setDefaultFixedFontSize(int);
         int defaultFixedFontSize() const { return m_defaultFixedFontSize; }
+
+        void setDefaultDeviceScaleFactor(int);
+        int defaultDeviceScaleFactor() const { return m_defaultDeviceScaleFactor; }
 
         // Unlike areImagesEnabled, this only suppresses the network load of
         // the image URL.  A cached image will still be rendered if requested.
@@ -192,6 +195,9 @@ namespace WebCore {
         void setUserStyleSheetLocation(const KURL&);
         const KURL& userStyleSheetLocation() const { return m_userStyleSheetLocation; }
 
+        void setFixedElementsLayoutRelativeToFrame(bool);
+        bool fixedElementsLayoutRelativeToFrame() const { return m_fixedElementsLayoutRelativeToFrame; }
+
         void setShouldPrintBackgrounds(bool);
         bool shouldPrintBackgrounds() const { return m_shouldPrintBackgrounds; }
 
@@ -232,6 +238,9 @@ namespace WebCore {
 
         void setUsesPageCache(bool);
         bool usesPageCache() const { return m_usesPageCache; }
+        
+        void setPageCacheSupportsPlugins(bool pageCacheSupportsPlugins) { m_pageCacheSupportsPlugins = pageCacheSupportsPlugins; }
+        bool pageCacheSupportsPlugins() const { return m_pageCacheSupportsPlugins; }
 
         void setShrinksStandaloneImagesToFit(bool);
         bool shrinksStandaloneImagesToFit() const { return m_shrinksStandaloneImagesToFit; }
@@ -304,6 +313,15 @@ namespace WebCore {
         void setAcceleratedDrawingEnabled(bool enabled) { m_acceleratedDrawingEnabled = enabled; }
         bool acceleratedDrawingEnabled() const { return m_acceleratedDrawingEnabled; }
 
+        void setAcceleratedFiltersEnabled(bool enabled) { m_acceleratedFiltersEnabled = enabled; }
+        bool acceleratedFiltersEnabled() const { return m_acceleratedFiltersEnabled; }
+
+        void setCSSCustomFilterEnabled(bool enabled) { m_isCSSCustomFilterEnabled = enabled; }
+        bool isCSSCustomFilterEnabled() const { return m_isCSSCustomFilterEnabled; }
+
+        void setCSSRegionsEnabled(bool enabled) { m_cssRegionsEnabled = enabled; }
+        bool cssRegionsEnabled() const { return m_cssRegionsEnabled; }
+
         void setAcceleratedCompositingEnabled(bool);
         bool acceleratedCompositingEnabled() const { return m_acceleratedCompositingEnabled; }
 
@@ -348,6 +366,9 @@ namespace WebCore {
         void setWebGLEnabled(bool);
         bool webGLEnabled() const { return m_webGLEnabled; }
 
+        void setWebGLErrorsToConsoleEnabled(bool);
+        bool webGLErrorsToConsoleEnabled() const { return m_webGLErrorsToConsoleEnabled; }
+
         void setOpenGLMultisamplingEnabled(bool);
         bool openGLMultisamplingEnabled() const { return m_openGLMultisamplingEnabled; }
 
@@ -357,8 +378,8 @@ namespace WebCore {
         void setAccelerated2dCanvasEnabled(bool);
         bool accelerated2dCanvasEnabled() const { return m_acceleratedCanvas2dEnabled; }
 
-        void setLegacyAccelerated2dCanvasEnabled(bool);
-        bool legacyAccelerated2dCanvasEnabled() const { return m_legacyAcceleratedCanvas2dEnabled; }
+        void setDeferred2dCanvasEnabled(bool);
+        bool deferred2dCanvasEnabled() const { return m_deferredCanvas2dEnabled; }
 
         // Number of pixels below which 2D canvas is rendered in software
         // even if hardware acceleration is enabled.
@@ -383,11 +404,6 @@ namespace WebCore {
 #if ENABLE(FULLSCREEN_API)
         void setFullScreenEnabled(bool flag) { m_fullScreenAPIEnabled = flag; }
         bool fullScreenEnabled() const  { return m_fullScreenAPIEnabled; }
-#endif
-
-#if ENABLE(POINTER_LOCK)
-        void setPointerLockEnabled(bool flag) { m_pointerLockEnabled = flag; }
-        bool PointerLockEnabled() const  { return m_pointerLockEnabled; }
 #endif
 
 #if USE(AVFOUNDATION)
@@ -492,12 +508,11 @@ namespace WebCore {
         void setPasswordEchoEnabled(bool flag) { m_passwordEchoEnabled = flag; }
         bool passwordEchoEnabled() const { return m_passwordEchoEnabled; }
 
+        void setSuppressesIncrementalRendering(bool flag) { m_suppressesIncrementalRendering = flag; }
+        bool suppressesIncrementalRendering() const { return m_suppressesIncrementalRendering; }
         void setPasswordEchoDurationInSeconds(double durationInSeconds) { m_passwordEchoDurationInSeconds = durationInSeconds; }
         double passwordEchoDurationInSeconds() const { return m_passwordEchoDurationInSeconds; }
 
-        void setSuppressIncrementalRendering(bool flag) { m_suppressIncrementalRendering = flag; }
-        bool suppressIncrementalRendering() const { return m_suppressIncrementalRendering; }
-        
         void setBackspaceKeyNavigationEnabled(bool flag) { m_backspaceKeyNavigationEnabled = flag; }
         bool backspaceKeyNavigationEnabled() const { return m_backspaceKeyNavigationEnabled; }
         
@@ -513,10 +528,49 @@ namespace WebCore {
         void setVisualWordMovementEnabled(bool enabled) { m_visualWordMovementEnabled = enabled; }
         bool visualWordMovementEnabled() const { return m_visualWordMovementEnabled; }
 
+#if ENABLE(VIDEO_TRACK)
+        void setShouldDisplaySubtitles(bool flag) { m_shouldDisplaySubtitles = flag; }
+        bool shouldDisplaySubtitles() const { return m_shouldDisplaySubtitles; }
+
+        void setShouldDisplayCaptions(bool flag) { m_shouldDisplayCaptions = flag; }
+        bool shouldDisplayCaptions() const { return m_shouldDisplayCaptions; }
+
+        void setShouldDisplayTextDescriptions(bool flag) { m_shouldDisplayTextDescriptions = flag; }
+        bool shouldDisplayTextDescriptions() const { return m_shouldDisplayTextDescriptions; }
+#endif
+
+        void setPerTileDrawingEnabled(bool enabled) { m_perTileDrawingEnabled = enabled; }
+        bool perTileDrawingEnabled() const { return m_perTileDrawingEnabled; }
+
+        void setPartialSwapEnabled(bool enabled) { m_partialSwapEnabled = enabled; }
+        bool partialSwapEnabled() const { return m_partialSwapEnabled; }
+
+        void setScrollingCoordinatorEnabled(bool enabled) { m_scrollingCoordinatorEnabled = enabled; }
+        bool scrollingCoordinatorEnabled() const { return m_scrollingCoordinatorEnabled; }
+
+        void setNotificationsEnabled(bool enabled) { m_notificationsEnabled = enabled; }
+        bool notificationsEnabled() const { return m_notificationsEnabled; }
+
+        // Some apps needs isLoadingInAPISense to account for active subresource loaders.
+        void setNeedsIsLoadingInAPISenseQuirk(bool enabled) { m_needsIsLoadingInAPISenseQuirk = enabled; }
+        bool needsIsLoadingInAPISenseQuirk() const { return m_needsIsLoadingInAPISenseQuirk; }
+
+#if ENABLE(TOUCH_EVENTS)
+        void setTouchEventEmulationEnabled(bool enabled) { m_touchEventEmulationEnabled = enabled; }
+        bool isTouchEventEmulationEnabled() const { return m_touchEventEmulationEnabled; }
+#endif
+
+        void setThreadedAnimationEnabled(bool enabled) { m_threadedAnimationEnabled = enabled; }
+        bool threadedAnimationEnabled() const { return m_threadedAnimationEnabled; }
+        
         void setDelegateSelectionPaint(bool enabled) { m_delegateSelectionPaint = enabled; }
         bool delegateSelectionPaint() const { return m_delegateSelectionPaint; }
 
     private:
+        Settings(Page*);
+
+        void initializeDefaultFontFamilies();
+
         Page* m_page;
 
         String m_defaultTextEncodingName;
@@ -537,6 +591,7 @@ namespace WebCore {
         int m_minimumLogicalFontSize;
         int m_defaultFontSize;
         int m_defaultFixedFontSize;
+        int m_defaultDeviceScaleFactor;
         int m_validationMessageTimerMagnification;
         int m_minimumAccelerated2dCanvasSize;
         int m_layoutFallbackWidth;
@@ -574,7 +629,8 @@ namespace WebCore {
         bool m_needsLeopardMailQuirks : 1;
         bool m_isDOMPasteAllowed : 1;
         bool m_shrinksStandaloneImagesToFit : 1;
-        bool m_usesPageCache: 1;
+        bool m_usesPageCache : 1;
+        bool m_pageCacheSupportsPlugins : 1;
         bool m_showsURLsInToolTips : 1;
         bool m_showsToolTipOverTruncatedText : 1;
         bool m_forceFTPDirectoryListings : 1;
@@ -592,6 +648,9 @@ namespace WebCore {
         bool m_allowScriptsToCloseWindows : 1;
         bool m_canvasUsesAcceleratedDrawing : 1;
         bool m_acceleratedDrawingEnabled : 1;
+        bool m_acceleratedFiltersEnabled : 1;
+        bool m_isCSSCustomFilterEnabled : 1;
+        bool m_cssRegionsEnabled : 1;
         bool m_downloadableBinaryFontsEnabled : 1;
         bool m_xssAuditorEnabled : 1;
         bool m_acceleratedCompositingEnabled : 1;
@@ -606,20 +665,18 @@ namespace WebCore {
         bool m_showRepaintCounter : 1;
         bool m_experimentalNotificationsEnabled : 1;
         bool m_webGLEnabled : 1;
+        bool m_webGLErrorsToConsoleEnabled : 1;
         bool m_openGLMultisamplingEnabled : 1;
         bool m_privilegedWebGLExtensionsEnabled : 1;
         bool m_webAudioEnabled : 1;
         bool m_acceleratedCanvas2dEnabled : 1;
-        bool m_legacyAcceleratedCanvas2dEnabled : 1;
+        bool m_deferredCanvas2dEnabled : 1;
         bool m_loadDeferringEnabled : 1;
         bool m_tiledBackingStoreEnabled : 1;
         bool m_paginateDuringLayoutEnabled : 1;
         bool m_dnsPrefetchingEnabled : 1;
 #if ENABLE(FULLSCREEN_API)
         bool m_fullScreenAPIEnabled : 1;
-#endif
-#if ENABLE(POINTER_LOCK)
-        bool m_pointerLockEnabled : 1;
 #endif
         bool m_asynchronousSpellCheckingEnabled: 1;
         bool m_unifiedTextCheckerEnabled: 1;
@@ -630,6 +687,7 @@ namespace WebCore {
         bool m_crossOriginCheckInGetMatchedCSSRulesDisabled : 1;
         bool m_forceCompositingMode : 1;
         bool m_shouldInjectUserScriptsInInitialEmptyDocument : 1;
+        bool m_fixedElementsLayoutRelativeToFrame : 1;
         bool m_allowDisplayOfInsecureContent : 1;
         bool m_allowRunningOfInsecureContent : 1;
 #if ENABLE(SMOOTH_SCROLLING)
@@ -641,10 +699,28 @@ namespace WebCore {
         bool m_mediaPlaybackRequiresUserGesture : 1;
         bool m_mediaPlaybackAllowsInline : 1;
         bool m_passwordEchoEnabled : 1;
-        bool m_suppressIncrementalRendering : 1;
+        bool m_suppressesIncrementalRendering : 1;
         bool m_backspaceKeyNavigationEnabled : 1;
         bool m_visualWordMovementEnabled : 1;
         bool m_delegateSelectionPaint : 1;
+
+#if ENABLE(VIDEO_TRACK)
+        bool m_shouldDisplaySubtitles : 1;
+        bool m_shouldDisplayCaptions : 1;
+        bool m_shouldDisplayTextDescriptions : 1;
+#endif
+        bool m_perTileDrawingEnabled : 1;
+        bool m_partialSwapEnabled : 1;
+
+        bool m_scrollingCoordinatorEnabled : 1;
+
+        bool m_notificationsEnabled : 1;
+        bool m_needsIsLoadingInAPISenseQuirk : 1;
+
+#if ENABLE(TOUCH_EVENTS)
+        bool m_touchEventEmulationEnabled : 1;
+#endif
+        bool m_threadedAnimationEnabled : 1;
 
         Timer<Settings> m_loadsImagesAutomaticallyTimer;
         void loadsImagesAutomaticallyTimerFired(Timer<Settings>*);

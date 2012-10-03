@@ -31,29 +31,29 @@ namespace JSC {
     public:
         typedef JSArray Base;
 
-        static RegExpMatchesArray* create(ExecState* exec, RegExpConstructorPrivate* ctorPrivate)
+        static RegExpMatchesArray* create(ExecState* exec, const RegExpConstructorPrivate& ctorPrivate)
         {
-            RegExpMatchesArray* regExp = new (allocateCell<RegExpMatchesArray>(*exec->heap())) RegExpMatchesArray(exec);
+            RegExpMatchesArray* regExp = new (NotNull, allocateCell<RegExpMatchesArray>(*exec->heap())) RegExpMatchesArray(exec);
             regExp->finishCreation(exec->globalData(), ctorPrivate);
             return regExp;
         }
-        virtual ~RegExpMatchesArray();
+        static void destroy(JSCell*);
 
-        static JS_EXPORTDATA const ClassInfo s_info;
-        
+        static const ClassInfo s_info;
+
         static Structure* createStructure(JSGlobalData& globalData, JSGlobalObject* globalObject, JSValue prototype)
         {
             return Structure::create(globalData, globalObject, prototype, TypeInfo(ObjectType, StructureFlags), &s_info);
         }
-        
+
     protected:
-        void finishCreation(JSGlobalData&, RegExpConstructorPrivate* data);
+        void finishCreation(JSGlobalData&, const RegExpConstructorPrivate& data);
 
     private:
         static bool getOwnPropertySlot(JSCell* cell, ExecState* exec, const Identifier& propertyName, PropertySlot& slot)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             return JSArray::getOwnPropertySlot(thisObject, exec, propertyName, slot);
         }
@@ -61,7 +61,7 @@ namespace JSC {
         static bool getOwnPropertySlotByIndex(JSCell* cell, ExecState* exec, unsigned propertyName, PropertySlot& slot)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             return JSArray::getOwnPropertySlotByIndex(thisObject, exec, propertyName, slot);
         }
@@ -69,7 +69,7 @@ namespace JSC {
         static bool getOwnPropertyDescriptor(JSObject* object, ExecState* exec, const Identifier& propertyName, PropertyDescriptor& descriptor)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(object);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             return JSArray::getOwnPropertyDescriptor(thisObject, exec, propertyName, descriptor);
         }
@@ -77,7 +77,7 @@ namespace JSC {
         static void put(JSCell* cell, ExecState* exec, const Identifier& propertyName, JSValue v, PutPropertySlot& slot)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             JSArray::put(thisObject, exec, propertyName, v, slot);
         }
@@ -85,7 +85,7 @@ namespace JSC {
         static void putByIndex(JSCell* cell, ExecState* exec, unsigned propertyName, JSValue v)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             JSArray::putByIndex(thisObject, exec, propertyName, v);
         }
@@ -93,7 +93,7 @@ namespace JSC {
         static bool deleteProperty(JSCell* cell, ExecState* exec, const Identifier& propertyName)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             return JSArray::deleteProperty(thisObject, exec, propertyName);
         }
@@ -101,7 +101,7 @@ namespace JSC {
         static bool deletePropertyByIndex(JSCell* cell, ExecState* exec, unsigned propertyName)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(cell);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             return JSArray::deletePropertyByIndex(thisObject, exec, propertyName);
         }
@@ -109,12 +109,15 @@ namespace JSC {
         static void getOwnPropertyNames(JSObject* object, ExecState* exec, PropertyNameArray& arr, EnumerationMode mode = ExcludeDontEnumProperties)
         {
             RegExpMatchesArray* thisObject = jsCast<RegExpMatchesArray*>(object);
-            if (thisObject->subclassData())
+            if (!thisObject->m_didFillArrayInstance)
                 thisObject->fillArrayInstance(exec);
             JSArray::getOwnPropertyNames(thisObject, exec, arr, mode);
         }
 
         void fillArrayInstance(ExecState*);
+
+        RegExpResult m_regExpResult;
+        bool m_didFillArrayInstance;
 };
 
 }

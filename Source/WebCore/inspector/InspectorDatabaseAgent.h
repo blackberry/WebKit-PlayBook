@@ -29,6 +29,9 @@
 #ifndef InspectorDatabaseAgent_h
 #define InspectorDatabaseAgent_h
 
+#if ENABLE(INSPECTOR) && ENABLE(SQL_DATABASE)
+
+#include "InspectorBaseAgent.h"
 #include "PlatformString.h"
 #include <wtf/HashMap.h>
 #include <wtf/PassOwnPtr.h>
@@ -44,7 +47,7 @@ class InstrumentingAgents;
 
 typedef String ErrorString;
 
-class InspectorDatabaseAgent {
+class InspectorDatabaseAgent : public InspectorBaseAgent<InspectorDatabaseAgent>, public InspectorBackendDispatcher::DatabaseCommandHandler {
 public:
     class FrontendProvider;
 
@@ -54,17 +57,17 @@ public:
     }
     ~InspectorDatabaseAgent();
 
-    void setFrontend(InspectorFrontend*);
-    void clearFrontend();
+    virtual void setFrontend(InspectorFrontend*);
+    virtual void clearFrontend();
+    virtual void restore();
 
     void clearResources();
-    void restore();
 
     // Called from the front-end.
-    void enable(ErrorString*);
-    void disable(ErrorString*);
-    void getDatabaseTableNames(ErrorString*, int databaseId, RefPtr<InspectorArray>* names);
-    void executeSQL(ErrorString*, int databaseId, const String& query, bool* success, int* transactionId);
+    virtual void enable(ErrorString*);
+    virtual void disable(ErrorString*);
+    virtual void getDatabaseTableNames(ErrorString*, int databaseId, RefPtr<InspectorArray>& names);
+    virtual void executeSQL(ErrorString*, int databaseId, const String& query, bool* success, int* transactionId);
 
     // Called from the injected script.
     int databaseId(Database*);
@@ -76,8 +79,6 @@ private:
     Database* databaseForId(int databaseId);
     InspectorDatabaseResource* findByFileName(const String& fileName);
 
-    InstrumentingAgents* m_instrumentingAgents;
-    InspectorState* m_inspectorState;
     typedef HashMap<int, RefPtr<InspectorDatabaseResource> > DatabaseResourcesMap;
     DatabaseResourcesMap m_resources;
     RefPtr<FrontendProvider> m_frontendProvider;
@@ -85,5 +86,7 @@ private:
 };
 
 } // namespace WebCore
+
+#endif // ENABLE(INSPECTOR) && ENABLE(SQL_DATABASE)
 
 #endif // !defined(InspectorDatabaseAgent_h)

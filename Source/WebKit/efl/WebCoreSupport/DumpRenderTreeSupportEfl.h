@@ -24,6 +24,8 @@
 #include <Eina.h>
 #include <FindOptions.h>
 #include <IntRect.h>
+#include <JavaScriptCore/APICast.h>
+#include <JavaScriptCore/JSStringRef.h>
 #include <wtf/Vector.h>
 #include <wtf/text/WTFString.h>
 
@@ -52,7 +54,6 @@ public:
     static int numberOfPages(const Evas_Object* ewkFrame, float pageWidth, float pageHeight);
     static int numberOfPagesForElementId(const Evas_Object* ewkFrame, const char* elementId, float pageWidth, float pageHeight);
     static bool pauseAnimation(Evas_Object* ewkFrame, const char* name, const char* elementId, double time);
-    static bool pauseSVGAnimation(Evas_Object* ewkFrame, const char* animationId, const char* elementId, double time);
     static bool pauseTransition(Evas_Object* ewkFrame, const char* name, const char* elementId, double time);
     static unsigned pendingUnloadEventCount(const Evas_Object* ewkFrame);
     static String renderTreeDump(Evas_Object* ewkFrame);
@@ -61,6 +62,8 @@ public:
     static WebCore::IntRect selectionRectangle(const Evas_Object* ewkFrame);
     static String suitableDRTFrameName(const Evas_Object* ewkFrame);
     static void suspendAnimations(Evas_Object* ewkFrame);
+    static void setValueForUser(JSContextRef, JSValueRef nodeObject, JSStringRef value);
+    static void setAutofilled(JSContextRef, JSValueRef nodeObject, bool autofilled);
 
     static bool findString(const Evas_Object* ewkView, const char* text, WebCore::FindOptions);
 
@@ -74,6 +77,8 @@ public:
     static bool isTargetItem(const Ewk_History_Item*);
 
     static void setMockScrollbarsEnabled(bool);
+
+    static void dumpConfigurationForViewport(Evas_Object* ewkView, int deviceDPI, const WebCore::IntSize& deviceSize, const WebCore::IntSize& availableSize);
 };
 
 #endif // DumpRenderTreeSupportEfl_h

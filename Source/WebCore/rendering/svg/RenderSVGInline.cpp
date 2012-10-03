@@ -24,6 +24,7 @@
 #if ENABLE(SVG)
 #include "RenderSVGInline.h"
 
+#include "RenderSVGInlineText.h"
 #include "RenderSVGResource.h"
 #include "RenderSVGText.h"
 #include "SVGInlineFlowBox.h"
@@ -73,9 +74,9 @@ LayoutRect RenderSVGInline::clippedOverflowRectForRepaint(RenderBoxModelObject* 
     return SVGRenderSupport::clippedOverflowRectForRepaint(this, repaintContainer);
 }
 
-void RenderSVGInline::computeRectForRepaint(RenderBoxModelObject* repaintContainer, LayoutRect& repaintRect, bool fixed) const
+void RenderSVGInline::computeFloatRectForRepaint(RenderBoxModelObject* repaintContainer, FloatRect& repaintRect, bool fixed) const
 {
-    SVGRenderSupport::computeRectForRepaint(this, repaintContainer, repaintRect, fixed);
+    SVGRenderSupport::computeFloatRectForRepaint(this, repaintContainer, repaintRect, fixed);
 }
 
 void RenderSVGInline::mapLocalToContainer(RenderBoxModelObject* repaintContainer, bool /* useTransforms */, bool /* fixed */, TransformState& transformState, bool* wasFixed) const
@@ -96,9 +97,6 @@ void RenderSVGInline::absoluteQuads(Vector<FloatQuad>& quads, bool* wasFixed) co
 
 void RenderSVGInline::willBeDestroyed()
 {
-    if (RenderSVGText* textRenderer = RenderSVGText::locateRenderSVGTextAncestor(this))
-        textRenderer->setNeedsPositioningValuesUpdate();
-
     SVGResourcesCache::clientDestroyed(this);
     RenderInline::willBeDestroyed();
 }
@@ -122,6 +120,12 @@ void RenderSVGInline::updateFromElement()
     SVGResourcesCache::clientUpdatedFromElement(this, style());
 }
 
+void RenderSVGInline::addChild(RenderObject* child, RenderObject* beforeChild)
+{
+    RenderInline::addChild(child, beforeChild);
+    if (RenderSVGText* textRenderer = RenderSVGText::locateRenderSVGTextAncestor(this))
+        textRenderer->layoutAttributesChanged(child);
+}
 
 }
 

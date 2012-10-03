@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,7 +20,6 @@
 #include "NetworkManager.h"
 
 #include "Chrome.h"
-#include "CookieManager.h"
 #include "CredentialStorage.h"
 #include "Frame.h"
 #include "FrameLoaderClientBlackBerry.h"
@@ -77,7 +76,7 @@ bool NetworkManager::startJob(int playerId, const String& pageGroupName, PassRef
         m_initialURL = KURL();
 
     BlackBerry::Platform::NetworkRequest platformRequest;
-    request.initializePlatformRequest(platformRequest, isInitial);
+    request.initializePlatformRequest(platformRequest, frame.loader() && frame.loader()->client() && static_cast<FrameLoaderClientBlackBerry*>(frame.loader()->client())->cookiesEnabled(), isInitial, redirectCount);
 
     // Attach any applicable auth credentials to the NetworkRequest.
     AuthenticationChallenge& challenge = guardJob->getInternal()->m_currentWebChallenge;
@@ -113,22 +112,12 @@ bool NetworkManager::startJob(int playerId, const String& pageGroupName, PassRef
 
         if (authType != BlackBerry::Platform::NetworkRequest::AuthNone)
             platformRequest.setCredentials(username.utf8().data(), password.utf8().data(), authType);
-    } else if (url.protocolInHTTPFamily()) {
+    } else if (url.protocolIsInHTTPFamily()) {
         // For URLs that match the paths of those previously challenged for HTTP Basic authentication,
         // try and reuse the credential preemptively, as allowed by RFC 2617.
         Credential credential = CredentialStorage::get(url);
         if (!credential.isEmpty())
             platformRequest.setCredentials(credential.user().utf8().data(), credential.password().utf8().data(), BlackBerry::Platform::NetworkRequest::AuthHTTPBasic);
-    }
-
-    if ((&frame) && (&frame)->loader() && (&frame)->loader()->client()
-        && static_cast<FrameLoaderClientBlackBerry*>((&frame)->loader()->client())->cookiesEnabled()) {
-        // Prepare a cookie header if there are cookies related to this url.
-        String cookiePairs = cookieManager().getCookie(url, WithHttpOnlyCookies);
-        if (!cookiePairs.isEmpty()) {
-            // We need to check the encoding and encode the cookie header data using latin1 or utf8 to support unicode characters.
-            platformRequest.setCookieData(cookiePairs.containsOnlyLatin1() ? cookiePairs.latin1().data() : cookiePairs.utf8().data());
-        }
     }
 
     if (!request.overrideContentType().isEmpty())
@@ -176,10 +165,10 @@ NetworkJob* NetworkManager::findJobForHandle(PassRefPtr<ResourceHandle> job)
 {
     for (unsigned i = 0; i < m_jobs.size(); ++i) {
         NetworkJob* networkJob = m_jobs[i];
-        if (networkJob->handle() == job) {
-            // We have only one job for one handle.
+        // We have only one job for one handle (not including cancelled jobs which may hang
+        // around briefly), so return the first non-cancelled job.
+        if (!networkJob->isCancelled() && networkJob->handle() == job)
             return networkJob;
-        }
     }
     return 0;
 }

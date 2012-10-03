@@ -66,17 +66,21 @@ namespace WebKit {
     macro(HyperlinkAuditingEnabled, hyperlinkAuditingEnabled, Bool, bool, true) \
     macro(NeedsSiteSpecificQuirks, needsSiteSpecificQuirks, Bool, bool, false) \
     macro(AcceleratedCompositingEnabled, acceleratedCompositingEnabled, Bool, bool, true) \
+    macro(ForceCompositingMode, forceCompositingMode, Bool, bool, false) \
     macro(AcceleratedDrawingEnabled, acceleratedDrawingEnabled, Bool, bool, false) \
     macro(CanvasUsesAcceleratedDrawing, canvasUsesAcceleratedDrawing, Bool, bool, true) \
     macro(CompositingBordersVisible, compositingBordersVisible, Bool, bool, false) \
     macro(CompositingRepaintCountersVisible, compositingRepaintCountersVisible, Bool, bool, false) \
+    macro(CSSCustomFilterEnabled, cssCustomFilterEnabled, Bool, bool, true) \
     macro(WebGLEnabled, webGLEnabled, Bool, bool, false) \
+    macro(CSSRegionsEnabled, cssRegionsEnabled, Bool, bool, true) \
     macro(ForceFTPDirectoryListings, forceFTPDirectoryListings, Bool, bool, false) \
     macro(TabsToLinks, tabsToLinks, Bool, bool, DEFAULT_WEBKIT_TABSTOLINKS_ENABLED) \
     macro(DNSPrefetchingEnabled, dnsPrefetchingEnabled, Bool, bool, false) \
     macro(WebArchiveDebugModeEnabled, webArchiveDebugModeEnabled, Bool, bool, false) \
     macro(LocalFileContentSniffingEnabled, localFileContentSniffingEnabled, Bool, bool, false) \
     macro(UsesPageCache, usesPageCache, Bool, bool, true) \
+    macro(PageCacheSupportsPlugins, pageCacheSupportsPlugins, Bool, bool, true) \
     macro(AuthorAndUserStylesEnabled, authorAndUserStylesEnabled, Bool, bool, true) \
     macro(PaginateDuringLayoutEnabled, paginateDuringLayoutEnabled, Bool, bool, false) \
     macro(DOMPasteAllowed, domPasteAllowed, Bool, bool, false) \
@@ -87,7 +91,7 @@ namespace WebKit {
     macro(AllowUniversalAccessFromFileURLs, allowUniversalAccessFromFileURLs, Bool, bool, false) \
     macro(AllowFileAccessFromFileURLs, allowFileAccessFromFileURLs, Bool, bool, false) \
     macro(AVFoundationEnabled, isAVFoundationEnabled, Bool, bool, DEFAULT_WEBKIT_AVFOUNDATION_ENABLED) \
-    macro(Hixie76WebSocketProtocolEnabled, hixie76WebSocketProtocolEnabled, Bool, bool, true) \
+    macro(Hixie76WebSocketProtocolEnabled, hixie76WebSocketProtocolEnabled, Bool, bool, false) \
     macro(MediaPlaybackRequiresUserGesture, mediaPlaybackRequiresUserGesture, Bool, bool, false) \
     macro(MediaPlaybackAllowsInline, mediaPlaybackAllowsInline, Bool, bool, true) \
     macro(InspectorStartsAttached, inspectorStartsAttached, Bool, bool, true) \
@@ -95,9 +99,13 @@ namespace WebKit {
     macro(MockScrollbarsEnabled, mockScrollbarsEnabled, Bool, bool, false) \
     macro(WebAudioEnabled, webAudioEnabled, Bool, bool, false) \
     macro(ApplicationChromeModeEnabled, applicationChromeMode, Bool, bool, false) \
-    macro(SuppressIncrementalRendering, suppressIncrementalRendering, Bool, bool, false) \
+    macro(SuppressesIncrementalRendering, suppressesIncrementalRendering, Bool, bool, false) \
     macro(BackspaceKeyNavigationEnabled, backspaceKeyNavigationEnabled, Bool, bool, true) \
     macro(CaretBrowsingEnabled, caretBrowsingEnabled, Bool, bool, false) \
+    macro(ShouldDisplaySubtitles, shouldDisplaySubtitles, Bool, bool, false) \
+    macro(ShouldDisplayCaptions, shouldDisplayCaptions, Bool, bool, false) \
+    macro(ShouldDisplayTextDescriptions, shouldDisplayTextDescriptions, Bool, bool, false) \
+    macro(NotificationsEnabled, notificationsEnabled, Bool, bool, true) \
     \
 
 #define FOR_EACH_WEBKIT_DOUBLE_PREFERENCE(macro) \
@@ -122,6 +130,7 @@ namespace WebKit {
     macro(DeviceHeight, deviceHeight, UInt32, uint32_t, 854) \
     macro(PDFDisplayMode, pdfDisplayMode, UInt32, uint32_t, 1) \
     macro(EditableLinkBehavior, editableLinkBehavior, UInt32, uint32_t, WebCore::EditableLinkNeverLive) \
+    macro(InspectorAttachedHeight, inspectorAttachedHeight, UInt32, uint32_t, 300) \
     \
 
 #if PLATFORM(WIN)
@@ -148,7 +157,7 @@ namespace WebKit {
     macro(PictographFontFamily, pictographFontFamily, String, String, "Apple Color Emoji") \
     \
 
-#elif PLATFORM(QT) || PLATFORM(GTK)
+#elif PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
 
 #define FOR_EACH_WEBKIT_FONT_FAMILY_PREFERENCE(macro) \
     macro(StandardFontFamily, standardFontFamily, String, String, "Times") \
@@ -206,7 +215,8 @@ struct WebPreferencesStore {
     bool setDoubleValueForKey(const String& key, double value);
     double getDoubleValueForKey(const String& key) const;
 
-    static void overrideXSSAuditorEnabledForTestRunner(bool);
+    // For WebKitTestRunner usage.
+    static void overrideBoolValueForKey(const String& key, bool value);
     static void removeTestRunnerOverrides();
 
     HashMap<String, String> m_stringValues;

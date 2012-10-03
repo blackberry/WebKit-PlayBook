@@ -38,6 +38,7 @@
 #include "LayoutTestControllerQt.h"
 #include "TextInputControllerQt.h"
 #include "PlainTextControllerQt.h"
+#include "QtInitializeTestFonts.h"
 #include "testplugin.h"
 #include "WorkQueue.h"
 
@@ -49,6 +50,7 @@
 #include <QFileInfo>
 #include <QFocusEvent>
 #include <QFontDatabase>
+#include <QLabel>
 #include <QLocale>
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
@@ -58,19 +60,12 @@
 #ifndef QT_NO_PRINTER
 #include <QPrinter>
 #endif
+#include <QProgressBar>
 #include <QUndoStack>
 #include <QUrl>
 
 #include <qwebsettings.h>
 #include <qwebsecurityorigin.h>
-
-#ifndef QT_NO_UITOOLS
-#include <QtUiTools/QUiLoader>
-#endif
-
-#ifdef Q_WS_X11
-#include <fontconfig/fontconfig.h>
-#endif
 
 #include <limits.h>
 #include <locale.h>
@@ -210,6 +205,7 @@ void WebPage::resetSettings()
     settings()->setUserStyleSheetUrl(QUrl()); // reset to default
 
     DumpRenderTreeSupportQt::setMinimumTimerInterval(this, DumpRenderTreeSupportQt::defaultMinimumTimerInterval());
+    DumpRenderTreeSupportQt::setHixie76WebSocketProtocolEnabled(this, DumpRenderTreeSupportQt::defaultHixie76WebSocketProtocolEnabled());
 
     DumpRenderTreeSupportQt::resetInternalsObject(mainFrame());
 
@@ -304,7 +300,10 @@ void WebPage::javaScriptConsoleMessage(const QString& message, int lineNumber, c
         }
     }
 
-    fprintf (stdout, "CONSOLE MESSAGE: line %d: %s\n", lineNumber, newMessage.toUtf8().constData());
+    fprintf(stdout, "CONSOLE MESSAGE: ");
+    if (lineNumber)
+        fprintf(stdout, "line %d: ", lineNumber);
+    fprintf(stdout, "%s\n", newMessage.toUtf8().constData());
 }
 
 bool WebPage::javaScriptConfirm(QWebFrame*, const QString& msg)
@@ -362,13 +361,13 @@ QObject* WebPage::createPlugin(const QString& classId, const QUrl& url, const QS
     Q_UNUSED(url);
     Q_UNUSED(paramNames);
     Q_UNUSED(paramValues);
-#ifndef QT_NO_UITOOLS
-    QUiLoader loader;
-    return loader.createWidget(classId, view());
-#else
-    Q_UNUSED(classId);
+
+    if (classId == QLatin1String("QProgressBar"))
+        return new QProgressBar(view());
+    if (classId == QLatin1String("QLabel"))
+        return new QLabel(view());
+
     return 0;
-#endif
 }
 
 void WebPage::setViewGeometry(const QRect& rect)
@@ -398,10 +397,11 @@ DumpRenderTree::DumpRenderTree()
     if (viewMode == "graphics")
         setGraphicsBased(true);
 
+    DumpRenderTreeSupportQt::initialize();
+
     // Set running in DRT mode for qwebpage to create testable objects.
     DumpRenderTreeSupportQt::setDumpRenderTreeModeEnabled(true);
     DumpRenderTreeSupportQt::overwritePluginDirectories();
-    DumpRenderTreeSupportQt::activeMockDeviceOrientationClient(true);
     QWebSettings::enablePersistentStorage(m_persistentStoragePath);
 
     m_networkAccessManager = new NetworkAccessManager(this);
@@ -482,7 +482,6 @@ DumpRenderTree::~DumpRenderTree()
         fclose(stderr);
     delete m_mainView;
     delete m_stdin;
-    DumpRenderTreeSupportQt::removeMockDeviceOrientation();
 }
 
 static void clearHistory(QWebPage* page)
@@ -627,9 +626,7 @@ void DumpRenderTree::open(const QUrl& url)
 #if !(QT_VERSION <= QT_VERSION_CHECK(4, 6, 2))
     QFontDatabase::removeAllApplicationFonts();
 #endif
-#if defined(Q_WS_X11)
-    initializeFonts();
-#endif
+    WebKit::initializeTestFonts();
 
     DumpRenderTreeSupportQt::dumpFrameLoader(url.toString().contains("loading/"));
     setTextOutputEnabled(true);
@@ -1141,44 +1138,14 @@ QList<WebPage*> DumpRenderTree::getAllPages() const
     return pages;
 }
 
-#if defined(Q_WS_X11)
-void DumpRenderTree::initializeFonts()
+void DumpRenderTree::setTimeout(int timeout)
 {
-    static int numFonts = -1;
-
-    // Some test cases may add or remove application fonts (via @font-face).
-    // Make sure to re-initialize the font set if necessary.
-    FcFontSet* appFontSet = FcConfigGetFonts(0, FcSetApplication);
-    if (appFontSet && numFonts >= 0 && appFontSet->nfont == numFonts)
-        return;
-
-    QByteArray fontDir = getenv("WEBKIT_TESTFONTS");
-    if (fontDir.isEmpty() || !QDir(fontDir).exists()) {
-        fprintf(stderr,
-                "\n\n"
-                "----------------------------------------------------------------------\n"
-                "WEBKIT_TESTFONTS environment variable is not set correctly.\n"
-                "This variable has to point to the directory containing the fonts\n"
-                "you can clone from git://gitorious.org/qtwebkit/testfonts.git\n"
-                "----------------------------------------------------------------------\n"
-               );
-        exit(1);
-    }
-    char currentPath[PATH_MAX+1];
-    if (!getcwd(currentPath, PATH_MAX))
-        qFatal("Couldn't get current working directory");
-    QByteArray configFile = currentPath;
-    FcConfig *config = FcConfigCreate();
-    configFile += "/Tools/DumpRenderTree/qt/fonts.conf";
-    if (!FcConfigParseAndLoad (config, (FcChar8*) configFile.data(), true))
-        qFatal("Couldn't load font configuration file");
-    if (!FcConfigAppFontAddDir (config, (FcChar8*) fontDir.data()))
-        qFatal("Couldn't add font dir!");
-    FcConfigSetCurrent(config);
-
-    appFontSet = FcConfigGetFonts(config, FcSetApplication);
-    numFonts = appFontSet->nfont;
+    m_controller->setTimeout(timeout);
 }
-#endif
+
+void DumpRenderTree::setShouldTimeout(bool flag)
+{
+    m_controller->setShouldTimeout(flag);
+}
 
 }

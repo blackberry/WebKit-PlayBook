@@ -102,13 +102,13 @@ namespace WebKit {
 #if ENABLE(REGISTER_PROTOCOL_HANDLER) 
         virtual void registerProtocolHandler(const WTF::String&, const WTF::String&, const WTF::String&, const WTF::String&); 
 #endif 
-        virtual void invalidateWindow(const IntRect&, bool);
-        virtual void invalidateContentsAndWindow(const IntRect&, bool);
+        virtual void invalidateRootView(const IntRect&, bool);
+        virtual void invalidateContentsAndRootView(const IntRect&, bool);
         virtual void invalidateContentsForSlowScroll(const IntRect&, bool);
         virtual void scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect);
 
-        virtual IntPoint screenToWindow(const IntPoint&) const;
-        virtual IntRect windowToScreen(const IntRect&) const;
+        virtual IntPoint screenToRootView(const IntPoint&) const;
+        virtual IntRect rootViewToScreen(const IntRect&) const;
         virtual PlatformPageClient platformPageClient() const;
         virtual void contentsSizeChanged(Frame*, const IntSize&) const;
 
@@ -125,9 +125,6 @@ namespace WebKit {
 #endif
         virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
         virtual void reachedApplicationCacheOriginQuota(SecurityOrigin*, int64_t totalSpaceNeeded);
-#if ENABLE(CONTEXT_MENUS)
-        virtual void showContextMenu() { }
-#endif
         virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>);
         virtual void loadIconForFiles(const Vector<WTF::String>&, FileIconLoader*);
 
@@ -142,6 +139,7 @@ namespace WebKit {
 
         virtual bool selectItemWritingDirectionIsNatural();
         virtual bool selectItemAlignmentFollowsMenuWritingDirection();
+        virtual bool hasOpenedPopup() const;
         virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const;
         virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const;
 #if ENABLE(VIDEO)
@@ -154,10 +152,12 @@ namespace WebKit {
         virtual bool supportsFullScreenForElement(const Element*, bool withKeyboard);
         virtual void enterFullScreenForElement(Element*);
         virtual void exitFullScreenForElement(Element*);
+        void cancelFullScreen();
 #endif
 
         virtual bool shouldRubberBandInDirection(ScrollDirection) const { return true; }
         virtual void numWheelEventHandlersChanged(unsigned) { }
+        virtual void numTouchEventHandlersChanged(unsigned) { }
 
 #if USE(ACCELERATED_COMPOSITING) 
         virtual void attachRootGraphicsLayer(Frame*, GraphicsLayer*);
@@ -181,7 +181,12 @@ namespace WebKit {
         Vector<IntRect> m_rectsToScroll;
         Vector<IntSize> m_scrollOffsets;
         double m_lastDisplayTime;
-        uint m_repaintSoonSourceId;
+        unsigned int m_repaintSoonSourceId;
+
+        void invalidateWidgetRect(const IntRect&);
+#if ENABLE(FULLSCREEN_API)
+        RefPtr<Element> m_fullScreenElement;
+#endif
     };
 }
 

@@ -91,9 +91,9 @@ LayoutRect RenderSVGForeignObject::clippedOverflowRectForRepaint(RenderBoxModelO
     return SVGRenderSupport::clippedOverflowRectForRepaint(this, repaintContainer);
 }
 
-void RenderSVGForeignObject::computeRectForRepaint(RenderBoxModelObject* repaintContainer, LayoutRect& repaintRect, bool fixed) const
+void RenderSVGForeignObject::computeFloatRectForRepaint(RenderBoxModelObject* repaintContainer, FloatRect& repaintRect, bool fixed) const
 {
-    SVGRenderSupport::computeRectForRepaint(this, repaintContainer, repaintRect, fixed);
+    SVGRenderSupport::computeFloatRectForRepaint(this, repaintContainer, repaintRect, fixed);
 }
 
 const AffineTransform& RenderSVGForeignObject::localToParentTransform() const
@@ -148,7 +148,7 @@ void RenderSVGForeignObject::layout()
     // FIXME: Investigate in location rounding issues - only affects RenderSVGForeignObject & RenderSVGText
     setLocation(roundedIntPoint(viewportLocation));
 
-    bool layoutChanged = m_everHadLayout && selfNeedsLayout();
+    bool layoutChanged = everHadLayout() && selfNeedsLayout();
     RenderBlock::layout();
     ASSERT(!needsLayout());
 

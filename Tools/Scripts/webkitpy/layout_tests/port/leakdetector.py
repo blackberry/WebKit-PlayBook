@@ -55,6 +55,7 @@ class LeakDetector(object):
     def _callstacks_to_exclude_from_leaks(self):
         callstacks = [
             "Flash_EnforceLocalSecurity",  # leaks in Flash plug-in code, rdar://problem/4449747
+            "ScanFromString", # <http://code.google.com/p/angleproject/issues/detail?id=249> leak in ANGLE
         ]
         if self._port.is_leopard():
             callstacks += [
@@ -76,21 +77,28 @@ class LeakDetector(object):
                 "glrCompExecuteKernel",  # <rdar://problem/7815391> leak in graphics driver while using OpenGL
                 "NSNumberFormatter getObjectValue:forString:errorDescription:",  # <rdar://problem/7149350> Leak in NSNumberFormatter
             ]
+        elif self._port.is_lion():
+            callstacks += [
+                "FigByteFlumeCustomURLCreateWithURL", # <rdar://problem/10461926> leak in CoreMedia
+                "PDFPage\(PDFPageInternal\) pageLayoutIfAvail", # <rdar://problem/10462055> leak in PDFKit
+                "SecTransformExecute", # <rdar://problem/10470667> leak in Security.framework
+                "_NSCopyStyleRefForFocusRingStyleClip", # <rdar://problem/10462031> leak in AppKit
+            ]
         return callstacks
 
     def _leaks_args(self, pid):
         leaks_args = []
         for callstack in self._callstacks_to_exclude_from_leaks():
-            leaks_args += ['--exclude-callstack="%s"' % callstack]  # Callstacks can have spaces in them, so we quote the arg to prevent confusing perl's optparse.
+            leaks_args += ['--exclude-callstack=%s' % callstack]
         for excluded_type in self._types_to_exlude_from_leaks():
-            leaks_args += ['--exclude-type="%s"' % excluded_type]
+            leaks_args += ['--exclude-type=%s' % excluded_type]
         leaks_args.append(pid)
         return leaks_args
 
     def _parse_leaks_output(self, leaks_output):
         _, count, bytes = re.search(r'Process (?P<pid>\d+): (?P<count>\d+) leaks? for (?P<bytes>\d+) total', leaks_output).groups()
         excluded_match = re.search(r'(?P<excluded>\d+) leaks? excluded', leaks_output)
-        excluded = excluded_match.group(0) if excluded_match else 0
+        excluded = excluded_match.group('excluded') if excluded_match else 0
         return int(count), int(excluded), int(bytes)
 
     def leaks_files_in_directory(self, directory):
@@ -113,7 +121,7 @@ class LeakDetector(object):
             return
 
         # total: 5,888 bytes (0 bytes excluded).
-        unique_leak_count = len(re.findall(r'^(\d*)\scalls', parse_malloc_history_output))
+        unique_leak_count = len(re.findall(r'^(\d*)\scalls', parse_malloc_history_output, re.MULTILINE))
         total_bytes_string = re.search(r'^total\:\s(.+)\s\(', parse_malloc_history_output, re.MULTILINE).group(1)
         return (total_bytes_string, unique_leak_count)
 

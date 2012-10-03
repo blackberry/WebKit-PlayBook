@@ -73,7 +73,6 @@
 #import "WebViewInternal.h"
 #import <AppKit/NSAccessibility.h>
 #import <ApplicationServices/ApplicationServices.h>
-#import <WebCore/CSSMutableStyleDeclaration.h>
 #import <WebCore/CachedImage.h>
 #import <WebCore/CachedResourceClient.h>
 #import <WebCore/CachedResourceLoader.h>
@@ -104,13 +103,15 @@
 #import <WebCore/LegacyWebArchive.h>
 #import <WebCore/MIMETypeRegistry.h>
 #import <WebCore/Page.h>
-#import <WebCore/PlatformKeyboardEvent.h>
+#import <WebCore/PlatformEventFactoryMac.h>
 #import <WebCore/Range.h>
 #import <WebCore/RenderWidget.h>
 #import <WebCore/RenderView.h>
+#import <WebCore/RunLoop.h>
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/SharedBuffer.h>
 #import <WebCore/SimpleFontData.h>
+#import <WebCore/StylePropertySet.h>
 #import <WebCore/Text.h>
 #import <WebCore/WebCoreObjCExtras.h>
 #import <WebCore/WebFontCache.h>
@@ -199,6 +200,16 @@ static WebMenuTarget* target;
 - (id)initWithResponderChain:(NSResponder *)chain;
 - (void)detach;
 - (BOOL)receivedUnhandledCommand;
+@end
+
+@interface WebLayerHostingFlippedView : NSView
+@end
+
+@implementation WebLayerHostingFlippedView
+- (BOOL)isFlipped
+{
+    return YES;
+}
 @end
 
 // if YES, do the standard NSView hit test (which can't give the right result when HTML overlaps a view)
@@ -508,10 +519,10 @@ struct WebHTMLViewInterpretKeyEventsParameters {
     
     WebDataSource *dataSource;
     WebCore::CachedImage* promisedDragTIFFDataSource;
-    
-    CFRunLoopTimerRef updateMouseoverTimer;
 
     SEL selectorForDoCommandBySelector;
+
+    NSTrackingArea *trackingAreaForNonKeyWindow;
 
 #ifndef NDEBUG
     BOOL enumeratingSubviews;
@@ -540,6 +551,7 @@ static NSCellStateValue kit(TriState state)
 {
     JSC::initializeThreading();
     WTF::initializeMainThreadToProcessMainThread();
+    WebCore::RunLoop::initializeMainRunLoop();
     WebCoreObjCFinalizeOnMainThread(self);
     
     if (!oldSetCursorForMouseLocationIMP) {
@@ -568,7 +580,6 @@ static NSCellStateValue kit(TriState state)
 
     ASSERT(!autoscrollTimer);
     ASSERT(!autoscrollTriggerEvent);
-    ASSERT(!updateMouseoverTimer);
     
     [mouseDownEvent release];
     [keyDownEvent release];
@@ -577,6 +588,7 @@ static NSCellStateValue kit(TriState state)
     [completionController release];
     [dataSource release];
     [highlighters release];
+    [trackingAreaForNonKeyWindow release];
     if (promisedDragTIFFDataSource)
         promisedDragTIFFDataSource->removeClient(promisedDataClient());
 
@@ -602,6 +614,7 @@ static NSCellStateValue kit(TriState state)
     [completionController release];
     [dataSource release];
     [highlighters release];
+    [trackingAreaForNonKeyWindow release];
     if (promisedDragTIFFDataSource)
         promisedDragTIFFDataSource->removeClient(promisedDataClient());
 
@@ -612,6 +625,7 @@ static NSCellStateValue kit(TriState state)
     completionController = nil;
     dataSource = nil;
     highlighters = nil;
+    trackingAreaForNonKeyWindow = nil;
     promisedDragTIFFDataSource = 0;
 
 #if USE(ACCELERATED_COMPOSITING)
@@ -1037,15 +1051,6 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
     _private->mouseDownEvent = event;
 }
 
-- (void)_cancelUpdateMouseoverTimer
-{
-    if (_private->updateMouseoverTimer) {
-        CFRunLoopTimerInvalidate(_private->updateMouseoverTimer);
-        CFRelease(_private->updateMouseoverTimer);
-        _private->updateMouseoverTimer = NULL;
-    }
-}
-
 - (WebHTMLView *)_topHTMLView
 {
     // FIXME: this can fail if the dataSource is nil, which happens when the WebView is tearing down from the window closing.
@@ -1180,8 +1185,6 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
 
 - (void)_updateMouseoverWithFakeEvent
 {
-    [self _cancelUpdateMouseoverTimer];
-    
     NSEvent *fakeEvent = [NSEvent mouseEventWithType:NSMouseMoved
         location:[[self window] convertScreenToBase:[NSEvent mouseLocation]]
         modifierFlags:[[NSApp currentEvent] modifierFlags]
@@ -1191,13 +1194,6 @@ static NSURL* uniqueURLWithRelativePart(NSString *relativePart)
         eventNumber:0 clickCount:0 pressure:0];
     
     [self _updateMouseoverWithEvent:fakeEvent];
-}
-
-static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
-{
-    WebHTMLView *view = (WebHTMLView *)info;
-    
-    [view _updateMouseoverWithFakeEvent];
 }
 
 - (void)_frameOrBoundsChanged
@@ -1221,16 +1217,6 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     }
     _private->lastScrollPosition = origin;
 
-    if ([self window] && !_private->closed && !_private->updateMouseoverTimer) {
-        CFRunLoopTimerContext context = { 0, self, NULL, NULL, NULL };
-        
-        // Use a 100ms delay so that the synthetic mouse over update doesn't cause cursor thrashing when pages are loading
-        // and scrolling rapidly back to back.
-        _private->updateMouseoverTimer = CFRunLoopTimerCreate(NULL, CFAbsoluteTimeGetCurrent() + 0.1, 0, 0, 0,
-                                                              _updateMouseoverTimerCallback, &context);
-        CFRunLoopAddTimer(CFRunLoopGetCurrent(), _private->updateMouseoverTimer, kCFRunLoopDefaultMode);
-    }
-    
 #if USE(ACCELERATED_COMPOSITING) && defined(BUILDING_ON_LEOPARD)
     [self _updateLayerHostingViewPosition];
 #endif
@@ -1386,6 +1372,16 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     return self != [self _topHTMLView];
 }
 
+static BOOL isQuickLookEvent(NSEvent *event)
+{
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+    const int kCGSEventSystemSubtypeHotKeyCombinationReleased = 9;
+    return [event type] == NSSystemDefined && [event subtype] == kCGSEventSystemSubtypeHotKeyCombinationReleased && [event data1] == 'lkup';
+#else
+    return NO;
+#endif
+}
+
 - (NSView *)hitTest:(NSPoint)point
 {
     // WebHTMLView objects handle all events for objects inside them.
@@ -1426,7 +1422,8 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
         captureHitsOnSubviews = !([event type] == NSMouseMoved
             || [event type] == NSRightMouseDown
             || ([event type] == NSLeftMouseDown && ([event modifierFlags] & NSControlKeyMask) != 0)
-            || [event type] == NSFlagsChanged);
+            || [event type] == NSFlagsChanged
+            || isQuickLookEvent(event));
     }
 
     if (!captureHitsOnSubviews) {
@@ -1566,6 +1563,24 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     return [[_private->toolTip copy] autorelease];
 }
 
+static bool mouseEventIsPartOfClickOrDrag(NSEvent *event)
+{
+    switch ([event type]) {
+        case NSLeftMouseDown:
+        case NSLeftMouseUp:
+        case NSLeftMouseDragged:
+        case NSRightMouseDown:
+        case NSRightMouseUp:
+        case NSRightMouseDragged:
+        case NSOtherMouseDown:
+        case NSOtherMouseUp:
+        case NSOtherMouseDragged:
+            return true;
+        default:
+            return false;
+    }
+}
+
 - (void)_updateMouseoverWithEvent:(NSEvent *)event
 {
     if (_private->closed)
@@ -1579,7 +1594,7 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     forceWebHTMLViewHitTest = NO;
     
     WebHTMLView *view = nil;
-    if ([hitView isKindOfClass:[WebHTMLView class]] && ![[(WebHTMLView *)hitView _webView] isHoverFeedbackSuspended])
+    if ([hitView isKindOfClass:[WebHTMLView class]])
         view = (WebHTMLView *)hitView;    
 
     if (view)
@@ -1607,8 +1622,17 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
     lastHitView = view;
 
     if (view) {
-        if (Frame* coreFrame = core([view _frame]))
-            coreFrame->eventHandler()->mouseMoved(event);
+        if (Frame* coreFrame = core([view _frame])) {
+            // We need to do a full, normal hit test during this mouse event if the page is active or if a mouse
+            // button is currently pressed. It is possible that neither of those things will be true on Lion and
+            // newer when legacy scrollbars are enabled, because then WebKit receives mouse events all the time. 
+            // If it is one of those cases where the page is not active and the mouse is not pressed, then we can
+            // fire a much more restricted and efficient scrollbars-only version of the event.
+            if ([[self window] isKeyWindow] || mouseEventIsPartOfClickOrDrag(event))
+                coreFrame->eventHandler()->mouseMoved(event);
+            else
+                coreFrame->eventHandler()->passMouseMovedEventToScrollbars(event);
+        }
 
         [view release];
     }
@@ -1892,7 +1916,6 @@ static void _updateMouseoverTimerCallback(CFRunLoopTimerRef timer, void *info)
 
     _private->closed = YES;
 
-    [self _cancelUpdateMouseoverTimer];
     [self _clearLastHitViewIfSelf];
     [self _removeMouseMovedObserverUnconditionally];
     [self _removeWindowObservers];
@@ -2265,6 +2288,7 @@ static bool matchesExtensionOrEquivalent(NSString *filename, NSString *extension
                              returnTypes:[[self class] _insertablePasteboardTypes]];
     JSC::initializeThreading();
     WTF::initializeMainThreadToProcessMainThread();
+    WebCore::RunLoop::initializeMainRunLoop();
     WebCoreObjCFinalizeOnMainThread(self);
 }
 
@@ -2822,6 +2846,12 @@ WEBCORE_COMMAND(yankAndSelect)
         return;
 #endif
 
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+    // Legacy scrollbars require tracking the mouse at all times.
+    if (WKRecommendedScrollerStyle() == NSScrollerStyleLegacy)
+        return;
+#endif
+
     [[self _webView] _mouseDidMoveOverElement:nil modifierFlags:0];
     [self _removeMouseMovedObserverUnconditionally];
 }
@@ -2900,7 +2930,6 @@ WEBCORE_COMMAND(yankAndSelect)
     [self _removeMouseMovedObserverUnconditionally];
     [self _removeWindowObservers];
     [self _removeSuperviewObservers];
-    [self _cancelUpdateMouseoverTimer];
 
     // FIXME: This accomplishes the same thing as the call to setCanStartMedia(false) in
     // WebView. It would be nice to have a single mechanism instead of two.
@@ -3098,7 +3127,7 @@ static void setMenuTargets(NSMenu* menu)
     _private->handlingMouseDownEvent = YES;
     page->contextMenuController()->clearContextMenu();
     coreFrame->eventHandler()->mouseDown(event);
-    BOOL handledEvent = coreFrame->eventHandler()->sendContextMenuEvent(PlatformMouseEvent(event, page->chrome()->platformPageClient()));
+    BOOL handledEvent = coreFrame->eventHandler()->sendContextMenuEvent(PlatformEventFactory::createPlatformMouseEvent(event, page->chrome()->platformPageClient()));
     _private->handlingMouseDownEvent = NO;
 
     if (!handledEvent)
@@ -3356,6 +3385,14 @@ static void setMenuTargets(NSMenu* menu)
         return;
     }
 
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+    if (_private->trackingAreaForNonKeyWindow) {
+        [self removeTrackingArea:_private->trackingAreaForNonKeyWindow];
+        [_private->trackingAreaForNonKeyWindow release];
+        _private->trackingAreaForNonKeyWindow = nil;
+    }
+#endif
+
     NSWindow *keyWindow = [notification object];
 
     if (keyWindow == [self window]) {
@@ -3380,6 +3417,19 @@ static void setMenuTargets(NSMenu* menu)
         [self _updateSecureInputState];
         [_private->completionController endRevertingChange:NO moveLeft:NO];
     }
+
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+    if (WKRecommendedScrollerStyle() == NSScrollerStyleLegacy) {
+        // Legacy style scrollbars have design details that rely on tracking the mouse all the time.
+        // It's easiest to do this with a tracking area, which we will remove when the window is key
+        // again.
+        _private->trackingAreaForNonKeyWindow = [[NSTrackingArea alloc] initWithRect:[self bounds]
+                                                    options:NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingInVisibleRect | NSTrackingActiveAlways
+                                                    owner:self
+                                                    userInfo:nil];
+        [self addTrackingArea:_private->trackingAreaForNonKeyWindow];
+    }
+#endif
 }
 
 - (void)windowWillOrderOnScreen:(NSNotification *)notification
@@ -3463,7 +3513,7 @@ static void setMenuTargets(NSMenu* menu)
             [hitHTMLView _setMouseDownEvent:event];
             if ([hitHTMLView _isSelectionEvent:event]) {
                 if (Page* page = coreFrame->page())
-                    result = coreFrame->eventHandler()->eventMayStartDrag(PlatformMouseEvent(event, page->chrome()->platformPageClient()));
+                    result = coreFrame->eventHandler()->eventMayStartDrag(PlatformEventFactory::createPlatformMouseEvent(event, page->chrome()->platformPageClient()));
             } else if ([hitHTMLView _isScrollBarEvent:event])
                 result = true;
             [hitHTMLView _setMouseDownEvent:nil];
@@ -3488,7 +3538,7 @@ static void setMenuTargets(NSMenu* menu)
             if (Frame* coreFrame = core([hitHTMLView _frame])) {
                 [hitHTMLView _setMouseDownEvent:event];
                 if (Page* page = coreFrame->page())
-                    result = coreFrame->eventHandler()->eventMayStartDrag(PlatformMouseEvent(event, page->chrome()->platformPageClient()));
+                    result = coreFrame->eventHandler()->eventMayStartDrag(PlatformEventFactory::createPlatformMouseEvent(event, page->chrome()->platformPageClient()));
                 [hitHTMLView _setMouseDownEvent:nil];
             }
         }
@@ -3523,9 +3573,6 @@ static void setMenuTargets(NSMenu* menu)
     // We don't want to pass them along to KHTML a second time.
     if (!([event modifierFlags] & NSControlKeyMask)) {
         _private->ignoringMouseDraggedEvents = NO;
-
-        // Don't do any mouseover while the mouse is down.
-        [self _cancelUpdateMouseoverTimer];
 
         // Let WebCore get a chance to deal with the event. This will call back to us
         // to start the autoscroll timer if appropriate.
@@ -3728,12 +3775,12 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
 
     switch ([event type]) {
     case NSKeyDown: {
-        PlatformKeyboardEvent platformEvent(event);
-        platformEvent.disambiguateKeyDownEvent(PlatformKeyboardEvent::RawKeyDown);
+        PlatformKeyboardEvent platformEvent = PlatformEventFactory::createPlatformKeyboardEvent(event);
+        platformEvent.disambiguateKeyDownEvent(PlatformEvent::RawKeyDown);
         return KeyboardEvent::create(platformEvent, coreFrame->document()->defaultView());
     }
     case NSKeyUp:
-        return KeyboardEvent::create(event, coreFrame->document()->defaultView());
+        return KeyboardEvent::create(PlatformEventFactory::createPlatformKeyboardEvent(event), coreFrame->document()->defaultView());
     default:
         return 0;
     }
@@ -3761,6 +3808,7 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
     [self _updateSecureInputState];
     _private->_forceUpdateSecureInputState = NO;
 
+    // FIXME: Kill ring handling is mostly in WebCore, so this call should also be moved there.
     frame->editor()->setStartNewKillRingSequence(true);
 
     Page* page = frame->page();
@@ -4130,7 +4178,7 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
 
     // Don't make an event from the num lock and function keys.
     if (coreFrame && keyCode != 0 && keyCode != 10 && keyCode != 63) {
-        coreFrame->eventHandler()->keyEvent(PlatformKeyboardEvent(event));
+        coreFrame->eventHandler()->keyEvent(PlatformEventFactory::createPlatformKeyboardEvent(event));
         return;
     }
         
@@ -4315,14 +4363,10 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
 
 - (void)_applyStyleToSelection:(DOMCSSStyleDeclaration *)style withUndoAction:(EditAction)undoAction
 {
-    if (Frame* coreFrame = core([self _frame]))
-        coreFrame->editor()->applyStyleToSelection(core(style), undoAction);
-}
-
-- (void)_applyParagraphStyleToSelection:(DOMCSSStyleDeclaration *)style withUndoAction:(EditAction)undoAction
-{
-    if (Frame* coreFrame = core([self _frame]))
-        coreFrame->editor()->applyParagraphStyleToSelection(core(style), undoAction);
+    if (Frame* coreFrame = core([self _frame])) {
+        // FIXME: We shouldn't have to make a copy here. We want callers of this function to work directly with StylePropertySet eventually.
+        coreFrame->editor()->applyStyleToSelection(core(style)->copy().get(), undoAction);
+    }
 }
 
 - (BOOL)_handleStyleKeyEquivalent:(NSEvent *)event
@@ -4531,29 +4575,6 @@ static PassRefPtr<KeyboardEvent> currentKeyboardEvent(Frame* coreFrame)
 
     [shadow release];
 
-#if 0
-
-NSObliquenessAttributeName        /* float; skew to be applied to glyphs, default 0: no skew */
-    // font-style, but that is just an on-off switch
-
-NSExpansionAttributeName          /* float; log of expansion factor to be applied to glyphs, default 0: no expansion */
-    // font-stretch?
-
-NSKernAttributeName               /* float, amount to modify default kerning, if 0, kerning off */
-    // letter-spacing? probably not good enough
-
-NSUnderlineColorAttributeName     /* NSColor, default nil: same as foreground color */
-NSStrikethroughColorAttributeName /* NSColor, default nil: same as foreground color */
-    // text-decoration-color?
-
-NSLigatureAttributeName           /* int, default 1: default ligatures, 0: no ligatures, 2: all ligatures */
-NSBaselineOffsetAttributeName     /* float, in points; offset from baseline, default 0 */
-NSStrokeWidthAttributeName        /* float, in percent of font point size, default 0: no stroke; positive for stroke alone, negative for stroke and fill (a typical value for outlined text would be 3.0) */
-NSStrokeColorAttributeName        /* NSColor, default nil: same as foreground color */
-    // need extensions?
-
-#endif
-    
     NSDictionary *a = [sender convertAttributes:oa];
     NSDictionary *b = [sender convertAttributes:ob];
 
@@ -4568,6 +4589,8 @@ NSStrokeColorAttributeName        /* NSColor, default nil: same as foreground co
     ca = [a objectForKey:NSForegroundColorAttributeName];
     cb = [b objectForKey:NSForegroundColorAttributeName];
     if (ca == cb) {
+        if (!ca)
+            ca = [NSColor blackColor];
         [style setColor:[self _colorAsString:ca]];
     }
 
@@ -4641,9 +4664,13 @@ NSStrokeColorAttributeName        /* NSColor, default nil: same as foreground co
 {
     DOMCSSStyleDeclaration *style = [self _styleFromColorPanelWithSelector:selector];
     WebView *webView = [self _webView];
-    if ([[webView _editingDelegateForwarder] webView:webView shouldApplyStyle:style toElementsInDOMRange:range])
-        if (Frame* coreFrame = core([self _frame]))
-            coreFrame->editor()->applyStyle(core(style), [self _undoActionFromColorPanelWithSelector:selector]);
+    if ([[webView _editingDelegateForwarder] webView:webView shouldApplyStyle:style toElementsInDOMRange:range]) {
+        if (Frame* coreFrame = core([self _frame])) {
+            // FIXME: We shouldn't have to make a copy here.
+            coreFrame->editor()->applyStyle(core(style)->copy().get(), [self _undoActionFromColorPanelWithSelector:selector]);
+        }
+    }
+
 }
 
 - (void)changeDocumentBackgroundColor:(id)sender
@@ -5001,8 +5028,6 @@ static BOOL writingDirectionKeyBindingsEnabled()
 {
     [self _updateSelectionForInputManager];
     [self _updateFontPanel];
-    if (Frame* coreFrame = core([self _frame]))
-        coreFrame->editor()->setStartNewKillRingSequence(true);
 }
 
 - (void)_updateFontPanel
@@ -5032,10 +5057,6 @@ static BOOL writingDirectionKeyBindingsEnabled()
     ASSERT(font != nil);
 
     [[NSFontManager sharedFontManager] setSelectedFont:font isMultiple:multipleFonts];
-
-    // FIXME: we don't keep track of selected attributes, or set them on the font panel. This
-    // appears to have no effect on the UI. E.g., underlined text in Mail or TextEdit is
-    // not reflected in the font panel. Maybe someday this will change.
 }
 
 - (BOOL)_canSmartCopyOrDelete
@@ -5285,11 +5306,6 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
                                 coreGraphicsScreenPointForAppKitScreenPoint(screenPoint), false, nil);
 }
 
-- (void)_hoverFeedbackSuspendedChanged
-{
-    [self _updateMouseoverWithFakeEvent];
-}
-
 - (void)_executeSavedKeypressCommands
 {
     WebHTMLViewInterpretKeyEventsParameters* parameters = _private->interpretKeyEventsParameters;
@@ -5372,7 +5388,7 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
         }
         // If there are no text insertion commands, default keydown handler is the right time to execute the commands.
         // Keypress (Char event) handler is the latest opportunity to execute.
-        if (!haveTextInsertionCommands || platformEvent->type() == PlatformKeyboardEvent::Char)
+        if (!haveTextInsertionCommands || platformEvent->type() == PlatformEvent::Char)
             [self _executeSavedKeypressCommands];
     }
     _private->interpretKeyEventsParameters = 0;
@@ -5439,7 +5455,7 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
 - (void)attachRootLayer:(CALayer*)layer
 {
     if (!_private->layerHostingView) {
-        NSView* hostingView = [[NSView alloc] initWithFrame:[self bounds]];
+        NSView* hostingView = [[WebLayerHostingFlippedView alloc] initWithFrame:[self bounds]];
 #ifndef BUILDING_ON_LEOPARD
         [hostingView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
 #endif
@@ -5489,9 +5505,12 @@ static CGPoint coreGraphicsScreenPointForAppKitScreenPoint(NSPoint point)
 #ifdef BUILDING_ON_LEOPARD
     [viewLayer setSublayerTransform:CATransform3DMakeScale(1, -1, 1)]; // setGeometryFlipped: doesn't exist on Leopard.
     [self _updateLayerHostingViewPosition];
-#else
+#elif (defined(BUILDING_ON_SNOW_LEOPARD) || defined(BUILDING_ON_LION))
     // Do geometry flipping here, which flips all the compositing layers so they are top-down.
     [viewLayer setGeometryFlipped:YES];
+#else
+    if (WKExecutableWasLinkedOnOrBeforeLion())
+        [viewLayer setGeometryFlipped:YES];
 #endif
 }
 

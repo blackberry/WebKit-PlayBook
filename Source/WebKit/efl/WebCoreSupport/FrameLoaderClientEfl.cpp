@@ -37,7 +37,6 @@
 
 #include "APICast.h"
 #include "DocumentLoader.h"
-#include "EWebKit.h"
 #include "FormState.h"
 #include "FrameLoader.h"
 #include "FrameNetworkingContextEfl.h"
@@ -51,18 +50,13 @@
 #include "ProgressTracker.h"
 #include "RenderPart.h"
 #include "ResourceRequest.h"
+#include "Settings.h"
 #include "WebKitVersion.h"
+#include "ewk_logging.h"
 #include "ewk_private.h"
+#include <Ecore_Evas.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringConcatenate.h>
-
-#if OS(UNIX)
-#include <sys/utsname.h>
-#elif OS(WINDOWS)
-#include "SystemInfo.h"
-#endif
-
-#include <Ecore_Evas.h>
 
 using namespace WebCore;
 
@@ -79,32 +73,9 @@ FrameLoaderClientEfl::FrameLoaderClientEfl(Evas_Object* view)
 {
 }
 
-static String agentOS()
-{
-#if OS(DARWIN)
-#if CPU(X86)
-    return "Intel Mac OS X";
-#else
-    return "PPC Mac OS X";
-#endif
-#elif OS(UNIX)
-    struct utsname name;
-    if (uname(&name) != -1)
-        return makeString(name.sysname, ' ', name.machine);
-
-    return "Unknown";
-#elif OS(WINDOWS)
-    return windowsVersionForUAString();
-#else
-    notImplemented();
-    return "Unknown";
-#endif
-}
-
 static String composeUserAgent()
 {
-    String webKitVersion = String::format("%d.%d", WEBKIT_MAJOR_VERSION, WEBKIT_MINOR_VERSION);
-    return makeString("Mozilla/5.0 (", agentOS(), ") AppleWebKit/", webKitVersion, " (KHTML, like Gecko) Safari/", webKitVersion);
+    return String(ewk_settings_default_user_agent_get());
 }
 
 void FrameLoaderClientEfl::setCustomUserAgent(const String& agent)
@@ -201,6 +172,15 @@ void FrameLoaderClientEfl::dispatchWillSendRequest(DocumentLoader* loader, unsig
 
     ewk_frame_request_will_send(m_frame, &request);
 
+    // We want to distinguish between a request for a document to be loaded into
+    // the main frame, a sub-frame, or the sub-objects in that document (via Chromium).
+    if (loader) {
+        const FrameLoader* frameLoader = loader->frameLoader();
+        const bool isMainFrameRequest = (loader == frameLoader->provisionalDocumentLoader() && frameLoader->isLoadingMainFrame());
+        if (isMainFrameRequest)
+            evas_object_smart_callback_call(m_view, "resource,request,willsend", &request);
+    }
+
     if (request.url != orig.url) {
         coreRequest.setURL(KURL(KURL(), request.url));
 
@@ -259,8 +239,12 @@ void FrameLoaderClientEfl::frameLoaderDestroyed()
     delete this;
 }
 
-void FrameLoaderClientEfl::dispatchDidReceiveResponse(DocumentLoader*, unsigned long, const ResourceResponse& response)
+void FrameLoaderClientEfl::dispatchDidReceiveResponse(DocumentLoader* loader, unsigned long, const ResourceResponse& response)
 {
+    // Update our knowledge of request soup flags - some are only set
+    // after the request is done.
+    loader->request().setSoupMessageFlags(response.soupMessageFlags());
+
     m_response = response;
 }
 
@@ -523,12 +507,12 @@ bool FrameLoaderClientEfl::shouldStopLoadingForHistoryItem(HistoryItem* item) co
 
 void FrameLoaderClientEfl::didDisplayInsecureContent()
 {
-    notImplemented();
+    ewk_frame_mixed_content_displayed_set(m_frame, true);
 }
 
 void FrameLoaderClientEfl::didRunInsecureContent(SecurityOrigin*, const KURL&)
 {
-    notImplemented();
+    ewk_frame_mixed_content_run_set(m_frame, true);
 }
 
 void FrameLoaderClientEfl::didDetectXSS(const KURL&, bool)
@@ -804,7 +788,7 @@ void FrameLoaderClientEfl::dispatchDidFailLoad(const ResourceError& err)
                          m_loadError.failingURL().utf8().data());
 }
 
-void FrameLoaderClientEfl::download(ResourceHandle*, const ResourceRequest& request, const ResourceRequest&, const ResourceResponse&)
+void FrameLoaderClientEfl::download(ResourceHandle*, const ResourceRequest& request, const ResourceResponse&)
 {
     if (!m_view)
         return;
@@ -943,8 +927,10 @@ void FrameLoaderClientEfl::transitionToCommittedForNewPage()
 
     ewk_frame_view_create_for_view(m_frame, m_view);
 
-    if (m_frame == ewk_view_frame_main_get(m_view))
+    if (m_frame == ewk_view_frame_main_get(m_view)) {
+        ewk_view_frame_view_creation_notify(m_view);
         ewk_view_frame_main_cleared(m_view);
+    }
 }
 
 void FrameLoaderClientEfl::didSaveToPageCache()
@@ -961,7 +947,7 @@ void FrameLoaderClientEfl::dispatchDidBecomeFrameset(bool)
 
 PassRefPtr<FrameNetworkingContext> FrameLoaderClientEfl::createNetworkingContext()
 {
-    return FrameNetworkingContextEfl::create(EWKPrivate::coreFrame(m_frame));
+    return FrameNetworkingContextEfl::create(EWKPrivate::coreFrame(m_frame), m_frame);
 }
 
 }

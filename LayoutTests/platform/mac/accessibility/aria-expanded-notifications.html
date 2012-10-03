@@ -19,6 +19,7 @@
 
 <p id="description"></p>
 <div id="console"></div>
+<div id="notifications"></div>
 
 <script>
 
@@ -28,20 +29,11 @@
     var notifyCount = 0;
     var notifyName = 0;
     // The order of notifications should be Row Count, Row Collapsed, Row Count, Row Expanded
-    function notifyCallback(notification) {  
+    function notifyCallback(element, notification) {  
         notifyName = notification;
-        if (notifyCount == 0) {
-            shouldBe("notifyName", "'AXRowCountChanged'");
-        } 
-        else if (notifyCount == 1) {
-            shouldBe("notifyName", "'AXRowCollapsed'");
-        }
-        else if (notifyCount == 2) {
-            shouldBe("notifyName", "'AXRowCountChanged'");
-        }
-        else if (notifyCount == 3) {
-            shouldBe("notifyName", "'AXRowExpanded'");
-            axTree.removeNotificationListener();
+        document.getElementById("notifications").innerHTML += "Notification: " + notifyName + "<br>";
+        if (notifyCount == 3) {
+            accessibilityController.removeNotificationListener();
             window.layoutTestController.notifyDone();
         }
         notifyCount++;
@@ -55,7 +47,7 @@
 
         axTree = window.accessibilityController.focusedElement;
 
-        var addedNotification = axTree.addNotificationListener(notifyCallback);
+        var addedNotification = accessibilityController.addNotificationListener(notifyCallback);
         shouldBe("addedNotification", "true");
 
         // the first aria-expanded should generate row count, row collapsed.

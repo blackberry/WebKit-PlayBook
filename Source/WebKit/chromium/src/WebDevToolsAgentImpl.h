@@ -33,8 +33,8 @@
 
 #include "InspectorClient.h"
 
-#include "PageOverlay.h"
 #include "WebDevToolsAgentPrivate.h"
+#include "WebPageOverlay.h"
 
 #include <wtf/Forward.h>
 #include <wtf/OwnPtr.h>
@@ -50,7 +50,6 @@ class Node;
 
 namespace WebKit {
 
-class DebuggerAgentImpl;
 class WebDevToolsAgentClient;
 class WebFrame;
 class WebFrameImpl;
@@ -63,7 +62,7 @@ struct WebDevToolsMessageData;
 
 class WebDevToolsAgentImpl : public WebDevToolsAgentPrivate,
                              public WebCore::InspectorClient,
-                             public PageOverlay::PageOverlayClient {
+                             public WebPageOverlay {
 public:
     WebDevToolsAgentImpl(WebViewImpl* webViewImpl, WebDevToolsAgentClient* client);
     virtual ~WebDevToolsAgentImpl();
@@ -75,7 +74,6 @@ public:
     virtual void attach();
     virtual void reattach(const WebString& savedState);
     virtual void detach();
-    virtual void frontendLoaded();
     virtual void didNavigate();
     virtual void dispatchOnInspectorBackend(const WebString& message);
     virtual void inspectElementAt(const WebPoint& point);
@@ -86,6 +84,9 @@ public:
     // InspectorClient implementation.
     virtual void inspectorDestroyed();
     virtual void openInspectorFrontend(WebCore::InspectorController*);
+    virtual void closeInspectorFrontend();
+
+    virtual void bringFrontendToFront();
     virtual void highlight();
     virtual void hideHighlight();
     virtual void updateInspectorStateCookie(const WTF::String&);
@@ -96,8 +97,8 @@ public:
 
     int hostId() { return m_hostId; }
 
-    // PageOverlayClient
-    virtual void paintPageOverlay(WebCore::GraphicsContext&);
+    // WebPageOverlay
+    virtual void paintPageOverlay(WebCanvas*);
 
 private:
     WebCore::InspectorController* inspectorController();
@@ -106,7 +107,6 @@ private:
     int m_hostId;
     WebDevToolsAgentClient* m_client;
     WebViewImpl* m_webViewImpl;
-    OwnPtr<DebuggerAgentImpl> m_debuggerAgentImpl;
     bool m_attached;
 };
 

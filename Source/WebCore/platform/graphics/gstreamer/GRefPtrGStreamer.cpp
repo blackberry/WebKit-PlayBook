@@ -19,16 +19,24 @@
 
 #include "config.h"
 #include "GRefPtrGStreamer.h"
+#include "GStreamerVersioning.h"
 
 #if USE(GSTREAMER)
 #include <gst/gstelement.h>
 
 namespace WTF {
 
+template <> GRefPtr<GstElement> adoptGRef(GstElement* ptr)
+{
+    ASSERT(!ptr || !GST_OBJECT_IS_FLOATING(GST_OBJECT(ptr)));
+    return GRefPtr<GstElement>(ptr, GRefPtrAdopt);
+}
+
 template <> GstElement* refGPtr<GstElement>(GstElement* ptr)
 {
     if (ptr)
-        gst_object_ref_sink(ptr);
+        webkitGstObjectRefSink(GST_OBJECT(ptr));
+
     return ptr;
 }
 
@@ -38,14 +46,41 @@ template <> void derefGPtr<GstElement>(GstElement* ptr)
         gst_object_unref(ptr);
 }
 
+template <> GRefPtr<GstPad> adoptGRef(GstPad* ptr)
+{
+    ASSERT(!ptr || !GST_OBJECT_IS_FLOATING(GST_OBJECT(ptr)));
+    return GRefPtr<GstPad>(ptr, GRefPtrAdopt);
+}
+
 template <> GstPad* refGPtr<GstPad>(GstPad* ptr)
 {
     if (ptr)
-        gst_object_ref_sink(GST_OBJECT(ptr));
+        webkitGstObjectRefSink(GST_OBJECT(ptr));
+
     return ptr;
 }
 
 template <> void derefGPtr<GstPad>(GstPad* ptr)
+{
+    if (ptr)
+        gst_object_unref(GST_OBJECT(ptr));
+}
+
+template <> GRefPtr<GstPadTemplate> adoptGRef(GstPadTemplate* ptr)
+{
+    ASSERT(!ptr || !GST_OBJECT_IS_FLOATING(GST_OBJECT(ptr)));
+    return GRefPtr<GstPadTemplate>(ptr, GRefPtrAdopt);
+}
+
+template <> GstPadTemplate* refGPtr<GstPadTemplate>(GstPadTemplate* ptr)
+{
+    if (ptr)
+        webkitGstObjectRefSink(GST_OBJECT(ptr));
+
+    return ptr;
+}
+
+template <> void derefGPtr<GstPadTemplate>(GstPadTemplate* ptr)
 {
     if (ptr)
         gst_object_unref(GST_OBJECT(ptr));
@@ -62,6 +97,27 @@ template <> void derefGPtr<GstCaps>(GstCaps* ptr)
 {
     if (ptr)
         gst_caps_unref(ptr);
+}
+
+
+template <> GRefPtr<GstTask> adoptGRef(GstTask* ptr)
+{
+    ASSERT(!GST_OBJECT_IS_FLOATING(GST_OBJECT(ptr)));
+    return GRefPtr<GstTask>(ptr, GRefPtrAdopt);
+}
+
+template <> GstTask* refGPtr<GstTask>(GstTask* ptr)
+{
+    if (ptr)
+        webkitGstObjectRefSink(GST_OBJECT(ptr));
+
+    return ptr;
+}
+
+template <> void derefGPtr<GstTask>(GstTask* ptr)
+{
+    if (ptr)
+        gst_object_unref(ptr);
 }
 
 }

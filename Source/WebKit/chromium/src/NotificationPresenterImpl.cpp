@@ -41,7 +41,7 @@
 #include "WebNotification.h"
 #include "WebNotificationPermissionCallback.h"
 #include "WebNotificationPresenter.h"
-#include "WebURL.h"
+#include "platform/WebURL.h"
 
 #include <wtf/PassRefPtr.h>
 
@@ -92,6 +92,10 @@ void NotificationPresenterImpl::cancel(Notification* notification)
 void NotificationPresenterImpl::notificationObjectDestroyed(Notification* notification)
 {
     m_presenter->objectDestroyed(PassRefPtr<Notification>(notification));
+}
+
+void NotificationPresenterImpl::notificationControllerDestroyed()
+{
 }
 
 NotificationPresenter::Permission NotificationPresenterImpl::checkPermission(ScriptExecutionContext* context)

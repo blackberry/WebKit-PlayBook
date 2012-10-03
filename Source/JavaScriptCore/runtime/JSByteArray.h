@@ -76,25 +76,25 @@ namespace JSC {
         }
 
     private:
-        JSByteArray(ExecState*, Structure*, ByteArray* storage);
+        JS_EXPORT_PRIVATE JSByteArray(ExecState*, Structure*, ByteArray* storage);
         
     public:
         static JSByteArray* create(ExecState* exec, Structure* structure, ByteArray* storage)
         {
-            JSByteArray* array = new (allocateCell<JSByteArray>(*exec->heap())) JSByteArray(exec, structure, storage);
+            JSByteArray* array = new (NotNull, allocateCell<JSByteArray>(*exec->heap())) JSByteArray(exec, structure, storage);
             array->finishCreation(exec);
             return array;
         }
 
-        static Structure* createStructure(JSGlobalData&, JSGlobalObject*, JSValue prototype, const JSC::ClassInfo* = &s_info);
+        JS_EXPORT_PRIVATE static Structure* createStructure(JSGlobalData&, JSGlobalObject*, JSValue prototype, const JSC::ClassInfo* = &s_info);
 
-        static bool getOwnPropertySlot(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertySlot&);
-        static bool getOwnPropertySlotByIndex(JSC::JSCell*, JSC::ExecState*, unsigned propertyName, JSC::PropertySlot&);
-        static bool getOwnPropertyDescriptor(JSObject*, ExecState*, const Identifier&, PropertyDescriptor&);
-        static void put(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::JSValue, JSC::PutPropertySlot&);
-        static void putByIndex(JSC::JSCell*, JSC::ExecState*, unsigned propertyName, JSC::JSValue);
+        JS_EXPORT_PRIVATE static bool getOwnPropertySlot(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::PropertySlot&);
+        JS_EXPORT_PRIVATE static bool getOwnPropertySlotByIndex(JSC::JSCell*, JSC::ExecState*, unsigned propertyName, JSC::PropertySlot&);
+        JS_EXPORT_PRIVATE static bool getOwnPropertyDescriptor(JSObject*, ExecState*, const Identifier&, PropertyDescriptor&);
+        JS_EXPORT_PRIVATE static void put(JSC::JSCell*, JSC::ExecState*, const JSC::Identifier& propertyName, JSC::JSValue, JSC::PutPropertySlot&);
+        JS_EXPORT_PRIVATE static void putByIndex(JSC::JSCell*, JSC::ExecState*, unsigned propertyName, JSC::JSValue);
 
-        static void getOwnPropertyNames(JSC::JSObject*, JSC::ExecState*, JSC::PropertyNameArray&, EnumerationMode);
+        JS_EXPORT_PRIVATE static void getOwnPropertyNames(JSC::JSObject*, JSC::ExecState*, JSC::PropertyNameArray&, EnumerationMode);
 
         static JS_EXPORTDATA const ClassInfo s_info;
         
@@ -102,9 +102,8 @@ namespace JSC {
 
         WTF::ByteArray* storage() const { return m_storage.get(); }
 
-#if !ASSERT_DISABLED
-        virtual ~JSByteArray();
-#endif
+        ~JSByteArray();
+        JS_EXPORT_PRIVATE static void destroy(JSCell*);
 
         static size_t offsetOfStorage() { return OBJECT_OFFSETOF(JSByteArray, m_storage); }
 
@@ -118,11 +117,6 @@ namespace JSC {
         }
 
     private:
-        JSByteArray(VPtrStealingHackType)
-            : JSNonFinalObject(VPtrStealingHack)
-        {
-        }
-
         RefPtr<WTF::ByteArray> m_storage;
     };
     
@@ -132,7 +126,7 @@ namespace JSC {
         return static_cast<JSByteArray*>(value.asCell());
     }
 
-    inline bool isJSByteArray(JSGlobalData* globalData, JSValue v) { return v.isCell() && v.asCell()->vptr() == globalData->jsByteArrayVPtr; }
+    inline bool isJSByteArray(JSValue v) { return v.isCell() && v.asCell()->classInfo() == &JSByteArray::s_info; }
 
 } // namespace JSC
 

@@ -38,6 +38,7 @@
 #include "HTMLNames.h"
 #include "RenderTextControlMultiLine.h"
 #include "ShadowRoot.h"
+#include "ShadowTree.h"
 #include "Text.h"
 #include "TextControlInnerElements.h"
 #include "TextIterator.h"
@@ -49,6 +50,19 @@ using namespace HTMLNames;
 
 static const int defaultRows = 2;
 static const int defaultCols = 20;
+
+// On submission, LF characters are converted into CRLF.
+// This function returns number of characters considering this.
+static unsigned computeLengthForSubmission(const String& text)
+{
+    unsigned count =  numGraphemeClusters(text);
+    unsigned length = text.length();
+    for (unsigned i = 0; i < length; i++) {
+        if (text[i] == '\n')
+            count++;
+    }
+    return count;
+}
 
 HTMLTextAreaElement::HTMLTextAreaElement(const QualifiedName& tagName, Document* document, HTMLFormElement* form)
     : HTMLTextFormControlElement(tagName, document, form)
@@ -71,8 +85,9 @@ PassRefPtr<HTMLTextAreaElement> HTMLTextAreaElement::create(const QualifiedName&
 
 void HTMLTextAreaElement::createShadowSubtree()
 {
-    ExceptionCode ec = 0;
-    ensureShadowRoot()->appendChild(TextControlInnerTextElement::create(document()), ec);
+    ASSERT(!hasShadowRoot());
+    RefPtr<ShadowRoot> root = ShadowRoot::create(this, ShadowRoot::CreatingUserAgentShadowRoot);
+    root->appendChild(TextControlInnerTextElement::create(document()), ASSERT_NO_EXCEPTION);
 }
 
 const AtomicString& HTMLTextAreaElement::formControlType() const
@@ -103,8 +118,35 @@ void HTMLTextAreaElement::childrenChanged(bool changedByParser, Node* beforeChan
     setInnerTextValue(value());
     HTMLElement::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
 }
-    
-void HTMLTextAreaElement::parseMappedAttribute(Attribute* attr)
+
+bool HTMLTextAreaElement::isPresentationAttribute(const QualifiedName& name) const
+{
+    if (name == alignAttr) {
+        // Don't map 'align' attribute.  This matches what Firefox, Opera and IE do.
+        // See http://bugs.webkit.org/show_bug.cgi?id=7075
+        return false;
+    }
+
+    if (name == wrapAttr)
+        return true;
+    return HTMLTextFormControlElement::isPresentationAttribute(name);
+}
+
+void HTMLTextAreaElement::collectStyleForAttribute(Attribute* attr, StylePropertySet* style)
+{
+    if (attr->name() == wrapAttr) {
+        if (shouldWrapText()) {
+            addPropertyToAttributeStyle(style, CSSPropertyWhiteSpace, CSSValuePreWrap);
+            addPropertyToAttributeStyle(style, CSSPropertyWordWrap, CSSValueBreakWord);
+        } else {
+            addPropertyToAttributeStyle(style, CSSPropertyWhiteSpace, CSSValuePre);
+            addPropertyToAttributeStyle(style, CSSPropertyWordWrap, CSSValueNormal);
+        }
+    } else
+        HTMLTextFormControlElement::collectStyleForAttribute(attr, style);
+}
+
+void HTMLTextAreaElement::parseAttribute(Attribute* attr)
 {
     if (attr->name() == rowsAttr) {
         int rows = attr->value().toInt();
@@ -136,27 +178,15 @@ void HTMLTextAreaElement::parseMappedAttribute(Attribute* attr)
             wrap = SoftWrap;
         if (wrap != m_wrap) {
             m_wrap = wrap;
-
-            if (shouldWrapText()) {
-                addCSSProperty(attr, CSSPropertyWhiteSpace, CSSValuePreWrap);
-                addCSSProperty(attr, CSSPropertyWordWrap, CSSValueBreakWord);
-            } else {
-                addCSSProperty(attr, CSSPropertyWhiteSpace, CSSValuePre);
-                addCSSProperty(attr, CSSPropertyWordWrap, CSSValueNormal);
-            }
-
             if (renderer())
                 renderer()->setNeedsLayoutAndPrefWidthsRecalc();
         }
     } else if (attr->name() == accesskeyAttr) {
         // ignore for the moment
-    } else if (attr->name() == alignAttr) {
-        // Don't map 'align' attribute.  This matches what Firefox, Opera and IE do.
-        // See http://bugs.webkit.org/show_bug.cgi?id=7075
     } else if (attr->name() == maxlengthAttr)
         setNeedsValidityCheck();
     else
-        HTMLTextFormControlElement::parseMappedAttribute(attr);
+        HTMLTextFormControlElement::parseAttribute(attr);
 }
 
 RenderObject* HTMLTextAreaElement::createRenderer(RenderArena* arena, RenderStyle*)
@@ -173,7 +203,11 @@ bool HTMLTextAreaElement::appendFormData(FormDataList& encoding, bool)
 
     const String& text = (m_wrap == HardWrap) ? valueWithHardLineBreaks() : value();
     encoding.appendData(name(), text);
-    return true;
+
+    const AtomicString& dirnameAttrValue = fastGetAttribute(dirnameAttr);
+    if (!dirnameAttrValue.isNull())
+        encoding.appendData(dirnameAttrValue, directionForFormData());
+    return true;    
 }
 
 void HTMLTextAreaElement::reset()
@@ -194,9 +228,6 @@ bool HTMLTextAreaElement::isMouseFocusable() const
 
 void HTMLTextAreaElement::updateFocusAppearance(bool restorePreviousSelection)
 {
-    ASSERT(renderer());
-    ASSERT(!document()->childNeedsAndNotInStyleRecalc());
-
     if (!restorePreviousSelection || !hasCachedSelection()) {
         // If this is the first focus, set a caret at the beginning of the text.  
         // This matches some browsers' behavior; see bug 11746 Comment #15.
@@ -243,13 +274,13 @@ void HTMLTextAreaElement::handleBeforeTextInsertedEvent(BeforeTextInsertedEvent*
         return;
     unsigned unsignedMaxLength = static_cast<unsigned>(signedMaxLength);
 
-    unsigned currentLength = numGraphemeClusters(innerTextValue());
+    unsigned currentLength = computeLengthForSubmission(innerTextValue());
     // selectionLength represents the selection length of this text field to be
     // removed by this insertion.
     // If the text field has no focus, we don't need to take account of the
     // selection length. The selection is the source of text drag-and-drop in
     // that case, and nothing in the text field will be removed.
-    unsigned selectionLength = focused() ? numGraphemeClusters(plainText(document()->frame()->selection()->selection().toNormalizedRange().get())) : 0;
+    unsigned selectionLength = focused() ? computeLengthForSubmission(plainText(document()->frame()->selection()->selection().toNormalizedRange().get())) : 0;
     ASSERT(currentLength >= selectionLength);
     unsigned baseLength = currentLength - selectionLength;
     unsigned appendableLength = unsignedMaxLength > baseLength ? unsignedMaxLength - baseLength : 0;
@@ -263,7 +294,7 @@ String HTMLTextAreaElement::sanitizeUserInputValue(const String& proposedValue, 
 
 HTMLElement* HTMLTextAreaElement::innerTextElement() const
 {
-    Node* node = shadowRoot()->firstChild();
+    Node* node = shadowTree()->oldestShadowRoot()->firstChild();
     ASSERT(!node || node->hasTagName(divTag));
     return toHTMLElement(node);
 }
@@ -345,7 +376,7 @@ String HTMLTextAreaElement::defaultValue() const
     // Since there may be comments, ignore nodes other than text nodes.
     for (Node* n = firstChild(); n; n = n->nextSibling()) {
         if (n->isTextNode())
-            value += static_cast<Text*>(n)->data();
+            value += toText(n)->data();
     }
 
     return value;
@@ -353,8 +384,9 @@ String HTMLTextAreaElement::defaultValue() const
 
 void HTMLTextAreaElement::setDefaultValue(const String& defaultValue)
 {
-    // To preserve comments, remove only the text nodes, then add a single text node.
+    RefPtr<Node> protectFromMutationEvents(this);
 
+    // To preserve comments, remove only the text nodes, then add a single text node.
     Vector<RefPtr<Node> > textNodes;
     for (Node* n = firstChild(); n; n = n->nextSibling()) {
         if (n->isTextNode())
@@ -401,7 +433,7 @@ bool HTMLTextAreaElement::tooLong(const String& value, NeedsToCheckDirtyFlag che
     int max = maxLength();
     if (max < 0)
         return false;
-    return numGraphemeClusters(value) > static_cast<unsigned>(max);
+    return computeLengthForSubmission(value) > static_cast<unsigned>(max);
 }
 
 bool HTMLTextAreaElement::isValidValue(const String& candidate) const
@@ -440,7 +472,7 @@ void HTMLTextAreaElement::updatePlaceholderText()
     String placeholderText = strippedPlaceholder();
     if (placeholderText.isEmpty()) {
         if (m_placeholder) {
-            shadowRoot()->removeChild(m_placeholder.get(), ec);
+            shadowTree()->oldestShadowRoot()->removeChild(m_placeholder.get(), ec);
             ASSERT(!ec);
             m_placeholder.clear();
         }
@@ -449,7 +481,7 @@ void HTMLTextAreaElement::updatePlaceholderText()
     if (!m_placeholder) {
         m_placeholder = HTMLDivElement::create(document());
         m_placeholder->setShadowPseudoId("-webkit-input-placeholder");
-        shadowRoot()->insertBefore(m_placeholder, shadowRoot()->firstChild()->nextSibling(), ec);
+        shadowTree()->oldestShadowRoot()->insertBefore(m_placeholder, shadowTree()->oldestShadowRoot()->firstChild()->nextSibling(), ec);
         ASSERT(!ec);
     }
     m_placeholder->setInnerText(placeholderText, ec);

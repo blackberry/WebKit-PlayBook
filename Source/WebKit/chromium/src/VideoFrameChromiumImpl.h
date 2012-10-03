@@ -57,6 +57,8 @@ public:
     virtual const void* data(unsigned plane) const;
     virtual const WebCore::IntSize requiredTextureSize(unsigned plane) const;
     virtual bool hasPaddingBytes(unsigned plane) const;
+    virtual unsigned textureId() const;
+    virtual unsigned textureTarget() const;
 
 private:
     WebVideoFrame* m_webVideoFrame;

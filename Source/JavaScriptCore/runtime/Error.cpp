@@ -26,7 +26,9 @@
 
 #include "ConstructData.h"
 #include "ErrorConstructor.h"
+#include "ExceptionHelpers.h"
 #include "FunctionPrototype.h"
+#include "JSArray.h"
 #include "JSFunction.h"
 #include "JSGlobalObject.h"
 #include "JSObject.h"
@@ -34,10 +36,11 @@
 #include "NativeErrorConstructor.h"
 #include "SourceCode.h"
 
+#include <wtf/text/StringBuilder.h>
+
 namespace JSC {
 
 static const char* linePropertyName = "line";
-static const char* sourceIdPropertyName = "sourceId";
 static const char* sourceURLPropertyName = "sourceURL";
 
 JSObject* createError(JSGlobalObject* globalObject, const UString& message)
@@ -117,30 +120,41 @@ JSObject* createURIError(ExecState* exec, const UString& message)
     return createURIError(exec->lexicalGlobalObject(), message);
 }
 
-JSObject* addErrorInfo(JSGlobalData* globalData, JSObject* error, int line, const SourceCode& source)
+JSObject* addErrorInfo(JSGlobalData* globalData, JSObject* error, int line, const SourceCode& source, const Vector<StackFrame>& stackTrace)
 {
-    intptr_t sourceID = source.provider()->asID();
     const UString& sourceURL = source.provider()->url();
 
     if (line != -1)
-        error->putWithAttributes(globalData, Identifier(globalData, linePropertyName), jsNumber(line), ReadOnly | DontDelete);
-    if (sourceID != -1)
-        error->putWithAttributes(globalData, Identifier(globalData, sourceIdPropertyName), jsNumber((double)sourceID), ReadOnly | DontDelete);
+        error->putDirect(*globalData, Identifier(globalData, linePropertyName), jsNumber(line), ReadOnly | DontDelete);
     if (!sourceURL.isNull())
-        error->putWithAttributes(globalData, Identifier(globalData, sourceURLPropertyName), jsString(globalData, sourceURL), ReadOnly | DontDelete);
+        error->putDirect(*globalData, Identifier(globalData, sourceURLPropertyName), jsString(globalData, sourceURL), ReadOnly | DontDelete);
+    if (!stackTrace.isEmpty()) {
+        JSGlobalObject* globalObject = 0;
+        if (isTerminatedExecutionException(error) || isInterruptedExecutionException(error))
+            globalObject = globalData->dynamicGlobalObject;
+        else
+            globalObject = error->globalObject();
+        StringBuilder builder;
+        for (unsigned i = 0; i < stackTrace.size(); i++) {
+            builder.append(String(stackTrace[i].toString(globalObject->globalExec()).impl()));
+            if (i != stackTrace.size() - 1)
+                builder.append('\n');
+        }
+
+        error->putDirect(*globalData, globalData->propertyNames->stack, jsString(globalData, UString(builder.toString().impl())), ReadOnly | DontDelete);
+    }
 
     return error;
 }
 
-JSObject* addErrorInfo(ExecState* exec, JSObject* error, int line, const SourceCode& source)
+JSObject* addErrorInfo(ExecState* exec, JSObject* error, int line, const SourceCode& source, const Vector<StackFrame>& stackTrace)
 {
-    return addErrorInfo(&exec->globalData(), error, line, source);
+    return addErrorInfo(&exec->globalData(), error, line, source, stackTrace);
 }
 
 bool hasErrorInfo(ExecState* exec, JSObject* error)
 {
     return error->hasProperty(exec, Identifier(exec, linePropertyName))
-        || error->hasProperty(exec, Identifier(exec, sourceIdPropertyName))
         || error->hasProperty(exec, Identifier(exec, sourceURLPropertyName));
 }
 
@@ -170,10 +184,9 @@ ASSERT_CLASS_FITS_IN_CELL(StrictModeTypeErrorFunction);
 
 const ClassInfo StrictModeTypeErrorFunction::s_info = { "Function", &Base::s_info, 0, 0, CREATE_METHOD_TABLE(StrictModeTypeErrorFunction) };
 
-JSValue createTypeErrorFunction(ExecState* exec, const UString& message)
+void StrictModeTypeErrorFunction::destroy(JSCell* cell)
 {
-    JSGlobalObject* globalObject = exec->lexicalGlobalObject();
-    return StrictModeTypeErrorFunction::create(exec, globalObject, globalObject->strictModeTypeErrorFunctionStructure(), message);
+    jsCast<StrictModeTypeErrorFunction*>(cell)->StrictModeTypeErrorFunction::~StrictModeTypeErrorFunction();
 }
 
 } // namespace JSC

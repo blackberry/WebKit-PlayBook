@@ -39,7 +39,7 @@
                             values : [30.5, 60.5, 361200.5],
                         },
                         {
-                            property : "getCueAsSource()",
+                            property : "text",
                             values : ["Bear is Coming!!!!!", "I said Bear is coming!!!!", "I said Bear is coming now!!!!"],
                         },
                     ],
@@ -64,7 +64,7 @@
             }
         </script>
     </head>
-    <body>
+    <body onload="enableAllTextTracks()">
     <p>Tests that cues are not affected by multiple newlines \n, \r, and \r\n and that cue not properly separated are treated as one big cue.</p>
         <video>
             <track src="captions-webvtt/tc011-cues.vtt" onload="trackLoaded()">

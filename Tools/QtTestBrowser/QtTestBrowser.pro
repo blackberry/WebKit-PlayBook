@@ -6,7 +6,14 @@
 
 TEMPLATE = app
 
+INCLUDEPATH += \
+    $${ROOT_WEBKIT_DIR}/Source/WebKit/qt/WebCoreSupport \
+    $${ROOT_WEBKIT_DIR}/Tools/DumpRenderTree/qt/ \
+
+load(features)
+
 SOURCES += \
+    $${ROOT_WEBKIT_DIR}/Tools/DumpRenderTree/qt/QtInitializeTestFonts.cpp \
     locationedit.cpp \
     launcherwindow.cpp \
     main.cpp \
@@ -19,6 +26,7 @@ SOURCES += \
     cookiejar.cpp
 
 HEADERS += \
+    $${ROOT_WEBKIT_DIR}/Tools/DumpRenderTree/qt/QtInitializeTestFonts.h \
     locationedit.h \
     launcherwindow.h \
     mainwindow.h \
@@ -31,21 +39,23 @@ HEADERS += \
     cookiejar.h
 
 
-CONFIG += uitools
-
-load(webcore)
+WEBKIT += webcore
 
 CONFIG += qtwebkit
 
 DESTDIR = $$ROOT_BUILD_DIR/bin
 
 QT += network
+
 macx:QT += xml
-haveQt(5): QT += printsupport
+haveQt(5): QT += printsupport widgets
 
-!embedded: PKGCONFIG += fontconfig
+contains(DEFINES, HAVE_FONTCONFIG=1): PKGCONFIG += fontconfig
 
-contains(QT_CONFIG, opengl): QT += opengl
+contains(QT_CONFIG, opengl) {
+    QT += opengl
+    DEFINES += QT_CONFIGURED_WITH_OPENGL
+}
 
 RESOURCES += \
     QtTestBrowser.qrc

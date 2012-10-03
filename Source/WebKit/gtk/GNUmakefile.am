@@ -58,6 +58,8 @@ libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_CPPF
 	$(webkitgtk_cppflags) \
 	-fno-strict-aliasing \
 	$(HILDON_CPPFLAGS) \
+	$(CLUTTER_CFLAGS) \
+	$(CLUTTER_GTK_CFLAGS) \
 	$(COVERAGE_CFLAGS) \
 	$(ENCHANT_CFLAGS) \
 	$(GAIL_CFLAGS) \
@@ -66,7 +68,6 @@ libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_CPPF
 	$(GSTREAMER_CFLAGS) \
 	$(GTK_CFLAGS) \
 	$(HILDON_CFLAGS) \
-	$(LIBFFTW_CFLAGS) \
 	$(LIBSOUP_CFLAGS) \
 	$(LIBXML_CFLAGS) \
 	$(LIBXSLT_CFLAGS) \
@@ -87,6 +88,8 @@ libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LIBA
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
 	$(webcore_ldflags) \
 	$(CAIRO_LIBS) \
+	$(CLUTTER_LIBS) \
+	$(CLUTTER_GTK_LIBS) \
 	$(COVERAGE_LDFLAGS) \
 	$(ENCHANT_LIBS) \
 	$(FREETYPE_LIBS) \
@@ -97,7 +100,6 @@ libwebkitgtk_@WEBKITGTK_API_MAJOR_VERSION@_@WEBKITGTK_API_MINOR_VERSION@_la_LIBA
 	$(GTK_LIBS) \
 	$(HILDON_LIBS) \
 	$(JPEG_LIBS) \
-	$(LIBFFTW_LIBS) \
 	$(LIBSOUP_LIBS) \
 	$(LIBXML_LIBS) \
 	$(LIBXSLT_LIBS) \
@@ -180,6 +182,9 @@ webkitgtk_sources += \
 	Source/WebCore/bindings/gobject/WebKitDOMObject.h \
 	Source/WebCore/bindings/gobject/WebKitHTMLElementWrapperFactory.cpp \
 	Source/WebCore/bindings/gobject/WebKitHTMLElementWrapperFactory.h \
+	Source/WebKit/gtk/WebCoreSupport/AcceleratedCompositingContext.h \
+	Source/WebKit/gtk/WebCoreSupport/AcceleratedCompositingContextClutter.cpp \
+	Source/WebKit/gtk/WebCoreSupport/AcceleratedCompositingContextGL.cpp \
 	Source/WebKit/gtk/WebCoreSupport/AssertMatchingEnums.cpp \
 	Source/WebKit/gtk/WebCoreSupport/ChromeClientGtk.cpp \
 	Source/WebKit/gtk/WebCoreSupport/ChromeClientGtk.h \
@@ -199,6 +204,7 @@ webkitgtk_sources += \
 	Source/WebKit/gtk/WebCoreSupport/EditorClientGtk.h \
 	Source/WebKit/gtk/WebCoreSupport/FrameLoaderClientGtk.cpp \
 	Source/WebKit/gtk/WebCoreSupport/FrameLoaderClientGtk.h \
+	Source/WebKit/gtk/WebCoreSupport/FrameNetworkingContextGtk.cpp \
 	Source/WebKit/gtk/WebCoreSupport/FrameNetworkingContextGtk.h \
 	Source/WebKit/gtk/WebCoreSupport/FullscreenVideoController.cpp \
 	Source/WebKit/gtk/WebCoreSupport/FullscreenVideoController.h \
@@ -288,9 +294,11 @@ $(WEBKIT_GIRSOURCES): $(G_IR_SCANNER) $(JSCORE_GIRSOURCES) libwebkitgtk-@WEBKITG
 	     --pkg=gobject-2.0 \
 	     --pkg=gtk+-@GTK_API_VERSION@ \
 	     --pkg=libsoup-2.4 \
+	     --pkg-export=webkitgtk-@WEBKITGTK_API_VERSION@ \
 	     --output=$@ \
 	     --add-include-path=$(WebKit) \
 	     --add-include-path=$(top_builddir) \
+	     --c-include="webkit/webkit.h" \
 	     -I$(srcdir)/Source \
 	     -I$(WebKit) \
 	     -I$(GENSOURCES) \
@@ -377,20 +385,19 @@ $(GENSOURCES_WEBKIT)/webkitenumtypes.cpp: $(webkitgtk_h_api) $(WebKit)/GNUmakefi
 	&& cp xgen-gtc $@ \
 	&& rm -f xgen-gtc
 
-# GSettings
-gsettings_SCHEMAS = $(top_builddir)/Source/WebKit/gtk/org.webkitgtk-@WEBKITGTK_API_VERSION@.gschema.xml
-@GSETTINGS_RULES@
-
 EXTRA_DIST += \
 	$(WebKit)/ChangeLog \
 	$(WebKit)/NEWS \
+	$(WebKit)/docs/webkitgtk-docs.sgml \
+	$(WebKit)/docs/webkitgtk-sections.txt \
+	$(WebKit)/docs/webkitgtk.types \
+	$(WebKit)/docs/webkitenvironment.xml \
+	$(WebKit)/docs/webkitgtk-overrides.txt \
 	$(WebKit)/webkitmarshal.list \
-	$(WebKit)/GNUmakefile.gtk-doc.am \
 	$(WebKit)/po/* \
 	$(WebKit)/resources/* \
 	$(WebKit)/tests/resources/* \
-	$(WebKit)/tests/test_utils.h \
-	$(WebKit)/org.webkitgtk.gschema.xml.in
+	$(WebKit)/tests/test_utils.h
 
 # extra resource files
 resourcesdir = ${datadir}/webkitgtk-@WEBKITGTK_API_VERSION@/resources
@@ -412,7 +419,9 @@ webkit_tests_cflags = \
 	$(javascriptcore_cppflags) \
 	$(GLIB_CFLAGS) \
 	$(GTK_CFLAGS) \
-	$(LIBSOUP_CFLAGS)
+	$(LIBSOUP_CFLAGS) \
+	$(XRENDER_LIBS) \
+	$(XT_LIBS)
 
 webkit_tests_ldadd = \
 	libjavascriptcoregtk-@WEBKITGTK_API_MAJOR_VERSION@.@WEBKITGTK_API_MINOR_VERSION@.la \
@@ -444,6 +453,7 @@ TEST_PROGS += \
 	Programs/unittests/testatk \
 	Programs/unittests/testatkroles \
 	Programs/unittests/testhittestresult \
+	Programs/unittests/testwebinspector \
 	Programs/unittests/testwebsettings \
 	Programs/unittests/testwebresource \
 	Programs/unittests/testwebdatasource \
@@ -543,6 +553,11 @@ Programs_unittests_testatkroles_CFLAGS = $(webkit_tests_cflags)
 Programs_unittests_testatkroles_LDADD = $(webkit_tests_ldadd)
 Programs_unittests_testatkroles_LDFLAGS = $(webkit_tests_ldflags)
 
+Programs_unittests_testwebinspector_SOURCES = Source/WebKit/gtk/tests/testwebinspector.c Source/WebKit/gtk/tests/test_utils.c
+Programs_unittests_testwebinspector_CFLAGS = $(webkit_tests_cflags)
+Programs_unittests_testwebinspector_LDADD = $(webkit_tests_ldadd)
+Programs_unittests_testwebinspector_LDFLAGS = $(webkit_tests_ldflags)
+
 Programs_unittests_testwebsettings_SOURCES = Source/WebKit/gtk/tests/testwebsettings.c
 Programs_unittests_testwebsettings_CFLAGS = $(webkit_tests_cflags)
 Programs_unittests_testwebsettings_LDADD = $(webkit_tests_ldadd)
@@ -593,8 +608,6 @@ DISTCLEANFILES += \
 	$(top_builddir)/Source/WebKit/gtk/org.webkitgtk-@WEBKITGTK_API_VERSION@.gschema.xml \
 	$(top_builddir)/Source/WebKit/gtk/webkit/webkitversion.h
 
-dist-hook:
-	cp $(WebKit)/NEWS $(distdir)
 install-data-local: po-install-data-local
 installdirs-data-local: po-installdirs-data-local
 uninstall-local: po-uninstall-local

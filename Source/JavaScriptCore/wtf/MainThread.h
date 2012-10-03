@@ -30,7 +30,7 @@
 #ifndef MainThread_h
 #define MainThread_h
 
-#include "Platform.h"
+#include <wtf/Platform.h>
 
 #include <stdint.h>
 
@@ -40,20 +40,26 @@ typedef uint32_t ThreadIdentifier;
 typedef void MainThreadFunction(void*);
 
 // Must be called from the main thread.
-void initializeMainThread();
+WTF_EXPORT_PRIVATE void initializeMainThread();
 
-void callOnMainThread(MainThreadFunction*, void* context);
-void callOnMainThreadAndWait(MainThreadFunction*, void* context);
-void cancelCallOnMainThread(MainThreadFunction*, void* context);
+WTF_EXPORT_PRIVATE void callOnMainThread(MainThreadFunction*, void* context);
+WTF_EXPORT_PRIVATE void callOnMainThreadAndWait(MainThreadFunction*, void* context);
+WTF_EXPORT_PRIVATE void cancelCallOnMainThread(MainThreadFunction*, void* context);
 
-void setMainThreadCallbacksPaused(bool paused);
+template<typename> class Function;
+WTF_EXPORT_PRIVATE void callOnMainThread(const Function<void ()>&);
+    
+WTF_EXPORT_PRIVATE void setMainThreadCallbacksPaused(bool paused);
 
-bool isMainThread();
+WTF_EXPORT_PRIVATE bool isMainThread();
+
+void initializeGCThreads();
+
 #if ENABLE(PARALLEL_GC)
 void registerGCThread();
-bool isMainThreadOrGCThread();
+WTF_EXPORT_PRIVATE bool isMainThreadOrGCThread();
 #elif PLATFORM(MAC)
-bool isMainThreadOrGCThread();
+WTF_EXPORT_PRIVATE bool isMainThreadOrGCThread();
 #else
 inline bool isMainThreadOrGCThread() { return isMainThread(); }
 #endif
@@ -67,7 +73,7 @@ void dispatchFunctionsFromMainThread();
 // This version of initializeMainThread sets up the main thread as corresponding
 // to the process's main thread, and not necessarily the thread that calls this
 // function. It should only be used as a legacy aid for Mac WebKit.
-void initializeMainThreadToProcessMainThread();
+WTF_EXPORT_PRIVATE void initializeMainThreadToProcessMainThread();
 void initializeMainThreadToProcessMainThreadPlatform();
 #endif
 

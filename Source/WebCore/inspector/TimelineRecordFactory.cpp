@@ -40,6 +40,7 @@
 #include "ResourceResponse.h"
 #include "ScriptCallStack.h"
 #include "ScriptCallStackFactory.h"
+#include <wtf/CurrentTime.h>
 
 namespace WebCore {
 
@@ -48,9 +49,11 @@ PassRefPtr<InspectorObject> TimelineRecordFactory::createGenericRecord(double st
     RefPtr<InspectorObject> record = InspectorObject::create();
     record->setNumber("startTime", startTime);
 
-    RefPtr<ScriptCallStack> stackTrace = createScriptCallStack(maxCallStackDepth, true);
-    if (stackTrace && stackTrace->size())
-        record->setArray("stackTrace", stackTrace->buildInspectorArray());
+    if (maxCallStackDepth) {
+        RefPtr<ScriptCallStack> stackTrace = createScriptCallStack(maxCallStackDepth, true);
+        if (stackTrace && stackTrace->size())
+            record->setArray("stackTrace", stackTrace->buildInspectorArray());
+    }
     return record.release();
 }
 
@@ -182,7 +185,7 @@ PassRefPtr<InspectorObject> TimelineRecordFactory::createParseHTMLData(unsigned 
     return data.release();
 }
 
-PassRefPtr<InspectorObject> TimelineRecordFactory::createAnimationFrameCallbackData(int callbackId)
+PassRefPtr<InspectorObject> TimelineRecordFactory::createAnimationFrameData(int callbackId)
 {
     RefPtr<InspectorObject> data = InspectorObject::create();
     data->setNumber("id", callbackId);

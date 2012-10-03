@@ -33,8 +33,8 @@
 // FIXME: Could move what Vector and Deque share into a separate file.
 // Deque doesn't actually use Vector.
 
-#include "PassTraits.h"
-#include "Vector.h"
+#include <wtf/PassTraits.h>
+#include <wtf/Vector.h>
 
 namespace WTF {
 
@@ -454,7 +454,7 @@ namespace WTF {
     {
         checkValidity();
         expandCapacityIfNeeded();
-        new (&m_buffer.buffer()[m_end]) T(value);
+        new (NotNull, &m_buffer.buffer()[m_end]) T(value);
         if (m_end == m_buffer.capacity() - 1)
             m_end = 0;
         else
@@ -471,7 +471,7 @@ namespace WTF {
             m_start = m_buffer.capacity() - 1;
         else
             --m_start;
-        new (&m_buffer.buffer()[m_start]) T(value);
+        new (NotNull, &m_buffer.buffer()[m_start]) T(value);
         checkValidity();
     }
 

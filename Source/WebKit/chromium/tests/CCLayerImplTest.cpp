@@ -35,27 +35,21 @@ using namespace WebCore;
 namespace {
 
 #define EXECUTE_AND_VERIFY_SUBTREE_CHANGED(codeToTest)                  \
-    root->resetLayerPropertyChanged();                                  \
-    child->resetLayerPropertyChanged();                                 \
-    grandChild->resetLayerPropertyChanged();                            \
+    root->resetAllChangeTrackingForSubtree();                           \
     codeToTest;                                                         \
     EXPECT_TRUE(root->layerPropertyChanged());                          \
     EXPECT_TRUE(child->layerPropertyChanged());                         \
     EXPECT_TRUE(grandChild->layerPropertyChanged())
 
 #define EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(codeToTest)           \
-    root->resetLayerPropertyChanged();                                  \
-    child->resetLayerPropertyChanged();                                 \
-    grandChild->resetLayerPropertyChanged();                            \
+    root->resetAllChangeTrackingForSubtree();                           \
     codeToTest;                                                         \
     EXPECT_FALSE(root->layerPropertyChanged());                         \
     EXPECT_FALSE(child->layerPropertyChanged());                        \
     EXPECT_FALSE(grandChild->layerPropertyChanged())
 
 #define EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(codeToTest)               \
-    root->resetLayerPropertyChanged();                                  \
-    child->resetLayerPropertyChanged();                                 \
-    grandChild->resetLayerPropertyChanged();                            \
+    root->resetAllChangeTrackingForSubtree();                           \
     codeToTest;                                                         \
     EXPECT_TRUE(root->layerPropertyChanged());                          \
     EXPECT_FALSE(child->layerPropertyChanged());                        \
@@ -71,14 +65,11 @@ TEST(CCLayerImplTest, verifyLayerChangesAreTrackedProperly)
     DebugScopedSetImplThread setImplThread;
 
     // Create a simple CCLayerImpl tree:
-    RefPtr<CCLayerImpl> root = CCLayerImpl::create(1);
-    RefPtr<CCLayerImpl> child = CCLayerImpl::create(2);
-    RefPtr<CCLayerImpl> grandChild = CCLayerImpl::create(3);
-    root->addChild(child);
-    child->addChild(grandChild);
-
-    RefPtr<CCLayerImpl> dummyMask = CCLayerImpl::create(4);
-    RefPtr<CCLayerImpl> dummyReplica = CCLayerImpl::create(5);
+    OwnPtr<CCLayerImpl> root = CCLayerImpl::create(1);
+    root->addChild(CCLayerImpl::create(2));
+    CCLayerImpl* child = root->children()[0].get();
+    child->addChild(CCLayerImpl::create(3));
+    CCLayerImpl* grandChild = child->children()[0].get();
 
     // Adding children is an internal operation and should not mark layers as changed.
     EXPECT_FALSE(root->layerPropertyChanged());
@@ -94,24 +85,26 @@ TEST(CCLayerImplTest, verifyLayerChangesAreTrackedProperly)
     Color arbitraryColor = Color(10, 20, 30);
     TransformationMatrix arbitraryTransform;
     arbitraryTransform.scale3d(0.1, 0.2, 0.3);
+    FilterOperations arbitraryFilters;
+    arbitraryFilters.operations().append(BasicComponentTransferFilterOperation::create(0.5, FilterOperation::OPACITY));
 
     // Changing these properties affects the entire subtree of layers.
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setAnchorPoint(arbitraryFloatPoint));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setAnchorPointZ(arbitraryNumber));
-    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setMaskLayer(dummyMask));
+    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setFilters(arbitraryFilters));
+    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setMaskLayer(CCLayerImpl::create(4)));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setMasksToBounds(true));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setOpaque(true));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setOpacity(arbitraryNumber));
-    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setReplicaLayer(dummyReplica));
+    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setReplicaLayer(CCLayerImpl::create(5)));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setPosition(arbitraryFloatPoint));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setPreserves3D(true));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setTransform(arbitraryTransform));
-    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setZoomAnimatorTransform(arbitraryTransform));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setDoubleSided(false)); // constructor initializes it to "true".
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->scrollBy(arbitraryIntSize));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setScrollDelta(arbitraryIntSize));
     EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setScrollPosition(arbitraryIntPoint));
-    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setScaleDelta(arbitraryNumber));
+    EXECUTE_AND_VERIFY_SUBTREE_CHANGED(root->setPageScaleDelta(arbitraryNumber));
 
     // Changing these properties only affects the layer itself.
     EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(root->setContentBounds(arbitraryIntSize));
@@ -119,11 +112,10 @@ TEST(CCLayerImplTest, verifyLayerChangesAreTrackedProperly)
     EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(root->setDebugBorderWidth(arbitraryNumber));
     EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(root->setDrawsContent(true));
     EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(root->setBackgroundColor(Color::gray));
+    EXECUTE_AND_VERIFY_ONLY_LAYER_CHANGED(root->setBackgroundCoversViewport(true));
 
     // Special case: check that sublayer transform changes all layer's descendants, but not the layer itself.
-    root->resetLayerPropertyChanged();
-    child->resetLayerPropertyChanged();
-    grandChild->resetLayerPropertyChanged();
+    root->resetAllChangeTrackingForSubtree();
     root->setSublayerTransform(arbitraryTransform);
     EXPECT_FALSE(root->layerPropertyChanged());
     EXPECT_TRUE(child->layerPropertyChanged());
@@ -139,17 +131,14 @@ TEST(CCLayerImplTest, verifyLayerChangesAreTrackedProperly)
     // not cause any change.
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setAnchorPoint(arbitraryFloatPoint));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setAnchorPointZ(arbitraryNumber));
-    EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setMaskLayer(dummyMask));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setMasksToBounds(true));
-    EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setReplicaLayer(dummyReplica));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setPosition(arbitraryFloatPoint));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setPreserves3D(true));
-    EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setZoomAnimatorTransform(arbitraryTransform));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setTransform(arbitraryTransform));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setDoubleSided(false)); // constructor initializes it to "true".
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setScrollDelta(arbitraryIntSize));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setScrollPosition(arbitraryIntPoint));
-    EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setScaleDelta(arbitraryNumber));
+    EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setPageScaleDelta(arbitraryNumber));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setContentBounds(arbitraryIntSize));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setOpaque(true));
     EXECUTE_AND_VERIFY_SUBTREE_DID_NOT_CHANGE(root->setOpacity(arbitraryNumber));

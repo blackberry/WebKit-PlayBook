@@ -33,7 +33,7 @@ namespace WebCore {
 
 PassRefPtr<MouseEvent> MouseEvent::create(const AtomicString& eventType, PassRefPtr<AbstractView> view, const PlatformMouseEvent& event, int detail, PassRefPtr<Node> relatedTarget)
 {
-    ASSERT(event.eventType() == MouseEventMoved || event.button() != NoButton);
+    ASSERT(event.type() == PlatformEvent::MouseMoved || event.button() != NoButton);
 
     bool isCancelable = eventType != eventNames().mousemoveEvent;
 
@@ -46,7 +46,10 @@ PassRefPtr<MouseEvent> MouseEvent::create(const AtomicString& eventType, PassRef
 #endif
 
     return MouseEvent::create(eventType, true, isCancelable, view,
-        detail, event.globalX(), event.globalY(), event.x(), event.y(),
+        detail, event.globalPosition().x(), event.globalPosition().y(), event.position().x(), event.position().y(),
+#if ENABLE(POINTER_LOCK)
+        event.movementDelta().x(), event.movementDelta().y(),
+#endif
         event.ctrlKey(), event.altKey(), event.shiftKey(), event.metaKey(), event.button(),
         relatedTarget, 0, false);
 }
@@ -59,11 +62,18 @@ MouseEvent::MouseEvent()
 
 MouseEvent::MouseEvent(const AtomicString& eventType, bool canBubble, bool cancelable, PassRefPtr<AbstractView> view,
                        int detail, int screenX, int screenY, int pageX, int pageY,
+#if ENABLE(POINTER_LOCK)
+                       int movementX, int movementY,
+#endif
                        bool ctrlKey, bool altKey, bool shiftKey, bool metaKey,
                        unsigned short button, PassRefPtr<EventTarget> relatedTarget,
                        PassRefPtr<Clipboard> clipboard, bool isSimulated)
     : MouseRelatedEvent(eventType, canBubble, cancelable, view, detail, IntPoint(screenX, screenY),
-                        IntPoint(pageX, pageY), ctrlKey, altKey, shiftKey, metaKey, isSimulated)
+                        IntPoint(pageX, pageY),
+#if ENABLE(POINTER_LOCK)
+                        IntPoint(movementX, movementY),
+#endif
+                        ctrlKey, altKey, shiftKey, metaKey, isSimulated)
     , m_button(button == (unsigned short)-1 ? 0 : button)
     , m_buttonDown(button != (unsigned short)-1)
     , m_relatedTarget(relatedTarget)
@@ -155,7 +165,11 @@ SimulatedMouseEvent::~SimulatedMouseEvent()
 }
 
 SimulatedMouseEvent::SimulatedMouseEvent(const AtomicString& eventType, PassRefPtr<AbstractView> view, PassRefPtr<Event> underlyingEvent)
-    : MouseEvent(eventType, true, true, view, 0, 0, 0, 0, 0, false, false, false, false, 0, 0, 0, true)
+    : MouseEvent(eventType, true, true, view, 0, 0, 0, 0, 0,
+#if ENABLE(POINTER_LOCK)
+                 0, 0,
+#endif
+                 false, false, false, false, 0, 0, 0, true)
 {
     if (UIEventWithKeyState* keyStateEvent = findEventWithKeyState(underlyingEvent.get())) {
         m_ctrlKey = keyStateEvent->ctrlKey();

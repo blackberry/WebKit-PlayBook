@@ -162,6 +162,11 @@ WebInspector.DataGrid = function(columns, editCallback, deleteCallback)
     this._columnWidthsInitialized = false;
 }
 
+WebInspector.DataGrid.Events = {
+    SelectedNode: "SelectedNode",
+    DeselectedNode: "DeselectedNode"
+}
+
 /**
  * @param {Array.<string>} columnNames
  * @param {Array.<string>} values
@@ -706,6 +711,8 @@ WebInspector.DataGrid.prototype = {
 
         if (this.expanded)
             child._attach();
+        if (!this.revealed)
+            child.revealed = false;
     },
 
     removeChild: function(child)
@@ -1259,6 +1266,15 @@ WebInspector.DataGridNode.prototype = {
         return this._depth;
     },
 
+    get leftPadding()
+    {
+        if (typeof(this._leftPadding) === "number")
+            return this._leftPadding;
+        
+        this._leftPadding = this.depth * this.dataGrid.indentWidth;
+        return this._leftPadding;
+    },
+
     get shouldRefreshChildren()
     {
         return this._shouldRefreshChildren;
@@ -1321,8 +1337,8 @@ WebInspector.DataGridNode.prototype = {
 
         if (columnIdentifier === this.dataGrid.disclosureColumnIdentifier) {
             cell.addStyleClass("disclosure");
-            if (this.depth)
-                cell.style.setProperty("padding-left", (this.depth * this.dataGrid.indentWidth) + "px");
+            if (this.leftPadding)
+                cell.style.setProperty("padding-left", this.leftPadding + "px");
         }
 
         return cell;
@@ -1455,8 +1471,10 @@ WebInspector.DataGridNode.prototype = {
         if (this._element)
             this._element.addStyleClass("selected");
 
-        if (!supressSelectedEvent)
+        if (!supressSelectedEvent) {
             this.dispatchEventToListeners("selected");
+            this.dataGrid.dispatchEventToListeners(WebInspector.DataGrid.Events.SelectedNode);
+        }
     },
 
     revealAndSelect: function()
@@ -1479,8 +1497,10 @@ WebInspector.DataGridNode.prototype = {
         if (this._element)
             this._element.removeStyleClass("selected");
 
-        if (!supressDeselectedEvent)
+        if (!supressDeselectedEvent) {
             this.dispatchEventToListeners("deselected");
+            this.dataGrid.dispatchEventToListeners(WebInspector.DataGrid.Events.DeselectedNode);
+        }
     },
 
     traverseNextNode: function(skipHidden, stayWithin, dontPopulate, info)
@@ -1546,8 +1566,8 @@ WebInspector.DataGridNode.prototype = {
         var cell = event.target.enclosingNodeOrSelfWithNodeName("td");
         if (!cell.hasStyleClass("disclosure"))
             return false;
-        var computedLeftPadding = window.getComputedStyle(cell).getPropertyCSSValue("padding-left").getFloatValue(CSSPrimitiveValue.CSS_PX);
-        var left = cell.totalOffsetLeft() + computedLeftPadding;
+        
+        var left = cell.totalOffsetLeft() + this.leftPadding;
         return event.pageX >= left && event.pageX <= left + this.disclosureToggleWidth;
     },
 

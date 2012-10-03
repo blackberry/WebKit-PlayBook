@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  *  This library is free software; you can redistribute it and/or
  *  modify it under the terms of the GNU Lesser General Public
@@ -46,14 +46,12 @@ String cookies(Document const* document, KURL const& url)
     if (!(frame && frame->loader() && frame->loader()->client()))
         return String();
 
-    if (!static_cast<WebCore::FrameLoaderClientBlackBerry*>(frame->loader()->client())->cookiesEnabled())
+    if (!static_cast<FrameLoaderClientBlackBerry*>(frame->loader()->client())->cookiesEnabled())
         return String();
 
     ASSERT(document && url == document->cookieURL());
     // 'HttpOnly' cookies should no be accessible from scripts, so we filter them out here
-    String result = cookieManager().getCookie(url, NoHttpOnlyCookie);
-
-    return result;
+    return cookieManager().getCookie(url, NoHttpOnlyCookie);
 }
 
 void setCookies(Document* document, KURL const& url, String const& value)
@@ -67,7 +65,7 @@ void setCookies(Document* document, KURL const& url, String const& value)
     if (!(frame && frame->loader() && frame->loader()->client()))
         return;
 
-    if (!static_cast<WebCore::FrameLoaderClientBlackBerry*>(frame->loader()->client())->cookiesEnabled())
+    if (!static_cast<FrameLoaderClientBlackBerry*>(frame->loader()->client())->cookiesEnabled())
         return;
 
     ASSERT(document && url == document->cookieURL());
@@ -89,7 +87,7 @@ bool getRawCookies(const Document* document, const KURL& url, Vector<Cookie>& ra
     return true;
 }
 
-void deleteCookie(const Document* document, const KURL& url, const WTF::String& cookieName)
+void deleteCookie(const Document* document, const KURL& url, const String& cookieName)
 {
     // Cookies are not bound to the document. Therefore, we don't need to pass
     // in the document object to find the targeted cookies in cookie manager.
@@ -101,10 +99,10 @@ String cookieRequestHeaderFieldValue(const Document* document, const KURL &url)
     ASSERT(document);
 
     if (!(document->frame() && document->frame()->loader() && document->frame()->loader()->client()))
-        return WTF::String();
+        return String();
 
-    if (!static_cast<WebCore::FrameLoaderClientBlackBerry*>(document->frame()->loader()->client())->cookiesEnabled())
-        return WTF::String();
+    if (!static_cast<FrameLoaderClientBlackBerry*>(document->frame()->loader()->client())->cookiesEnabled())
+        return String();
 
     return cookieManager().getCookie(url, WithHttpOnlyCookies);
 }

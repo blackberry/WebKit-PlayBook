@@ -80,13 +80,16 @@ namespace WebCore {
     class StrokeStyleApplier;
 
     enum PathElementType {
-        PathElementMoveToPoint,
-        PathElementAddLineToPoint,
-        PathElementAddQuadCurveToPoint,
-        PathElementAddCurveToPoint,
-        PathElementCloseSubpath
+        PathElementMoveToPoint, // The points member will contain 1 value.
+        PathElementAddLineToPoint, // The points member will contain 1 value.
+        PathElementAddQuadCurveToPoint, // The points member will contain 2 values.
+        PathElementAddCurveToPoint, // The points member will contain 3 values.
+        PathElementCloseSubpath // The points member will contain no values.
     };
 
+    // The points in the sturcture are the same as those that would be used with the
+    // add... method. For example, a line returns the endpoint, while a cubic returns
+    // two tangent points and the endpoint.
     struct PathElement {
         PathElementType type;
         FloatPoint* points;
@@ -143,9 +146,9 @@ namespace WebCore {
         void apply(void* info, PathApplierFunction) const;
         void transform(const AffineTransform&);
 
-    private:
         void addBeziersForRoundedRect(const FloatRect&, const FloatSize& topLeftRadius, const FloatSize& topRightRadius, const FloatSize& bottomLeftRadius, const FloatSize& bottomRightRadius);
 
+    private:
         PlatformPathPtr m_path;
     };
 

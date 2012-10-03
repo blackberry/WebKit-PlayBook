@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -30,9 +30,6 @@ class WebSettings;
 namespace WebCore {
 
 class IconDatabaseClientBlackBerry : public IconDatabaseClient {
-private:
-    IconDatabaseClientBlackBerry() : m_initState(NotInitialized) { }
-    enum { NotInitialized, InitializeSucceeded, InitializeFailed } m_initState;
 public:
     static IconDatabaseClientBlackBerry* getInstance();
     bool initIconDatabase(const BlackBerry::WebKit::WebSettings*);
@@ -43,6 +40,13 @@ public:
     virtual void didImportIconDataForPageURL(const String&);
     virtual void didChangeIconForPageURL(const String&);
     virtual void didFinishURLImport();
+
+private:
+    IconDatabaseClientBlackBerry()
+        : m_initState(NotInitialized)
+    {
+    }
+    enum { NotInitialized, InitializeSucceeded, InitializeFailed } m_initState;
 };
 
 }

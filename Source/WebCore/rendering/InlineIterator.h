@@ -131,15 +131,15 @@ static inline void notifyObserverEnteredObject(Observer* observer, RenderObject*
         // Thus we ignore any possible dir= attribute on the span.
         return;
     }
-    if (unicodeBidi == Isolate) {
+    if (isIsolated(unicodeBidi)) {
         observer->enterIsolate();
         // Embedding/Override characters implied by dir= are handled when
         // we process the isolated span, not when laying out the "parent" run.
         return;
     }
 
-    // FIXME: Should unicode-bidi: plaintext really be embedding override/embed characters here?
-    observer->embed(embedCharFromDirection(style->direction(), unicodeBidi), FromStyleOrDOM);
+    if (!observer->inIsolate())
+        observer->embed(embedCharFromDirection(style->direction(), unicodeBidi), FromStyleOrDOM);
 }
 
 template <class Observer>
@@ -151,13 +151,14 @@ static inline void notifyObserverWillExitObject(Observer* observer, RenderObject
     EUnicodeBidi unicodeBidi = object->style()->unicodeBidi();
     if (unicodeBidi == UBNormal)
         return; // Nothing to do for unicode-bidi: normal
-    if (unicodeBidi == Isolate) {
+    if (isIsolated(unicodeBidi)) {
         observer->exitIsolate();
         return;
     }
 
     // Otherwise we pop any embed/override character we added when we opened this tag.
-    observer->embed(WTF::Unicode::PopDirectionalFormat, FromStyleOrDOM);
+    if (!observer->inIsolate())
+        observer->embed(WTF::Unicode::PopDirectionalFormat, FromStyleOrDOM);
 }
 
 static inline bool isIteratorTarget(RenderObject* object)
@@ -253,9 +254,8 @@ static inline RenderObject* bidiNextIncludingEmptyInlines(RenderObject* root, Re
     return bidiNextShared(root, current, observer, IncludeEmptyInlines, endOfInlinePtr);
 }
 
-static inline RenderObject* bidiFirstSkippingEmptyInlines(RenderObject* root, InlineBidiResolver* resolver)
+static inline RenderObject* bidiFirstSkippingEmptyInlines(RenderObject* root, InlineBidiResolver* resolver = 0)
 {
-    ASSERT(resolver);
     RenderObject* o = root->firstChild();
     if (!o)
         return 0;
@@ -276,7 +276,8 @@ static inline RenderObject* bidiFirstSkippingEmptyInlines(RenderObject* root, In
     if (o && !isIteratorTarget(o))
         o = bidiNextSkippingEmptyInlines(root, o, resolver);
 
-    resolver->commitExplicitEmbedding();
+    if (resolver)
+        resolver->commitExplicitEmbedding();
     return o;
 }
 
@@ -390,7 +391,7 @@ inline void InlineBidiResolver::increment()
 static inline bool isIsolatedInline(RenderObject* object)
 {
     ASSERT(object);
-    return object->isRenderInline() && object->style()->unicodeBidi() == Isolate;
+    return object->isRenderInline() && isIsolated(object->style()->unicodeBidi());
 }
 
 static inline RenderObject* containingIsolate(RenderObject* object, RenderObject* root)
@@ -404,12 +405,26 @@ static inline RenderObject* containingIsolate(RenderObject* object, RenderObject
     return 0;
 }
 
+static inline unsigned numberOfIsolateAncestors(const InlineIterator& iter)
+{
+    RenderObject* object = iter.object();
+    if (!object)
+        return 0;
+    unsigned count = 0;
+    while (object && object != iter.root()) {
+        if (isIsolatedInline(object))
+            count++;
+        object = object->parent();
+    }
+    return count;
+}
+
 // FIXME: This belongs on InlineBidiResolver, except it's a template specialization
 // of BidiResolver which knows nothing about RenderObjects.
-static inline void addPlaceholderRunForIsolatedInline(InlineBidiResolver& resolver, RenderObject* isolatedInline)
+static inline void addPlaceholderRunForIsolatedInline(InlineBidiResolver& resolver, RenderObject* obj, unsigned pos)
 {
-    ASSERT(isolatedInline);
-    BidiRun* isolatedRun = new (isolatedInline->renderArena()) BidiRun(0, 0, isolatedInline, resolver.context(), resolver.dir());
+    ASSERT(obj);
+    BidiRun* isolatedRun = new (obj->renderArena()) BidiRun(pos, 0, obj, resolver.context(), resolver.dir());
     resolver.runs().addRun(isolatedRun);
     // FIXME: isolatedRuns() could be a hash of object->run and then we could cheaply
     // ASSERT here that we didn't create multiple objects for the same inline.
@@ -418,8 +433,8 @@ static inline void addPlaceholderRunForIsolatedInline(InlineBidiResolver& resolv
 
 class IsolateTracker {
 public:
-    explicit IsolateTracker(bool inIsolate)
-        : m_nestedIsolateCount(inIsolate ? 1 : 0)
+    explicit IsolateTracker(unsigned nestedIsolateCount)
+        : m_nestedIsolateCount(nestedIsolateCount)
         , m_haveAddedFakeRunForRootIsolate(false)
     {
     }
@@ -437,23 +452,17 @@ public:
     // We don't care if we encounter bidi directional overrides.
     void embed(WTF::Unicode::Direction, BidiEmbeddingSource) { }
 
-    void addFakeRunIfNecessary(RenderObject* obj, InlineBidiResolver& resolver)
+    void addFakeRunIfNecessary(RenderObject* obj, unsigned pos, InlineBidiResolver& resolver)
     {
-        // We only need to lookup the root isolated span and add a fake run
-        // for it once, but we'll be called for every span inside the isolated span
-        // so we just ignore the call.
+        // We only need to add a fake run for a given isolated span once during each call to createBidiRunsForLine.
+        // We'll be called for every span inside the isolated span so we just ignore subsequent calls.
         if (m_haveAddedFakeRunForRootIsolate)
             return;
         m_haveAddedFakeRunForRootIsolate = true;
-
-        // FIXME: position() could be outside the run and may be the wrong call here.
-        // If we were passed an InlineIterator instead that would have the right root().
-        RenderObject* isolatedInline = containingIsolate(obj, resolver.position().root());
-        // FIXME: Because enterIsolate is not passed a RenderObject, we have to crawl up the
-        // tree to see which parent inline is the isolate. We could change enterIsolate
-        // to take a RenderObject and do this logic there, but that would be a layering
-        // violation for BidiResolver (which knows nothing about RenderObject).
-        addPlaceholderRunForIsolatedInline(resolver, isolatedInline);
+        // obj and pos together denote a single position in the inline, from which the parsing of the isolate will start.
+        // We don't need to mark the end of the run because this is implicit: it is either endOfLine or the end of the
+        // isolate, when we call createBidiRunsForLine it will stop at whichever comes first.
+        addPlaceholderRunForIsolatedInline(resolver, obj, pos);
     }
 
 private:
@@ -468,12 +477,12 @@ inline void InlineBidiResolver::appendRun()
         // Keep track of when we enter/leave "unicode-bidi: isolate" inlines.
         // Initialize our state depending on if we're starting in the middle of such an inline.
         // FIXME: Could this initialize from this->inIsolate() instead of walking up the render tree?
-        IsolateTracker isolateTracker(containingIsolate(m_sor.m_obj, m_sor.root()));
+        IsolateTracker isolateTracker(numberOfIsolateAncestors(m_sor));
         int start = m_sor.m_pos;
         RenderObject* obj = m_sor.m_obj;
         while (obj && obj != m_eor.m_obj && obj != endOfLine.m_obj) {
             if (isolateTracker.inIsolate())
-                isolateTracker.addFakeRunIfNecessary(obj, *this);
+                isolateTracker.addFakeRunIfNecessary(obj, start, *this);
             else
                 RenderBlock::appendRunsForObject(m_runs, start, obj->length(), obj, *this);
             // FIXME: start/obj should be an InlineIterator instead of two separate variables.
@@ -489,7 +498,7 @@ inline void InlineBidiResolver::appendRun()
             // It's OK to add runs for zero-length RenderObjects, just don't make the run larger than it should be
             int end = obj->length() ? pos + 1 : 0;
             if (isolateTracker.inIsolate())
-                isolateTracker.addFakeRunIfNecessary(obj, *this);
+                isolateTracker.addFakeRunIfNecessary(obj, start, *this);
             else
                 RenderBlock::appendRunsForObject(m_runs, start, end, obj, *this);
         }

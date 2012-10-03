@@ -293,6 +293,9 @@ void RenderMenuList::showPopup()
     if (m_popupIsVisible)
         return;
 
+    if (document()->page()->chrome()->hasOpenedPopup())
+        return;
+
     // Create m_innerBlock here so it ends up as the first child.
     // This is important because otherwise we might try to create m_innerBlock
     // inside the showPopup call and it would fail.
@@ -328,17 +331,15 @@ void RenderMenuList::valueChanged(unsigned listIndex, bool fireOnChange)
     select->optionSelectedByUser(select->listToOptionIndex(listIndex), fireOnChange);
 }
 
-#if ENABLE(NO_LISTBOX_RENDERING)
 void RenderMenuList::listBoxSelectItem(int listIndex, bool allowMultiplySelections, bool shift, bool fireOnChangeNow)
 {
     toHTMLSelectElement(node())->listBoxSelectItem(listIndex, allowMultiplySelections, shift, fireOnChangeNow);
 }
 
-bool RenderMenuList::multiple()
+bool RenderMenuList::multiple() const
 {
     return toHTMLSelectElement(node())->multiple();
 }
-#endif
 
 void RenderMenuList::didSetSelectedIndex(int listIndex)
 {
@@ -416,6 +417,8 @@ bool RenderMenuList::itemIsEnabled(unsigned listIndex) const
     if (listIndex >= listItems.size())
         return false;
     HTMLElement* element = listItems[listIndex];
+    if (!element->hasTagName(optionTag))
+        return false;
 
     bool groupEnabled = true;
     if (Element* parentElement = element->parentElement()) {

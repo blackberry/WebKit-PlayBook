@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Google Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -80,6 +80,7 @@ void WebPreferences::reset()
     defaultTextEncodingName = WebString::fromUTF8("ISO-8859-1");
     developerExtrasEnabled = true;
     experimentalWebGLEnabled = false;
+    experimentalCSSRegionsEnabled = true;
     javaEnabled = false;
     javaScriptCanAccessClipboard = true;
     javaScriptCanOpenWindowsAutomatically = true;
@@ -92,6 +93,7 @@ void WebPreferences::reset()
     textAreasAreResizable = false;
     userStyleSheetLocation = WebURL();
     usesPageCache = false;
+    pageCacheSupportsPlugins = false;
     webSecurityEnabled = true;
     caretBrowsingEnabled = false;
 
@@ -107,14 +109,16 @@ void WebPreferences::reset()
 
     tabsToLinks = false;
     hyperlinkAuditingEnabled = false;
+    acceleratedCompositingForVideoEnabled = false;
     acceleratedCompositingEnabled = false;
-    threadedCompositingEnabled = false;
     compositeToTexture = false;
     accelerated2dCanvasEnabled = false;
-    legacyAccelerated2dCanvasEnabled = false;
-    acceleratedDrawingEnabled = false;
+    deferred2dCanvasEnabled = false;
+    acceleratedPaintingEnabled = false;
     forceCompositingMode = false;
     hixie76WebSocketProtocolEnabled = true;
+    perTilePaintingEnabled = false;
+    mockScrollbarsEnabled = false;
 }
 
 static void setStandardFontFamilyWrapper(WebSettings* settings, const WebKit::WebString& font, UScriptCode script)
@@ -190,6 +194,7 @@ void WebPreferences::applyTo(WebView* webView)
     settings->setDefaultTextEncodingName(defaultTextEncodingName);
     settings->setDeveloperExtrasEnabled(developerExtrasEnabled);
     settings->setExperimentalWebGLEnabled(experimentalWebGLEnabled);
+    settings->setExperimentalCSSRegionsEnabled(experimentalCSSRegionsEnabled);
     settings->setJavaEnabled(javaEnabled);
     settings->setJavaScriptCanAccessClipboard(javaScriptCanAccessClipboard);
     settings->setJavaScriptCanOpenWindowsAutomatically(javaScriptCanOpenWindowsAutomatically);
@@ -202,6 +207,7 @@ void WebPreferences::applyTo(WebView* webView)
     settings->setTextAreasAreResizable(textAreasAreResizable);
     settings->setUserStyleSheetLocation(userStyleSheetLocation);
     settings->setUsesPageCache(usesPageCache);
+    settings->setPageCacheSupportsPlugins(pageCacheSupportsPlugins);
     settings->setWebSecurityEnabled(webSecurityEnabled);
     settings->setAllowUniversalAccessFromFileURLs(allowUniversalAccessFromFileURLs);
     settings->setEditingBehavior(editingBehavior);
@@ -211,13 +217,15 @@ void WebPreferences::applyTo(WebView* webView)
     webView->setTabsToLinks(tabsToLinks);
     settings->setCaretBrowsingEnabled(caretBrowsingEnabled);
     settings->setAcceleratedCompositingEnabled(acceleratedCompositingEnabled);
-    settings->setUseThreadedCompositor(threadedCompositingEnabled);
+    settings->setAcceleratedCompositingForVideoEnabled(acceleratedCompositingForVideoEnabled);
     settings->setCompositeToTextureEnabled(compositeToTexture);
     settings->setForceCompositingMode(forceCompositingMode);
     settings->setAccelerated2dCanvasEnabled(accelerated2dCanvasEnabled);
-    settings->setLegacyAccelerated2dCanvasEnabled(legacyAccelerated2dCanvasEnabled);
-    settings->setAcceleratedDrawingEnabled(acceleratedDrawingEnabled);
+    settings->setDeferred2dCanvasEnabled(deferred2dCanvasEnabled);
+    settings->setAcceleratedPaintingEnabled(acceleratedPaintingEnabled);
     settings->setHixie76WebSocketProtocolEnabled(hixie76WebSocketProtocolEnabled);
+    settings->setPerTilePaintingEnabled(perTilePaintingEnabled);
+    settings->setMockScrollbarsEnabled(mockScrollbarsEnabled);
 
     // Fixed values.
     settings->setTextDirectionSubmenuInclusionBehaviorNeverIncluded();
@@ -235,4 +243,5 @@ void WebPreferences::applyTo(WebView* webView)
     settings->setFullScreenEnabled(true);
     settings->setValidationMessageTimerMagnification(-1);
     settings->setVisualWordMovementEnabled(false);
+    settings->setPasswordEchoEnabled(false);
 }

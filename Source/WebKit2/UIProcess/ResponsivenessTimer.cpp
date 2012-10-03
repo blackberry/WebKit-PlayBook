@@ -26,7 +26,7 @@
 #include "config.h"
 #include "ResponsivenessTimer.h"
 
-#include "WorkItem.h"
+using namespace WebCore;
 
 namespace WebKit {
 

@@ -44,10 +44,12 @@ WebInspector.MIMETypes = {
     "image/bmp":                   {2: true},
     "image/svg+xml":               {2: true},
     "image/vnd.microsoft.icon":    {2: true},
+    "image/webp":                  {2: true},
     "image/x-icon":                {2: true},
     "image/x-xbitmap":             {2: true},
     "font/ttf":                    {3: true},
     "font/opentype":               {3: true},
+    "font/woff":                   {3: true},
     "application/x-font-type1":    {3: true},
     "application/x-font-ttf":      {3: true},
     "application/x-font-woff":     {3: true},
@@ -71,7 +73,7 @@ WebInspector.MIMETypes = {
  *
  * @param {NetworkAgent.RequestId} requestId
  * @param {string} url
- * @param {?string} frameId
+ * @param {string} frameId
  * @param {?NetworkAgent.LoaderId} loaderId
  */
 WebInspector.Resource = function(requestId, url, frameId, loaderId)
@@ -93,9 +95,13 @@ WebInspector.Resource = function(requestId, url, frameId, loaderId)
     this.receiveHeadersEnd = 0;
 }
 
+/**
+ * @param {string} url
+ * @return {string}
+ */
 WebInspector.Resource.displayName = function(url)
 {
-    return new WebInspector.Resource("fake-transient-resource", url, null, null).displayName;
+    return new WebInspector.Resource("fake-transient-resource", url, "", null).displayName;
 }
 
 // Keep these in sync with WebCore::InspectorResource::Type
@@ -109,11 +115,19 @@ WebInspector.Resource.Type = {
     WebSocket:  7,
     Other:      8,
 
+    /**
+     * @param {number} type
+     * @return {boolean}
+     */
     isTextType: function(type)
     {
         return (type === WebInspector.Resource.Type.Document) || (type === WebInspector.Resource.Type.Stylesheet) || (type === WebInspector.Resource.Type.Script) || (type === WebInspector.Resource.Type.XHR);
     },
 
+    /**
+     * @param {number} type
+     * @return {string}
+     */
     toUIString: function(type)
     {
         switch (type) {
@@ -137,8 +151,12 @@ WebInspector.Resource.Type = {
         }
     },
 
-    // Returns locale-independent string identifier of resource type (primarily for use in extension API).
-    // The IDs need to be kept in sync with webInspector.resoureces.Types object in ExtensionAPI.js.
+    /**
+     * Returns locale-independent string identifier of resource type (primarily for use in extension API).
+     * The IDs need to be kept in sync with webInspector.resoureces.Types object in ExtensionAPI.js.
+     * @param {number} type
+     * @return {string}
+     */
     toString: function(type)
     {
         switch (type) {
@@ -165,6 +183,10 @@ WebInspector.Resource.Type = {
 
 WebInspector.Resource._domainModelBindings = [];
 
+/**
+ * @param {number} type
+ * @param {WebInspector.ResourceDomainModelBinding} binding
+ */
 WebInspector.Resource.registerDomainModelBinding = function(type, binding)
 {
     WebInspector.Resource._domainModelBindings[type] = binding;
@@ -213,8 +235,12 @@ WebInspector.Resource.restoreRevisions = function()
     }
 
     // Schedule async storage.
-    setTimeout(persist, 0);}
+    setTimeout(persist, 0);
+}
 
+/**
+ * @param {WebInspector.Resource} resource
+ */
 WebInspector.Resource.persistRevision = function(resource)
 {
     if (!window.localStorage)
@@ -248,10 +274,13 @@ WebInspector.Resource.persistRevision = function(resource)
 WebInspector.Resource.Events = {
     RevisionAdded: "revision-added",
     MessageAdded: "message-added",
-    MessagesCleared: "messages-cleared"
+    MessagesCleared: "messages-cleared",
 }
 
 WebInspector.Resource.prototype = {
+    /**
+     * @return {string}
+     */
     get url()
     {
         return this._url;
@@ -269,22 +298,13 @@ WebInspector.Resource.prototype = {
         this.domain = parsedURL ? parsedURL.host : "";
         this.path = parsedURL ? parsedURL.path : "";
         this.urlFragment = parsedURL ? parsedURL.fragment : "";
-        this.lastPathComponent = "";
-        if (parsedURL && parsedURL.path) {
-            // First cut the query params.
-            var path = parsedURL.path;
-            var indexOfQuery = path.indexOf("?");
-            if (indexOfQuery !== -1)
-                path = path.substring(0, indexOfQuery);
-
-            // Then take last path component.
-            var lastSlashIndex = path.lastIndexOf("/");
-            if (lastSlashIndex !== -1)
-                this.lastPathComponent = path.substring(lastSlashIndex + 1);
-        }
+        this.lastPathComponent = parsedURL ? parsedURL.lastPathComponent : "";
         this.lastPathComponentLowerCase = this.lastPathComponent.toLowerCase();
     },
 
+    /**
+     * @return {string}
+     */
     get documentURL()
     {
         return this._documentURL;
@@ -295,6 +315,9 @@ WebInspector.Resource.prototype = {
         this._documentURL = x;
     },
 
+    /**
+     * @return {string}
+     */
     get displayName()
     {
         if (this._displayName)
@@ -303,12 +326,15 @@ WebInspector.Resource.prototype = {
         if (!this._displayName)
             this._displayName = this.displayDomain;
         if (!this._displayName && this.url)
-            this._displayName = this.url.trimURL(WebInspector.mainResource ? WebInspector.mainResource.domain : "");
+            this._displayName = this.url.trimURL(WebInspector.inspectedPageDomain ? WebInspector.inspectedPageDomain : "");
         if (this._displayName === "/")
             this._displayName = this.url;
         return this._displayName;
     },
 
+    /**
+     * @return {string}
+     */
     get folder()
     {
         var path = this.path;
@@ -319,14 +345,20 @@ WebInspector.Resource.prototype = {
         return lastSlashIndex !== -1 ? path.substring(0, lastSlashIndex) : "";
     },
 
+    /**
+     * @return {string}
+     */
     get displayDomain()
     {
         // WebInspector.Database calls this, so don't access more than this.domain.
-        if (this.domain && (!WebInspector.mainResource || (WebInspector.mainResource && this.domain !== WebInspector.mainResource.domain)))
+        if (this.domain && (!WebInspector.inspectedPageDomain || (WebInspector.inspectedPageDomain && this.domain !== WebInspector.inspectedPageDomain)))
             return this.domain;
         return "";
     },
 
+    /**
+     * @return {number}
+     */
     get startTime()
     {
         return this._startTime || -1;
@@ -337,6 +369,9 @@ WebInspector.Resource.prototype = {
         this._startTime = x;
     },
 
+    /**
+     * @return {number}
+     */
     get responseReceivedTime()
     {
         return this._responseReceivedTime || -1;
@@ -347,6 +382,9 @@ WebInspector.Resource.prototype = {
         this._responseReceivedTime = x;
     },
 
+    /**
+     * @return {number}
+     */
     get endTime()
     {
         return this._endTime || -1;
@@ -365,6 +403,9 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    /**
+     * @return {number}
+     */
     get duration()
     {
         if (this._endTime === -1 || this._startTime === -1)
@@ -372,6 +413,9 @@ WebInspector.Resource.prototype = {
         return this._endTime - this._startTime;
     },
 
+    /**
+     * @return {number}
+     */
     get latency()
     {
         if (this._responseReceivedTime === -1 || this._startTime === -1)
@@ -379,6 +423,9 @@ WebInspector.Resource.prototype = {
         return this._responseReceivedTime - this._startTime;
     },
 
+    /**
+     * @return {number}
+     */
     get receiveDuration()
     {
         if (this._endTime === -1 || this._responseReceivedTime === -1)
@@ -386,6 +433,9 @@ WebInspector.Resource.prototype = {
         return this._endTime - this._responseReceivedTime;
     },
 
+    /**
+     * @return {number}
+     */
     get resourceSize()
     {
         return this._resourceSize || 0;
@@ -396,6 +446,9 @@ WebInspector.Resource.prototype = {
         this._resourceSize = x;
     },
 
+    /**
+     * @return {number}
+     */
     get transferSize()
     {
         if (this.cached)
@@ -418,11 +471,17 @@ WebInspector.Resource.prototype = {
         return this.responseHeadersSize + bodySize;
     },
 
+    /**
+     * @param {number} x
+     */
     increaseTransferSize: function(x)
     {
         this._transferSize = (this._transferSize || 0) + x;
     },
 
+    /**
+     * @return {boolean}
+     */
     get finished()
     {
         return this._finished;
@@ -442,6 +501,9 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    /**
+     * @return {boolean}
+     */
     get failed()
     {
         return this._failed;
@@ -452,6 +514,9 @@ WebInspector.Resource.prototype = {
         this._failed = x;
     },
 
+    /**
+     * @return {boolean}
+     */
     get canceled()
     {
         return this._canceled;
@@ -462,6 +527,9 @@ WebInspector.Resource.prototype = {
         this._canceled = x;
     },
 
+    /**
+     * @return {WebInspector.ResourceCategory}
+     */
     get category()
     {
         return this._category;
@@ -472,6 +540,9 @@ WebInspector.Resource.prototype = {
         this._category = x;
     },
 
+    /**
+     * @return {boolean}
+     */
     get cached()
     {
         return this._cached;
@@ -484,6 +555,9 @@ WebInspector.Resource.prototype = {
             delete this._timing;
     },
 
+    /**
+     * @return {NetworkAgent.ResourceTiming|undefined}
+     */
     get timing()
     {
         return this._timing;
@@ -502,6 +576,9 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    /**
+     * @return {string}
+     */
     get mimeType()
     {
         return this._mimeType;
@@ -512,6 +589,9 @@ WebInspector.Resource.prototype = {
         this._mimeType = x;
     },
 
+    /**
+     * @return {number}
+     */
     get type()
     {
         return this._type;
@@ -553,6 +633,9 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    /**
+     * @return {WebInspector.Resource|undefined}
+     */
     get redirectSource()
     {
         if (this.redirects && this.redirects.length > 0)
@@ -565,6 +648,9 @@ WebInspector.Resource.prototype = {
         this._redirectSource = x;
     },
 
+    /**
+     * @return {Object}
+     */
     get requestHeaders()
     {
         return this._requestHeaders || {};
@@ -579,6 +665,9 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners("requestHeaders changed");
     },
 
+    /**
+     * @return {string}
+     */
     get requestHeadersText()
     {
         if (this._requestHeadersText === undefined) {
@@ -596,11 +685,17 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners("requestHeaders changed");
     },
 
+    /**
+     * @return {number}
+     */
     get requestHeadersSize()
     {
         return this.requestHeadersText.length;
     },
 
+    /**
+     * @return {Array.<Object>}
+     */
     get sortedRequestHeaders()
     {
         if (this._sortedRequestHeaders !== undefined)
@@ -614,11 +709,18 @@ WebInspector.Resource.prototype = {
         return this._sortedRequestHeaders;
     },
 
+    /**
+     * @param {string} headerName
+     * @return {string|undefined}
+     */
     requestHeaderValue: function(headerName)
     {
         return this._headerValue(this.requestHeaders, headerName);
     },
 
+    /**
+     * @type {Array.<WebInspector.Cookie>}
+     */
     get requestCookies()
     {
         if (!this._requestCookies)
@@ -626,6 +728,9 @@ WebInspector.Resource.prototype = {
         return this._requestCookies;
     },
 
+    /**
+     * @type {string|undefined}
+     */
     get requestFormData()
     {
         return this._requestFormData;
@@ -637,6 +742,9 @@ WebInspector.Resource.prototype = {
         delete this._parsedFormParameters;
     },
 
+    /**
+     * @type {string|undefined}
+     */
     get requestHttpVersion()
     {
         var firstLine = this.requestHeadersText.split(/\r\n/)[0];
@@ -644,6 +752,9 @@ WebInspector.Resource.prototype = {
         return match ? match[1] : undefined;
     },
 
+    /**
+     * @type {Object}
+     */
     get responseHeaders()
     {
         return this._responseHeaders || {};
@@ -658,6 +769,9 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners("responseHeaders changed");
     },
 
+    /**
+     * @type {string}
+     */
     get responseHeadersText()
     {
         if (this._responseHeadersText === undefined) {
@@ -675,11 +789,17 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners("responseHeaders changed");
     },
 
+    /**
+     * @type {number}
+     */
     get responseHeadersSize()
     {
         return this.responseHeadersText.length;
     },
 
+    /**
+     * @type {Array.<Object>}
+     */
     get sortedResponseHeaders()
     {
         if (this._sortedResponseHeaders !== undefined)
@@ -693,11 +813,18 @@ WebInspector.Resource.prototype = {
         return this._sortedResponseHeaders;
     },
 
+    /**
+     * @param {string} headerName
+     * @return {string|undefined}
+     */
     responseHeaderValue: function(headerName)
     {
         return this._headerValue(this.responseHeaders, headerName);
     },
 
+    /**
+     * @type {Array.<WebInspector.Cookie>}
+     */
     get responseCookies()
     {
         if (!this._responseCookies)
@@ -705,37 +832,50 @@ WebInspector.Resource.prototype = {
         return this._responseCookies;
     },
 
+    /**
+     * @type {?Array.<Object>}
+     */
     get queryParameters()
     {
         if (this._parsedQueryParameters)
             return this._parsedQueryParameters;
         var queryString = this.url.split("?", 2)[1];
         if (!queryString)
-            return;
+            return null;
         queryString = queryString.split("#", 2)[0];
         this._parsedQueryParameters = this._parseParameters(queryString);
         return this._parsedQueryParameters;
     },
 
+    /**
+     * @type {?Array.<Object>}
+     */
     get formParameters()
     {
         if (this._parsedFormParameters)
             return this._parsedFormParameters;
         if (!this.requestFormData)
-            return;
+            return null;
         var requestContentType = this.requestContentType();
         if (!requestContentType || !requestContentType.match(/^application\/x-www-form-urlencoded\s*(;.*)?$/i))
-            return;
+            return null;
         this._parsedFormParameters = this._parseParameters(this.requestFormData);
         return this._parsedFormParameters;
     },
 
+    /**
+     * @type {string|undefined}
+     */
     get responseHttpVersion()
     {
         var match = this.responseHeadersText.match(/^(HTTP\/\d+\.\d+)/);
         return match ? match[1] : undefined;
     },
 
+    /**
+     * @param {string} queryString
+     * @return {Array.<Object>}
+     */
     _parseParameters: function(queryString)
     {
         function parseNameValue(pair)
@@ -753,6 +893,11 @@ WebInspector.Resource.prototype = {
         return queryString.split("&").map(parseNameValue);
     },
 
+    /**
+     * @param {Object} headers
+     * @param {string} headerName
+     * @return {string|undefined}
+     */
     _headerValue: function(headers, headerName)
     {
         headerName = headerName.toLowerCase();
@@ -762,11 +907,17 @@ WebInspector.Resource.prototype = {
         }
     },
 
+    /**
+     * @type {Array.<WebInspector.ConsoleMessage>}
+     */
     get messages()
     {
         return this._messages || [];
     },
 
+    /**
+     * @param {WebInspector.ConsoleMessage} msg
+     */
     addMessage: function(msg)
     {
         if (!msg.isErrorOrWarning() || !msg.message)
@@ -778,6 +929,9 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners(WebInspector.Resource.Events.MessageAdded, msg);
     },
 
+    /**
+     * @type {number}
+     */
     get errors()
     {
         return this._errors || 0;
@@ -788,6 +942,9 @@ WebInspector.Resource.prototype = {
         this._errors = x;
     },
 
+    /**
+     * @type {number}
+     */
     get warnings()
     {
         return this._warnings || 0;
@@ -806,21 +963,33 @@ WebInspector.Resource.prototype = {
         this.dispatchEventToListeners(WebInspector.Resource.Events.MessagesCleared);
     },
 
+    /**
+     * @type {string}
+     */
     get content()
     {
         return this._content;
     },
 
+    /**
+     * @type {string}
+     */
     get contentEncoded()
     {
         return this._contentEncoded;
     },
 
+    /**
+     * @type {number}
+     */
     get contentTimestamp()
     {
         return this._contentTimestamp;
     },
 
+    /**
+     * @return {boolean}
+     */
     isEditable: function()
     {
         if (this._actualResource)
@@ -829,6 +998,11 @@ WebInspector.Resource.prototype = {
         return binding && binding.canSetContent(this);
     },
 
+    /**
+     * @param {string} newContent
+     * @param {boolean} majorChange
+     * @param {function(string=)} callback
+     */
     setContent: function(newContent, majorChange, callback)
     {
         if (!this.isEditable()) {
@@ -854,10 +1028,9 @@ WebInspector.Resource.prototype = {
         this._contentTimestamp = timestamp || new Date();
 
         this.dispatchEventToListeners(WebInspector.Resource.Events.RevisionAdded, revision);
-
         if (!restoringHistory)
             this._persistRevision();
-        WebInspector.extensionServer.notifyResourceContentCommitted(this, newContent);
+        WebInspector.resourceTreeModel.dispatchEventToListeners(WebInspector.ResourceTreeModel.EventTypes.ResourceContentCommitted, { resource: this, content: newContent });
     },
 
     _persistRevision: function()
@@ -865,6 +1038,9 @@ WebInspector.Resource.prototype = {
         WebInspector.Resource.persistRevision(this);
     },
 
+    /**
+     * @param {function(?string, ?string)} callback
+     */
     requestContent: function(callback)
     {
         // We do not support content retrieval for WebSockets at the moment.
@@ -883,8 +1059,18 @@ WebInspector.Resource.prototype = {
             this._innerRequestContent();
     },
 
+    /**
+     * @param {string} query
+     * @param {boolean} caseSensitive
+     * @param {boolean} isRegex
+     * @param {function(Array.<PageAgent.SearchMatch>)} callback
+     */
     searchInContent: function(query, caseSensitive, isRegex, callback)
     {
+        /**
+         * @param {?Protocol.Error} error
+         * @param {Array.<PageAgent.SearchMatch>} searchMatches
+         */
         function callbackWrapper(error, searchMatches)
         {
             callback(searchMatches || []);
@@ -896,6 +1082,9 @@ WebInspector.Resource.prototype = {
             callback([]);
     },
 
+    /**
+     * @param {Element} image
+     */
     populateImageSource: function(image)
     {
         function onResourceContent()
@@ -903,32 +1092,44 @@ WebInspector.Resource.prototype = {
             image.src = this._contentURL();
         }
 
-        if (Preferences.useDataURLForResourceImageIcons)
-            this.requestContent(onResourceContent.bind(this));
-        else
-            image.src = this.url;
+        this.requestContent(onResourceContent.bind(this));
     },
 
+    /**
+     * @return {boolean}
+     */
     isHttpFamily: function()
     {
-        return this.url.match(/^https?:/i);
+        return !!this.url.match(/^https?:/i);
     },
 
+    /**
+     * @return {string|undefined}
+     */
     requestContentType: function()
     {
         return this.requestHeaderValue("Content-Type");
     },
 
+    /**
+     * @return {boolean}
+     */
     isPingRequest: function()
     {
         return "text/ping" === this.requestContentType();
     },
 
+    /**
+     * @return {boolean}
+     */
     hasErrorStatusCode: function()
     {
         return this.statusCode >= 400;
     },
 
+    /**
+     * @return {string}
+     */
     _contentURL: function()
     {
         const maxDataUrlSize = 1024 * 1024;
@@ -964,6 +1165,9 @@ WebInspector.Resource.prototype.__proto__ = WebInspector.Object.prototype;
 
 /**
  * @constructor
+ * @param {WebInspector.Resource} resource
+ * @param {string} content
+ * @param {number} timestamp
  */
 WebInspector.ResourceRevision = function(resource, content, timestamp)
 {
@@ -973,16 +1177,25 @@ WebInspector.ResourceRevision = function(resource, content, timestamp)
 }
 
 WebInspector.ResourceRevision.prototype = {
+    /**
+     * @type {WebInspector.Resource}
+     */
     get resource()
     {
         return this._resource;
     },
 
+    /**
+     * @type {number}
+     */
     get timestamp()
     {
         return this._timestamp;
     },
 
+    /**
+     * @type {string}
+     */
     get content()
     {
         return this._content;
@@ -997,6 +1210,9 @@ WebInspector.ResourceRevision.prototype = {
         this.requestContent(revert.bind(this));
     },
 
+    /**
+     * @param {function(string)} callback
+     */
     requestContent: function(callback)
     {
         if (typeof this._content === "string") {
@@ -1025,7 +1241,18 @@ WebInspector.ResourceRevision.prototype = {
  * @interface
  */
 WebInspector.ResourceDomainModelBinding = function() { }
+
 WebInspector.ResourceDomainModelBinding.prototype = {
+    /**
+     * @return {boolean}
+     */
     canSetContent: function() { return true; },
+
+    /**
+     * @param {WebInspector.Resource} resource
+     * @param {string} content
+     * @param {boolean} majorChange
+     * @param {function(?string)} callback
+     */
     setContent: function(resource, content, majorChange, callback) { }
 }

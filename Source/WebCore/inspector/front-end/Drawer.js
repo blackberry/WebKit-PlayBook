@@ -123,7 +123,7 @@ WebInspector.Drawer.prototype = {
         
         function animationFinished()
         {
-            WebInspector.inspectorView.currentPanel().statusBarResized();
+            WebInspector.inspectorView.currentPanel().doResize();
             if (this._view && this._view.afterShow)
                 this._view.afterShow();
             delete this._currentAnimation;
@@ -144,8 +144,7 @@ WebInspector.Drawer.prototype = {
 
         this._savedHeight = this.element.offsetHeight;
 
-        if (this.element === WebInspector.currentFocusElement() || this.element.isAncestor(WebInspector.currentFocusElement()))
-            WebInspector.setCurrentFocusElement(WebInspector.previousFocusElement());
+        WebInspector.restoreFocusFromElement(this.element);
 
         var anchoredItems = document.getElementById("anchored-status-bar-items");
 

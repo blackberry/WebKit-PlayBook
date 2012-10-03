@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2005, 2006, 2007, 2008, 2009, 2010, 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2005-2012 Apple Inc. All rights reserved.
  * Copyright (C) 2006 David Smith (catfish.man@gmail.com)
  * Copyright (C) 2010 Igalia S.L
  *
@@ -87,6 +87,7 @@
 #import "WebNSURLRequestExtras.h"
 #import "WebNSViewExtras.h"
 #import "WebNodeHighlight.h"
+#import "WebNotificationClient.h"
 #import "WebPDFView.h"
 #import "WebPanelAuthenticationHandler.h"
 #import "WebPlatformStrategies.h"
@@ -143,13 +144,14 @@
 #import <WebCore/Page.h>
 #import <WebCore/PageCache.h>
 #import <WebCore/PageGroup.h>
-#import <WebCore/PlatformMouseEvent.h>
+#import <WebCore/PlatformEventFactoryMac.h>
 #import <WebCore/ProgressTracker.h>
 #import <WebCore/RenderView.h>
 #import <WebCore/RenderWidget.h>
 #import <WebCore/ResourceHandle.h>
 #import <WebCore/ResourceLoadScheduler.h>
 #import <WebCore/ResourceRequest.h>
+#import <WebCore/RunLoop.h>
 #import <WebCore/RuntimeApplicationChecks.h>
 #import <WebCore/SchemeRegistry.h>
 #import <WebCore/ScriptController.h>
@@ -205,10 +207,11 @@
 - (BOOL)_shouldAutoscrollForDraggingInfo:(id)dragInfo;
 @end
 
-@interface NSWindow (WebNSWindowDetails) 
+@interface NSWindow (WebNSWindowDetails)
 - (id)_oldFirstResponderBeforeBecoming;
 - (void)_enableScreenUpdatesIfNeeded;
 - (BOOL)_wrapsCarbonWindow;
+- (BOOL)_hasKeyAppearance;
 @end
 
 using namespace WebCore;
@@ -394,9 +397,6 @@ FindOptions coreOptions(WebFindOptions options)
 + (void)_preflightSpellChecker;
 - (BOOL)_continuousCheckingAllowed;
 - (NSResponder *)_responderForResponderOperations;
-#if USE(ACCELERATED_COMPOSITING)
-- (void)_clearLayerSyncLoopObserver;
-#endif
 #if ENABLE(GLIB_SUPPORT)
 - (void)_clearGlibLoopObserver;
 #endif
@@ -509,6 +509,18 @@ static CFMutableSetRef allWebViewsSet;
 
 @implementation WebView (WebPrivate)
 
+#if !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
+
+static NSString *createMacOSXVersionString()
+{
+    // Use underscores instead of dots because when we first added the Mac OS X version to the user agent string
+    // we were concerned about old DHTML libraries interpreting "4." as Netscape 4. That's no longer a concern for us
+    // but we're sticking with the underscores for compatibility with the format used by older versions of Safari.
+    return [[WKGetMacOSXVersionString() stringByReplacingOccurrencesOfString:@"." withString:@"_"] retain];
+}
+
+#else
+
 static inline int callGestalt(OSType selector)
 {
     SInt32 value = 0;
@@ -531,6 +543,8 @@ static NSString *createMacOSXVersionString()
         return [[NSString alloc] initWithFormat:@"%d_%d", major, minor];
     return [[NSString alloc] initWithFormat:@"%d", major];
 }
+
+#endif // !defined(BUILDING_ON_SNOW_LEOPARD) && !defined(BUILDING_ON_LION)
 
 static NSString *createUserVisibleWebKitVersionString()
 {
@@ -728,10 +742,13 @@ static NSString *leakOutlookQuirksUserScriptContents()
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
     pageClients.geolocationClient = new WebGeolocationClient(self);
 #endif
-#if ENABLE(DEVICE_ORIENTATION)
-    pageClients.deviceOrientationClient = new WebDeviceOrientationClient(self);
-#endif
     _private->page = new Page(pageClients);
+#if ENABLE(NOTIFICATIONS)
+    WebCore::provideNotification(_private->page, new WebNotificationClient(self));
+#endif
+#if ENABLE(DEVICE_ORIENTATION)
+    WebCore::provideDeviceOrientationTo(_private->page, new WebDeviceOrientationClient(self));
+#endif
 
     _private->page->setCanStartMedia([self window]);
     _private->page->settings()->setLocalStorageDatabasePath([[self preferences] _localStorageDatabasePath]);
@@ -1096,7 +1113,10 @@ static bool fastDocumentTeardownEnabled()
     }
 
 #if USE(ACCELERATED_COMPOSITING)
-    [self _clearLayerSyncLoopObserver];
+    if (_private->layerFlushController) {
+        _private->layerFlushController->invalidateObserver();
+        _private->layerFlushController = nullptr;
+    }
 #endif
     
 #if ENABLE(GLIB_SUPPORT)
@@ -1302,6 +1322,13 @@ static bool fastDocumentTeardownEnabled()
     return needsQuirk;
 }
 
+- (BOOL)_needsIsLoadingInAPISenseQuirk
+{
+    static BOOL needsQuirk = WKAppVersionCheckLessThan(@"com.apple.iAdProducer", -1, 2.1);
+    
+    return needsQuirk;
+}
+
 - (BOOL)_needsKeyboardEventDisambiguationQuirks
 {
     static BOOL needsQuirks = !WebKitLinkedOnOrAfter(WEBKIT_FIRST_VERSION_WITH_IE_COMPATIBLE_KEYBOARD_EVENT_DISPATCH) && !applicationIsSafari();
@@ -1410,6 +1437,7 @@ static bool needsSelfRetainWhileLoadingQuirk()
     settings->setTextDirectionSubmenuInclusionBehavior(core([preferences textDirectionSubmenuInclusionBehavior]));
     settings->setDOMPasteAllowed([preferences isDOMPasteAllowed]);
     settings->setUsesPageCache([self usesPageCache]);
+    settings->setPageCacheSupportsPlugins([preferences pageCacheSupportsPlugins]);
     settings->setShowsURLsInToolTips([preferences showsURLsInToolTips]);
     settings->setShowsToolTipOverTruncatedText([preferences showsToolTipOverTruncatedText]);
     settings->setDeveloperExtrasEnabled([preferences developerExtrasEnabled]);
@@ -1450,6 +1478,10 @@ static bool needsSelfRetainWhileLoadingQuirk()
     settings->setFrameFlatteningEnabled([preferences isFrameFlatteningEnabled]);
     settings->setSpatialNavigationEnabled([preferences isSpatialNavigationEnabled]);
     settings->setPaginateDuringLayoutEnabled([preferences paginateDuringLayoutEnabled]);
+#if ENABLE(CSS_SHADERS)
+    settings->setCSSCustomFilterEnabled([preferences cssCustomFilterEnabled]);
+#endif
+    settings->setCSSRegionsEnabled([preferences cssRegionsEnabled]);
 #if ENABLE(FULLSCREEN_API)
     settings->setFullScreenEnabled([preferences fullScreenEnabled]);
 #endif
@@ -1475,8 +1507,17 @@ static bool needsSelfRetainWhileLoadingQuirk()
 #endif
     settings->setMediaPlaybackRequiresUserGesture([preferences mediaPlaybackRequiresUserGesture]);
     settings->setMediaPlaybackAllowsInline([preferences mediaPlaybackAllowsInline]);
-    settings->setSuppressIncrementalRendering([preferences suppressIncrementalRendering]);
+    settings->setSuppressesIncrementalRendering([preferences suppressesIncrementalRendering]);
     settings->setBackspaceKeyNavigationEnabled([preferences backspaceKeyNavigationEnabled]);
+    settings->setMockScrollbarsEnabled([preferences mockScrollbarsEnabled]);
+
+#if ENABLE(VIDEO_TRACK)
+    settings->setShouldDisplaySubtitles([preferences shouldDisplaySubtitles]);
+    settings->setShouldDisplayCaptions([preferences shouldDisplayCaptions]);
+    settings->setShouldDisplayTextDescriptions([preferences shouldDisplayTextDescriptions]);
+#endif
+
+    settings->setNeedsIsLoadingInAPISenseQuirk([self _needsIsLoadingInAPISenseQuirk]);
 
     // Application Cache Preferences are stored on the global cache storage manager, not in Settings.
     [WebApplicationCache setDefaultOriginQuota:[preferences applicationCacheDefaultOriginQuota]];
@@ -2484,7 +2525,7 @@ static inline IMP getMethod(id o, SEL s)
 - (void)_updateActiveState
 {
     if (_private && _private->page)
-        _private->page->focusController()->setActive([[self window] isKeyWindow]);
+        _private->page->focusController()->setActive([[self window] _hasKeyAppearance]);
 }
 
 static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
@@ -2717,6 +2758,118 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
     return view->fixedLayoutSize();
 }
 
+- (void)_setPaginationMode:(WebPaginationMode)paginationMode
+{
+    Page* page = core(self);
+    if (!page)
+        return;
+
+    Page::Pagination pagination = page->pagination();
+    switch (paginationMode) {
+    case WebPaginationModeUnpaginated:
+        pagination.mode = Page::Pagination::Unpaginated;
+        break;
+    case WebPaginationModeHorizontal:
+        pagination.mode = Page::Pagination::HorizontallyPaginated;
+        break;
+    case WebPaginationModeVertical:
+        pagination.mode = Page::Pagination::VerticallyPaginated;
+        break;
+    default:
+        return;
+    }
+
+    page->setPagination(pagination);
+}
+
+- (WebPaginationMode)_paginationMode
+{
+    Page* page = core(self);
+    if (!page)
+        return WebPaginationModeUnpaginated;
+
+    switch (page->pagination().mode) {
+    case Page::Pagination::Unpaginated:
+        return WebPaginationModeUnpaginated;
+    case Page::Pagination::HorizontallyPaginated:
+        return WebPaginationModeHorizontal;
+    case Page::Pagination::VerticallyPaginated:
+        return WebPaginationModeVertical;
+    }
+
+    ASSERT_NOT_REACHED();
+    return WebPaginationModeUnpaginated;
+}
+
+- (void)_setPaginationBehavesLikeColumns:(BOOL)behavesLikeColumns
+{
+    Page* page = core(self);
+    if (!page)
+        return;
+
+    Page::Pagination pagination = page->pagination();
+    pagination.behavesLikeColumns = behavesLikeColumns;
+}
+
+- (BOOL)_paginationBehavesLikeColumns
+{
+    Page* page = core(self);
+    if (!page)
+        return NO;
+
+    return page->pagination().behavesLikeColumns;
+}
+
+- (void)_setPageLength:(CGFloat)pageLength
+{
+    Page* page = core(self);
+    if (!page)
+        return;
+
+    Page::Pagination pagination = page->pagination();
+    pagination.pageLength = pageLength;
+
+    page->setPagination(pagination);
+}
+
+- (CGFloat)_pageLength
+{
+    Page* page = core(self);
+    if (!page)
+        return 1;
+
+    return page->pagination().pageLength;
+}
+
+- (void)_setGapBetweenPages:(CGFloat)pageGap
+{
+    Page* page = core(self);
+    if (!page)
+        return;
+
+    Page::Pagination pagination = page->pagination();
+    pagination.gap = pageGap;
+    page->setPagination(pagination);
+}
+
+- (CGFloat)_gapBetweenPages
+{
+    Page* page = core(self);
+    if (!page)
+        return 0;
+
+    return page->pagination().gap;
+}
+
+- (NSUInteger)_pageCount
+{
+    Page* page = core(self);
+    if (!page)
+        return 0;
+
+    return page->pageCount();
+}
+
 - (CGFloat)_backingScaleFactor
 {
     return [self _deviceScaleFactor];
@@ -2829,6 +2982,7 @@ static PassOwnPtr<Vector<String> > toStringVector(NSArray* patterns)
     InitWebCoreSystemInterface();
     JSC::initializeThreading();
     WTF::initializeMainThreadToProcessMainThread();
+    WebCore::RunLoop::initializeMainRunLoop();
 
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_applicationWillTerminate) name:NSApplicationWillTerminateNotification object:NSApp];
     [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_preferencesChangedNotification:) name:WebPreferencesChangedInternalNotification object:nil];
@@ -3231,10 +3385,6 @@ static NSString * const backingPropertyOldScaleFactorKey = @"NSBackingPropertyOl
 - (void)addWindowObserversForWindow:(NSWindow *)window
 {
     if (window) {
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_windowDidBecomeKey:)
-            name:NSWindowDidBecomeKeyNotification object:nil];
-        [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_windowDidResignKey:)
-            name:NSWindowDidResignKeyNotification object:nil];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_windowWillOrderOnScreen:)
             name:WKWindowWillOrderOnScreenNotification() object:window];
         [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_windowWillOrderOffScreen:)
@@ -3250,10 +3400,6 @@ static NSString * const backingPropertyOldScaleFactorKey = @"NSBackingPropertyOl
 {
     NSWindow *window = [self window];
     if (window) {
-        [[NSNotificationCenter defaultCenter] removeObserver:self
-            name:NSWindowDidBecomeKeyNotification object:nil];
-        [[NSNotificationCenter defaultCenter] removeObserver:self
-            name:NSWindowDidResignKeyNotification object:nil];
         [[NSNotificationCenter defaultCenter] removeObserver:self
             name:WKWindowWillOrderOnScreenNotification() object:window];
         [[NSNotificationCenter defaultCenter] removeObserver:self
@@ -3320,35 +3466,23 @@ static NSString * const backingPropertyOldScaleFactorKey = @"NSBackingPropertyOl
         _private->page->windowScreenDidChange((PlatformDisplayID)[[[[[self window] screen] deviceDescription] objectForKey:@"NSScreenNumber"] intValue]);
 }
 
-- (void)_windowDidBecomeKey:(NSNotification *)notification
+- (void)_windowChangedKeyState
 {
-    NSWindow *keyWindow = [notification object];
-    if (keyWindow == [self window] || keyWindow == [[self window] attachedSheet])
-        [self _updateActiveState];
-}
-
-- (void)_windowDidResignKey:(NSNotification *)notification
-{
-    NSWindow *formerKeyWindow = [notification object];
-    if (formerKeyWindow == [self window] || formerKeyWindow == [[self window] attachedSheet])
-        [self _updateActiveState];
+    [self _updateActiveState];
 }
 
 - (void)_windowWillOrderOnScreen:(NSNotification *)notification
 {
-    // Update the active state here so WebViews in NSPopovers get the active state.
-    // This is needed because the normal NSWindowDidBecomeKeyNotification is not fired
-    // for NSPopover windows since they share key with their parent window.
-    [self _updateActiveState];
-
     if (![self shouldUpdateWhileOffscreen])
         [self setNeedsDisplay:YES];
 
     // Send a change screen to make sure the initial displayID is set
     [self doWindowDidChangeScreen];
 
-    if (_private && _private->page)
-        _private->page->resumeScriptedAnimations();    
+    if (_private && _private->page) {
+        _private->page->resumeScriptedAnimations();
+        _private->page->focusController()->setContainingWindowIsVisible(true);
+    }
 }
 
 - (void)_windowDidChangeScreen:(NSNotification *)notification
@@ -3358,13 +3492,10 @@ static NSString * const backingPropertyOldScaleFactorKey = @"NSBackingPropertyOl
 
 - (void)_windowWillOrderOffScreen:(NSNotification *)notification
 {
-    // Update the active state here so WebViews in NSPopovers get the inactive state.
-    // This is needed because the normal NSWindowDidResignKeyNotification is not fired
-    // for NSPopover windows since they share key with their parent window.
-    [self _updateActiveState];
-    
-    if (_private && _private->page)
-        _private->page->suspendScriptedAnimations();    
+    if (_private && _private->page) {
+        _private->page->suspendScriptedAnimations();
+        _private->page->focusController()->setContainingWindowIsVisible(false);
+    }
 }
 
 - (void)_windowWillClose:(NSNotification *)notification
@@ -3782,17 +3913,18 @@ static NSString * const backingPropertyOldScaleFactorKey = @"NSBackingPropertyOl
     return coreFrame->script()->windowScriptObject();
 }
 
-// Get the appropriate user-agent string for a particular URL.
-- (NSString *)userAgentForURL:(NSURL *)url
+- (String)_userAgentString
 {
-    if (_private->useSiteSpecificSpoofing) {
-        // No current site-specific spoofs.
-    }
-
     if (_private->userAgent.isNull())
         _private->userAgent = [[self class] _standardUserAgentWithApplicationName:_private->applicationNameForUserAgent];
 
     return _private->userAgent;
+}
+
+// Get the appropriate user-agent string for a particular URL.
+- (NSString *)userAgentForURL:(NSURL *)url
+{
+    return [self _userAgentString];
 }
 
 - (void)setHostWindow:(NSWindow *)hostWindow
@@ -4513,28 +4645,18 @@ static BOOL findString(NSView <WebDocumentSearching> *searchView, NSString *stri
     return kit(_private->page->rangeOfString(string, core(previousRange), coreOptions(options)).get());
 }
 
+#if defined(BUILDING_ON_SNOW_LEOPARD) || defined(BUILDING_ON_LION)
+// FIXME: Remove once WebKit no longer needs to support versions of Safari that call this.
 - (void)setHoverFeedbackSuspended:(BOOL)newValue
 {
-    if (_private->hoverFeedbackSuspended == newValue)
-        return;
-    
-    _private->hoverFeedbackSuspended = newValue;
-
-    id <WebDocumentView> documentView = [[[self mainFrame] frameView] documentView];
-    // FIXME: in a perfect world we'd do this in a general way that worked with any document view,
-    // such as by calling a protocol method or using respondsToSelector or sending a notification.
-    // But until there is any need for these more general solutions, we'll just hardwire it to work
-    // with WebHTMLView.
-    // Note that _hoverFeedbackSuspendedChanged needs to be called only on the main WebHTMLView, not
-    // on each subframe separately.
-    if ([documentView isKindOfClass:[WebHTMLView class]])
-        [(WebHTMLView *)documentView _hoverFeedbackSuspendedChanged];
 }
 
+// FIXME: Remove once WebKit no longer needs to support versions of Safari that call this.
 - (BOOL)isHoverFeedbackSuspended
 {
-    return _private->hoverFeedbackSuspended;
+    return NO;
 }
+#endif
 
 - (void)setMainFrameDocumentReady:(BOOL)mainFrameDocumentReady
 {
@@ -5404,8 +5526,9 @@ static NSAppleEventDescriptor* aeDescFromJSValue(ExecState* exec, JSValue jsValu
     // change the API to allow this.
     WebFrame *webFrame = [self _selectedOrMainFrame];
     Frame* coreFrame = core(webFrame);
+    // FIXME: We shouldn't have to make a copy here.
     if (coreFrame)
-        coreFrame->editor()->applyStyle(core(style));
+        coreFrame->editor()->applyStyle(core(style)->copy().get());
 }
 
 @end
@@ -5447,6 +5570,16 @@ FOR_EACH_RESPONDER_SELECTOR(FORWARD)
 {
     [self _performResponderOperation:_cmd with:text];
 }
+
+- (NSDictionary *)typingAttributes
+{
+    Frame* coreFrame = core([self _selectedOrMainFrame]);
+    if (coreFrame)
+        return coreFrame->editor()->fontAttributesForSelectionStart();
+    
+    return nil;
+}
+
 
 @end
 
@@ -5859,18 +5992,6 @@ static inline uint64_t roundUpToPowerOf2(uint64_t num)
 #endif
 }
 
-#if USE(ACCELERATED_COMPOSITING)
-- (void)_clearLayerSyncLoopObserver
-{
-    if (!_private->layerSyncRunLoopObserver)
-        return;
-
-    CFRunLoopObserverInvalidate(_private->layerSyncRunLoopObserver);
-    CFRelease(_private->layerSyncRunLoopObserver);
-    _private->layerSyncRunLoopObserver = 0;
-}
-#endif
-
 #if ENABLE(GLIB_SUPPORT)
 - (void)_clearGlibLoopObserver
 {
@@ -5963,9 +6084,10 @@ static inline uint64_t roundUpToPowerOf2(uint64_t num)
     _private->identifierMap.remove(identifier);
     
     // If the identifier map is now empty it means we're no longer loading anything
-    // and we should release the web view.
+    // and we should release the web view. Autorelease rather than release in order to
+    // avoid re-entering this method beneath -dealloc with the same identifier. <rdar://problem/10523721>
     if (_private->identifierMap.isEmpty())
-        CFRelease(self);
+        WebCFAutorelease(self);
 }
 
 - (void)_retrieveKeyboardUIModeFromPreferences:(NSNotification *)notification
@@ -6076,12 +6198,10 @@ static inline uint64_t roundUpToPowerOf2(uint64_t num)
        until the time is right (essentially when there are no more pending layouts).
     
 */
-
-static void layerSyncRunLoopObserverCallBack(CFRunLoopObserverRef, CFRunLoopActivity, void* info)
+bool LayerFlushController::flushLayers()
 {
-    WebView *webView = reinterpret_cast<WebView*>(info);
-    NSWindow *window = [webView window];
-
+    NSWindow *window = [m_webView window];
+    
     // An NSWindow may not display in the next runloop cycle after dirtying due to delayed window display logic,
     // in which case this observer can fire first. So if the window is due for a display, don't commit
     // layer changes, otherwise they'll show on screen before the view drawing.
@@ -6094,46 +6214,30 @@ static void layerSyncRunLoopObserverCallBack(CFRunLoopObserverRef, CFRunLoopActi
         viewsNeedDisplay = [window viewsNeedDisplay];
 
     if (viewsNeedDisplay)
-        return;
+        return false;
 
-    if ([webView _syncCompositingChanges]) {
-        [webView _clearLayerSyncLoopObserver];
+    if ([m_webView _syncCompositingChanges]) {
         // AppKit may have disabled screen updates, thinking an upcoming window flush will re-enable them.
         // In case setNeedsDisplayInRect() has prevented the window from needing to be flushed, re-enable screen
         // updates here.
         if (![window isFlushWindowDisabled])
             [window _enableScreenUpdatesIfNeeded];
-    } else {
-        // Since the WebView does not need display, -viewWillDraw will not be called. Perform pending layout now,
-        // so that the layers draw with up-to-date layout. 
-        [webView _viewWillDrawInternal];
+
+        return true;
     }
+
+    // Since the WebView does not need display, -viewWillDraw will not be called. Perform pending layout now,
+    // so that the layers draw with up-to-date layout. 
+    [m_webView _viewWillDrawInternal];
+
+    return false;
 }
 
 - (void)_scheduleCompositingLayerSync
 {
-    CFRunLoopRef currentRunLoop = CFRunLoopGetCurrent();
-
-    // Make sure we wake up the loop or the observer could be delayed until some other source fires.
-    CFRunLoopWakeUp(currentRunLoop);
-
-    if (_private->layerSyncRunLoopObserver)
-        return;
-
-    // Run after AppKit does its window update. If we do any painting, we'll commit
-    // layer changes from FrameView::paintContents(), otherwise we'll commit via
-    // _syncCompositingChanges when this observer fires.
-    // Also leave a slot for the requestAnimationFrameRunLoopObserver, if it's enabled
-    const CFIndex runLoopOrder = NSDisplayWindowRunLoopOrdering + 2;
-
-    // The WebView always outlives the observer, so no need to retain/release.
-    CFRunLoopObserverContext context = { 0, self, 0, 0, 0 };
-
-    _private->layerSyncRunLoopObserver = CFRunLoopObserverCreate(NULL,
-        kCFRunLoopBeforeWaiting | kCFRunLoopExit, true /* repeats */,
-        runLoopOrder, layerSyncRunLoopObserverCallBack, &context);
-
-    CFRunLoopAddObserver(currentRunLoop, _private->layerSyncRunLoopObserver, kCFRunLoopCommonModes);
+    if (!_private->layerFlushController)
+        _private->layerFlushController = LayerFlushController::create(self);
+    _private->layerFlushController->scheduleLayerFlush();
 }
 
 #endif
@@ -6244,6 +6348,15 @@ static void glibContextIterationCallback(CFRunLoopObserverRef, CFRunLoopActivity
 }
 #endif
 
+- (NSPoint)_convertPointFromRootView:(NSPoint)point
+{
+    return NSMakePoint(point.x, [self bounds].size.height - point.y);
+}
+
+- (NSRect)_convertRectFromRootView:(NSRect)rect
+{
+    return NSMakeRect(rect.origin.x, [self bounds].size.height - rect.origin.y - rect.size.height, rect.size.width, rect.size.height);
+}
 
 @end
 
@@ -6299,6 +6412,43 @@ static void glibContextIterationCallback(CFRunLoopObserverRef, CFRunLoopActivity
 
 @end
 
+@implementation WebView (WebViewNotification)
+- (void)_setNotificationProvider:(id<WebNotificationProvider>)notificationProvider
+{
+    if (_private) {
+        _private->_notificationProvider = notificationProvider;
+        [_private->_notificationProvider registerWebView:self];
+    }
+}
+
+- (void)_notificationControllerDestroyed
+{
+    [[self _notificationProvider] unregisterWebView:self];
+}
+
+- (id<WebNotificationProvider>)_notificationProvider
+{
+    if (_private)
+        return _private->_notificationProvider;
+    return nil;
+}
+
+- (void)_notificationDidShow:(uint64_t)notificationID
+{
+    [[self _notificationProvider] webView:self didShowNotification:notificationID];
+}
+
+- (void)_notificationDidClick:(uint64_t)notificationID
+{
+    [[self _notificationProvider] webView:self didClickNotification:notificationID];
+}
+
+- (void)_notificationsDidClose:(NSArray *)notificationIDs
+{
+    [[self _notificationProvider] webView:self didCloseNotifications:notificationIDs];
+}
+@end
+
 @implementation WebView (WebViewPrivateStyleInfo)
 
 - (JSValueRef)_computedStyleIncludingVisitedInfo:(JSContextRef)context forElement:(JSValueRef)value
@@ -6312,27 +6462,8 @@ static void glibContextIterationCallback(CFRunLoopObserverRef, CFRunLoopActivity
         return JSValueMakeUndefined(context);
     JSElement* jsElement = static_cast<JSElement*>(asObject(jsValue));
     Element* element = jsElement->impl();
-    RefPtr<CSSComputedStyleDeclaration> style = computedStyle(element, true);
+    RefPtr<CSSComputedStyleDeclaration> style = CSSComputedStyleDeclaration::create(element, true);
     return toRef(exec, toJS(exec, jsElement->globalObject(), style.get()));
-}
-
-@end
-
-@implementation WebView (WebViewPrivateNodesFromRect)
-
-- (JSValueRef)_nodesFromRect:(JSContextRef)context forDocument:(JSValueRef)value x:(int)x  y:(int)y top:(unsigned)top right:(unsigned)right bottom:(unsigned)bottom left:(unsigned)left ignoreClipping:(BOOL)ignoreClipping
-{
-    JSLock lock(SilenceAssertionsOnly);
-    ExecState* exec = toJS(context);
-    if (!value)
-        return JSValueMakeUndefined(context);
-    JSValue jsValue = toJS(exec, value);
-    if (!jsValue.inherits(&JSDocument::s_info))
-        return JSValueMakeUndefined(context);
-    JSDocument* jsDocument = static_cast<JSDocument*>(asObject(jsValue));
-    Document* document = jsDocument->impl();
-    RefPtr<NodeList> nodes = document->nodesFromRect(x, y, top, right, bottom, left, ignoreClipping);
-    return toRef(exec, toJS(exec, jsDocument->globalObject(), nodes.get()));
 }
 
 @end

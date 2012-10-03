@@ -48,23 +48,23 @@ namespace JSC {
 
         static JSActivation* create(JSGlobalData& globalData, CallFrame* callFrame, FunctionExecutable* funcExec)
         {
-            JSActivation* activation = new (allocateCell<JSActivation>(globalData.heap)) JSActivation(callFrame, funcExec);
+            JSActivation* activation = new (NotNull, allocateCell<JSActivation>(globalData.heap)) JSActivation(callFrame, funcExec);
             activation->finishCreation(callFrame);
             return activation;
         }
 
-        virtual ~JSActivation();
+        static void finalize(JSCell*);
 
         static void visitChildren(JSCell*, SlotVisitor&);
 
-        virtual bool isDynamicScope(bool& requiresDynamicChecks) const;
+        bool isDynamicScope(bool& requiresDynamicChecks) const;
 
         static bool getOwnPropertySlot(JSCell*, ExecState*, const Identifier&, PropertySlot&);
         static void getOwnPropertyNames(JSObject*, ExecState*, PropertyNameArray&, EnumerationMode);
 
         static void put(JSCell*, ExecState*, const Identifier&, JSValue, PutPropertySlot&);
 
-        static void putWithAttributes(JSObject*, ExecState*, const Identifier&, JSValue, unsigned attributes);
+        static void putDirectVirtual(JSObject*, ExecState*, const Identifier&, JSValue, unsigned attributes);
         static bool deleteProperty(JSCell*, ExecState*, const Identifier& propertyName);
 
         static JSObject* toThisObject(JSCell*, ExecState*);
@@ -75,6 +75,8 @@ namespace JSC {
 
         static Structure* createStructure(JSGlobalData& globalData, JSGlobalObject* globalObject, JSValue proto) { return Structure::create(globalData, globalObject, proto, TypeInfo(ActivationObjectType, StructureFlags), &s_info); }
 
+        bool isValidScopedLookup(int index) { return index < m_numCapturedVars; }
+
     protected:
         void finishCreation(CallFrame*);
         static const unsigned StructureFlags = IsEnvironmentRecord | OverridesGetOwnPropertySlot | OverridesVisitChildren | OverridesGetPropertyNames | JSVariableObject::StructureFlags;
@@ -83,13 +85,13 @@ namespace JSC {
         bool symbolTableGet(const Identifier&, PropertySlot&);
         bool symbolTableGet(const Identifier&, PropertyDescriptor&);
         bool symbolTableGet(const Identifier&, PropertySlot&, bool& slotIsWriteable);
-        bool symbolTablePut(JSGlobalData&, const Identifier&, JSValue);
+        bool symbolTablePut(ExecState*, const Identifier&, JSValue, bool shouldThrow);
         bool symbolTablePutWithAttributes(JSGlobalData&, const Identifier&, JSValue, unsigned attributes);
 
         static JSValue argumentsGetter(ExecState*, JSValue, const Identifier&);
         NEVER_INLINE PropertySlot::GetValueFunc getArgumentsGetter();
 
-        int m_numParametersMinusThis;
+        int m_numCapturedArgs;
         int m_numCapturedVars : 31;
         bool m_requiresDynamicChecks : 1;
         int m_argumentsRegister;
@@ -117,17 +119,26 @@ namespace JSC {
     inline void JSActivation::tearOff(JSGlobalData& globalData)
     {
         ASSERT(!m_registerArray);
+        ASSERT(m_numCapturedVars + m_numCapturedArgs);
 
-        size_t numLocals = m_numCapturedVars + m_numParametersMinusThis;
+        int registerOffset = CallFrame::offsetFor(m_numCapturedArgs + 1);
+        size_t registerArraySize = registerOffset + m_numCapturedVars;
 
-        if (!numLocals)
-            return;
-
-        int registerOffset = m_numParametersMinusThis + RegisterFile::CallFrameHeaderSize;
-        size_t registerArraySize = numLocals + RegisterFile::CallFrameHeaderSize;
-
-        OwnArrayPtr<WriteBarrier<Unknown> > registerArray = copyRegisterArray(globalData, m_registers - registerOffset, registerArraySize, m_numParametersMinusThis + 1);
+        OwnArrayPtr<WriteBarrier<Unknown> > registerArray = adoptArrayPtr(new WriteBarrier<Unknown>[registerArraySize]);
         WriteBarrier<Unknown>* registers = registerArray.get() + registerOffset;
+
+        // Copy all arguments that can be captured by name or by the arguments object.
+        for (int i = 0; i < m_numCapturedArgs; ++i) {
+            int index = CallFrame::argumentOffset(i);
+            registers[index].set(globalData, this, m_registers[index].get());
+        }
+
+        // Skip 'this' and call frame.
+
+        // Copy all captured vars.
+        for (int i = 0; i < m_numCapturedVars; ++i)
+            registers[i].set(globalData, this, m_registers[i].get());
+
         setRegisters(registers, registerArray.release());
     }
 

@@ -55,11 +55,11 @@ private:
     {
     }
 
-    virtual void doApply()
+    virtual void doApply() OVERRIDE
     {
     }
 
-    virtual void doUnapply()
+    virtual void doUnapply() OVERRIDE
     {
         if (!m_hasBeenUndone) {
             document()->frame()->editor()->unappliedSpellCorrection(startingSelection(), m_corrected, m_correction);
@@ -67,6 +67,12 @@ private:
         }
         
     }
+
+#ifndef NDEBUG
+    virtual void getNodesInCommand(HashSet<Node*>&) OVERRIDE
+    {
+    }
+#endif
 
     String m_corrected;
     String m_correction;

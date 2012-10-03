@@ -39,7 +39,7 @@ class KURL;
 
 class SecurityOrigin : public ThreadSafeRefCounted<SecurityOrigin> {
 public:
-    static PassRefPtr<SecurityOrigin> create(const KURL&, bool forceUnique = false);
+    static PassRefPtr<SecurityOrigin> create(const KURL&);
     static PassRefPtr<SecurityOrigin> createUnique();
 
     static PassRefPtr<SecurityOrigin> createFromDatabaseIdentifier(const String&);
@@ -164,8 +164,13 @@ public:
     // (and whether it was set) but considering the host. It is used for postMessage.
     bool isSameSchemeHostPort(const SecurityOrigin*) const;
 
+#if PLATFORM(BLACKBERRY)
+    bool containsInFolder(const SecurityOrigin*) const;
+#endif
+
 private:
-    explicit SecurityOrigin(const KURL&, bool forceUnique);
+    SecurityOrigin();
+    explicit SecurityOrigin(const KURL&);
     explicit SecurityOrigin(const SecurityOrigin*);
 
     // FIXME: Rename this function to something more semantic.
@@ -176,12 +181,16 @@ private:
     mutable String m_encodedHost;
     String m_domain;
     String m_filePath;
+#if PLATFORM(BLACKBERRY)
+    String m_folderPath;
+#endif
     unsigned short m_port;
     bool m_isUnique;
     bool m_universalAccess;
     bool m_domainWasSetInDOM;
     bool m_canLoadLocalResources;
     bool m_enforceFilePathSeparation;
+    bool m_needsDatabaseIdentifierQuirkForFiles;
 };
 
 } // namespace WebCore

@@ -25,7 +25,7 @@
 #ifndef HTMLTextFormControlElement_h
 #define HTMLTextFormControlElement_h
 
-#include "HTMLFormControlElement.h"
+#include "HTMLFormControlElementWithState.h"
 
 namespace WebCore {
 
@@ -34,6 +34,7 @@ class RenderTextControl;
 class VisiblePosition;
 
 enum TextFieldSelectionDirection { SelectionHasNoDirection, SelectionHasForwardDirection, SelectionHasBackwardDirection };
+enum TextFieldEventBehavior { DispatchNoEvent, DispatchChangeEvent, DispatchInputAndChangeEvent };
 
 class HTMLTextFormControlElement : public HTMLFormControlElementWithState {
 public:
@@ -79,14 +80,16 @@ public:
     void setInnerTextValue(const String&);
     String innerTextValue() const;
 
+    String directionForFormData() const;
+
+    void setTextAsOfLastFormControlChangeEvent(const String& text) { m_textAsOfLastFormControlChangeEvent = text; }
+
 protected:
     HTMLTextFormControlElement(const QualifiedName&, Document*, HTMLFormElement*);
     virtual void updatePlaceholderText() = 0;
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
-    void setTextAsOfLastFormControlChangeEvent(const String& text) { m_textAsOfLastFormControlChangeEvent = text; }
-    
     void cacheSelection(int start, int end, TextFieldSelectionDirection direction)
     {
         m_cachedSelectionStart = start;
@@ -111,6 +114,7 @@ private:
 
     virtual void dispatchFocusEvent(PassRefPtr<Node> oldFocusedNode);
     virtual void dispatchBlurEvent(PassRefPtr<Node> newFocusedNode);
+    virtual bool childShouldCreateRenderer(const NodeRenderingContext&) const OVERRIDE;
 
     bool isPlaceholderEmpty() const;
 

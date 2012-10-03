@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -35,7 +35,7 @@ AccessibilityUIElement::~AccessibilityUIElement()
 {
 }
 
-void AccessibilityUIElement::getLinkedUIElements(Vector<AccessibilityUIElement>& elements)
+void AccessibilityUIElement::getLinkedUIElements(Vector<AccessibilityUIElement>&)
 {
     notImplemented();
 }
@@ -45,12 +45,12 @@ void AccessibilityUIElement::getDocumentLinks(Vector<AccessibilityUIElement>&)
     notImplemented();
 }
 
-void AccessibilityUIElement::getChildren(Vector<AccessibilityUIElement>& children)
+void AccessibilityUIElement::getChildren(Vector<AccessibilityUIElement>&)
 {
     notImplemented();
 }
 
-void AccessibilityUIElement::getChildrenWithRange(Vector<AccessibilityUIElement>& elementVector, unsigned start, unsigned end)
+void AccessibilityUIElement::getChildrenWithRange(Vector<AccessibilityUIElement>&, unsigned, unsigned)
 {
     notImplemented();
 }
@@ -61,19 +61,19 @@ int AccessibilityUIElement::childrenCount()
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::elementAtPoint(int x, int y)
+AccessibilityUIElement AccessibilityUIElement::elementAtPoint(int, int)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::getChildAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::getChildAtIndex(unsigned)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::linkedUIElementAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::linkedUIElementAtIndex(unsigned)
 {
     notImplemented();
     return 0;
@@ -235,7 +235,7 @@ int AccessibilityUIElement::insertionPointLineNumber()
     return 0;
 }
 
-bool AccessibilityUIElement::isActionSupported(JSStringRef action)
+bool AccessibilityUIElement::isActionSupported(JSStringRef)
 {
     notImplemented();
     return 0;
@@ -337,7 +337,7 @@ int AccessibilityUIElement::lineForIndex(int)
     return 0;
 }
 
-JSStringRef AccessibilityUIElement::boundsForRange(unsigned location, unsigned length)
+JSStringRef AccessibilityUIElement::boundsForRange(unsigned, unsigned)
 {
     notImplemented();
     return 0;
@@ -349,13 +349,13 @@ JSStringRef AccessibilityUIElement::stringForRange(unsigned, unsigned)
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::uiElementForSearchPredicate(AccessibilityUIElement* startElement, bool isDirectionNext, JSStringRef searchKey, JSStringRef searchText)
+AccessibilityUIElement AccessibilityUIElement::uiElementForSearchPredicate(AccessibilityUIElement*, bool, JSStringRef, JSStringRef)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::cellForColumnAndRow(unsigned column, unsigned row)
+AccessibilityUIElement AccessibilityUIElement::cellForColumnAndRow(unsigned, unsigned)
 {
     notImplemented();
     return 0;
@@ -367,18 +367,18 @@ JSStringRef AccessibilityUIElement::selectedTextRange()
     return 0;
 }
 
-void AccessibilityUIElement::setSelectedTextRange(unsigned location, unsigned length)
+void AccessibilityUIElement::setSelectedTextRange(unsigned, unsigned)
 {
     notImplemented();
 }
 
-bool AccessibilityUIElement::isAttributeSettable(JSStringRef attribute)
+bool AccessibilityUIElement::isAttributeSettable(JSStringRef)
 {
     notImplemented();
     return 0;
 }
 
-bool AccessibilityUIElement::isAttributeSupported(JSStringRef attribute)
+bool AccessibilityUIElement::isAttributeSupported(JSStringRef)
 {
     notImplemented();
     return 0;
@@ -399,25 +399,25 @@ void AccessibilityUIElement::showMenu()
     notImplemented();
 }
 
-AccessibilityUIElement AccessibilityUIElement::disclosedRowAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::disclosedRowAtIndex(unsigned)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::ariaOwnsElementAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::ariaOwnsElementAtIndex(unsigned)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::ariaFlowToElementAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::ariaFlowToElementAtIndex(unsigned)
 {
     notImplemented();
     return 0;
 }
 
-AccessibilityUIElement AccessibilityUIElement::selectedRowAtIndex(unsigned index)
+AccessibilityUIElement AccessibilityUIElement::selectedRowAtIndex(unsigned)
 {
     notImplemented();
     return 0;
@@ -453,19 +453,19 @@ unsigned AccessibilityUIElement::indexOfChild(AccessibilityUIElement*)
     return 0;
 }
 
-double AccessibilityUIElement::numberAttributeValue(JSStringRef attribute)
-{
-    notImplemented();
-    return 0.0f;
-}
-
-bool AccessibilityUIElement::boolAttributeValue(JSStringRef attribute)
+double AccessibilityUIElement::numberAttributeValue(JSStringRef)
 {
     notImplemented();
     return 0;
 }
 
-JSStringRef AccessibilityUIElement::stringAttributeValue(JSStringRef attribute)
+bool AccessibilityUIElement::boolAttributeValue(JSStringRef)
+{
+    notImplemented();
+    return 0;
+}
+
+JSStringRef AccessibilityUIElement::stringAttributeValue(JSStringRef)
 {
     notImplemented();
     return 0;
@@ -490,7 +490,7 @@ JSStringRef AccessibilityUIElement::url()
 }
 
 
-bool AccessibilityUIElement::addNotificationListener(JSObjectRef functionCallback)
+bool AccessibilityUIElement::addNotificationListener(JSObjectRef)
 {
     notImplemented();
     return 0;
@@ -503,6 +503,12 @@ bool AccessibilityUIElement::isSelectable() const
 }
 
 bool AccessibilityUIElement::isMultiSelectable() const
+{
+    notImplemented();
+    return false;
+}
+
+bool AccessibilityUIElement::isSelectedOptionActive() const
 {
     notImplemented();
     return false;
@@ -586,7 +592,7 @@ JSStringRef AccessibilityUIElement::attributedStringForRange(unsigned, unsigned)
     return 0;
 }
 
-bool AccessibilityUIElement::attributedStringRangeIsMisspelled(unsigned location, unsigned length)
+bool AccessibilityUIElement::attributedStringRangeIsMisspelled(unsigned, unsigned)
 {
     notImplemented();
     return 0;
@@ -594,7 +600,7 @@ bool AccessibilityUIElement::attributedStringRangeIsMisspelled(unsigned location
 
 bool AccessibilityUIElement::isIgnored() const
 {
-    // FIXME: implement
+    notImplemented();
     return false;
 }
 

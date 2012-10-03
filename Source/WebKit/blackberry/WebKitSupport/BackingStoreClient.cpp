@@ -21,31 +21,35 @@
 
 #include "BackingStore.h"
 #include "BackingStore_p.h"
-#include "Element.h"
 #include "FloatPoint.h"
 #include "FocusController.h"
 #include "Frame.h"
 #include "FrameView.h"
 #include "HTMLFrameOwnerElement.h"
-#include "IntPoint.h"
-#include "IntRect.h"
-#include "IntSize.h"
 #include "Page.h"
 #include "RenderBox.h"
-#include "RenderView.h"
 #include "WebPage_p.h"
+
+// FIXME: Leaving the below lines commented out as a reference for us to soon be sure if we need these
+// methods and class variables be moved from WebPage to BackingStoreClient.
+// Notification methods that deliver changes to the real geometry of the device as specified above.
+// void notifyTransformChanged();
+// void notifyTransformedContentsSizeChanged();
+// void notifyTransformedScrollChanged();
+// m_overflowExceedsContentsSize = true;
+// haspendingscrollevent
 
 using namespace WebCore;
 
 namespace BlackBerry {
 namespace WebKit {
 
-static inline WebCore::IntSize pointToSize(const WebCore::IntPoint& point)
+static inline IntSize pointToSize(const IntPoint& point)
 {
-    return WebCore::IntSize(point.x(), point.y());
+    return IntSize(point.x(), point.y());
 }
 
-BackingStoreClient* BackingStoreClient::create(WebCore::Frame* frame, WebCore::Frame* parentFrame, WebPage* parentPage)
+BackingStoreClient* BackingStoreClient::create(Frame* frame, Frame* parentFrame, WebPage* parentPage)
 {
     ASSERT(parentPage);
     ASSERT(frame->view());
@@ -60,7 +64,7 @@ BackingStoreClient* BackingStoreClient::create(WebCore::Frame* frame, WebCore::F
         : 0;
 
     // If this frame has a parent with no backingstore then just stop since
-    // our frame heirarchy is done
+    // our frame heirarchy is done.
     if (parentFrame && !parentBackingStoreClient)
         return 0;
 
@@ -77,7 +81,7 @@ BackingStoreClient* BackingStoreClient::create(WebCore::Frame* frame, WebCore::F
     return it;
 }
 
-BackingStoreClient::BackingStoreClient(WebCore::Frame* frame, WebCore::Frame* parentFrame, WebPage* parentPage)
+BackingStoreClient::BackingStoreClient(Frame* frame, Frame* parentFrame, WebPage* parentPage)
     : m_frame(frame)
     , m_webPage(parentPage)
     , m_backingStore(0)
@@ -118,9 +122,9 @@ WTF::Vector <BackingStoreClient*> BackingStoreClient::children() const
     return children;
 }
 
-WebCore::IntRect BackingStoreClient::absoluteRect() const
+IntRect BackingStoreClient::absoluteRect() const
 {
-    WebCore::IntRect rect = WebCore::IntRect(WebCore::IntPoint(0, 0), viewportSize());
+    IntRect rect = IntRect(IntPoint::zero(), viewportSize());
 
     if (!isMainFrame()) {
         // It is possible that the owner HTML element has been removed at this point,
@@ -131,7 +135,7 @@ WebCore::IntRect BackingStoreClient::absoluteRect() const
         }
     }
 
-    WebCore::Frame* frame = m_frame;
+    Frame* frame = m_frame;
     while (frame) {
         if (Element* element = static_cast<Element*>(frame->ownerElement())) {
             do {
@@ -146,35 +150,41 @@ WebCore::IntRect BackingStoreClient::absoluteRect() const
     return rect;
 }
 
-WebCore::IntRect BackingStoreClient::transformedAbsoluteRect() const
+IntRect BackingStoreClient::transformedAbsoluteRect() const
 {
     return m_webPage->d->mapToTransformed(absoluteRect());
 }
 
-WebCore::IntPoint BackingStoreClient::absoluteLocation() const
+IntPoint BackingStoreClient::absoluteLocation() const
 {
     return absoluteRect().location();
 }
 
-WebCore::IntPoint BackingStoreClient::transformedAbsoluteLocation() const
+IntPoint BackingStoreClient::transformedAbsoluteLocation() const
 {
     return m_webPage->d->mapToTransformed(transformedAbsoluteRect()).location();
 }
 
-WebCore::IntPoint BackingStoreClient::scrollPosition() const
+IntPoint BackingStoreClient::scrollPosition() const
 {
     ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntPoint();
+
     return m_frame->view()->scrollPosition() - pointToSize(m_frame->view()->minimumScrollPosition());
 }
 
-WebCore::IntPoint BackingStoreClient::transformedScrollPosition() const
+IntPoint BackingStoreClient::transformedScrollPosition() const
 {
     return m_webPage->d->mapToTransformed(scrollPosition());
 }
 
-void BackingStoreClient::setScrollPosition(const WebCore::IntPoint& pos)
+void BackingStoreClient::setScrollPosition(const IntPoint& pos)
 {
-    ASSERT(m_frame->view());
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return;
+
     if (pos == scrollPosition())
         return;
 
@@ -190,23 +200,26 @@ void BackingStoreClient::setScrollPosition(const WebCore::IntPoint& pos)
     m_isScrollNotificationSuppressed = false;
 }
 
-WebCore::IntPoint BackingStoreClient::maximumScrollPosition() const
+IntPoint BackingStoreClient::maximumScrollPosition() const
 {
-    ASSERT(m_frame->view());
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntPoint();
+
     return m_frame->view()->maximumScrollPosition() - pointToSize(m_frame->view()->minimumScrollPosition());
 }
 
-WebCore::IntPoint BackingStoreClient::transformedMaximumScrollPosition() const
+IntPoint BackingStoreClient::transformedMaximumScrollPosition() const
 {
     return m_webPage->d->mapToTransformed(maximumScrollPosition());
 }
 
-WebCore::IntSize BackingStoreClient::actualVisibleSize() const
+IntSize BackingStoreClient::actualVisibleSize() const
 {
     return m_webPage->d->mapFromTransformed(transformedActualVisibleSize());
 }
 
-WebCore::IntSize BackingStoreClient::transformedActualVisibleSize() const
+IntSize BackingStoreClient::transformedActualVisibleSize() const
 {
     if (isMainFrame())
         return m_webPage->d->transformedActualVisibleSize();
@@ -214,35 +227,44 @@ WebCore::IntSize BackingStoreClient::transformedActualVisibleSize() const
     return transformedViewportSize();
 }
 
-WebCore::IntSize BackingStoreClient::viewportSize() const
+IntSize BackingStoreClient::viewportSize() const
 {
-    ASSERT(m_frame->view());
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntSize();
+
     if (isMainFrame())
         return m_webPage->d->viewportSize();
 
     return m_frame->view()->visibleContentRect().size();
 }
 
-WebCore::IntSize BackingStoreClient::transformedViewportSize() const
+IntSize BackingStoreClient::transformedViewportSize() const
 {
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntSize();
+
     if (isMainFrame())
         return m_webPage->d->transformedViewportSize();
 
-    ASSERT(m_frame->view());
-    const WebCore::IntSize untransformedViewportSize = m_frame->view()->visibleContentRect().size();
-    const WebCore::FloatPoint transformedBottomRight = m_webPage->d->m_transformationMatrix->mapPoint(
-        WebCore::FloatPoint(untransformedViewportSize.width(), untransformedViewportSize.height()));
-    return WebCore::IntSize(floorf(transformedBottomRight.x()), floorf(transformedBottomRight.y()));
+    const IntSize untransformedViewportSize = m_frame->view()->visibleContentRect().size();
+    const FloatPoint transformedBottomRight = m_webPage->d->m_transformationMatrix->mapPoint(
+        FloatPoint(untransformedViewportSize.width(), untransformedViewportSize.height()));
+    return IntSize(floorf(transformedBottomRight.x()), floorf(transformedBottomRight.y()));
 }
 
-WebCore::IntRect BackingStoreClient::visibleContentsRect() const
+IntRect BackingStoreClient::visibleContentsRect() const
 {
-    ASSERT(m_frame->view());
-    WebCore::IntRect visibleContentRect = m_frame->view()->visibleContentRect();
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntRect();
+
+    IntRect visibleContentRect = m_frame->view()->visibleContentRect();
     if (isMainFrame())
         return visibleContentRect;
 
-    WebCore::IntPoint offset = absoluteLocation();
+    IntPoint offset = absoluteLocation();
     visibleContentRect.move(offset.x(), offset.y());
     if (m_parent)
         visibleContentRect.intersect(m_parent->visibleContentsRect());
@@ -250,7 +272,7 @@ WebCore::IntRect BackingStoreClient::visibleContentsRect() const
     return visibleContentRect;
 }
 
-WebCore::IntRect BackingStoreClient::transformedVisibleContentsRect() const
+IntRect BackingStoreClient::transformedVisibleContentsRect() const
 {
     // Usually this would be mapToTransformed(visibleContentsRect()), but
     // that results in rounding errors because we already set the WebCore
@@ -258,22 +280,25 @@ WebCore::IntRect BackingStoreClient::transformedVisibleContentsRect() const
     // Instead, we only transform the scroll position and take the
     // viewport size as it is, which ensures that e.g. blitting operations
     // always cover the whole widget/screen.
-    WebCore::IntRect visibleContentsRect = WebCore::IntRect(transformedScrollPosition(), transformedViewportSize());
+    IntRect visibleContentsRect = IntRect(transformedScrollPosition(), transformedViewportSize());
     if (isMainFrame())
         return visibleContentsRect;
 
-    WebCore::IntPoint offset = transformedAbsoluteLocation();
+    IntPoint offset = transformedAbsoluteLocation();
     visibleContentsRect.move(offset.x(), offset.y());
     return visibleContentsRect;
 }
 
-WebCore::IntSize BackingStoreClient::contentsSize() const
+IntSize BackingStoreClient::contentsSize() const
 {
-    ASSERT(m_frame->view());
+    ASSERT(m_frame);
+    if (!m_frame->view())
+        return IntSize();
+
     return m_frame->view()->contentsSize();
 }
 
-WebCore::IntSize BackingStoreClient::transformedContentsSize() const
+IntSize BackingStoreClient::transformedContentsSize() const
 {
     // mapToTransformed() functions use this method to crop their results,
     // so we can't make use of them here. While we want rounding inside page
@@ -281,60 +306,60 @@ WebCore::IntSize BackingStoreClient::transformedContentsSize() const
     // contents size to the floored values so that we don't try to display
     // or report points that are not fully covered by the actual float-point
     // contents rectangle.
-    const WebCore::IntSize untransformedContentsSize = contentsSize();
-    const WebCore::FloatPoint transformedBottomRight = m_webPage->d->m_transformationMatrix->mapPoint(
-        WebCore::FloatPoint(untransformedContentsSize.width(), untransformedContentsSize.height()));
-    return WebCore::IntSize(floorf(transformedBottomRight.x()), floorf(transformedBottomRight.y()));
+    const IntSize untransformedContentsSize = contentsSize();
+    const FloatPoint transformedBottomRight = m_webPage->d->m_transformationMatrix->mapPoint(
+        FloatPoint(untransformedContentsSize.width(), untransformedContentsSize.height()));
+    return IntSize(floorf(transformedBottomRight.x()), floorf(transformedBottomRight.y()));
 }
 
-void BackingStoreClient::clipToTransformedContentsRect(WebCore::IntRect& rect) const
+void BackingStoreClient::clipToTransformedContentsRect(IntRect& rect) const
 {
     // FIXME: Needs to proper translate coordinates here?
-    rect.intersect(WebCore::IntRect(WebCore::IntPoint(0, 0), transformedContentsSize()));
+    rect.intersect(IntRect(IntPoint::zero(), transformedContentsSize()));
 }
 
-WebCore::IntPoint BackingStoreClient::mapFromContentsToViewport(const WebCore::IntPoint& point) const
+IntPoint BackingStoreClient::mapFromContentsToViewport(const IntPoint& point) const
 {
-    const WebCore::IntPoint scrollPosition = this->scrollPosition();
-    return WebCore::IntPoint(point.x() - scrollPosition.x(), point.y() - scrollPosition.y());
+    const IntPoint scrollPosition = this->scrollPosition();
+    return IntPoint(point.x() - scrollPosition.x(), point.y() - scrollPosition.y());
 }
 
-WebCore::IntPoint BackingStoreClient::mapFromViewportToContents(const WebCore::IntPoint& point) const
+IntPoint BackingStoreClient::mapFromViewportToContents(const IntPoint& point) const
 {
-    const WebCore::IntPoint scrollPosition = this->scrollPosition();
-    return WebCore::IntPoint(point.x() + scrollPosition.x(), point.y() + scrollPosition.y());
+    const IntPoint scrollPosition = this->scrollPosition();
+    return IntPoint(point.x() + scrollPosition.x(), point.y() + scrollPosition.y());
 }
 
-WebCore::IntRect BackingStoreClient::mapFromContentsToViewport(const WebCore::IntRect& rect) const
+IntRect BackingStoreClient::mapFromContentsToViewport(const IntRect& rect) const
 {
-    return WebCore::IntRect(mapFromContentsToViewport(rect.location()), rect.size());
+    return IntRect(mapFromContentsToViewport(rect.location()), rect.size());
 }
 
-WebCore::IntRect BackingStoreClient::mapFromViewportToContents(const WebCore::IntRect& rect) const
+IntRect BackingStoreClient::mapFromViewportToContents(const IntRect& rect) const
 {
-    return WebCore::IntRect(mapFromViewportToContents(rect.location()), rect.size());
+    return IntRect(mapFromViewportToContents(rect.location()), rect.size());
 }
 
-WebCore::IntPoint BackingStoreClient::mapFromTransformedContentsToTransformedViewport(const WebCore::IntPoint& point) const
+IntPoint BackingStoreClient::mapFromTransformedContentsToTransformedViewport(const IntPoint& point) const
 {
-    const WebCore::IntPoint scrollPosition = transformedScrollPosition();
-    return WebCore::IntPoint(point.x() - scrollPosition.x(), point.y() - scrollPosition.y());
+    const IntPoint scrollPosition = transformedScrollPosition();
+    return IntPoint(point.x() - scrollPosition.x(), point.y() - scrollPosition.y());
 }
 
-WebCore::IntPoint BackingStoreClient::mapFromTransformedViewportToTransformedContents(const WebCore::IntPoint& point) const
+IntPoint BackingStoreClient::mapFromTransformedViewportToTransformedContents(const IntPoint& point) const
 {
-    const WebCore::IntPoint scrollPosition = transformedScrollPosition();
-    return WebCore::IntPoint(point.x() + scrollPosition.x(), point.y() + scrollPosition.y());
+    const IntPoint scrollPosition = transformedScrollPosition();
+    return IntPoint(point.x() + scrollPosition.x(), point.y() + scrollPosition.y());
 }
 
-WebCore::IntRect BackingStoreClient::mapFromTransformedContentsToTransformedViewport(const WebCore::IntRect& rect) const
+IntRect BackingStoreClient::mapFromTransformedContentsToTransformedViewport(const IntRect& rect) const
 {
-    return WebCore::IntRect(mapFromTransformedContentsToTransformedViewport(rect.location()), rect.size());
+    return IntRect(mapFromTransformedContentsToTransformedViewport(rect.location()), rect.size());
 }
 
-WebCore::IntRect BackingStoreClient::mapFromTransformedViewportToTransformedContents(const WebCore::IntRect& rect) const
+IntRect BackingStoreClient::mapFromTransformedViewportToTransformedContents(const IntRect& rect) const
 {
-    return WebCore::IntRect(mapFromTransformedViewportToTransformedContents(rect.location()), rect.size());
+    return IntRect(mapFromTransformedViewportToTransformedContents(rect.location()), rect.size());
 }
 
 WebPagePrivate::LoadState BackingStoreClient::loadState() const
@@ -351,9 +376,7 @@ bool BackingStoreClient::isLoading() const
 
 bool BackingStoreClient::isFocused() const
 {
-    return m_frame
-        && m_frame->page()
-        && m_frame->page()->focusController()
+    return m_frame && m_frame->page() && m_frame->page()->focusController()
         && m_frame->page()->focusController()->focusedFrame() == m_frame;
 }
 

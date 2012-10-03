@@ -61,10 +61,18 @@
 #include "RenderObject.h"
 #include "ScriptValue.h"
 #include "SecurityOrigin.h"
+
+#if PLATFORM(BLACKBERRY)
 #include "SecurityPolicy.h"
+#endif
+
 #include "Settings.h"
+
+#if PLATFORM(BLACKBERRY)
 #include "TouchEvent.h"
 #include "WheelEvent.h"
+#endif
+
 #include "npruntime_impl.h"
 #include <wtf/ASCIICType.h>
 
@@ -154,7 +162,7 @@ void PluginView::setFrameRect(const IntRect& rect)
 #if OS(WINDOWS)
     // On Windows always call plugin to change geometry.
     setNPWindowRect(rect);
-#elif !OS(QNX) && defined(XP_UNIX)
+#elif defined(XP_UNIX) && !PLATFORM(BLACKBERRY)
     // On Unix, multiple calls to setNPWindow() in windowed mode causes Flash to crash
     if (m_mode == NP_FULL || !m_isWindowed)
         setNPWindowRect(rect);
@@ -168,12 +176,10 @@ void PluginView::frameRectsChanged()
 
 void PluginView::handleEvent(Event* event)
 {
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-    // Even windowed plugins want to get events.
     if (!m_plugin)
         return;
-#else
-    if (!m_plugin || m_isWindowed)
+#if !PLATFORM(BLACKBERRY)  // On BlackBerry, even windowed plugins want to get events.
+    if (m_isWindowed)
         return;
 #endif
 
@@ -186,16 +192,14 @@ void PluginView::handleEvent(Event* event)
         handleKeyboardEvent(static_cast<KeyboardEvent*>(event));
     else if (event->type() == eventNames().contextmenuEvent)
         event->setDefaultHandled(); // We don't know if the plug-in has handled mousedown event by displaying a context menu, so we never want WebKit to show a default one.
-#if PLATFORM(BLACKBERRY) && OS(QNX) && ENABLE(NETSCAPE_PLUGIN_API)
+#if PLATFORM(BLACKBERRY) && ENABLE(NETSCAPE_PLUGIN_API)
     else if (event->interfaceName() == eventNames().interfaceForWheelEvent)
         handleWheelEvent(static_cast<WheelEvent*>(event));
     else if (event->interfaceName() == eventNames().interfaceForTouchEvent)
         handleTouchEvent(static_cast<TouchEvent*>(event));
-    else if (event->type() == eventNames().DOMFocusOutEvent)
-        setFocus(false);
-    else if (event->type() == eventNames().DOMFocusInEvent)
-        setFocus(true);
-#elif defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
+#endif
+
+#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API)
     else if (event->type() == eventNames().focusoutEvent)
         handleFocusOutEvent();
     else if (event->type() == eventNames().focusinEvent)
@@ -286,8 +290,8 @@ bool PluginView::start()
         frameLoadRequest.resourceRequest().setHTTPMethod("GET");
         frameLoadRequest.resourceRequest().setURL(m_url);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-        if (!SecurityPolicy::shouldHideReferrer(m_url, m_baseURL))
+#if PLATFORM(BLACKBERRY)
+        if (!SecurityPolicy::shouldHideReferrer(m_url, m_parentFrame->document()->baseURL()))
             frameLoadRequest.resourceRequest().setHTTPReferrer(m_parentFrame->loader()->outgoingReferrer());
 #endif
 
@@ -475,7 +479,7 @@ void PluginView::performRequest(PluginRequest* request)
             // PluginView, so we protect it. <rdar://problem/6991251>
             RefPtr<PluginView> protect(this);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
             ResourceRequest resourceRequest = request->frameLoadRequest().resourceRequest();
             resourceRequest.setIsRequestedByPlugin(true);
             m_parentFrame->loader()->load(resourceRequest, targetFrameName, false);
@@ -601,10 +605,10 @@ NPError PluginView::getURLNotify(const char* url, const char* target, void* noti
 
     frameLoadRequest.setFrameName(target);
     frameLoadRequest.resourceRequest().setHTTPMethod("GET");
-    frameLoadRequest.resourceRequest().setURL(makeURL(m_baseURL, url));
+    frameLoadRequest.resourceRequest().setURL(makeURL(m_parentFrame->document()->baseURL(), url));
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_baseURL))
+#if PLATFORM(BLACKBERRY)
+    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_parentFrame->document()->baseURL()))
         frameLoadRequest.resourceRequest().setHTTPReferrer(m_parentFrame->loader()->outgoingReferrer());
 #endif
 
@@ -617,10 +621,10 @@ NPError PluginView::getURL(const char* url, const char* target)
 
     frameLoadRequest.setFrameName(target);
     frameLoadRequest.resourceRequest().setHTTPMethod("GET");
-    frameLoadRequest.resourceRequest().setURL(makeURL(m_baseURL, url));
+    frameLoadRequest.resourceRequest().setURL(makeURL(m_parentFrame->document()->baseURL(), url));
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_baseURL))
+#if PLATFORM(BLACKBERRY)
+    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_parentFrame->document()->baseURL()))
         frameLoadRequest.resourceRequest().setHTTPReferrer(m_parentFrame->loader()->outgoingReferrer());
 #endif
 
@@ -723,7 +727,7 @@ NPError PluginView::setValue(NPPVariable variable, void* value)
         }
     }
 #endif // defined(XP_MACOSX)
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     case NPPVbackgroundPlayBool:
         setBackgroundPlay(reinterpret_cast<intptr_t>(value));
         return NPERR_NO_ERROR;
@@ -873,7 +877,6 @@ PluginView::PluginView(Frame* parentFrame, const IntSize& size, PluginPackage* p
     , m_element(element)
     , m_isStarted(false)
     , m_url(url)
-    , m_baseURL(m_parentFrame->document()->baseURL()) // FIXME: No need for this member variable!
     , m_status(PluginStatusLoadedSuccessfully)
     , m_requestTimer(this, &PluginView::requestTimerFired)
     , m_invalidateTimer(this, &PluginView::invalidateTimerFired)
@@ -911,7 +914,7 @@ PluginView::PluginView(Frame* parentFrame, const IntSize& size, PluginPackage* p
     , m_contextRef(0)
     , m_fakeWindow(0)
 #endif
-#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && PLATFORM(X11)
+#if defined(XP_UNIX) && ENABLE(NETSCAPE_PLUGIN_API) && !PLATFORM(BLACKBERRY)
     , m_hasPendingGeometryChange(true)
     , m_drawable(0)
     , m_visual(0)
@@ -925,7 +928,7 @@ PluginView::PluginView(Frame* parentFrame, const IntSize& size, PluginPackage* p
     , m_manualStream(0)
     , m_isJavaScriptPaused(false)
     , m_haveCalledSetWindow(false)
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
     , m_private(0)
 #endif
 {
@@ -1257,13 +1260,13 @@ NPError PluginView::handlePost(const char* url, const char* target, uint32_t len
     }
 
     frameLoadRequest.resourceRequest().setHTTPMethod("POST");
-    frameLoadRequest.resourceRequest().setURL(makeURL(m_baseURL, url));
+    frameLoadRequest.resourceRequest().setURL(makeURL(m_parentFrame->document()->baseURL(), url));
     frameLoadRequest.resourceRequest().addHTTPHeaderFields(headerFields);
     frameLoadRequest.resourceRequest().setHTTPBody(FormData::create(postData, postDataLength));
     frameLoadRequest.setFrameName(target);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
-    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_baseURL))
+#if PLATFORM(BLACKBERRY)
+    if (!SecurityPolicy::shouldHideReferrer(frameLoadRequest.resourceRequest().url(), m_parentFrame->document()->baseURL()))
         frameLoadRequest.resourceRequest().setHTTPReferrer(m_parentFrame->loader()->outgoingReferrer());
 #endif
 
@@ -1457,7 +1460,7 @@ NPError PluginView::getValueForURL(NPNURLVariable variable, const char* url, cha
 
     switch (variable) {
     case NPNURLVCookie: {
-        KURL u(m_baseURL, url);
+        KURL u(m_parentFrame->document()->baseURL(), url);
         if (u.isValid()) {
             Frame* frame = getFrame(parentFrame(), m_element);
             if (frame) {
@@ -1479,7 +1482,7 @@ NPError PluginView::getValueForURL(NPNURLVariable variable, const char* url, cha
         break;
     }
     case NPNURLVProxy: {
-        KURL u(m_baseURL, url);
+        KURL u(m_parentFrame->document()->baseURL(), url);
         if (u.isValid()) {
             Frame* frame = getFrame(parentFrame(), m_element);
             const FrameLoader* frameLoader = frame ? frame->loader() : 0;
@@ -1518,7 +1521,7 @@ NPError PluginView::setValueForURL(NPNURLVariable variable, const char* url, con
 
     switch (variable) {
     case NPNURLVCookie: {
-        KURL u(m_baseURL, url);
+        KURL u(m_parentFrame->document()->baseURL(), url);
         if (u.isValid()) {
             const String cookieStr = String::fromUTF8(value, len);
             Frame* frame = getFrame(parentFrame(), m_element);

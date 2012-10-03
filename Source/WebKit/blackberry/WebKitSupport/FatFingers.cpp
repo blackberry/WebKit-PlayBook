@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,7 +37,6 @@
 #include "HTMLNames.h"
 #include "HTMLTextAreaElement.h"
 #include "Range.h"
-#include "RenderLayer.h"
 #include "RenderObject.h"
 #include "RenderView.h"
 #include "Text.h"
@@ -52,8 +51,6 @@ using BlackBerry::Platform::LogLevelInfo;
 using BlackBerry::Platform::log;
 using BlackBerry::Platform::IntRectRegion;
 using WTF::RefPtr;
-using WTF::String;
-using WTF::Vector;
 
 using namespace WebCore;
 
@@ -95,9 +92,16 @@ bool FatFingers::isElementClickable(Element* element) const
     case ClickableByDefault: {
         ExceptionCode ec = 0;
         return element->webkitMatchesSelector("a[href],*:link,*:visited,*[role=button],button,input,select,label[for],area[href],textarea,embed,object", ec)
+            || element->isMediaControlElement()
             || element->isContentEditable();
     }
     case MadeClickableByTheWebpage:
+
+        // Elements within a shadow DOM can not be 'made clickable by the webpage', since
+        // they are not accessible.
+        if (element->isInShadowTree())
+            return false;
+
         // FIXME: We fall back to checking for the presence of CSS style "cursor: pointer" to indicate whether the element A
         // can be clicked when A neither registers mouse events handlers nor is a hyperlink or form control. This workaround
         // ensures that we don't break various Google web apps, including <http://maps.google.com>. Ideally, we should walk
@@ -106,7 +110,7 @@ bool FatFingers::isElementClickable(Element* element) const
         // Notice, B is not a hyperlink, or form control, and does not register any mouse event handler. Then B cannot
         // be clicked. Suppose B specified the CSS property "cursor: pointer". Then, B will be considered as clickable.
         return hasMousePressListener(element)
-            || computedStyle(element)->getPropertyValue(cssPropertyID("cursor")) == "pointer";
+            || CSSComputedStyleDeclaration::create(element)->getPropertyValue(cssPropertyID("cursor")) == "pointer";
     default:
         ASSERT_NOT_REACHED();
     }
@@ -122,7 +126,6 @@ static inline bool isFieldWithText(Node* node)
         return false;
 
     Element* element = toElement(node);
-
     return !DOMSupport::inputElementText(element).isEmpty();
 }
 
@@ -133,7 +136,7 @@ static inline int distanceBetweenPoints(const IntPoint& p1, const IntPoint& p2)
     return sqrt((double)((dx * dx) + (dy * dy)));
 }
 
-static bool compareDistanceBetweenPoints(const BlackBerry::Platform::IntPoint& p, const BlackBerry::Platform::IntRectRegion& r1, const BlackBerry::Platform::IntRectRegion& r2)
+static bool compareDistanceBetweenPoints(const Platform::IntPoint& p, const Platform::IntRectRegion& r1, const Platform::IntRectRegion& r2)
 {
     return distanceBetweenPoints(p, r1.extents().center()) > distanceBetweenPoints(p, r2.extents().center());
 }
@@ -167,9 +170,10 @@ FatFingers::~FatFingers()
 const FatFingersResult FatFingers::findBestPoint()
 {
     ASSERT(m_webPage);
+    ASSERT(m_webPage->m_mainFrame);
 
-    if (!m_webPage->m_mainFrame)
-        return m_contentPos;
+    m_cachedRectHitTestResults.clear();
+
     FatFingersResult result(m_contentPos);
     m_matchingApproach = ClickableByDefault;
 
@@ -182,7 +186,7 @@ const FatFingersResult FatFingers::findBestPoint()
     if (elementUnderPoint) {
         result.m_nodeUnderFatFinger = elementUnderPoint;
 
-        // If we are looking for a Clickable Element and we found one, we can quite early.
+        // If we are looking for a Clickable Element and we found one, we can quit early.
         if (m_targetType == ClickableElement) {
             if (clickableElementUnderPoint) {
                 setSuccessfulFatFingersResult(result, clickableElementUnderPoint, m_contentPos /*adjustedPosition*/);
@@ -197,35 +201,36 @@ const FatFingersResult FatFingers::findBestPoint()
     }
 
 #if DEBUG_FAT_FINGERS
-    // force blit to make the fat fingers rects show up
+    // Force blit to make the fat fingers rects show up.
     if (!m_debugFatFingerRect.isEmpty())
         m_webPage->m_backingStore->repaint(0, 0, m_webPage->transformedViewportSize().width(), m_webPage->transformedViewportSize().height(), true, true);
 #endif
 
     Vector<IntersectingRegion> intersectingRegions;
-    BlackBerry::Platform::IntRectRegion remainingFingerRegion = BlackBerry::Platform::IntRectRegion(fingerRectForPoint(m_contentPos));
+    Platform::IntRectRegion remainingFingerRegion = Platform::IntRectRegion(fingerRectForPoint(m_contentPos));
 
     bool foundOne = findIntersectingRegions(m_webPage->m_mainFrame->document(), intersectingRegions, remainingFingerRegion);
     if (!foundOne) {
         m_matchingApproach = MadeClickableByTheWebpage;
-        remainingFingerRegion = BlackBerry::Platform::IntRectRegion(fingerRectForPoint(m_contentPos));
+        remainingFingerRegion = Platform::IntRectRegion(fingerRectForPoint(m_contentPos));
         foundOne = findIntersectingRegions(m_webPage->m_mainFrame->document(), intersectingRegions, remainingFingerRegion);
     }
 
     m_matchingApproach = Done;
+    m_cachedRectHitTestResults.clear();
 
     if (!foundOne)
         return result;
 
     Node* bestNode = 0;
-    BlackBerry::Platform::IntRectRegion largestIntersectionRegion;
+    Platform::IntRectRegion largestIntersectionRegion;
     IntPoint bestPoint;
     int largestIntersectionRegionArea = 0;
 
     Vector<IntersectingRegion>::const_iterator endIt = intersectingRegions.end();
     for (Vector<IntersectingRegion>::const_iterator it = intersectingRegions.begin(); it != endIt; ++it) {
         Node* currentNode = it->first;
-        BlackBerry::Platform::IntRectRegion currentIntersectionRegion = it->second;
+        Platform::IntRectRegion currentIntersectionRegion = it->second;
 
         int currentIntersectionRegionArea = currentIntersectionRegion.area();
         if (currentIntersectionRegionArea > largestIntersectionRegionArea
@@ -253,17 +258,17 @@ const FatFingersResult FatFingers::findBestPoint()
 // 'remainingFingerRegion' and 'intersectingRegions' will always be in main frame contents
 // coordinates.
 // Thus, before comparing, we need to map the former to main frame contents coordinates.
-bool FatFingers::checkFingerIntersection(const BlackBerry::Platform::IntRectRegion& region,
-                                         const BlackBerry::Platform::IntRectRegion& remainingFingerRegion,
+bool FatFingers::checkFingerIntersection(const Platform::IntRectRegion& region,
+                                         const Platform::IntRectRegion& remainingFingerRegion,
                                          Node* node, Vector<IntersectingRegion>& intersectingRegions)
 {
     ASSERT(node);
 
-    BlackBerry::Platform::IntRectRegion regionCopy(region);
+    Platform::IntRectRegion regionCopy(region);
     WebCore::IntPoint framePos(m_webPage->frameOffset(node->document()->frame()));
     regionCopy.move(framePos.x(), framePos.y());
 
-    BlackBerry::Platform::IntRectRegion intersection = intersectRegions(regionCopy, remainingFingerRegion);
+    Platform::IntRectRegion intersection = intersectRegions(regionCopy, remainingFingerRegion);
     if (intersection.isEmpty())
         return false;
 
@@ -287,7 +292,7 @@ bool FatFingers::checkFingerIntersection(const BlackBerry::Platform::IntRectRegi
 // intersectingRegions and remainingFingerRegion are all in main frame contents coordinates,
 // even on recursive calls of ::findIntersectingRegions.
 bool FatFingers::findIntersectingRegions(Document* document,
-                                         Vector<IntersectingRegion>& intersectingRegions, BlackBerry::Platform::IntRectRegion& remainingFingerRegion)
+                                         Vector<IntersectingRegion>& intersectingRegions, Platform::IntRectRegion& remainingFingerRegion)
 {
     if (!document || !document->frame()->view())
         return false;
@@ -308,15 +313,15 @@ bool FatFingers::findIntersectingRegions(Document* document,
         m_debugFatFingerRect = m_webPage->mapToTransformed(m_webPage->mapFromContentsToViewport(fingerRect));
 #endif
 
-    // Document::nodesFromRect needs viewport coordinates, but FatFinger::nodesFromRect gets contents coordinates
-    // for simplicity instead.
     bool foundOne = false;
-    HitTestResult result = nodesFromRect(document, frameContentPos);
 
     RenderLayer* lowestPositionedEnclosingLayerSoFar = 0;
 
-    // Iterate over the list of nodes (and subrects of nodes where possible), for each saving the intersection of the bounding box with the finger rect
-    ListHashSet<RefPtr<Node> > intersectedNodes = result.rectBasedTestResult();
+    // Iterate over the list of nodes (and subrects of nodes where possible), for each saving the
+    // intersection of the bounding box with the finger rect.
+    ListHashSet<RefPtr<Node> > intersectedNodes;
+    getNodesFromRect(document, frameContentPos, intersectedNodes);
+
     ListHashSet<RefPtr<Node> >::const_iterator it = intersectedNodes.begin();
     ListHashSet<RefPtr<Node> >::const_iterator end = intersectedNodes.end();
     for ( ; it != end; ++it) {
@@ -349,13 +354,13 @@ bool FatFingers::findIntersectingRegions(Document* document,
 
 bool FatFingers::checkForClickableElement(Element* curElement,
                                           Vector<IntersectingRegion>& intersectingRegions,
-                                          BlackBerry::Platform::IntRectRegion& remainingFingerRegion,
+                                          Platform::IntRectRegion& remainingFingerRegion,
                                           RenderLayer*& lowestPositionedEnclosingLayerSoFar)
 {
     ASSERT(curElement);
 
     bool intersects = false;
-    BlackBerry::Platform::IntRectRegion elementRegion;
+    Platform::IntRectRegion elementRegion;
 
     bool isClickableElement = isElementClickable(curElement);
     if (isClickableElement) {
@@ -371,12 +376,12 @@ bool FatFingers::checkForClickableElement(Element* curElement,
             ASSERT(n);
 
             for (size_t i = 0; i < n; ++i)
-                elementRegion = unionRegions(elementRegion, BlackBerry::Platform::IntRect(quads[i].enclosingBoundingBox()));
+                elementRegion = unionRegions(elementRegion, Platform::IntRect(quads[i].enclosingBoundingBox()));
         } else
-            elementRegion = BlackBerry::Platform::IntRectRegion(curElement->renderer()->absoluteBoundingBoxRect(true /*use transforms*/));
+            elementRegion = Platform::IntRectRegion(curElement->renderer()->absoluteBoundingBoxRect(true /*use transforms*/));
 
     } else
-        elementRegion = BlackBerry::Platform::IntRectRegion(curElement->renderer()->absoluteBoundingBoxRect(true /*use transforms*/));
+        elementRegion = Platform::IntRectRegion(curElement->renderer()->absoluteBoundingBoxRect(true /*use transforms*/));
 
     if (lowestPositionedEnclosingLayerSoFar) {
         RenderLayer* curElementRenderLayer = m_webPage->enclosingPositionedAncestorOrSelfIfPositioned(curElement->renderer()->enclosingLayer());
@@ -385,7 +390,7 @@ bool FatFingers::checkForClickableElement(Element* curElement,
             // elementRegion will always be in contents coordinates of its container frame. It needs to be
             // mapped to main frame contents coordinates in order to subtract the fingerRegion, then.
             WebCore::IntPoint framePos(m_webPage->frameOffset(curElement->document()->frame()));
-            BlackBerry::Platform::IntRectRegion layerRegion(BlackBerry::Platform::IntRect(lowestPositionedEnclosingLayerSoFar->renderer()->absoluteBoundingBoxRect(true/*use transforms*/)));
+            Platform::IntRectRegion layerRegion(Platform::IntRect(lowestPositionedEnclosingLayerSoFar->renderer()->absoluteBoundingBoxRect(true/*use transforms*/)));
             layerRegion.move(framePos.x(), framePos.y());
 
             remainingFingerRegion = subtractRegions(remainingFingerRegion, layerRegion);
@@ -401,14 +406,14 @@ bool FatFingers::checkForClickableElement(Element* curElement,
     return intersects;
 }
 
-bool FatFingers::checkForText(Node* curNode, Vector<IntersectingRegion>& intersectingRegions, BlackBerry::Platform::IntRectRegion& fingerRegion)
+bool FatFingers::checkForText(Node* curNode, Vector<IntersectingRegion>& intersectingRegions, Platform::IntRectRegion& fingerRegion)
 {
     ASSERT(curNode);
     if (isFieldWithText(curNode)) {
         // FIXME: Find all text in the field and find the best word.
         // For now, we will just select the whole field.
         IntRect boundingRect = curNode->renderer()->absoluteBoundingBoxRect(true /*use transforms*/);
-        BlackBerry::Platform::IntRectRegion nodeRegion(boundingRect);
+        Platform::IntRectRegion nodeRegion(boundingRect);
         return checkFingerIntersection(nodeRegion, fingerRegion, curNode, intersectingRegions);
     }
 
@@ -416,7 +421,7 @@ bool FatFingers::checkForText(Node* curNode, Vector<IntersectingRegion>& interse
         WebCore::Text* curText = static_cast<WebCore::Text*>(curNode);
         String allText = curText->wholeText();
 
-        // Iterate through all words, breaking at whitespace, to find the bounding box of each word
+        // Iterate through all words, breaking at whitespace, to find the bounding box of each word.
         TextBreakIterator* wordIterator = wordBreakIterator(allText.characters(), allText.length());
 
         int lastOffset = textBreakFirst(wordIterator);
@@ -433,7 +438,7 @@ bool FatFingers::checkForText(Node* curNode, Vector<IntersectingRegion>& interse
 #if DEBUG_FAT_FINGERS
                 log(LogLevelInfo, "Checking word '%s'", range->text().latin1().data());
 #endif
-                BlackBerry::Platform::IntRectRegion rangeRegion(DOMSupport::transformedBoundingBoxForRange(*range));
+                Platform::IntRectRegion rangeRegion(DOMSupport::transformedBoundingBoxForRange(*range));
                 foundOne |= checkFingerIntersection(rangeRegion, fingerRegion, curNode, intersectingRegions);
             }
             lastOffset = offset;
@@ -445,10 +450,10 @@ bool FatFingers::checkForText(Node* curNode, Vector<IntersectingRegion>& interse
 
 void FatFingers::getPaddings(unsigned& top, unsigned& right, unsigned& bottom, unsigned& left) const
 {
-    static unsigned topPadding = BlackBerry::Platform::Settings::get()->topFatFingerPadding();
-    static unsigned rightPadding = BlackBerry::Platform::Settings::get()->rightFatFingerPadding();
-    static unsigned bottomPadding = BlackBerry::Platform::Settings::get()->bottomFatFingerPadding();
-    static unsigned leftPadding = BlackBerry::Platform::Settings::get()->leftFatFingerPadding();
+    static unsigned topPadding = Platform::Settings::get()->topFatFingerPadding();
+    static unsigned rightPadding = Platform::Settings::get()->rightFatFingerPadding();
+    static unsigned bottomPadding = Platform::Settings::get()->bottomFatFingerPadding();
+    static unsigned leftPadding = Platform::Settings::get()->leftFatFingerPadding();
 
     double currentScale = m_webPage->currentScale();
     top = topPadding / currentScale;
@@ -457,16 +462,41 @@ void FatFingers::getPaddings(unsigned& top, unsigned& right, unsigned& bottom, u
     left = leftPadding / currentScale;
 }
 
-HitTestResult FatFingers::nodesFromRect(Document* document, const IntPoint& contentPos) const
+FatFingers::CachedResultsStrategy FatFingers::cachingStrategy() const
 {
+    switch (m_matchingApproach) {
+    case ClickableElement:
+        return GetFromRenderTree;
+    case MadeClickableByTheWebpage:
+        return GetFromCache;
+    case Done:
+    default:
+        ASSERT_NOT_REACHED();
+        return GetFromRenderTree;
+    }
+}
+
+void FatFingers::getNodesFromRect(Document* document, const IntPoint& contentPos, ListHashSet<RefPtr<WebCore::Node> >& intersectedNodes)
+{
+    FatFingers::CachedResultsStrategy cacheResolvingStrategy = cachingStrategy();
+
+    if (cacheResolvingStrategy == GetFromCache) {
+        ASSERT(m_cachedRectHitTestResults.contains(document));
+        intersectedNodes = m_cachedRectHitTestResults.get(document);
+        return;
+    }
+
+    ASSERT(cacheResolvingStrategy == GetFromRenderTree);
+
     unsigned topPadding, rightPadding, bottomPadding, leftPadding;
     getPaddings(topPadding, rightPadding, bottomPadding, leftPadding);
 
     HitTestRequest request(HitTestRequest::ReadOnly | HitTestRequest::Active | HitTestRequest::IgnoreClipping);
-    HitTestResult result(contentPos, topPadding, rightPadding, bottomPadding, leftPadding, HitTestShadowDOM);
+    HitTestResult result(contentPos, topPadding, rightPadding, bottomPadding, leftPadding, AllowShadowContent);
 
     document->renderView()->layer()->hitTest(request, result);
-    return result;
+    intersectedNodes = result.rectBasedTestResult();
+    m_cachedRectHitTestResults.add(document, intersectedNodes);
 }
 
 void FatFingers::getRelevantInfoFromPoint(Document* document, const IntPoint& contentPos, Element*& elementUnderPoint, Element*& clickableElementUnderPoint) const

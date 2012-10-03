@@ -63,24 +63,24 @@ public:
 
     void setFallBack(bool fallback) { m_needFallBack = fallback; }
     bool isFallBack() { return m_needFallBack; }
-    bool has8BitCode() { return m_ref8.m_size; }
-    bool has16BitCode() { return m_ref16.m_size; }
+    bool has8BitCode() { return m_ref8.size(); }
+    bool has16BitCode() { return m_ref16.size(); }
     void set8BitCode(MacroAssembler::CodeRef ref) { m_ref8 = ref; }
     void set16BitCode(MacroAssembler::CodeRef ref) { m_ref16 = ref; }
 
     int execute(const LChar* input, unsigned start, unsigned length, int* output)
     {
         ASSERT(has8BitCode());
-        return reinterpret_cast<YarrJITCode8>(m_ref8.m_code.executableAddress())(input, start, length, output);
+        return reinterpret_cast<YarrJITCode8>(m_ref8.code().executableAddress())(input, start, length, output);
     }
 
     int execute(const UChar* input, unsigned start, unsigned length, int* output)
     {
         ASSERT(has16BitCode());
-        return reinterpret_cast<YarrJITCode16>(m_ref16.m_code.executableAddress())(input, start, length, output);
+        return reinterpret_cast<YarrJITCode16>(m_ref16.code().executableAddress())(input, start, length, output);
     }
 #if ENABLE(REGEXP_TRACING)
-    void *getAddr() { return m_ref.m_code.executableAddress(); }
+    void *getAddr() { return m_ref.code().executableAddress(); }
 #endif
 
 private:
@@ -90,8 +90,16 @@ private:
 };
 
 void jitCompile(YarrPattern&, YarrCharSize, JSGlobalData*, YarrCodeBlock& jitObject);
-int execute(YarrCodeBlock& jitObject, const UChar* input, unsigned start, unsigned length, int* output);
-int execute(YarrCodeBlock& jitObject, const LChar* input, unsigned start, unsigned length, int* output);
+
+inline int execute(YarrCodeBlock& jitObject, const LChar* input, unsigned start, unsigned length, int* output)
+{
+    return jitObject.execute(input, start, length, output);
+}
+
+inline int execute(YarrCodeBlock& jitObject, const UChar* input, unsigned start, unsigned length, int* output)
+{
+    return jitObject.execute(input, start, length, output);
+}
 
 } } // namespace JSC::Yarr
 

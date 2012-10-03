@@ -36,6 +36,7 @@ if (!window.InspectorFrontendHost) {
 WebInspector.InspectorFrontendHostStub = function()
 {
     this._attachedWindowHeight = 0;
+    this.isStub = true;
 }
 
 WebInspector.InspectorFrontendHostStub.prototype = {
@@ -65,20 +66,15 @@ WebInspector.InspectorFrontendHostStub.prototype = {
         this._windowVisible = false;
     },
 
-    disconnectFromBackend: function()
-    {
-        this._windowVisible = false;
-    },
-
-    attach: function()
+    requestAttachWindow: function()
     {
     },
 
-    detach: function()
+    requestDetachWindow: function()
     {
     },
 
-    search: function(sourceRow, query)
+    requestSetDockSide: function()
     {
     },
 
@@ -90,7 +86,7 @@ WebInspector.InspectorFrontendHostStub.prototype = {
     {
     },
 
-    setExtensionAPI: function(script)
+    setInjectedScriptForOrigin: function(origin, script)
     {
     },
 
@@ -110,10 +106,21 @@ WebInspector.InspectorFrontendHostStub.prototype = {
 
     inspectedURLChanged: function(url)
     {
+        document.title = WebInspector.UIString(Preferences.applicationTitle, url);
     },
 
     copyText: function()
     {
+    },
+
+    openInNewTab: function(url)
+    {
+        window.open(url, "_blank");
+    },
+
+    canSaveAs: function(fileName, content)
+    {
+        return true;
     },
 
     saveAs: function(fileName, content)
@@ -154,6 +161,10 @@ WebInspector.InspectorFrontendHostStub.prototype = {
     loadResourceSynchronously: function(url)
     {
         return "";
+    },
+
+    setZoomFactor: function(zoom)
+    {
     }
 }
 

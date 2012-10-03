@@ -31,8 +31,6 @@
 #include "config.h"
 #include "WebDevToolsAgentImpl.h"
 
-#include "DebuggerAgentImpl.h"
-#include "DebuggerAgentManager.h"
 #include "ExceptionCode.h"
 #include "GraphicsContext.h"
 #include "InjectedScriptHost.h"
@@ -44,8 +42,8 @@
 #include "MemoryCache.h"
 #include "Page.h"
 #include "PageGroup.h"
-#include "PageOverlay.h"
 #include "PageScriptDebugServer.h"
+#include "painting/GraphicsContextBuilder.h"
 #include "PlatformString.h"
 #include "ResourceError.h"
 #include "ResourceRequest.h"
@@ -56,12 +54,12 @@
 #include "WebDataSource.h"
 #include "WebDevToolsAgentClient.h"
 #include "WebFrameImpl.h"
-#include "WebRect.h"
-#include "WebString.h"
-#include "WebURL.h"
-#include "WebURLError.h"
-#include "WebURLRequest.h"
-#include "WebURLResponse.h"
+#include "platform/WebRect.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
+#include "platform/WebURLError.h"
+#include "platform/WebURLRequest.h"
+#include "platform/WebURLResponse.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 #include <wtf/CurrentTime.h>
@@ -183,13 +181,11 @@ WebDevToolsAgentImpl::WebDevToolsAgentImpl(
     , m_webViewImpl(webViewImpl)
     , m_attached(false)
 {
-    DebuggerAgentManager::setExposeV8DebuggerProtocol(
-        client->exposeV8DebuggerProtocol());
+    ASSERT(m_hostId > 0);
 }
 
 WebDevToolsAgentImpl::~WebDevToolsAgentImpl()
 {
-    DebuggerAgentManager::onWebViewClosed(m_webViewImpl);
     ClientMessageLoopAdapter::inspectedViewClosed(m_webViewImpl);
 }
 
@@ -198,17 +194,19 @@ void WebDevToolsAgentImpl::attach()
     if (m_attached)
         return;
 
-    if (!m_client->exposeV8DebuggerProtocol())
-        ClientMessageLoopAdapter::ensureClientMessageLoopCreated(m_client);
-
-    m_debuggerAgentImpl = adoptPtr(new DebuggerAgentImpl(m_webViewImpl, this, m_client));
+    ClientMessageLoopAdapter::ensureClientMessageLoopCreated(m_client);
+    inspectorController()->connectFrontend();
     m_attached = true;
 }
 
 void WebDevToolsAgentImpl::reattach(const WebString& savedState)
 {
-    attach();
+    if (m_attached)
+        return;
+
+    ClientMessageLoopAdapter::ensureClientMessageLoopCreated(m_client);
     inspectorController()->restoreInspectorStateFromCookie(savedState);
+    m_attached = true;
 }
 
 void WebDevToolsAgentImpl::detach()
@@ -218,24 +216,19 @@ void WebDevToolsAgentImpl::detach()
     ic->disconnectFrontend();
     ic->hideHighlight();
     ic->close();
-    m_debuggerAgentImpl.clear();
     m_attached = false;
-}
-
-void WebDevToolsAgentImpl::frontendLoaded()
-{
-    inspectorController()->connectFrontend();
 }
 
 void WebDevToolsAgentImpl::didNavigate()
 {
     ClientMessageLoopAdapter::didNavigate();
-    DebuggerAgentManager::onNavigate();
 }
 
 void WebDevToolsAgentImpl::didClearWindowObject(WebFrameImpl* webframe)
 {
-    DebuggerAgentManager::setHostId(webframe, m_hostId);
+    WebCore::V8Proxy* proxy = WebCore::V8Proxy::retrieve(webframe->frame());
+    if (proxy && webframe->frame()->script()->canExecuteScripts(NotAboutToExecuteScript))
+        proxy->setContextDebugId(m_hostId);
 }
 
 void WebDevToolsAgentImpl::dispatchOnInspectorBackend(const WebString& message)
@@ -271,22 +264,31 @@ void WebDevToolsAgentImpl::openInspectorFrontend(InspectorController*)
 {
 }
 
-// PageOverlayClient
-void WebDevToolsAgentImpl::paintPageOverlay(GraphicsContext& gc)
+void WebDevToolsAgentImpl::closeInspectorFrontend()
+{
+}
+
+void WebDevToolsAgentImpl::bringFrontendToFront()
+{
+}
+
+// WebPageOverlay
+void WebDevToolsAgentImpl::paintPageOverlay(WebCanvas* canvas)
 {
     InspectorController* ic = inspectorController();
     if (ic)
-        ic->drawHighlight(gc);
+        ic->drawHighlight(GraphicsContextBuilder(canvas).context());
 }
 
 void WebDevToolsAgentImpl::highlight()
 {
-    m_webViewImpl->setPageOverlayClient(this);
+    // Use 99 as a big z-order number so that highlight is above other overlays.
+    m_webViewImpl->addPageOverlay(this, 99);
 }
 
 void WebDevToolsAgentImpl::hideHighlight()
 {
-    m_webViewImpl->setPageOverlayClient(0);
+    m_webViewImpl->removePageOverlay(this);
 }
 
 bool WebDevToolsAgentImpl::sendMessageToFrontend(const String& message)
@@ -344,16 +346,6 @@ bool WebDevToolsAgent::supportsInspectorProtocolVersion(const WebString& version
     return WebCore::supportsInspectorProtocolVersion(version);
 }
 
-void WebDevToolsAgent::executeDebuggerCommand(const WebString& command, int callerId)
-{
-    DebuggerAgentManager::executeDebuggerCommand(command, callerId);
-}
-
-void WebDevToolsAgent::debuggerPauseScript()
-{
-    DebuggerAgentManager::pauseScript();
-}
-
 void WebDevToolsAgent::interruptAndDispatch(MessageDescriptor* rawDescriptor)
 {
     // rawDescriptor can't be a PassOwnPtr because interruptAndDispatch is a WebKit API function.
@@ -393,14 +385,11 @@ WebString WebDevToolsAgent::disconnectEventAsText()
         }
         String m_message;
     } channel;
-    InspectorFrontend::Inspector inspector(&channel);
-    inspector.disconnectFromBackend();
+#if ENABLE(WORKERS)
+    InspectorFrontend::Worker inspector(&channel);
+    inspector.disconnectedFromWorker();
+#endif
     return channel.m_message;
-}
-
-void WebDevToolsAgent::setMessageLoopDispatchHandler(MessageLoopDispatchHandler handler)
-{
-    DebuggerAgentManager::setMessageLoopDispatchHandler(handler);
 }
 
 } // namespace WebKit

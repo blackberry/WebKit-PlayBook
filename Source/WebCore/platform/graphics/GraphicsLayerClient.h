@@ -47,13 +47,16 @@ enum AnimatedPropertyID {
     AnimatedPropertyInvalid,
     AnimatedPropertyWebkitTransform,
     AnimatedPropertyOpacity,
-    AnimatedPropertyBackgroundColor
+    AnimatedPropertyBackgroundColor,
+    AnimatedPropertyWebkitFilter
 };
 
 class GraphicsLayerClient {
 public:
     virtual ~GraphicsLayerClient() {}
 
+    virtual bool shouldUseTileCache(const GraphicsLayer*) const { return false; }
+    
     // Callback for when hardware-accelerated animation started.
     virtual void notifyAnimationStarted(const GraphicsLayer*, double time) = 0;
 
@@ -69,8 +72,8 @@ public:
     // Page scale factor.
     virtual float pageScaleFactor() const { return 1; }
 
-    virtual bool showDebugBorders() const = 0;
-    virtual bool showRepaintCounter() const = 0;
+    virtual bool showDebugBorders(const GraphicsLayer*) const = 0;
+    virtual bool showRepaintCounter(const GraphicsLayer*) const = 0;
 
 #if PLATFORM(BLACKBERRY)
     virtual bool contentsVisible(const GraphicsLayer*, const IntRect& contentRect) const = 0;

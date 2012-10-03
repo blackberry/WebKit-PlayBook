@@ -54,7 +54,7 @@ namespace WebCore {
     String contextMenuItemTagOpenImageInNewWindow();
     String contextMenuItemTagDownloadImageToDisk();
     String contextMenuItemTagCopyImageToClipboard();
-#if PLATFORM(QT) || PLATFORM(GTK)
+#if PLATFORM(QT) || PLATFORM(GTK) || PLATFORM(EFL)
     String contextMenuItemTagCopyImageUrlToClipboard();
 #endif
     String contextMenuItemTagOpenFrameInNewWindow();
@@ -70,7 +70,7 @@ namespace WebCore {
     String contextMenuItemTagInputMethods();
     String contextMenuItemTagUnicode();
 #endif
-#if PLATFORM(GTK) || PLATFORM(QT)
+#if PLATFORM(GTK) || PLATFORM(QT) || PLATFORM(EFL)
     String contextMenuItemTagSelectAll();
 #endif
     String contextMenuItemTagNoGuessesFound();
@@ -174,6 +174,10 @@ namespace WebCore {
     String keygenKeychainItemName(const String& host);
 #endif
 
+#if PLATFORM(IOS)
+    String htmlSelectMultipleItems(size_t num);
+#endif
+
     String imageTitle(const String& filename, const IntSize& size);
 
     String mediaElementLoadingStateText();
@@ -198,11 +202,12 @@ namespace WebCore {
     String validationMessageRangeOverflowText(const String& maximum);
     String validationMessageStepMismatchText(const String& base, const String& step);
 
-
+#if !PLATFORM(CHROMIUM)
 #define WEB_UI_STRING(string, description) WebCore::localizedString(string)
 #define WEB_UI_STRING_KEY(string, key, description) WebCore::localizedString(key)
 
     String localizedString(const char* key);
+#endif
 
 } // namespace WebCore
 

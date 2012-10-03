@@ -70,6 +70,7 @@ public:
     virtual void setName(const WebString&);
     virtual long long identifier() const;
     virtual WebVector<WebIconURL> iconURLs(int iconTypes) const;
+    virtual WebReferrerPolicy referrerPolicy() const;
     virtual WebSize scrollOffset() const;
     virtual void setScrollOffset(const WebSize&);
     virtual WebSize minimumScrollOffset() const;
@@ -82,7 +83,7 @@ public:
     virtual bool hasVerticalScrollbar() const;
     virtual WebView* view() const;
     virtual WebFrame* opener() const;
-    virtual void clearOpener();
+    virtual void setOpener(const WebFrame*);
     virtual WebFrame* parent() const;
     virtual WebFrame* top() const;
     virtual WebFrame* firstChild() const;
@@ -157,6 +158,7 @@ public:
     virtual bool isCommandEnabled(const WebString&) const;
     virtual void enableContinuousSpellChecking(bool);
     virtual bool isContinuousSpellCheckingEnabled() const;
+    virtual void requestTextChecking(const WebElement&);
     virtual bool hasSelection() const;
     virtual WebRange selectionRange() const;
     virtual WebString selectionAsText() const;
@@ -171,6 +173,7 @@ public:
     virtual float getPrintPageShrink(int page);
     virtual void printEnd();
     virtual bool isPrintScalingDisabledForPlugin(const WebNode&);
+    virtual bool hasCustomPageSizeStyle(int pageIndex);
     virtual bool isPageBoxVisible(int pageIndex);
     virtual void pageSizeAndMarginsInPixels(int pageIndex,
                                             WebSize& pageSize,
@@ -191,6 +194,15 @@ public:
     virtual void increaseMatchCount(int count, int identifier);
     virtual void resetMatchCount();
 
+    virtual void handleIntentResult(int, const WebString&);
+    virtual void handleIntentFailure(int, const WebString&);
+
+    virtual void addEventListener(const WebString& eventType,
+                                  WebDOMEventListener*, bool useCapture);
+    virtual void removeEventListener(const WebString& eventType,
+                                     WebDOMEventListener*, bool useCapture);
+    virtual bool dispatchEvent(const WebDOMEvent&);
+
     virtual WebString contentAsText(size_t maxChars) const;
     virtual WebString contentAsMarkup() const;
     virtual WebString renderTreeAsText(RenderAsTextControls toShow = RenderAsTextNormal) const;
@@ -202,9 +214,6 @@ public:
     virtual WebRect selectionBoundsRect() const;
 
     virtual bool selectionStartHasSpellingMarkerFor(int from, int length) const;
-    virtual bool pauseSVGAnimation(const WebString& animationId,
-                                   double time,
-                                   const WebString& elementId);
     virtual WebString layerTreeAsText(bool showDebugInfo = false) const;
 
     static PassRefPtr<WebFrameImpl> create(WebFrameClient* client);
@@ -241,7 +250,7 @@ public:
     // Returns which frame has an active match. This function should only be
     // called on the main frame, as it is the only frame keeping track. Returned
     // value can be 0 if no frame has an active match.
-    const WebFrameImpl* activeMatchFrame() const { return m_activeMatchFrame; }
+    const WebFrameImpl* activeMatchFrame() const { return m_currentActiveMatchFrame; }
 
     // When a Find operation ends, we want to set the selection to what was active
     // and set focus to the first focusable node we find (starting with the first
@@ -335,13 +344,13 @@ private:
 
     // A way for the main frame to keep track of which frame has an active
     // match. Should be 0 for all other frames.
-    WebFrameImpl* m_activeMatchFrame;
+    WebFrameImpl* m_currentActiveMatchFrame;
 
     // The range of the active match for the current frame.
     RefPtr<WebCore::Range> m_activeMatch;
 
-    // The index of the active match.
-    int m_activeMatchIndex;
+    // The index of the active match for the current frame.
+    int m_activeMatchIndexInCurrentFrame;
 
     // This flag is used by the scoping effort to determine if we need to figure
     // out which rectangle is the active match. Once we find the active

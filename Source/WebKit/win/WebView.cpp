@@ -95,6 +95,7 @@
 #include <WebCore/GraphicsContext.h>
 #include <WebCore/HTMLMediaElement.h>
 #include <WebCore/HTMLNames.h>
+#include <WebCore/HWndDC.h>
 #include <WebCore/HistoryItem.h>
 #include <WebCore/HitTestRequest.h>
 #include <WebCore/HitTestResult.h>
@@ -331,6 +332,7 @@ bool WebView::s_allowSiteSpecificHacks = false;
 
 WebView::WebView()
     : m_refCount(0)
+    , m_shouldInvertColors(false)
 #if !ASSERT_DISABLED
     , m_deletionHasBegun(false)
 #endif
@@ -338,6 +340,7 @@ WebView::WebView()
     , m_viewWindow(0)
     , m_mainFrame(0)
     , m_page(0)
+    , m_inspectorClient(0)
     , m_hasCustomDropTarget(false)
     , m_useBackForwardList(true)
     , m_userAgentOverridden(false)
@@ -710,6 +713,7 @@ HRESULT STDMETHODCALLTYPE WebView::close()
     setUIDelegate(0);
     setFormDelegate(0);
 
+    m_inspectorClient = 0;
     if (m_webInspector)
         m_webInspector->webViewClosed();
 
@@ -860,7 +864,7 @@ void WebView::scrollBackingStore(FrameView* frameView, int dx, int dy, const Int
     HRGN updateRegion = ::CreateRectRgn(0, 0, 0, 0);
 
     // Collect our device context info and select the bitmap to scroll.
-    HDC windowDC = ::GetDC(m_viewWindow);
+    HWndDC windowDC(m_viewWindow);
     HDC bitmapDC = ::CreateCompatibleDC(windowDC);
     HGDIOBJ oldBitmap = ::SelectObject(bitmapDC, m_backingStoreBitmap->handle());
     
@@ -886,7 +890,6 @@ void WebView::scrollBackingStore(FrameView* frameView, int dx, int dy, const Int
     // Clean up.
     ::SelectObject(bitmapDC, oldBitmap);
     ::DeleteDC(bitmapDC);
-    ::ReleaseDC(m_viewWindow, windowDC);
 }
 
 void WebView::sizeChanged(const IntSize& newSize)
@@ -956,11 +959,10 @@ void WebView::updateBackingStore(FrameView* frameView, HDC dc, bool backingStore
 
     LOCAL_GDI_COUNTER(0, __FUNCTION__);
 
-    HDC windowDC = 0;
     HDC bitmapDC = dc;
     HGDIOBJ oldBitmap = 0;
     if (!dc) {
-        windowDC = ::GetDC(m_viewWindow);
+        HWndDC windowDC(m_viewWindow);
         bitmapDC = ::CreateCompatibleDC(windowDC);
         oldBitmap = ::SelectObject(bitmapDC, m_backingStoreBitmap->handle());
     }
@@ -994,7 +996,6 @@ void WebView::updateBackingStore(FrameView* frameView, HDC dc, bool backingStore
     if (!dc) {
         ::SelectObject(bitmapDC, oldBitmap);
         ::DeleteDC(bitmapDC);
-        ::ReleaseDC(m_viewWindow, windowDC);
     }
 
     GdiFlush();
@@ -1006,7 +1007,7 @@ void WebView::performLayeredWindowUpdate()
     if (!m_backingStoreBitmap)
         return;
 
-    HDC hdcScreen = ::GetDC(m_viewWindow);
+    HWndDC hdcScreen(m_viewWindow);
     OwnPtr<HDC> hdcMem = adoptPtr(::CreateCompatibleDC(hdcScreen));
     HBITMAP hbmOld = static_cast<HBITMAP>(::SelectObject(hdcMem.get(), m_backingStoreBitmap->handle()));
 
@@ -1024,7 +1025,6 @@ void WebView::performLayeredWindowUpdate()
     ::UpdateLayeredWindow(m_viewWindow, hdcScreen, 0, &windowSize, hdcMem.get(), &layerPos, 0, &blendFunction, ULW_ALPHA);
 
     ::SelectObject(hdcMem.get(), hbmOld);
-    ::ReleaseDC(0, hdcScreen);
 }
 
 void WebView::paint(HDC dc, LPARAM options)
@@ -1130,13 +1130,14 @@ void WebView::paintIntoBackingStore(FrameView* frameView, HDC bitmapDC, const In
     RECT rect = dirtyRect;
 
 #if FLASH_BACKING_STORE_REDRAW
-    HDC dc = ::GetDC(m_viewWindow);
-    OwnPtr<HBRUSH> yellowBrush(CreateSolidBrush(RGB(255, 255, 0)));
-    FillRect(dc, &rect, yellowBrush.get());
-    GdiFlush();
-    Sleep(50);
-    paintIntoWindow(bitmapDC, dc, dirtyRect);
-    ::ReleaseDC(m_viewWindow, dc);
+    {
+        HWndDC dc(m_viewWindow);
+        OwnPtr<HBRUSH> yellowBrush(CreateSolidBrush(RGB(255, 255, 0)));
+        FillRect(dc, &rect, yellowBrush.get());
+        GdiFlush();
+        Sleep(50);
+        paintIntoWindow(bitmapDC, dc, dirtyRect);
+    }
 #endif
 
     GraphicsContext gc(bitmapDC, m_transparent);
@@ -1154,6 +1155,8 @@ void WebView::paintIntoBackingStore(FrameView* frameView, HDC bitmapDC, const In
     if (frameView && frameView->frame() && frameView->frame()->contentRenderer()) {
         gc.clip(dirtyRect);
         frameView->paint(&gc, dirtyRect);
+        if (m_shouldInvertColors)
+            gc.fillRect(dirtyRect, Color::white, ColorSpaceDeviceRGB, CompositeDifference);
     }
     gc.restore();
 }
@@ -1463,8 +1466,8 @@ bool WebView::handleMouseEvent(UINT message, WPARAM wParam, LPARAM lParam)
 
     setMouseActivated(false);
 
-    bool insideThreshold = abs(globalPrevPoint.x() - mouseEvent.pos().x()) < ::GetSystemMetrics(SM_CXDOUBLECLK) &&
-                           abs(globalPrevPoint.y() - mouseEvent.pos().y()) < ::GetSystemMetrics(SM_CYDOUBLECLK);
+    bool insideThreshold = abs(globalPrevPoint.x() - mouseEvent.position().x()) < ::GetSystemMetrics(SM_CXDOUBLECLK) &&
+                           abs(globalPrevPoint.y() - mouseEvent.position().y()) < ::GetSystemMetrics(SM_CYDOUBLECLK);
     LONG messageTime = ::GetMessageTime();
 
     bool handled = false;
@@ -1487,7 +1490,7 @@ bool WebView::handleMouseEvent(UINT message, WPARAM wParam, LPARAM lParam)
             globalClickCount = 1;
         globalPrevMouseDownTime = messageTime;
         globalPrevButton = mouseEvent.button();
-        globalPrevPoint = mouseEvent.pos();
+        globalPrevPoint = mouseEvent.position();
         
         mouseEvent.setClickCount(globalClickCount);
         handled = m_page->mainFrame()->eventHandler()->handleMousePressEvent(mouseEvent);
@@ -1498,7 +1501,7 @@ bool WebView::handleMouseEvent(UINT message, WPARAM wParam, LPARAM lParam)
     } else if (message == WM_LBUTTONUP || message == WM_MBUTTONUP || message == WM_RBUTTONUP) {
         // Record the global position and the button of the up.
         globalPrevButton = mouseEvent.button();
-        globalPrevPoint = mouseEvent.pos();
+        globalPrevPoint = mouseEvent.position();
         mouseEvent.setClickCount(globalClickCount);
         m_page->mainFrame()->eventHandler()->handleMouseReleaseEvent(mouseEvent);
         ::ReleaseCapture();
@@ -1811,7 +1814,7 @@ bool WebView::execCommand(WPARAM wParam, LPARAM /*lParam*/)
 
 bool WebView::keyUp(WPARAM virtualKeyCode, LPARAM keyData, bool systemKeyDown)
 {
-    PlatformKeyboardEvent keyEvent(m_viewWindow, virtualKeyCode, keyData, PlatformKeyboardEvent::KeyUp, systemKeyDown);
+    PlatformKeyboardEvent keyEvent(m_viewWindow, virtualKeyCode, keyData, PlatformEvent::KeyUp, systemKeyDown);
 
     Frame* frame = m_page->focusController()->focusedOrMainFrame();
     m_currentCharacterCode = 0;
@@ -1953,7 +1956,7 @@ bool WebView::handleEditingKeyboardEvent(KeyboardEvent* evt)
 
     Editor::Command command = frame->editor()->command(interpretKeyEvent(evt));
 
-    if (keyEvent->type() == PlatformKeyboardEvent::RawKeyDown) {
+    if (keyEvent->type() == PlatformEvent::RawKeyDown) {
         // WebKit doesn't have enough information about mode to decide how commands that just insert text if executed via Editor should be treated,
         // so we leave it upon WebCore to either handle them immediately (e.g. Tab that changes focus) or let a keypress event be generated
         // (e.g. Tab that inserts a Tab character, or Enter).
@@ -1981,7 +1984,7 @@ bool WebView::keyDown(WPARAM virtualKeyCode, LPARAM keyData, bool systemKeyDown)
 #endif
     Frame* frame = m_page->focusController()->focusedOrMainFrame();
 
-    PlatformKeyboardEvent keyEvent(m_viewWindow, virtualKeyCode, keyData, PlatformKeyboardEvent::RawKeyDown, systemKeyDown);
+    PlatformKeyboardEvent keyEvent(m_viewWindow, virtualKeyCode, keyData, PlatformEvent::RawKeyDown, systemKeyDown);
     bool handled = frame->eventHandler()->keyEvent(keyEvent);
 
     // These events cannot be canceled, and we have no default handling for them.
@@ -2053,7 +2056,7 @@ bool WebView::keyPress(WPARAM charCode, LPARAM keyData, bool systemKeyDown)
 {
     Frame* frame = m_page->focusController()->focusedOrMainFrame();
 
-    PlatformKeyboardEvent keyEvent(m_viewWindow, charCode, keyData, PlatformKeyboardEvent::Char, systemKeyDown);
+    PlatformKeyboardEvent keyEvent(m_viewWindow, charCode, keyData, PlatformEvent::Char, systemKeyDown);
     // IE does not dispatch keypress event for WM_SYSCHAR.
     if (systemKeyDown)
         return frame->eventHandler()->handleAccessKey(keyEvent);
@@ -2067,6 +2070,23 @@ void WebView::setIsBeingDestroyed()
     // Remove our this pointer from the window so we won't try to handle any more window messages.
     // See <http://webkit.org/b/55054>.
     ::SetWindowLongPtrW(m_viewWindow, 0, 0);
+}
+
+void WebView::setShouldInvertColors(bool shouldInvertColors)
+{
+    if (m_shouldInvertColors == shouldInvertColors)
+        return;
+
+    m_shouldInvertColors = shouldInvertColors;
+
+#if USE(ACCELERATED_COMPOSITING)
+    if (m_layerTreeHost)
+        m_layerTreeHost->setShouldInvertColors(shouldInvertColors);
+#endif
+
+    RECT windowRect = {0};
+    frameRect(&windowRect);
+    repaint(windowRect, true, true);
 }
 
 bool WebView::registerWebViewWindowClass()
@@ -2620,7 +2640,7 @@ HRESULT STDMETHODCALLTYPE WebView::initWithFrame(
 
     static bool didOneTimeInitialization;
     if (!didOneTimeInitialization) {
-        InitializeLoggingChannelsIfNecessary();
+        initializeLoggingChannelsIfNecessary();
 #if ENABLE(SQL_DATABASE)
         WebKitInitializeWebDatabasesIfNecessary();
 #endif
@@ -2641,12 +2661,14 @@ HRESULT STDMETHODCALLTYPE WebView::initWithFrame(
     if (SUCCEEDED(m_preferences->shouldUseHighResolutionTimers(&useHighResolutionTimer)))
         Settings::setShouldUseHighResolutionTimers(useHighResolutionTimer);
 
+    m_inspectorClient = new WebInspectorClient(this);
+
     Page::PageClients pageClients;
     pageClients.chromeClient = new WebChromeClient(this);
     pageClients.contextMenuClient = new WebContextMenuClient(this);
     pageClients.editorClient = new WebEditorClient(this);
     pageClients.dragClient = new WebDragClient(this);
-    pageClients.inspectorClient = new WebInspectorClient(this);
+    pageClients.inspectorClient = m_inspectorClient;
 #if ENABLE(CLIENT_BASED_GEOLOCATION)
     pageClients.geolocationClient = new WebGeolocationClient(this);
 #endif
@@ -4580,6 +4602,32 @@ HRESULT WebView::notifyPreferencesChanged(IWebNotification* notification)
     settings->setFixedFontFamily(AtomicString(str, SysStringLen(str)));
     SysFreeString(str);
 
+#if ENABLE(VIDEO_TRACK)
+    hr = preferences->shouldDisplaySubtitles(&enabled);
+    if (FAILED(hr))
+        return hr;
+    settings->setShouldDisplaySubtitles(enabled);
+
+    hr = preferences->shouldDisplayCaptions(&enabled);
+    if (FAILED(hr))
+        return hr;
+    settings->setShouldDisplayCaptions(enabled);
+
+    hr = preferences->shouldDisplayTextDescriptions(&enabled);
+    if (FAILED(hr))
+        return hr;
+    settings->setShouldDisplayTextDescriptions(enabled);
+#endif
+
+    COMPtr<IWebPreferencesPrivate> prefsPrivate(Query, preferences);
+    if (prefsPrivate) {
+        hr = prefsPrivate->localStorageDatabasePath(&str);
+        if (FAILED(hr))
+            return hr;
+        settings->setLocalStorageDatabasePath(String(str, SysStringLen(str)));
+        SysFreeString(str);
+    }
+
     hr = preferences->pictographFontFamily(&str);
     if (FAILED(hr))
         return hr;
@@ -4733,7 +4781,6 @@ HRESULT WebView::notifyPreferencesChanged(IWebNotification* notification)
     settings->setAVFoundationEnabled(enabled);
 #endif
 
-    COMPtr<IWebPreferencesPrivate> prefsPrivate(Query, preferences);
     if (prefsPrivate) {
         hr = prefsPrivate->authorAndUserStylesEnabled(&enabled);
         if (FAILED(hr))
@@ -4891,6 +4938,11 @@ HRESULT WebView::notifyPreferencesChanged(IWebNotification* notification)
     if (FAILED(hr))
         return hr;
     settings->setMediaPlaybackAllowsInline(enabled);
+
+    hr = prefsPrivate->shouldInvertColors(&enabled);
+    if (FAILED(hr))
+        return hr;
+    setShouldInvertColors(enabled);
 
     return S_OK;
 }
@@ -5725,7 +5777,7 @@ bool WebView::onIMESetContext(WPARAM wparam, LPARAM)
 HRESULT STDMETHODCALLTYPE WebView::inspector(IWebInspector** inspector)
 {
     if (!m_webInspector)
-        m_webInspector.adoptRef(WebInspector::createInstance(this));
+        m_webInspector.adoptRef(WebInspector::createInstance(this, m_inspectorClient));
 
     return m_webInspector.copyRefTo(inspector);
 }
@@ -6433,6 +6485,8 @@ void WebView::setAcceleratedCompositing(bool accelerated)
         if (m_layerTreeHost) {
             m_isAcceleratedCompositing = true;
 
+            m_layerTreeHost->setShouldInvertColors(m_shouldInvertColors);
+
             m_layerTreeHost->setClient(this);
             ASSERT(m_viewWindow);
             m_layerTreeHost->setWindow(m_viewWindow);
@@ -6559,6 +6613,18 @@ HRESULT WebView::registerURLSchemeAsSecure(BSTR scheme)
     return S_OK;
 }
 
+HRESULT WebView::registerURLSchemeAsAllowingLocalStorageAccessInPrivateBrowsing(BSTR scheme)
+{
+    SchemeRegistry::registerURLSchemeAsAllowingLocalStorageAccessInPrivateBrowsing(toString(scheme));
+    return S_OK;
+}
+
+HRESULT WebView::registerURLSchemeAsAllowingDatabaseAccessInPrivateBrowsing(BSTR scheme)
+{
+    SchemeRegistry::registerURLSchemeAsAllowingDatabaseAccessInPrivateBrowsing(toString(scheme));
+    return S_OK;
+}
+
 HRESULT WebView::nextDisplayIsSynchronous()
 {
     m_nextDisplayIsSynchronous = true;
@@ -6589,12 +6655,12 @@ void WebView::paintContents(const GraphicsLayer*, GraphicsContext& context, Grap
     context.restore();
 }
 
-bool WebView::showDebugBorders() const
+bool WebView::showDebugBorders(const GraphicsLayer*) const
 {
     return m_page->settings()->showDebugBorders();
 }
 
-bool WebView::showRepaintCounter() const
+bool WebView::showRepaintCounter(const GraphicsLayer*) const
 {
     return m_page->settings()->showRepaintCounter();
 }

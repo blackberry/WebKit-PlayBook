@@ -65,10 +65,6 @@ ScriptElement::ScriptElement(Element* element, bool parserInserted, bool already
     , m_willExecuteWhenDocumentFinishedParsing(false)
     , m_forceAsync(!parserInserted)
     , m_willExecuteInOrder(false)
-#if PLATFORM(CHROMIUM)
-    , m_cachedScriptState(NeverSet)
-    , m_backtraceSize(0)
-#endif
 {
     ASSERT(m_element);
 }
@@ -82,12 +78,6 @@ void ScriptElement::insertedIntoDocument()
 {
     if (!m_parserInserted)
         prepareScript(); // FIXME: Provide a real starting line number here.
-}
-
-void ScriptElement::removedFromDocument()
-{
-    // Eventually stop loading any not-yet-finished content
-    stopLoadRequest();
 }
 
 void ScriptElement::childrenChanged()
@@ -209,15 +199,6 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition, Legac
     if (!document->frame()->script()->canExecuteScripts(AboutToExecuteScript))
         return false;
 
-    Node* ancestor = m_element->parentNode();
-    while (ancestor) {
-        if (ancestor->isSVGShadowRoot()) {
-            fprintf(stderr, "aborted script: shadow root\n");
-            return false;
-        }
-        ancestor = ancestor->parentNode();
-    }
-
     if (!isScriptForEventSupported())
         return false;
 
@@ -242,9 +223,10 @@ bool ScriptElement::prepareScript(const TextPosition& scriptStartPosition, Legac
         m_willExecuteInOrder = true;
         document->scriptRunner()->queueScriptForExecution(this, m_cachedScript, ScriptRunner::IN_ORDER_EXECUTION);
         m_cachedScript->addClient(this);
-    } else if (hasSourceAttribute())
+    } else if (hasSourceAttribute()) {
+        m_element->document()->scriptRunner()->queueScriptForExecution(this, m_cachedScript, ScriptRunner::ASYNC_EXECUTION);
         m_cachedScript->addClient(this);
-    else {
+    } else {
         // Reset line numbering for nested writes.
         TextPosition position = document->isInDocumentWrite() ? TextPosition() : scriptStartPosition;
         executeScript(ScriptSourceCode(scriptContent(), document->url(), position));
@@ -269,10 +251,6 @@ bool ScriptElement::requestScript(const String& sourceUrl)
     }
 
     if (m_cachedScript) {
-#if PLATFORM(CHROMIUM)      
-        ASSERT(m_cachedScriptState == NeverSet);
-        m_cachedScriptState = Set;
-#endif
         return true;
     }
 
@@ -300,8 +278,6 @@ void ScriptElement::executeScript(const ScriptSourceCode& sourceCode)
             // Note: This is where the script is compiled and actually executed.
             frame->script()->evaluate(sourceCode);
         }
-
-        Document::updateStyleForAllDocuments();
     }
 }
 
@@ -310,12 +286,6 @@ void ScriptElement::stopLoadRequest()
     if (m_cachedScript) {
         if (!m_willBeParserExecuted)
             m_cachedScript->removeClient(this);
-#if PLATFORM(CHROMIUM)
-        ASSERT(m_cachedScriptState == Set);
-        m_cachedScriptState = ZeroedInStopLoadRequest;
-        m_backtraceSize = MaxBacktraceSize;
-        WTFGetBacktrace(m_backtrace, &m_backtraceSize);
-#endif
         m_cachedScript = 0;
     }
 }
@@ -338,16 +308,10 @@ void ScriptElement::notifyFinished(CachedResource* o)
     ASSERT(!m_willBeParserExecuted);
     ASSERT_UNUSED(o, o == m_cachedScript);
     if (m_willExecuteInOrder)
-        m_element->document()->scriptRunner()->notifyInOrderScriptReady();
+        m_element->document()->scriptRunner()->notifyScriptReady(this, ScriptRunner::IN_ORDER_EXECUTION);
     else
-        m_element->document()->scriptRunner()->queueScriptForExecution(this, m_cachedScript, ScriptRunner::ASYNC_EXECUTION);
+        m_element->document()->scriptRunner()->notifyScriptReady(this, ScriptRunner::ASYNC_EXECUTION);
 
-#if PLATFORM(CHROMIUM)
-    ASSERT(m_cachedScriptState == Set);
-    m_cachedScriptState = ZeroedInNotifyFinished;
-    m_backtraceSize = MaxBacktraceSize;
-    WTFGetBacktrace(m_backtrace, &m_backtraceSize);
-#endif
     m_cachedScript = 0;
 }
 
@@ -382,7 +346,7 @@ String ScriptElement::scriptContent() const
         if (!n->isTextNode())
             continue;
 
-        Text* t = static_cast<Text*>(n);
+        Text* t = toText(n);
         if (foundMultipleTextNodes)
             content.append(t->data());
         else if (firstTextNode) {

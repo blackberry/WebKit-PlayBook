@@ -30,10 +30,13 @@
 #include "JSEventTarget.h"
 #include "JSMessagePortCustom.h"
 #include "JSNode.h"
+#include "JSStorage.h"
 #include "JSTrackCustom.h"
 #include "SerializedScriptValue.h"
 #include "ScriptValue.h"
+#include <wtf/HashMap.h>
 #include <wtf/MathExtras.h>
+#include <wtf/text/AtomicString.h>
 
 using namespace JSC;
 
@@ -43,7 +46,7 @@ JSDictionary::GetPropertyResult JSDictionary::tryGetProperty(const char* propert
 {
     Identifier identifier(m_exec, propertyName);
     PropertySlot slot(m_initializerObject);
-    
+
     if (!m_initializerObject->getPropertySlot(m_exec, identifier, slot))
         return NoPropertyFound;
 
@@ -90,7 +93,7 @@ void JSDictionary::convertValue(ExecState* exec, JSValue value, double& result)
 
 void JSDictionary::convertValue(ExecState* exec, JSValue value, String& result)
 {
-    result = ustringToString(value.toString(exec));
+    result = ustringToString(value.toString(exec)->value(exec));
 }
 
 void JSDictionary::convertValue(ExecState* exec, JSValue value, ScriptValue& result)
@@ -100,7 +103,7 @@ void JSDictionary::convertValue(ExecState* exec, JSValue value, ScriptValue& res
 
 void JSDictionary::convertValue(ExecState* exec, JSValue value, RefPtr<SerializedScriptValue>& result)
 {
-    result = SerializedScriptValue::create(exec, value, 0);
+    result = SerializedScriptValue::create(exec, value, 0, 0);
 }
 
 void JSDictionary::convertValue(ExecState*, JSValue value, RefPtr<DOMWindow>& result)
@@ -118,15 +121,43 @@ void JSDictionary::convertValue(ExecState*, JSValue value, RefPtr<Node>& result)
     result = toNode(value);
 }
 
+void JSDictionary::convertValue(ExecState*, JSValue value, RefPtr<Storage>& result)
+{
+    result = toStorage(value);
+}
+
 void JSDictionary::convertValue(ExecState* exec, JSValue value, MessagePortArray& result)
 {
-    fillMessagePortArray(exec, value, result);
+    ArrayBufferArray arrayBuffers;
+    fillMessagePortArray(exec, value, result, arrayBuffers);
 }
 
 #if ENABLE(VIDEO_TRACK)
 void JSDictionary::convertValue(ExecState*, JSValue value, RefPtr<TrackBase>& result)
 {
     result = toTrack(value);
+}
+#endif
+
+#if ENABLE(MUTATION_OBSERVERS)
+void JSDictionary::convertValue(ExecState* exec, JSValue value, HashSet<AtomicString>& result)
+{
+    result.clear();
+
+    if (value.isUndefinedOrNull())
+        return;
+
+    unsigned length;
+    JSObject* object = toJSSequence(exec, value, length);
+    if (exec->hadException())
+        return;
+
+    for (unsigned i = 0 ; i < length; ++i) {
+        JSValue itemValue = object->get(exec, i);
+        if (exec->hadException())
+            return;
+        result.add(ustringToAtomicString(itemValue.toString(exec)->value(exec)));
+    }
 }
 #endif
 

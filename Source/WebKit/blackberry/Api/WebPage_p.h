@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -19,41 +19,26 @@
 #ifndef WebPage_p_h
 #define WebPage_p_h
 
-#include "BlackBerryContext.h"
 #include "ChromeClient.h"
 #if USE(ACCELERATED_COMPOSITING)
+#include "GLES2Context.h"
 #include "LayerRenderer.h"
 #endif
 #include "PageClientBlackBerry.h"
 #include "PlatformMouseEvent.h"
+#include "ScriptSourceCode.h"
 #include "Timer.h"
 #include "ViewportArguments.h"
 #include "WebPage.h"
 #include "WebSettings.h"
-#include "WebString.h"
-#include "ScriptSourceCode.h"
 
-#include <BlackBerryPlatformGraphics.h>
-#include <BlackBerryPlatformGuardedPointer.h>
-#include <BlackBerryPlatformInputEvents.h>
 #include <BlackBerryPlatformMessage.h>
-#include <wtf/HashMap.h>
-#include <wtf/OwnPtr.h>
-#include <wtf/Vector.h>
 
 namespace WebCore {
-class Cursor;
 class DOMWrapperWorld;
 class Document;
-class FloatPoint;
 class Frame;
-class FrameView;
 class GeolocationControllerClientBlackBerry;
-class HTMLInputElement;
-class HTMLSelectElement;
-class IntPoint;
-class IntRect;
-class IntSize;
 class JavaScriptDebuggerBlackBerry;
 class KURL;
 class Node;
@@ -62,7 +47,6 @@ class PluginView;
 class RenderLayer;
 class RenderObject;
 class ScrollView;
-class SurfaceOpenVG;
 class TransformationMatrix;
 template<typename T> class Timer;
 }
@@ -74,40 +58,40 @@ class BackingStore;
 class BackingStoreClient;
 class BackingStoreTile;
 class DumpRenderTreeClient;
+class InPageSearchManager;
 class InputHandler;
-class InRegionScroller;
 class SelectionHandler;
 class TouchEventHandler;
-class WebPage;
 class WebPageClient;
-
-typedef WTF::HashMap<const WebCore::Frame*, BackingStoreClient*> BackingStoreClientForFrameMap;
 
 #if USE(ACCELERATED_COMPOSITING)
 class FrameLayers;
-class WebPageCompositor;
+class WebPageCompositorPrivate;
 #endif
 
 // In the client code, there is screen size and viewport.
 // In WebPagePrivate, the screen size is called the transformedViewportSize,
-//                    the viewport position is called the transformedScrollPosition,
-//                and the viewport size is called the transformedActualVisibleSize.
-class WebPagePrivate : public PageClientBlackBerry, public WebSettingsDelegate, public BlackBerry::Platform::GuardedPointerBase {
+// the viewport position is called the transformedScrollPosition,
+// and the viewport size is called the transformedActualVisibleSize.
+class WebPagePrivate : public PageClientBlackBerry, public WebSettingsDelegate, public Platform::GuardedPointerBase {
 public:
     enum ViewMode { Mobile, Desktop, FixedDesktop };
-    enum LoadState { None /*on instantiation of page*/, Provisional, Committed, Finished, Failed };
+    enum LoadState { None /* on instantiation of page */, Provisional, Committed, Finished, Failed };
 
-    WebPagePrivate(WebPage*, WebPageClient*, const Platform::IntRect&);
-    virtual ~WebPagePrivate();
+    WebPagePrivate(WebPage*, WebPageClient*, const WebCore::IntRect&);
+
+    static WebCore::Page* core(const WebPage*);
+
+    WebPageClient* client() const { return m_client; }
 
     void init(const WebString& pageGroupName);
     bool handleMouseEvent(WebCore::PlatformMouseEvent&);
     bool handleWheelEvent(WebCore::PlatformWheelEvent&);
 
     void load(const char* url, const char* networkToken, const char* method, Platform::NetworkRequest::CachePolicy, const char* data, size_t dataLength, const char* const* headers, size_t headersLength, bool isInitial, bool mustHandleInternally = false, bool forceDownload = false, const char* overrideContentType = "");
-    void loadString(const char* string, const char* baseURL, const char* mimeType);
+    void loadString(const char* string, const char* baseURL, const char* mimeType, const char* failingURL = 0);
     bool executeJavaScript(const char* script, JavaScriptDataType& returnType, WebString& returnValue);
-    bool executeJavaScriptInIsolatedWorld(const WebCore::ScriptSourceCode& script, JavaScriptDataType& returnType, WebString& returnValue);
+    bool executeJavaScriptInIsolatedWorld(const WebCore::ScriptSourceCode&, JavaScriptDataType& returnType, WebString& returnValue);
 
     void stopCurrentLoad();
     void prepareToDestroy();
@@ -129,14 +113,14 @@ public:
     bool scheduleZoomAboutPoint(double scale, const WebCore::FloatPoint& anchor, bool enforceScaleClamping = true, bool forceRendering = false);
     void unscheduleZoomAboutPoint();
     WebCore::IntPoint calculateReflowedScrollPosition(const WebCore::FloatPoint& anchorOffset, double inverseScale);
-    void setTextReflowAnchorPoint(const BlackBerry::Platform::IntPoint& focalPoint);
+    void setTextReflowAnchorPoint(const Platform::IntPoint& focalPoint);
 
     void schedulePinchZoomAboutPoint(double scale, const WebCore::IntPoint& anchor);
 
     // Perform actual zoom for block zoom.
     void zoomBlock();
 
-    // Called by the backingstore as well as the method below.
+    // Called by the backing store as well as the method below.
     void requestLayoutIfNeeded() const;
     void setNeedsLayout();
 
@@ -146,12 +130,12 @@ public:
     bool scrollBy(int deltaX, int deltaY, bool scrollMainFrame = true);
 
     void enqueueRenderingOfClippedContentOfScrollableNodeAfterInRegionScrolling(WebCore::Node*);
-    std::vector<Platform::ScrollViewBase> inRegionScrollerForPoint(const Platform::IntPoint&);
+    std::vector<Platform::ScrollViewBase> inRegionScrollableAreasForPoint(const Platform::IntPoint&);
     void notifyInRegionScrollStatusChanged(bool status);
-    void setScrollOriginPoint(const BlackBerry::Platform::IntPoint&);
+    void setScrollOriginPoint(const Platform::IntPoint&);
     void setHasInRegionScrollableAreas(bool);
 
-    // The actual visible size as reported by the client, but in webkit coordinates.
+    // The actual visible size as reported by the client, but in WebKit coordinates.
     WebCore::IntSize actualVisibleSize() const;
 
     // The viewport size is the same as the client's window size, but in webkit coordinates.
@@ -174,9 +158,9 @@ public:
     WebCore::IntSize absoluteVisibleOverflowSize() const;
 
     // Virtual functions inherited from PageClientBlackBerry.
-    virtual void setCursor(WebCore::PlatformCursorHandle);
-    virtual BlackBerry::Platform::NetworkStreamFactory* networkStreamFactory();
-    virtual BlackBerry::Platform::Graphics::Window* platformWindow() const;
+    virtual void setCursor(WebCore::PlatformCursor);
+    virtual Platform::NetworkStreamFactory* networkStreamFactory();
+    virtual Platform::Graphics::Window* platformWindow() const;
     virtual void setPreventsScreenDimming(bool preventDimming);
     virtual void showVirtualKeyboard(bool showKeyboard);
     virtual void ensureContentVisible(bool centerInView = true);
@@ -194,12 +178,15 @@ public:
     virtual double currentZoomFactor() const;
     virtual int showAlertDialog(WebPageClient::AlertType atype);
     virtual bool isActive() const;
+    virtual bool isVisible() const { return m_visible; }
+    virtual bool authenticationChallenge(const WebCore::KURL&, const WebCore::ProtectionSpace&, WebCore::Credential&);
+    virtual SaveCredentialType notifyShouldSaveCredential(bool);
 
     // Called from within WebKit via ChromeClientBlackBerry.
     void enterFullscreenForNode(WebCore::Node*);
     void exitFullscreenForNode(WebCore::Node*);
     void contentsSizeChanged(const WebCore::IntSize&);
-    void overflowExceedsContentsSize();
+    void overflowExceedsContentsSize() { m_overflowExceedsContentsSize = true; }
     void layoutFinished();
     void setNeedTouchEvents(bool);
 
@@ -207,22 +194,23 @@ public:
     void zoomToInitialScaleOnLoad();
 
     // Various scale factors.
-    double currentScale() const;
+    double currentScale() const { return m_transformationMatrix->m11(); }
     double zoomToFitScale() const;
     double initialScale() const;
     void setInitialScale(double scale) { m_initialScale = scale; }
-    double minimumScale() const;
+    double minimumScale() const
+    {
+        return (m_minimumScale > zoomToFitScale() && m_minimumScale <= maximumScale()) ? m_minimumScale : zoomToFitScale();
+    }
+
     void setMinimumScale(double scale) { m_minimumScale = scale; }
     double maximumScale() const;
     void setMaximumScale(double scale) { m_maximumScale = scale; }
     void resetScales();
 
-    int reflowWidth() const
-    {
-        // Note: to make this reflow width transform invariant just use
-        // transformedActualVisibleSize() here instead!
-        return actualVisibleSize().width();
-    }
+    // Note: to make this reflow width transform invariant just use
+    // transformedActualVisibleSize() here instead!
+    int reflowWidth() const { return actualVisibleSize().width(); }
 
     // These methods give the real geometry of the device given the currently set transform.
     WebCore::IntPoint transformedScrollPosition() const;
@@ -262,13 +250,9 @@ public:
     void notifyTransformedContentsSizeChanged();
     void notifyTransformedScrollChanged();
 
-    void assignFocus(BlackBerry::Platform::FocusDirection);
-    bool moveToNextField(BlackBerry::Platform::ScrollDirection, int desiredScrollAmount);
-    bool moveToNextField(WebCore::Frame*, BlackBerry::Platform::ScrollDirection, int desiredScrollAmount);
-    BlackBerry::Platform::IntRect focusNodeRect();
+    void assignFocus(Platform::FocusDirection);
+    Platform::IntRect focusNodeRect();
     WebCore::IntRect getRecursiveVisibleWindowRect(WebCore::ScrollView*, bool noClipOfMainFrame = false);
-
-    bool focusField(bool focus);
 
     WebCore::IntPoint frameOffset(const WebCore::Frame*) const;
 
@@ -287,11 +271,11 @@ public:
     void notifyPluginRectChanged(int id, const WebCore::IntRect& rectChanged);
 
     // Context Methods.
-    ActiveNodeContext activeNodeContext(TargetDetectionStrategy);
+    Platform::WebContext webContext(TargetDetectionStrategy);
     PassRefPtr<WebCore::Node> contextNode(TargetDetectionStrategy);
 
 #if ENABLE(VIEWPORT_REFLOW)
-    void toggleTextReflowIfTextReflowEnabledOnlyForBlockZoom(bool shouldEnableTextReflow = false);
+    void toggleTextReflowIfEnabledForBlockZoomOnly(bool shouldEnableTextReflow = false);
 #endif
 
     void selectionChanged(WebCore::Frame*);
@@ -310,19 +294,15 @@ public:
     bool useFixedLayout() const;
     WebCore::IntSize fixedLayoutSize(bool snapToIncrement = false) const;
 
-    bool didLayoutExceedMaximumIterations() const
-    {
-        // ZoomToFitOnLoad can lead to a large recursion depth in FrameView::layout() as we attempt
-        // to determine the zoom scale factor so as to have the content of the page fit within the
-        // area of the frame. From observation, we can bail out after a recursion depth of 10 and
-        // still have reasonable results.
-        return m_nestedLayoutFinishedCount > 10;
-    }
-
+    // ZoomToFitOnLoad can lead to a large recursion depth in FrameView::layout() as we attempt
+    // to determine the zoom scale factor so as to have the content of the page fit within the
+    // area of the frame. From observation, we can bail out after a recursion depth of 10 and
+    // still have reasonable results.
+    bool didLayoutExceedMaximumIterations() const { return m_nestedLayoutFinishedCount > 10; }
 
     void clearFocusNode();
     WebCore::Frame* focusedOrMainFrame() const;
-    WebCore::Frame* mainFrame() const;
+    WebCore::Frame* mainFrame() const { return m_mainFrame; }
 
     bool scrollNodeRecursively(WebCore::Node* originalNode, const WebCore::IntSize& delta);
     bool scrollRenderer(WebCore::RenderObject* renderer, const WebCore::IntSize& delta);
@@ -348,7 +328,7 @@ public:
 
     // If this url should be handled as a pattern, returns the pattern
     // otherwise, returns an empty string.
-    WTF::String findPatternStringForUrl(const WebCore::KURL&) const;
+    String findPatternStringForUrl(const WebCore::KURL&) const;
 
     void suspendBackingStore();
     void resumeBackingStore();
@@ -358,7 +338,7 @@ public:
 
     void setScreenOrientation(int);
 
-    // Scroll and/or zoom so that the webpage fits the new actual
+    // Scroll and/or zoom so that the WebPage fits the new actual
     // visible size.
     void setViewportSize(const WebCore::IntSize& transformedActualVisibleSize, bool ensureFocusElementVisible);
     void screenRotated(); // Helper method for setViewportSize().
@@ -376,6 +356,9 @@ public:
         return m_transformationMatrix;
     }
 
+    bool compositorDrawsRootLayer() const; // Thread safe
+    void setCompositorDrawsRootLayer(bool); // WebKit thread only
+
 #if USE(ACCELERATED_COMPOSITING)
     // WebKit thread.
     bool needsOneShotDrawingSynchronization();
@@ -390,14 +373,15 @@ public:
 
     // Thread safe.
     void resetCompositingSurface();
-    void drawLayersOnCommit(); // Including backingstore blit.
-    bool drawSubLayers(const WebCore::IntRect& dstRect, const WebCore::FloatRect& contents);
-    bool drawSubLayers(); // Draw them at last known position.
+    void drawLayersOnCommit(); // Including backing store blit.
 
     // Compositing thread.
     void setRootLayerCompositingThread(WebCore::LayerCompositingThread*);
-    void commitRootLayer(const WebCore::IntRect&, const WebCore::IntSize&);
-    void setIsAcceleratedCompositingActive(bool);
+    void commitRootLayer(const WebCore::IntRect&, const WebCore::IntSize&, bool);
+    bool isAcceleratedCompositingActive() const { return m_compositor; }
+    WebPageCompositorPrivate* compositor() const { return m_compositor.get(); }
+    void setCompositor(PassRefPtr<WebPageCompositorPrivate>);
+    bool createCompositor();
     void destroyCompositor();
     void syncDestroyCompositorOnCompositingThread();
     void destroyLayerResources();
@@ -406,9 +390,9 @@ public:
     void blitVisibleContents();
 #endif
 
-    bool dispatchTouchEventToFullScreenPlugin(WebCore::PluginView*, const BlackBerry::Platform::TouchEvent&);
-    bool dispatchTouchPointAsMouseEventToFullScreenPlugin(WebCore::PluginView*, const BlackBerry::Platform::TouchPoint&);
-    bool dispatchMouseEventToFullScreenPlugin(WebCore::PluginView*, const BlackBerry::Platform::MouseEvent&);
+    bool dispatchTouchEventToFullScreenPlugin(WebCore::PluginView*, const Platform::TouchEvent&);
+    bool dispatchTouchPointAsMouseEventToFullScreenPlugin(WebCore::PluginView*, const Platform::TouchPoint&);
+    bool dispatchMouseEventToFullScreenPlugin(WebCore::PluginView*, const Platform::MouseEvent&);
 
     BackingStoreClient* backingStoreClientForFrame(const WebCore::Frame*) const;
     void addBackingStoreClientForFrame(const WebCore::Frame*, BackingStoreClient*);
@@ -417,17 +401,24 @@ public:
     // Clean up any document related data we might be holding.
     void clearDocumentData(const WebCore::Document*);
 
+    void frameUnloaded(const WebCore::Frame*);
+
     static WebCore::RenderLayer* enclosingPositionedAncestorOrSelfIfPositioned(WebCore::RenderLayer*);
     static WebCore::RenderLayer* enclosingFixedPositionedAncestorOrSelfIfFixedPositioned(WebCore::RenderLayer*);
 
     static WebCore::IntSize defaultMaxLayoutSize();
+
+    void setVisible(bool);
+#if ENABLE(PAGE_VISIBILITY_API)
+    void setPageVisibilityState();
+#endif
+    void notifyAppActivationStateChange(ActivationStateType);
 
     WebPage* m_webPage;
     WebPageClient* m_client;
     WebCore::Page* m_page;
     WebCore::Frame* m_mainFrame;
     RefPtr<WebCore::Node> m_currentContextNode;
-
     WebSettings* m_webSettings;
 
 #if ENABLE(JAVASCRIPT_DEBUGGER)
@@ -435,8 +426,8 @@ public:
 #endif
 
     bool m_visible;
+    ActivationStateType m_activationState;
     bool m_shouldResetTilesWhenShown;
-    static Vector<WebPage*>* s_visibleWebPages;
     bool m_userScalable;
     bool m_userPerformedManualZoom;
     bool m_userPerformedManualScroll;
@@ -450,7 +441,7 @@ public:
 #if ENABLE(TOUCH_EVENTS)
     bool m_preventDefaultOnTouchStart;
 #endif
-    unsigned int m_nestedLayoutFinishedCount;
+    unsigned m_nestedLayoutFinishedCount;
     WebCore::IntSize m_previousContentsSize;
     int m_actualVisibleWidth;
     int m_actualVisibleHeight;
@@ -464,6 +455,7 @@ public:
     WebCore::TransformationMatrix* m_transformationMatrix;
     BackingStore* m_backingStore;
     BackingStoreClient* m_backingStoreClient;
+    InPageSearchManager* m_inPageSearchManager;
     InputHandler* m_inputHandler;
     SelectionHandler* m_selectionHandler;
     TouchEventHandler* m_touchEventHandler;
@@ -473,7 +465,7 @@ public:
     WebCore::TouchEventMode m_touchEventMode;
 #endif
 
-    BlackBerry::Platform::BlackBerryCursor m_currentCursor;
+    Platform::BlackBerryCursor m_currentCursor;
 
     DumpRenderTreeClient* m_dumpRenderTree;
 
@@ -503,7 +495,7 @@ public:
     double m_lastUserEventTimestamp; // Used to detect user scrolling.
 
     WebCore::PlatformMouseEvent m_lastMouseEvent;
-    bool m_pluginMouseButtonPressed; // Used to track mouse button for fullscreen plugins.
+    bool m_pluginMouseButtonPressed; // Used to track mouse button for full screen plugins.
     bool m_pluginMayOpenNewTab;
 
     WebCore::GeolocationControllerClientBlackBerry* m_geolocationClient;
@@ -515,7 +507,12 @@ public:
 #if USE(ACCELERATED_COMPOSITING)
     bool m_isAcceleratedCompositingActive;
     OwnPtr<FrameLayers> m_frameLayers; // WebKit thread only.
-    OwnPtr<WebPageCompositor> m_compositor; // Compositing thread only.
+
+    // Compositing thread only, used only when the WebKit layer created the context.
+    // If the API client created the context, this will be null.
+    OwnPtr<GLES2Context> m_ownedContext;
+
+    RefPtr<WebPageCompositorPrivate> m_compositor; // Compositing thread only.
     OwnPtr<WebCore::Timer<WebPagePrivate> > m_rootLayerCommitTimer;
     bool m_needsOneShotDrawingSynchronization;
     bool m_needsCommit;
@@ -526,6 +523,8 @@ public:
 
     RefPtr<WebCore::Node> m_fullscreenVideoNode;
     RefPtr<WebCore::PluginView> m_fullScreenPluginView;
+
+    typedef HashMap<const WebCore::Frame*, BackingStoreClient*> BackingStoreClientForFrameMap;
     BackingStoreClientForFrameMap m_backingStoreClientForFrameMap;
 
     // WebSettingsDelegate methods.
@@ -534,6 +533,9 @@ public:
     RefPtr<WebCore::DOMWrapperWorld> m_isolatedWorld;
     bool m_hasInRegionScrollableAreas;
     bool m_updateDelegatedOverlaysDispatched;
+
+protected:
+    virtual ~WebPagePrivate();
 };
 }
 }

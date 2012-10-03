@@ -155,7 +155,7 @@ bool SpellingCorrectionController::isSpellingMarkerAllowed(PassRefPtr<Range> mis
 
 void SpellingCorrectionController::show(PassRefPtr<Range> rangeToReplace, const String& replacement)
 {
-    FloatRect boundingBox = windowRectForRange(rangeToReplace.get());
+    FloatRect boundingBox = rootViewRectForRange(rangeToReplace.get());
     if (boundingBox.isEmpty())
         return;
     m_correctionPanelInfo.replacedString = plainText(rangeToReplace.get());
@@ -298,7 +298,7 @@ void SpellingCorrectionController::correctionPanelTimerFired(Timer<SpellingCorre
             break;
         m_correctionPanelInfo.isActive = true;
         m_correctionPanelInfo.replacedString = plainText(m_correctionPanelInfo.rangeToBeReplaced.get());
-        FloatRect boundingBox = windowRectForRange(m_correctionPanelInfo.rangeToBeReplaced.get());
+        FloatRect boundingBox = rootViewRectForRange(m_correctionPanelInfo.rangeToBeReplaced.get());
         if (!boundingBox.isEmpty())
             client()->showCorrectionPanel(m_correctionPanelInfo.panelType, boundingBox, m_correctionPanelInfo.replacedString, m_correctionPanelInfo.replacementString, Vector<String>());
     }
@@ -316,7 +316,7 @@ void SpellingCorrectionController::correctionPanelTimerFired(Timer<SpellingCorre
         String topSuggestion = suggestions.first();
         suggestions.remove(0);
         m_correctionPanelInfo.isActive = true;
-        FloatRect boundingBox = windowRectForRange(m_correctionPanelInfo.rangeToBeReplaced.get());
+        FloatRect boundingBox = rootViewRectForRange(m_correctionPanelInfo.rangeToBeReplaced.get());
         if (!boundingBox.isEmpty())
             client()->showCorrectionPanel(m_correctionPanelInfo.panelType, boundingBox, m_correctionPanelInfo.replacedString, topSuggestion, suggestions);
     }
@@ -362,7 +362,7 @@ bool SpellingCorrectionController::isAutomaticSpellingCorrectionEnabled()
     return client() && client()->isAutomaticSpellingCorrectionEnabled();
 }
 
-FloatRect SpellingCorrectionController::windowRectForRange(const Range* range) const
+FloatRect SpellingCorrectionController::rootViewRectForRange(const Range* range) const
 {
     FrameView* view = m_frame->view();
     if (!view)
@@ -373,7 +373,7 @@ FloatRect SpellingCorrectionController::windowRectForRange(const Range* range) c
     size_t size = textQuads.size();
     for (size_t i = 0; i < size; ++i)
         boundingRect.unite(textQuads[i].boundingBox());
-    return view->contentsToWindow(IntRect(boundingRect));
+    return view->contentsToRootView(IntRect(boundingRect));
 }        
 
 void SpellingCorrectionController::respondToChangedSelection(const VisibleSelection& oldSelection)
@@ -427,7 +427,7 @@ void SpellingCorrectionController::respondToChangedSelection(const VisibleSelect
     }
 }
 
-void SpellingCorrectionController::respondToAppliedEditing(EditCommand* command)
+void SpellingCorrectionController::respondToAppliedEditing(CompositeEditCommand* command)
 {
     if (command->isTopLevelCommand() && !command->shouldRetainAutocorrectionIndicator())
         m_frame->document()->markers()->removeMarkers(DocumentMarker::CorrectionIndicator);
@@ -436,9 +436,9 @@ void SpellingCorrectionController::respondToAppliedEditing(EditCommand* command)
     m_originalStringForLastDeletedAutocorrection = String();
 }
 
-void SpellingCorrectionController::respondToUnappliedEditing(EditCommand* command)
+void SpellingCorrectionController::respondToUnappliedEditing(EditCommandComposition* command)
 {
-    if (!command->isCreateLinkCommand())
+    if (!command->wasCreateLinkCommand())
         return;
     RefPtr<Range> range = Range::create(m_frame->document(), command->startingSelection().start(), command->startingSelection().end());
     if (!range)

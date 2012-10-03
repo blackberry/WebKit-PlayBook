@@ -36,9 +36,7 @@ CCScheduler::CCScheduler(CCSchedulerClient* client, PassOwnPtr<CCFrameRateContro
 {
     ASSERT(m_client);
     m_frameRateController->setClient(this);
-
-    // FIXME: make the CCSchedulerStateMachine turn off FrameRateController it isn't needed.
-    m_frameRateController->setActive(true);
+    m_frameRateController->setActive(m_stateMachine.vsyncCallbackNeeded());
 }
 
 CCScheduler::~CCScheduler()
@@ -49,11 +47,7 @@ CCScheduler::~CCScheduler()
 void CCScheduler::setVisible(bool visible)
 {
     m_stateMachine.setVisible(visible);
-}
-void CCScheduler::setNeedsAnimate()
-{
-    // Stub through to requestCommit for now.
-    setNeedsCommit();
+    processScheduledActions();
 }
 
 void CCScheduler::setNeedsCommit()
@@ -106,29 +100,49 @@ void CCScheduler::beginFrame()
     }
     TRACE_EVENT("CCScheduler::beginFrame", this, 0);
 
-    m_stateMachine.setInsideVSync(true);
+    m_stateMachine.didEnterVSync();
     processScheduledActions();
-    m_stateMachine.setInsideVSync(false);
+    m_stateMachine.didLeaveVSync();
+}
+
+CCSchedulerStateMachine::Action CCScheduler::nextAction()
+{
+    m_stateMachine.setCanDraw(m_client->canDraw());
+    return m_stateMachine.nextAction();
 }
 
 void CCScheduler::processScheduledActions()
 {
     // Early out so we don't spam TRACE_EVENTS with useless processScheduledActions.
-    if (m_stateMachine.nextAction() == CCSchedulerStateMachine::ACTION_NONE)
+    if (nextAction() == CCSchedulerStateMachine::ACTION_NONE) {
+        m_frameRateController->setActive(m_stateMachine.vsyncCallbackNeeded());
         return;
+    }
 
+    // This function can re-enter itself. For example, draw may call
+    // setNeedsCommit. Proceeed with caution.
     CCSchedulerStateMachine::Action action;
     do {
-        action = m_stateMachine.nextAction();
+        action = nextAction();
+        m_stateMachine.updateState(action);
+
         switch (action) {
         case CCSchedulerStateMachine::ACTION_NONE:
-            return;
+            break;
         case CCSchedulerStateMachine::ACTION_BEGIN_FRAME:
             m_client->scheduledActionBeginFrame();
             break;
         case CCSchedulerStateMachine::ACTION_BEGIN_UPDATE_MORE_RESOURCES:
             m_client->scheduledActionUpdateMoreResources();
-            m_updateMoreResourcesPending = true;
+            if (!m_client->hasMoreResourceUpdates()) {
+                // If we were just told to update resources, but there are no
+                // more pending, then tell the state machine that the
+                // beginUpdateMoreResources completed. If more are pending,
+                // then we will ack the update at the next draw.
+                m_updateMoreResourcesPending = false;
+                m_stateMachine.beginUpdateMoreResourcesComplete(false);
+            } else
+                m_updateMoreResourcesPending = true;
             break;
         case CCSchedulerStateMachine::ACTION_COMMIT:
             m_client->scheduledActionCommit();
@@ -138,19 +152,10 @@ void CCScheduler::processScheduledActions()
             m_frameRateController->didBeginFrame();
             break;
         }
-        m_stateMachine.updateState(action);
-
-        // If we were just told to update resources, but there are no more
-        // pending, then tell the state machine that the
-        // beginUpdateMoreResources completed.  If more are pending, then we
-        // will ack the update at the next draw.
-        if (action == CCSchedulerStateMachine::ACTION_BEGIN_UPDATE_MORE_RESOURCES
-            && !m_client->hasMoreResourceUpdates()) {
-            m_updateMoreResourcesPending = false;
-            m_stateMachine.beginUpdateMoreResourcesComplete(false);
-        }
-
     } while (action != CCSchedulerStateMachine::ACTION_NONE);
+
+    // Activate or deactivate the frame rate controller.
+    m_frameRateController->setActive(m_stateMachine.vsyncCallbackNeeded());
 }
 
 }

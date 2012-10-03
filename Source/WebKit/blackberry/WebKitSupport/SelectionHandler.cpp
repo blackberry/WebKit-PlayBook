@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -24,6 +24,7 @@
 #include "Editor.h"
 #include "EditorClient.h"
 #include "FatFingers.h"
+#include "FloatQuad.h"
 #include "Frame.h"
 #include "FrameSelection.h"
 #include "FrameView.h"
@@ -34,6 +35,7 @@
 #include "IntRect.h"
 #include "Page.h"
 #include "RenderPart.h"
+#include "TextGranularity.h"
 #include "TouchEventHandler.h"
 #include "WebPage.h"
 #include "WebPageClient.h"
@@ -42,19 +44,22 @@
 #include "htmlediting.h"
 #include "visible_units.h"
 
-#include <BlackBerryPlatformIntRectRegion.h>
+#include <BlackBerryPlatformKeyboardEvent.h>
 
 #include <sys/keycodes.h>
 
+// Note: This generates a lot of logs when dumping rects lists. It will seriously
+// impact performance. Do not enable this during performance tests.
 #define SHOWDEBUG_SELECTIONHANDLER 0
 
+using namespace BlackBerry::Platform;
+using namespace WebCore;
+
 #if SHOWDEBUG_SELECTIONHANDLER
-#define DEBUG_SELECTION(severity, format, ...) BlackBerry::Platform::logAlways(severity, format, ## __VA_ARGS__)
+#define DEBUG_SELECTION(severity, format, ...) logAlways(severity, format, ## __VA_ARGS__)
 #else
 #define DEBUG_SELECTION(severity, format, ...)
 #endif // SHOWDEBUG_SELECTIONHANDLER
-
-using namespace WebCore;
 
 namespace BlackBerry {
 namespace WebKit {
@@ -74,9 +79,9 @@ SelectionHandler::~SelectionHandler()
 void SelectionHandler::cancelSelection()
 {
     m_selectionActive = false;
-    m_lastSelectionRegion = BlackBerry::Platform::IntRectRegion();
+    m_lastSelectionRegion = IntRectRegion();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::cancelSelection");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::cancelSelection");
 
     if (m_webPage->m_inputHandler->isInputMode())
         m_webPage->m_inputHandler->cancelSelection();
@@ -89,65 +94,65 @@ WebString SelectionHandler::selectedText() const
     return m_webPage->focusedOrMainFrame()->editor()->selectedText();
 }
 
-bool SelectionHandler::findNextString(const WTF::String& searchString, bool forward)
+WebCore::IntRect SelectionHandler::clippingRectForVisibleContent() const
 {
-    if (searchString.isEmpty()) {
-        cancelSelection();
-        return false;
+    // Get the containing content rect for the frame.
+    Frame* frame = m_webPage->focusedOrMainFrame();
+    WebCore::IntRect clipRect = WebCore::IntRect(-1, -1, 0, 0);
+    if (frame != m_webPage->mainFrame()) {
+        clipRect = m_webPage->getRecursiveVisibleWindowRect(frame->view(), true /* no clip to main frame window */);
+        clipRect = m_webPage->m_mainFrame->view()->windowToContents(clipRect);
     }
 
-    ASSERT(m_webPage->m_page);
+    // Get the input field containing box.
+    if (m_webPage->m_inputHandler->isInputMode()
+        && frame->document()->focusedNode()
+        && frame->document()->focusedNode()->renderer()) {
 
-    m_webPage->m_page->unmarkAllTextMatches();
-
-    bool result = m_webPage->m_page->findString(searchString, WTF::TextCaseInsensitive, forward ? WebCore::FindDirectionForward : WebCore::FindDirectionBackward, true /*should wrap*/);
-    if (result && m_webPage->focusedOrMainFrame()->selection()->selectionType() == VisibleSelection::NoSelection) {
-        // Word was found but could not be selected on this page.
-        result = m_webPage->m_page->markAllMatchesForText(searchString, WTF::TextCaseInsensitive, true /*should highlight*/, 0 /*limit to match 0 = unlimited*/);
+        // Adjust the bounding box to the frame offset.
+        clipRect = frame->document()->focusedNode()->renderer()->absoluteBoundingBoxRect();
+        clipRect = m_webPage->mainFrame()->view()->windowToContents(frame->view()->contentsToWindow(clipRect));
     }
-
-    // Defocus the input field if one is active.
-    if (m_webPage->m_inputHandler->isInputMode())
-        m_webPage->m_inputHandler->nodeFocused(0);
-
-    return result;
+    return clipRect;
 }
 
-void SelectionHandler::getConsolidatedRegionOfTextQuadsForSelection(const VisibleSelection& selection, BlackBerry::Platform::IntRectRegion& region) const
+void SelectionHandler::regionForTextQuads(Vector<FloatQuad> &quadList, IntRectRegion& region, bool shouldClipToVisibleContent) const
 {
     ASSERT(region.isEmpty());
 
-    if (!selection.isRange())
-        return;
-
-    ASSERT(selection.firstRange());
-
-    FrameView* frameView = m_webPage->focusedOrMainFrame()->view();
-
-    // frame Rect is in frame coordinates.
-    IntRect frameRect(IntPoint(0, 0), frameView->contentsSize());
-
-    // The framePos is in main frame coordinates.
-    IntPoint framePosition = m_webPage->frameOffset(m_webPage->focusedOrMainFrame());
-
-    Vector<FloatQuad> quadList;
-    DOMSupport::visibleTextQuads(*(selection.firstRange()), quadList, true /*use selection height*/);
-
     if (!quadList.isEmpty()) {
-        // The ranges rect list is based on render elements and may include multiple adjacent rects.
-        // Use BlackBerry::Platform::IntRectRegion to consolidate these rects into bands as well as a container to pass
-        // to the client.
+        FrameView* frameView = m_webPage->focusedOrMainFrame()->view();
 
+        // frameRect is in frame coordinates.
+        WebCore::IntRect frameRect(WebCore::IntPoint(0, 0), frameView->contentsSize());
+
+        // framePosition is in main frame coordinates.
+        WebCore::IntPoint framePosition = m_webPage->frameOffset(m_webPage->focusedOrMainFrame());
+
+        // Get the visibile content rect.
+        WebCore::IntRect clippingRect = shouldClipToVisibleContent ? clippingRectForVisibleContent() : WebCore::IntRect(-1, -1, 0, 0);
+
+        // Convert the text quads into a more platform friendy
+        // IntRectRegion and adjust for subframes.
+        Platform::IntRect selectionBoundingBox;
+        std::vector<Platform::IntRect> adjustedIntRects;
         for (unsigned i = 0; i < quadList.size(); i++) {
-            IntRect enclosingRect = quadList[i].enclosingBoundingBox();
+            WebCore::IntRect enclosingRect = quadList[i].enclosingBoundingBox();
             enclosingRect.intersect(frameRect);
             enclosingRect.move(framePosition.x(), framePosition.y());
-            region = unionRegions(region, BlackBerry::Platform::IntRectRegion(enclosingRect));
+
+            // Clip to the visible content.
+            if (clippingRect.location() != DOMSupport::InvalidPoint)
+                enclosingRect.intersect(clippingRect);
+
+            adjustedIntRects.push_back(enclosingRect);
+            selectionBoundingBox = unionOfRects(enclosingRect, selectionBoundingBox);
         }
+        region = IntRectRegion(selectionBoundingBox, adjustedIntRects.size(), adjustedIntRects);
     }
 }
 
-static VisiblePosition visiblePositionForPointIgnoringClipping(const Frame& frame, const IntPoint& framePoint)
+static VisiblePosition visiblePositionForPointIgnoringClipping(const Frame& frame, const WebCore::IntPoint& framePoint)
 {
     // Frame::visiblePositionAtPoint hard-codes ignoreClipping=false in the
     // call to hitTestResultAtPoint. This has a bug where some pages (such as
@@ -155,20 +160,24 @@ static VisiblePosition visiblePositionForPointIgnoringClipping(const Frame& fram
     // outside the visible rect. To work around the bug, this is a copy of
     // visiblePositionAtPoint which which passes ignoreClipping=true.
     // See RIM Bug #4315.
-    HitTestResult result = frame.eventHandler()->hitTestResultAtPoint(framePoint, true /*allowShadowContent*/, true /*ignoreClipping*/);
+    HitTestResult result = frame.eventHandler()->hitTestResultAtPoint(framePoint, true /* allowShadowContent */, true /* ignoreClipping */);
+
     Node* node = result.innerNode();
-    if (!node)
+    if (!node || node->document() != frame.document())
         return VisiblePosition();
+
     RenderObject* renderer = node->renderer();
     if (!renderer)
         return VisiblePosition();
+
     VisiblePosition visiblePos = renderer->positionForPoint(result.localPoint());
     if (visiblePos.isNull())
         visiblePos = VisiblePosition(Position(createLegacyEditingPosition(node, 0)));
+
     return visiblePos;
 }
 
-static unsigned short directionOfPointRelativeToRect(const WebCore::IntPoint& point, const WebCore::IntRect& rect)
+static unsigned short directionOfPointRelativeToRect(const WebCore::IntPoint& point, const WebCore::IntRect& rect, const bool useTopPadding = true, const bool useBottomPadding = true)
 {
     ASSERT(!rect.contains(point));
 
@@ -177,14 +186,15 @@ static unsigned short directionOfPointRelativeToRect(const WebCore::IntPoint& po
 
     // Do height movement check first but add padding. We may be off on both x & y axis and only
     // want to move in one direction at a time.
-    if (point.y() + verticalPadding < rect.y())
+    if (point.y() + (useTopPadding ? verticalPadding : 0) < rect.y())
         return KEYCODE_UP;
-    if (point.y() > rect.maxY() + verticalPadding)
+    if (point.y() > rect.maxY() + (useBottomPadding ? verticalPadding : 0))
         return KEYCODE_DOWN;
     if (point.x() < rect.location().x())
         return KEYCODE_LEFT;
     if (point.x() > rect.maxX())
         return KEYCODE_RIGHT;
+
     return 0;
 }
 
@@ -203,7 +213,7 @@ bool SelectionHandler::shouldUpdateSelectionOrCaretForPoint(const WebCore::IntPo
     bool aboveCaret = point.y() < caretRect.y();
     bool belowCaret = point.y() >= caretRect.maxY();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::shouldUpdateSelectionOrCaretForPoint multiline = %s above = %s below = %s first line = %s last line = %s start = %s \n"
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::shouldUpdateSelectionOrCaretForPoint multiline = %s above = %s below = %s first line = %s last line = %s start = %s \n"
             , m_webPage->m_inputHandler->isMultilineInputMode() ? "true" : "false", aboveCaret ? "true" : "false", belowCaret ? "true" : "false"
             , inSameLine(currentSelection.visibleStart(), startOfEditableContent(currentSelection.visibleStart())) ? "true" : "false"
             , inSameLine(currentSelection.visibleEnd(), endOfEditableContent(currentSelection.visibleEnd())) ? "true" : "false"
@@ -226,12 +236,12 @@ void SelectionHandler::setCaretPosition(const WebCore::IntPoint &position)
 
     m_caretActive = true;
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::setCaretPosition requested point %d, %d", position.x(), position.y());
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::setCaretPosition requested point %d, %d", position.x(), position.y());
 
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
     FrameSelection* controller = focusedFrame->selection();
-    IntPoint relativePoint = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, position);
-    IntRect currentCaretRect = controller->selection().visibleStart().absoluteCaretBounds();
+    WebCore::IntPoint relativePoint = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, position);
+    WebCore::IntRect currentCaretRect = controller->selection().visibleStart().absoluteCaretBounds();
 
     if (relativePoint == DOMSupport::InvalidPoint || !shouldUpdateSelectionOrCaretForPoint(relativePoint, currentCaretRect)) {
         selectionPositionChanged();
@@ -241,10 +251,9 @@ void SelectionHandler::setCaretPosition(const WebCore::IntPoint &position)
     VisiblePosition visibleCaretPosition(focusedFrame->visiblePositionForPoint(relativePoint));
 
     if (!DOMSupport::isPositionInNode(m_webPage->focusedOrMainFrame()->document()->focusedNode(), visibleCaretPosition.deepEquivalent())) {
-        unsigned short character = directionOfPointRelativeToRect(relativePoint, currentCaretRect);
+        if (unsigned short character = directionOfPointRelativeToRect(relativePoint, currentCaretRect))
+            m_webPage->m_inputHandler->handleKeyboardInput(Platform::KeyboardEvent(character));
 
-        if (character)
-            m_webPage->m_inputHandler->handleNavigationMove(character, false /*shiftDown*/, false /*altDown*/, false /*canExitField*/);
         selectionPositionChanged();
         return;
     }
@@ -257,11 +266,11 @@ void SelectionHandler::setCaretPosition(const WebCore::IntPoint &position)
 
     controller->setSelection(newSelection);
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::setCaretPosition point valid, cursor updated");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::setCaretPosition point valid, cursor updated");
 }
 
 // This function makes sure we are not reducing the selection to a caret selection.
-static bool doesNavigationEventEndSelection(const VisibleSelection& selection, unsigned short character)
+static bool shouldExtendSelectionInDirection(const VisibleSelection& selection, unsigned short character)
 {
     FrameSelection tempSelection;
     tempSelection.setSelection(selection);
@@ -281,10 +290,21 @@ static bool doesNavigationEventEndSelection(const VisibleSelection& selection, u
     default:
         break;
     }
-    return tempSelection.selection().selectionType() != VisibleSelection::RangeSelection;
+
+    if ((character == KEYCODE_LEFT || character == KEYCODE_RIGHT)
+        && (!inSameLine(selection.visibleStart(), tempSelection.selection().visibleStart())
+           || !inSameLine(selection.visibleEnd(), tempSelection.selection().visibleEnd())))
+        return false;
+
+    return tempSelection.selection().selectionType() == VisibleSelection::RangeSelection;
 }
 
-static VisiblePosition directionalVisiblePositionAtExtentOfBox(Frame* frame, const IntRect& boundingBox, unsigned short direction, const IntPoint& basePoint)
+static int clamp(const int min, const int value, const int max)
+{
+    return value < min ? min : std::min(value, max);
+}
+
+static VisiblePosition directionalVisiblePositionAtExtentOfBox(Frame* frame, const WebCore::IntRect& boundingBox, unsigned short direction, const WebCore::IntPoint& basePoint)
 {
     ASSERT(frame);
 
@@ -293,21 +313,22 @@ static VisiblePosition directionalVisiblePositionAtExtentOfBox(Frame* frame, con
 
     switch (direction) {
     case KEYCODE_LEFT:
-        // Extend x to start without modifying y
-        return frame->visiblePositionForPoint(IntPoint(boundingBox.x(), basePoint.y()));
+        // Extend x to start and clamp y to the edge of bounding box.
+        return frame->visiblePositionForPoint(WebCore::IntPoint(boundingBox.x(), clamp(boundingBox.y(), basePoint.y(), boundingBox.maxY())));
     case KEYCODE_RIGHT:
-        // Extend x to end without modifying y
-        return frame->visiblePositionForPoint(IntPoint(boundingBox.maxX(), basePoint.y()));
+        // Extend x to end and clamp y to the edge of bounding box.
+        return frame->visiblePositionForPoint(WebCore::IntPoint(boundingBox.maxX(), clamp(boundingBox.y(), basePoint.y(), boundingBox.maxY())));
     case KEYCODE_UP:
-        // Extend y to top without modifying x
-        return frame->visiblePositionForPoint(IntPoint(basePoint.x(), boundingBox.y()));
+        // Extend y to top and clamp x to the edge of bounding box.
+        return frame->visiblePositionForPoint(WebCore::IntPoint(clamp(boundingBox.x(), basePoint.x(), boundingBox.maxX()), boundingBox.y()));
     case KEYCODE_DOWN:
-        // Extend x to bottom without modifying x
-        return frame->visiblePositionForPoint(IntPoint(basePoint.x(), boundingBox.maxY()));
+        // Extend y to bottom and clamp x to the edge of bounding box.
+        return frame->visiblePositionForPoint(WebCore::IntPoint(clamp(boundingBox.x(), basePoint.x(), boundingBox.maxX()), boundingBox.maxY()));
     default:
         break;
     }
-    return frame->visiblePositionForPoint(IntPoint(basePoint.x(), basePoint.y()));
+
+    return frame->visiblePositionForPoint(WebCore::IntPoint(basePoint.x(), basePoint.y()));
 }
 
 static bool pointIsOutsideOfBoundingBoxInDirection(unsigned direction, const WebCore::IntPoint& selectionPoint, const WebCore::IntRect& boundingBox)
@@ -315,28 +336,29 @@ static bool pointIsOutsideOfBoundingBoxInDirection(unsigned direction, const Web
     if ((direction == KEYCODE_LEFT && selectionPoint.x() < boundingBox.x())
         || (direction == KEYCODE_UP && selectionPoint.y() < boundingBox.y())
         || (direction == KEYCODE_RIGHT && selectionPoint.x() > boundingBox.maxX())
-        || (direction == KEYCODE_DOWN && selectionPoint.y() > boundingBox.maxY())) {
+        || (direction == KEYCODE_DOWN && selectionPoint.y() > boundingBox.maxY()))
         return true;
-    }
+
     return false;
 }
 
-unsigned short SelectionHandler::extendSelectionToFieldBoundary(bool isStartHandle, const WebCore::IntPoint& selectionPoint, WebCore::VisibleSelection& newSelection)
+unsigned short SelectionHandler::extendSelectionToFieldBoundary(bool isStartHandle, const WebCore::IntPoint& selectionPoint, VisibleSelection& newSelection)
 {
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
-    FrameSelection* controller = focusedFrame->selection();
-
     if (!focusedFrame->document()->focusedNode() || !focusedFrame->document()->focusedNode()->renderer())
         return 0;
 
-    IntRect caretRect = isStartHandle ? controller->selection().visibleStart().absoluteCaretBounds()
+    FrameSelection* controller = focusedFrame->selection();
+
+    WebCore::IntRect caretRect = isStartHandle ? controller->selection().visibleStart().absoluteCaretBounds()
                                       : controller->selection().visibleEnd().absoluteCaretBounds();
 
-    IntRect nodeBoundingBox = focusedFrame->document()->focusedNode()->renderer()->absoluteBoundingBoxRect();
+    WebCore::IntRect nodeBoundingBox = focusedFrame->document()->focusedNode()->renderer()->absoluteBoundingBoxRect();
+    nodeBoundingBox.inflate(-1);
 
     // Start handle is outside of the field. Treat it as the changed handle and move
     // relative to the start caret rect.
-    unsigned short character = directionOfPointRelativeToRect(selectionPoint, caretRect);
+    unsigned short character = directionOfPointRelativeToRect(selectionPoint, caretRect, isStartHandle /* useTopPadding */, !isStartHandle /* useBottomPadding */);
 
     // Prevent incorrect movement, handles can only extend the selection this way
     // to prevent inversion of the handles.
@@ -344,16 +366,16 @@ unsigned short SelectionHandler::extendSelectionToFieldBoundary(bool isStartHand
         || !isStartHandle && (character == KEYCODE_LEFT || character == KEYCODE_UP))
         character = 0;
 
-    WebCore::VisiblePosition newVisiblePosition = controller->selection().start();
+    VisiblePosition newVisiblePosition = isStartHandle ? controller->selection().extent() : controller->selection().base();
     // Extend the selection to the bounds of the box before doing incremental scroll if the point is outside the node.
     // Don't extend selection and handle the character at the same time.
     if (pointIsOutsideOfBoundingBoxInDirection(character, selectionPoint, nodeBoundingBox))
         newVisiblePosition = directionalVisiblePositionAtExtentOfBox(focusedFrame, nodeBoundingBox, character, selectionPoint);
 
     if (isStartHandle)
-        newSelection = VisibleSelection(newVisiblePosition, newSelection.visibleEnd(), true /*isDirectional*/);
+        newSelection = VisibleSelection(newVisiblePosition, newSelection.extent(), true /* isDirectional */);
     else
-        newSelection = VisibleSelection(newSelection.visibleStart(), newVisiblePosition, true /*isDirectional*/);
+        newSelection = VisibleSelection(newSelection.base(), newVisiblePosition, true /* isDirectional */);
 
     // If no selection will be changed, return the character to extend using navigation.
     if (controller->selection() == newSelection)
@@ -364,29 +386,29 @@ unsigned short SelectionHandler::extendSelectionToFieldBoundary(bool isStartHand
 }
 
 // Returns true if handled.
-bool SelectionHandler::updateOrHandleInputSelection(WebCore::VisibleSelection& newSelection, const WebCore::IntPoint& relativeStart
+bool SelectionHandler::updateOrHandleInputSelection(VisibleSelection& newSelection, const WebCore::IntPoint& relativeStart
                                                     , const WebCore::IntPoint& relativeEnd)
 {
     ASSERT(m_webPage->m_inputHandler->isInputMode());
 
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
-    FrameSelection* controller = focusedFrame->selection();
     Node* focusedNode = focusedFrame->document()->focusedNode();
-
     if (!focusedNode || !focusedNode->renderer())
         return false;
 
-    IntRect currentStartCaretRect = controller->selection().visibleStart().absoluteCaretBounds();
-    IntRect currentEndCaretRect = controller->selection().visibleEnd().absoluteCaretBounds();
+    FrameSelection* controller = focusedFrame->selection();
+
+    WebCore::IntRect currentStartCaretRect = controller->selection().visibleStart().absoluteCaretBounds();
+    WebCore::IntRect currentEndCaretRect = controller->selection().visibleEnd().absoluteCaretBounds();
 
     // Check if the handle movement is valid.
-    if (!shouldUpdateSelectionOrCaretForPoint(relativeStart, currentStartCaretRect, true /*startCaret*/)
-        || !shouldUpdateSelectionOrCaretForPoint(relativeEnd, currentEndCaretRect, false /*startCaret*/)) {
+    if (!shouldUpdateSelectionOrCaretForPoint(relativeStart, currentStartCaretRect, true /* startCaret */)
+        || !shouldUpdateSelectionOrCaretForPoint(relativeEnd, currentEndCaretRect, false /* startCaret */)) {
         selectionPositionChanged();
         return true;
     }
 
-    IntRect nodeBoundingBox = focusedNode->renderer()->absoluteBoundingBoxRect();
+    WebCore::IntRect nodeBoundingBox = focusedNode->renderer()->absoluteBoundingBoxRect();
 
     // Only do special handling if one handle is outside of the node.
     bool startIsOutsideOfField = relativeStart != DOMSupport::InvalidPoint && !nodeBoundingBox.contains(relativeStart);
@@ -396,31 +418,31 @@ bool SelectionHandler::updateOrHandleInputSelection(WebCore::VisibleSelection& n
 
     unsigned short character = 0;
     if (startIsOutsideOfField) {
-        character = extendSelectionToFieldBoundary(true /*isStartHandle*/, relativeStart, newSelection);
+        character = extendSelectionToFieldBoundary(true /* isStartHandle */, relativeStart, newSelection);
         if (character) {
             // Invert the selection so that the cursor point is at the beginning.
-            controller->setSelection(VisibleSelection(controller->selection().end(), controller->selection().start()));
+            controller->setSelection(VisibleSelection(controller->selection().end(), controller->selection().start(), true /* isDirectional */));
         }
     } else if (endIsOutsideOfField) {
-        character = extendSelectionToFieldBoundary(false /*isStartHandle*/, relativeEnd, newSelection);
+        character = extendSelectionToFieldBoundary(false /* isStartHandle */, relativeEnd, newSelection);
         if (character) {
             // Reset the selection so that the end is the edit point.
-            controller->setSelection(VisibleSelection(controller->selection().start(), controller->selection().end()));
+            controller->setSelection(VisibleSelection(controller->selection().start(), controller->selection().end(), true /* isDirectional */));
         }
     }
 
-    if (character) {
-        DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::setSelection making selection change attempt using navigation");
+    if (!character)
+        return false;
 
-        if (!doesNavigationEventEndSelection(controller->selection(), character))
-            m_webPage->m_inputHandler->handleNavigationMove(character, true /*shiftDown*/, false /*altDown*/, false /*canExitField*/);
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::setSelection making selection change attempt using key event %d", character);
 
-        // Must send the selectionPositionChanged every time, sometimes this will duplicate but an accepted
-        // handleNavigationMove may not make an actual selection change.
-        selectionPositionChanged();
-        return true;
-    }
-    return false;
+    if (shouldExtendSelectionInDirection(controller->selection(), character))
+        m_webPage->m_inputHandler->handleKeyboardInput(Platform::KeyboardEvent(character, Platform::KeyboardEvent::KeyDown, KEYMOD_SHIFT));
+
+    // Must send the selectionPositionChanged every time, sometimes this will duplicate but an accepted
+    // handleNavigationMove may not make an actual selection change.
+    selectionPositionChanged();
+    return true;
 }
 
 void SelectionHandler::setSelection(const WebCore::IntPoint& start, const WebCore::IntPoint& end)
@@ -434,7 +456,7 @@ void SelectionHandler::setSelection(const WebCore::IntPoint& start, const WebCor
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
     FrameSelection* controller = focusedFrame->selection();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::setSelection adjusted points %d, %d, %d, %d", start.x(), start.y(), end.x(), end.y());
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::setSelection adjusted points %d, %d, %d, %d", start.x(), start.y(), end.x(), end.y());
 
     // Note that IntPoint(-1, -1) is being our sentinel so far for
     // clipped out selection starting or ending location.
@@ -444,34 +466,43 @@ void SelectionHandler::setSelection(const WebCore::IntPoint& start, const WebCor
     // At least one of the locations must be valid.
     ASSERT(startIsValid || m_lastUpdatedEndPointIsValid);
 
-    IntPoint relativeStart = start;
-    IntPoint relativeEnd = end;
+    WebCore::IntPoint relativeStart = start;
+    WebCore::IntPoint relativeEnd = end;
 
     VisibleSelection newSelection(controller->selection());
 
     // We need the selection to be ordered base then extent.
     if (!controller->selection().isBaseFirst())
-        controller->setSelection(VisibleSelection(controller->selection().start(), controller->selection().end()));
+        controller->setSelection(VisibleSelection(controller->selection().start(), controller->selection().end(), true /* isDirectional */));
 
+    // We don't return early in the following, so that we can do input field scrolling if the
+    // handle is outside the bounds of the field. This can be extended to handle sub-region
+    // scrolling as well
     if (startIsValid) {
         relativeStart = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, start);
 
-        // Set the selection with validation.
-        newSelection.setBase(visiblePositionForPointIgnoringClipping(*focusedFrame, relativeStart));
-
-        // Reset the selection using the existing extent without validation.
-        newSelection.setWithoutValidation(newSelection.base(), controller->selection().end());
+        VisiblePosition base = visiblePositionForPointIgnoringClipping(*focusedFrame, clipPointToVisibleContainer(start));
+        if (base.isNotNull()) {
+            // The function setBase validates the "base"
+            newSelection.setBase(base);
+            newSelection.setWithoutValidation(newSelection.base(), controller->selection().end());
+            // Don't return early.
+        }
     }
 
     if (m_lastUpdatedEndPointIsValid) {
         relativeEnd = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, end);
 
-        // Set the selection with validation.
-        newSelection.setExtent(visiblePositionForPointIgnoringClipping(*focusedFrame, relativeEnd));
-
-        // Reset the selection using the existing base without validation.
-        newSelection.setWithoutValidation(controller->selection().start(), newSelection.extent());
+        VisiblePosition extent = visiblePositionForPointIgnoringClipping(*focusedFrame, clipPointToVisibleContainer(end));
+        if (extent.isNotNull()) {
+            // The function setExtent validates the "extent"
+            newSelection.setExtent(extent);
+            newSelection.setWithoutValidation(controller->selection().start(), newSelection.extent());
+            // Don't return early.
+        }
     }
+
+    newSelection.setIsDirectional(true);
 
     if (m_webPage->m_inputHandler->isInputMode()) {
         if (updateOrHandleInputSelection(newSelection, relativeStart, relativeEnd))
@@ -486,22 +517,24 @@ void SelectionHandler::setSelection(const WebCore::IntPoint& start, const WebCor
     // If the selection size is reduce to less than a character, selection type becomes
     // Caret. As long as it is still a range, it's a valid selection. Selection cannot
     // be cancelled through this function.
-    BlackBerry::Platform::IntRectRegion region;
-    getConsolidatedRegionOfTextQuadsForSelection(newSelection, region);
-    clipRegionToVisibleContainer(region);
-    if (!region.isEmpty()) {
+    Vector<FloatQuad> quads;
+    DOMSupport::visibleTextQuads(newSelection, quads);
+
+    IntRectRegion unclippedRegion;
+    regionForTextQuads(quads, unclippedRegion, false /* shouldClipToVisibleContent */);
+    if (!unclippedRegion.isEmpty()) {
         // Check if the handles reversed position.
         if (m_selectionActive && !newSelection.isBaseFirst())
             m_webPage->m_client->notifySelectionHandlesReversed();
 
         controller->setSelection(newSelection);
 
-        DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::setSelection selection points valid, selection updated");
+        DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::setSelection selection points valid, selection updated\n");
     } else {
         // Requested selection results in an empty selection, skip this change.
         selectionPositionChanged();
 
-        DEBUG_SELECTION(BlackBerry::Platform::LogLevelWarn, "SelectionHandler::setSelection selection points invalid, selection not updated");
+        DEBUG_SELECTION(LogLevelWarn, "SelectionHandler::setSelection selection points invalid, selection not updated\n");
     }
 }
 
@@ -509,7 +542,7 @@ void SelectionHandler::setSelection(const WebCore::IntPoint& start, const WebCor
 // This function should be moved to a new unit file. Names suggetions include DOMQueries
 // and NodeTypes. Functions currently in InputHandler.cpp, SelectionHandler.cpp and WebPage.cpp
 // can all be moved in.
-static Node* enclosingLinkEventParentForNode(WebCore::Node* node)
+static Node* enclosingLinkEventParentForNode(Node* node)
 {
     if (!node)
         return 0;
@@ -531,7 +564,7 @@ void SelectionHandler::selectAtPoint(const WebCore::IntPoint& location)
     // FIXME: Factory this get right fat finger code into a helper.
     const FatFingersResult lastFatFingersResult = m_webPage->m_touchEventHandler->lastFatFingersResult();
     if (lastFatFingersResult.positionWasAdjusted() && lastFatFingersResult.nodeAsElementIfApplicable()) {
-        targetNode = lastFatFingersResult.validNode();
+        targetNode = lastFatFingersResult.node(FatFingersResult::ShadowContentNotAllowed);
         targetPosition = lastFatFingersResult.adjustedPosition();
     } else {
         FatFingersResult newFatFingersResult = FatFingers(m_webPage, location, FatFingers::Text).findBestPoint();
@@ -539,7 +572,7 @@ void SelectionHandler::selectAtPoint(const WebCore::IntPoint& location)
             return;
 
         targetPosition = newFatFingersResult.adjustedPosition();
-        targetNode = newFatFingersResult.validNode();
+        targetNode = newFatFingersResult.node(FatFingersResult::ShadowContentNotAllowed);
     }
 
     ASSERT(targetNode);
@@ -562,6 +595,9 @@ static bool expandSelectionToGranularity(Frame* frame, VisibleSelection selectio
     if (!(selection.start().anchorNode() && selection.start().anchorNode()->isTextNode()))
         return false;
 
+    if (granularity == WordGranularity)
+        selection = DOMSupport::visibleSelectionForClosestActualWordStart(selection);
+
     selection.expandUsingGranularity(granularity);
     RefPtr<Range> newRange = selection.toNormalizedRange();
     RefPtr<Range> oldRange = frame->selection()->selection().toNormalizedRange();
@@ -579,32 +615,33 @@ void SelectionHandler::selectObject(const WebCore::IntPoint& location, TextGranu
     ASSERT(m_webPage && m_webPage->focusedOrMainFrame() && m_webPage->focusedOrMainFrame()->selection());
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectObject adjusted points %d, %d", location.x(), location.y());
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::selectObject adjusted points %d, %d", location.x(), location.y());
 
-    IntPoint relativePoint = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, location);
+    WebCore::IntPoint relativePoint = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), focusedFrame, location);
     VisiblePosition pointLocation(focusedFrame->visiblePositionForPoint(relativePoint));
     VisibleSelection selection = VisibleSelection(pointLocation, pointLocation);
 
     m_selectionActive = expandSelectionToGranularity(focusedFrame, selection, granularity, m_webPage->m_inputHandler->isInputMode());
 }
 
-void SelectionHandler::selectObject(WebCore::TextGranularity granularity)
+void SelectionHandler::selectObject(TextGranularity granularity)
 {
+    ASSERT(m_webPage && m_webPage->m_inputHandler);
     // Using caret location, must be inside an input field.
     if (!m_webPage->m_inputHandler->isInputMode())
         return;
 
-    ASSERT(m_webPage && m_webPage->focusedOrMainFrame() && m_webPage->focusedOrMainFrame()->selection());
+    ASSERT(m_webPage->focusedOrMainFrame() && m_webPage->focusedOrMainFrame()->selection());
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectObject using current selection");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::selectObject using current selection");
 
     // Use the current selection as the selection point.
     ASSERT(focusedFrame->selection()->selectionType() != VisibleSelection::NoSelection);
     m_selectionActive = expandSelectionToGranularity(focusedFrame, focusedFrame->selection()->selection(), granularity, true /* isInputMode */);
 }
 
-void SelectionHandler::selectObject(WebCore::Node* node)
+void SelectionHandler::selectObject(Node* node)
 {
     if (!node)
         return;
@@ -614,7 +651,7 @@ void SelectionHandler::selectObject(WebCore::Node* node)
     ASSERT(m_webPage && m_webPage->focusedOrMainFrame() && m_webPage->focusedOrMainFrame()->selection());
     Frame* focusedFrame = m_webPage->focusedOrMainFrame();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectNode");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::selectNode");
 
     VisibleSelection selection = VisibleSelection::selectionFromContentsOfNode(node);
     focusedFrame->selection()->setSelection(selection);
@@ -625,9 +662,10 @@ static TextDirection directionOfEnclosingBlock(FrameSelection* selection)
     Node* enclosingBlockNode = enclosingBlock(selection->selection().extent().deprecatedNode());
     if (!enclosingBlockNode)
         return LTR;
-    RenderObject* renderer = enclosingBlockNode->renderer();
-    if (renderer)
+
+    if (RenderObject* renderer = enclosingBlockNode->renderer())
         return renderer->style()->direction();
+
     return LTR;
 }
 
@@ -638,31 +676,34 @@ static inline int comparePointsToReferencePoint(const WebCore::IntPoint& p1, con
 {
     int dy1 = abs(referencePoint.y() - p1.y());
     int dy2 = abs(referencePoint.y() - p2.y());
-    if (dy1 == dy2) {
-        // same y-coordinate, choose the farthest right (or left) point
-        if (p1.x() == p2.x())
-            return 0;
-        if (p1.x() > p2.x())
-            return rightGravity ? 1 : -1;
-        return rightGravity ? -1 : 1;
-    }
-    return dy2 - dy1;
+    if (dy1 != dy2)
+        return dy2 - dy1;
+
+    // Same y-coordinate, choose the farthest right (or left) point.
+    if (p1.x() == p2.x())
+        return 0;
+
+    if (p1.x() > p2.x())
+        return rightGravity ? 1 : -1;
+
+    return rightGravity ? -1 : 1;
 }
 
 // NOTE/FIXME: Due to r77286, we are getting off-by-one results in the IntRect class counterpart implementation of the
 //             methods below. As done in r89803, r77928 and a few others, lets use local method to fix it.
 //             We should keep our eyes very open on it, since it can affect BackingStore very badly.
-static IntPoint minXMinYCorner(const WebCore::IntRect& rect) { return rect.location(); } // typically topLeft
-static IntPoint maxXMinYCorner(const WebCore::IntRect& rect) { return WebCore::IntPoint(rect.x() + rect.width() - 1, rect.y()); } // typically topRight
-static IntPoint minXMaxYCorner(const WebCore::IntRect& rect) { return WebCore::IntPoint(rect.x(), rect.y() + rect.height() - 1); } // typically bottomLeft
-static IntPoint maxXMaxYCorner(const WebCore::IntRect& rect) { return IntPoint(rect.x() + rect.width() - 1, rect.y() + rect.height() - 1); } // typically bottomRight
+static WebCore::IntPoint minXMinYCorner(const WebCore::IntRect& rect) { return rect.location(); } // typically topLeft
+static WebCore::IntPoint maxXMinYCorner(const WebCore::IntRect& rect) { return WebCore::IntPoint(rect.x() + rect.width() - 1, rect.y()); } // typically topRight
+static WebCore::IntPoint minXMaxYCorner(const WebCore::IntRect& rect) { return WebCore::IntPoint(rect.x(), rect.y() + rect.height() - 1); } // typically bottomLeft
+static WebCore::IntPoint maxXMaxYCorner(const WebCore::IntRect& rect) { return WebCore::IntPoint(rect.x() + rect.width() - 1, rect.y() + rect.height() - 1); } // typically bottomRight
 
 // The caret is a one-pixel wide line down either the right or left edge of a
-// rect, depending on the text direction
+// rect, depending on the text direction.
 static inline bool caretIsOnLeft(bool isStartCaret, bool isRTL)
 {
     if (isStartCaret)
         return !isRTL;
+
     return isRTL;
 }
 
@@ -675,17 +716,18 @@ static inline WebCore::IntPoint caretComparisonPointForRect(const WebCore::IntRe
 {
     if (isStartCaret)
         return caretIsOnLeft(isStartCaret, isRTL) ? minXMinYCorner(rect) : maxXMinYCorner(rect);
+
     return caretIsOnLeft(isStartCaret, isRTL) ? minXMaxYCorner(rect) : maxXMaxYCorner(rect);
 }
 
 static void adjustCaretRects(WebCore::IntRect& startCaret, bool isStartCaretClippedOut,
                              WebCore::IntRect& endCaret, bool isEndCaretClippedOut,
-                             const std::vector<BlackBerry::Platform::IntRect> rectList,
+                             const std::vector<Platform::IntRect> rectList,
                              const WebCore::IntPoint& startReferencePoint,
                              const WebCore::IntPoint& endReferencePoint,
                              bool isRTL)
 {
-    // startReferencePoint is the best guess at the top left of the selection; endReferencePoint is the best guess at the bottom right
+    // startReferencePoint is the best guess at the top left of the selection; endReferencePoint is the best guess at the bottom right.
     if (isStartCaretClippedOut)
         startCaret.setLocation(DOMSupport::InvalidPoint);
     else {
@@ -708,9 +750,9 @@ static void adjustCaretRects(WebCore::IntRect& startCaret, bool isStartCaretClip
     endCaret.setWidth(1);
 
     for (unsigned i = 1; i < rectList.size(); i++) {
-        IntRect currentRect(rectList[i]);
-        // Compare start and end and update.
+        WebCore::IntRect currentRect(rectList[i]);
 
+        // Compare and update the start and end carets with their respective reference points.
         if (!isStartCaretClippedOut && comparePointsToReferencePoint(
                     caretComparisonPointForRect(currentRect, true, isRTL),
                     caretComparisonPointForRect(startCaret, true, isRTL),
@@ -729,34 +771,25 @@ static void adjustCaretRects(WebCore::IntRect& startCaret, bool isStartCaretClip
     }
 }
 
-void SelectionHandler::clipRegionToVisibleContainer(BlackBerry::Platform::IntRectRegion& region)
+WebCore::IntPoint SelectionHandler::clipPointToVisibleContainer(const WebCore::IntPoint& point) const
 {
     ASSERT(m_webPage->m_mainFrame && m_webPage->m_mainFrame->view());
 
     Frame* frame = m_webPage->focusedOrMainFrame();
-    WebCore::IntRect containingContentRect;
-    // Don't allow the region to extend outside of the all its ancestor frames' visible area.
-    if (frame != m_webPage->mainFrame()) {
-        containingContentRect = m_webPage->getRecursiveVisibleWindowRect(frame->view(), true /*no clip to main frame window*/);
-        containingContentRect = m_webPage->m_mainFrame->view()->windowToContents(containingContentRect);
-        region = intersectRegions(BlackBerry::Platform::IntRectRegion(containingContentRect), region);
-    }
+    WebCore::IntPoint clippedPoint = DOMSupport::convertPointToFrame(m_webPage->mainFrame(), frame, point, true /* clampToTargetFrame */);
 
-    // Don't allow the region to extend outside of the input field.
     if (m_webPage->m_inputHandler->isInputMode()
-        && frame->document()->focusedNode()
-        && frame->document()->focusedNode()->renderer()) {
-
-        // Adjust the bounding box to the frame offset.
-        IntRect boundingBox(frame->document()->focusedNode()->renderer()->absoluteBoundingBoxRect());
-        boundingBox = m_webPage->mainFrame()->view()->windowToContents(frame->view()->contentsToWindow(boundingBox));
-
-        region = intersectRegions(BlackBerry::Platform::IntRectRegion(boundingBox), region);
+            && frame->document()->focusedNode()
+            && frame->document()->focusedNode()->renderer()) {
+        WebCore::IntRect boundingBox(frame->document()->focusedNode()->renderer()->absoluteBoundingBoxRect());
+        boundingBox.inflate(-1);
+        clippedPoint = WebCore::IntPoint(clamp(boundingBox.x(), clippedPoint.x(), boundingBox.maxX()), clamp(boundingBox.y(), clippedPoint.y(), boundingBox.maxY()));
     }
+
+    return clippedPoint;
 }
 
-static WebCore::IntPoint referencePoint(const WebCore::VisiblePosition& position, const WebCore::IntRect& boundingRect
-                                        , const WebCore::IntPoint& framePosition, bool isStartCaret, bool isRTL)
+static WebCore::IntPoint referencePoint(const VisiblePosition& position, const WebCore::IntRect& boundingRect, const WebCore::IntPoint& framePosition, bool isStartCaret, bool isRTL)
 {
     // If one of the carets is invalid (this happens, for instance, if the
     // selection ends in an empty div) fall back to using the corner of the
@@ -767,14 +800,30 @@ static WebCore::IntPoint referencePoint(const WebCore::VisiblePosition& position
         startCaretBounds = boundingRect;
     else
         startCaretBounds.move(framePosition.x(), framePosition.y());
+
     return caretComparisonPointForRect(startCaretBounds, isStartCaret, isRTL);
+}
+
+// Check all rects in the region for a point match. The region is non-banded
+// and non-sorted so all must be checked.
+static bool regionRectListContainsPoint(const IntRectRegion& region, const WebCore::IntPoint& point)
+{
+    if (!region.extents().contains(point))
+        return false;
+
+    std::vector<Platform::IntRect> rectList = region.rects();
+    for (unsigned int i = 0; i < rectList.size(); i++) {
+        if (rectList[i].contains(point))
+            return true;
+    }
+    return false;
 }
 
 // Note: This is the only function in SelectionHandler in which the coordinate
 // system is not entirely WebKit.
 void SelectionHandler::selectionPositionChanged(bool visualChangeOnly)
 {
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectionPositionChanged");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::selectionPositionChanged visibleChangeOnly = %s", visualChangeOnly ? "true" : "false");
 
     // This method can get called during WebPage shutdown process.
     // If that is the case, just bail out since the client is not
@@ -795,7 +844,7 @@ void SelectionHandler::selectionPositionChanged(bool visualChangeOnly)
     // Enter selection mode if selection type is RangeSelection, and disable selection if
     // selection is active and becomes caret selection.
     Frame* frame = m_webPage->focusedOrMainFrame();
-    IntPoint framePos = m_webPage->frameOffset(frame);
+    WebCore::IntPoint framePos = m_webPage->frameOffset(frame);
     if (m_selectionActive && (m_caretActive || frame->selection()->isNone()))
         m_selectionActive = false;
     else if (frame->selection()->isRange())
@@ -807,54 +856,52 @@ void SelectionHandler::selectionPositionChanged(bool visualChangeOnly)
     WebCore::IntRect endCaret;
 
     // Get the text rects from the selections range.
-    BlackBerry::Platform::IntRectRegion region;
-    getConsolidatedRegionOfTextQuadsForSelection(frame->selection()->selection(), region);
+    Vector<FloatQuad> quads;
+    DOMSupport::visibleTextQuads(frame->selection()->selection(), quads);
+
+    IntRectRegion unclippedRegion;
+    regionForTextQuads(quads, unclippedRegion, false /* shouldClipToVisibleContent */);
 
     // If there is no change in selected text and the visual rects
     // have not changed then don't bother notifying anything.
-    if (visualChangeOnly && m_lastSelectionRegion.isEqual(region))
+    if (visualChangeOnly && m_lastSelectionRegion.isEqual(unclippedRegion))
         return;
 
-    m_lastSelectionRegion = region;
+    m_lastSelectionRegion = unclippedRegion;
 
-    if (!region.isEmpty()) {
-
+    IntRectRegion visibleSelectionRegion;
+    if (!unclippedRegion.isEmpty()) {
         WebCore::IntRect unclippedStartCaret;
         WebCore::IntRect unclippedEndCaret;
 
         bool isRTL = directionOfEnclosingBlock(frame->selection()) == RTL;
 
-        std::vector<BlackBerry::Platform::IntRect> rectList = region.rects();
+        WebCore::IntPoint startCaretReferencePoint = referencePoint(frame->selection()->selection().visibleStart(), unclippedRegion.extents(), framePos, true /* isStartCaret */, isRTL);
+        WebCore::IntPoint endCaretReferencePoint = referencePoint(frame->selection()->selection().visibleEnd(), unclippedRegion.extents(), framePos, false /* isStartCaret */, isRTL);
 
-        WebCore::IntPoint startCaretReferencePoint = referencePoint(frame->selection()->selection().visibleStart(),
-                                                                    region.extents(), framePos, true /*isStartCaret*/, isRTL);
-        WebCore::IntPoint endCaretReferencePoint = referencePoint(frame->selection()->selection().visibleEnd(),
-                                                                    region.extents(), framePos, false /*isStartCaret*/, isRTL);
+        adjustCaretRects(unclippedStartCaret, false /* unclipped */, unclippedEndCaret, false /* unclipped */, unclippedRegion.rects(), startCaretReferencePoint, endCaretReferencePoint, isRTL);
 
-        adjustCaretRects(unclippedStartCaret, false /*unclipped*/, unclippedEndCaret, false /*unclipped*/, rectList, startCaretReferencePoint, endCaretReferencePoint, isRTL);
-
-        clipRegionToVisibleContainer(region);
+        regionForTextQuads(quads, visibleSelectionRegion);
 
 #if SHOWDEBUG_SELECTIONHANDLER // Don't rely just on DEBUG_SELECTION to avoid loop.
-        for (unsigned int i = 0; i < rectList.size(); i++)
-            DEBUG_SELECTION(BlackBerry::Platform::LogLevelCritical, "Rect list - Unmodified #%d, (%d, %d) (%d x %d)", i, rectList[i].x(), rectList[i].y(), rectList[i].width(), rectList[i].height());
-        for (unsigned int i = 0; i < region.numRects(); i++)
-            DEBUG_SELECTION(BlackBerry::Platform::LogLevelCritical, "Rect list  - Consolidated #%d, (%d, %d) (%d x %d)", i, region.rects()[i].x(), region.rects()[i].y(), region.rects()[i].width(), region.rects()[i].height());
+        for (unsigned int i = 0; i < unclippedRegion.numRects(); i++)
+            DEBUG_SELECTION(LogLevelCritical, "Rect list - Unmodified #%d, (%d, %d) (%d x %d)", i, unclippedRegion.rects()[i].x(), unclippedRegion.rects()[i].y(), unclippedRegion.rects()[i].width(), unclippedRegion.rects()[i].height());
+        for (unsigned int i = 0; i < visibleSelectionRegion.numRects(); i++)
+            DEBUG_SELECTION(LogLevelCritical, "Rect list  - Clipped to Visible #%d, (%d, %d) (%d x %d)", i, visibleSelectionRegion.rects()[i].x(), visibleSelectionRegion.rects()[i].y(), visibleSelectionRegion.rects()[i].width(), visibleSelectionRegion.rects()[i].height());
 #endif
 
         bool shouldCareAboutPossibleClippedOutSelection = frame != m_webPage->mainFrame() || m_webPage->m_inputHandler->isInputMode();
 
-        if (!region.isEmpty() || shouldCareAboutPossibleClippedOutSelection) {
+        if (!visibleSelectionRegion.isEmpty() || shouldCareAboutPossibleClippedOutSelection) {
             // Adjust the handle markers to be at the end of the painted rect. When selecting links
             // and other elements that may have a larger visible area than needs to be rendered a gap
             // can exist between the handle and overlay region.
 
-            bool shouldClipStartCaret = !region.isRectInRegion(unclippedStartCaret);
-            bool shouldClipEndCaret = !region.isRectInRegion(unclippedEndCaret);
+            bool shouldClipStartCaret = !regionRectListContainsPoint(visibleSelectionRegion, unclippedStartCaret.location());
+            bool shouldClipEndCaret = !regionRectListContainsPoint(visibleSelectionRegion, unclippedEndCaret.location());
 
             // Find the top corner and bottom corner.
-            std::vector<BlackBerry::Platform::IntRect> clippedRectList = region.rects();
-            adjustCaretRects(startCaret, shouldClipStartCaret, endCaret, shouldClipEndCaret, clippedRectList, startCaretReferencePoint, endCaretReferencePoint, isRTL);
+            adjustCaretRects(startCaret, shouldClipStartCaret, endCaret, shouldClipEndCaret, visibleSelectionRegion.rects(), startCaretReferencePoint, endCaretReferencePoint, isRTL);
 
             // Translate the caret values as they must be in transformed coordinates.
             if (!shouldClipStartCaret) {
@@ -869,23 +916,24 @@ void SelectionHandler::selectionPositionChanged(bool visualChangeOnly)
         }
     }
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectionPositionChanged Start Rect=%s End Rect=%s",
-                        startCaret.toString().utf8().data(), endCaret.toString().utf8().data());
+    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::selectionPositionChanged Start Rect=(%d, %d) (%d x %d) End Rect=(%d, %d) (%d x %d)",
+                    startCaret.x(), startCaret.y(), startCaret.width(), startCaret.height(), endCaret.x(), endCaret.y(), endCaret.width(), endCaret.height());
 
-    m_webPage->m_client->notifySelectionDetailsChanged(startCaret, endCaret, region);
+
+    m_webPage->m_client->notifySelectionDetailsChanged(startCaret, endCaret, visibleSelectionRegion);
 }
 
 // NOTE: This function is not in WebKit coordinates.
 void SelectionHandler::caretPositionChanged()
 {
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::caretPositionChanged");
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::caretPositionChanged");
 
     WebCore::IntRect caretLocation;
     // If the input field is not active, we must be turning off the caret.
     if (!m_webPage->m_inputHandler->isInputMode() && m_caretActive) {
         m_caretActive = false;
         // Send an empty caret change to turn off the caret.
-        m_webPage->m_client->notifyCaretChanged(caretLocation, m_webPage->m_touchEventHandler->lastFatFingersResult().isTextInput() /*userTouchTriggered*/);
+        m_webPage->m_client->notifyCaretChanged(caretLocation, m_webPage->m_touchEventHandler->lastFatFingersResult().isTextInput() /* userTouchTriggered */);
         return;
     }
 
@@ -895,26 +943,24 @@ void SelectionHandler::caretPositionChanged()
     ASSERT(m_webPage->m_inputHandler->isInputMode());
 
     if (m_webPage->focusedOrMainFrame()->selection()->selectionType() == VisibleSelection::CaretSelection) {
-        IntPoint frameOffset = m_webPage->frameOffset(m_webPage->focusedOrMainFrame());
+        WebCore::IntPoint frameOffset = m_webPage->frameOffset(m_webPage->focusedOrMainFrame());
 
         caretLocation = m_webPage->focusedOrMainFrame()->selection()->selection().visibleStart().absoluteCaretBounds();
         caretLocation.move(frameOffset.x(), frameOffset.y());
 
         // Clip against the containing frame and node boundaries.
-        BlackBerry::Platform::IntRectRegion region(caretLocation);
-        clipRegionToVisibleContainer(region);
-        caretLocation = region.extents();
+        caretLocation.intersect(clippingRectForVisibleContent());
     }
 
     m_caretActive = !caretLocation.isEmpty();
 
-    DEBUG_SELECTION(BlackBerry::Platform::LogLevelInfo, "SelectionHandler::caretPositionChanged caret Rect %d, %d, %dx%d",
+    DEBUG_SELECTION(LogLevelInfo, "SelectionHandler::caretPositionChanged caret Rect %d, %d, %dx%d",
                         caretLocation.x(), caretLocation.y(), caretLocation.width(), caretLocation.height());
 
     caretLocation = m_webPage->mapToTransformed(caretLocation);
     m_webPage->clipToTransformedContentsRect(caretLocation);
 
-    m_webPage->m_client->notifyCaretChanged(caretLocation, m_webPage->m_touchEventHandler->lastFatFingersResult().isTextInput() /*userTouchTriggered*/);
+    m_webPage->m_client->notifyCaretChanged(caretLocation, m_webPage->m_touchEventHandler->lastFatFingersResult().isTextInput() /* userTouchTriggered */);
 }
 
 bool SelectionHandler::selectionContains(const WebCore::IntPoint& point)

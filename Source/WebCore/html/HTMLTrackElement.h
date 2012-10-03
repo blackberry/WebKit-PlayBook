@@ -30,6 +30,7 @@
 
 #include "HTMLElement.h"
 #include "LoadableTextTrack.h"
+#include "TextTrack.h"
 
 namespace WebCore {
 
@@ -40,31 +41,44 @@ public:
     static PassRefPtr<HTMLTrackElement> create(const QualifiedName&, Document*);
 
     KURL src() const;
-    String kind() const;
+    void setSrc(const String&);
+
+    String kind();
+    void setKind(const String&);
+
     String srclang() const;
+    void setSrclang(const String&);
+
     String label() const;
+    void setLabel(const String&);
 
     bool isDefault() const;
-    void setKind(const String&);
-    void setSrc(const String&);
-    void setSrclang(const String&);
-    void setLabel(const String&);
     void setIsDefault(bool);
+
+    enum ReadyState { NONE = 0, LOADING = 1, LOADED = 2, TRACK_ERROR = 3 };
+    ReadyState readyState();
+    void setReadyState(ReadyState);
+
     TextTrack* track();
-    
+
     void scheduleLoad();
-    virtual bool canLoadUrl(LoadableTextTrack*, const KURL&);
-    virtual void didCompleteLoad(LoadableTextTrack*, bool /* loadingFailed */);
+
+    enum LoadStatus { Failure, Success };
+    virtual void didCompleteLoad(LoadableTextTrack*, LoadStatus);
+
+    const AtomicString& mediaElementCrossOriginAttribute() const;
+
+    bool hasBeenConfigured() const { return m_hasBeenConfigured; }
+    void setHasBeenConfigured(bool flag) { m_hasBeenConfigured = flag; }
 
 private:
     HTMLTrackElement(const QualifiedName&, Document*);
     virtual ~HTMLTrackElement();
 
-    virtual void parseMappedAttribute(Attribute*);
-    virtual void attributeChanged(Attribute*, bool preserveDecls);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
-    virtual void insertedIntoTree(bool);
-    virtual void willRemove();
+    virtual void insertedIntoDocument() OVERRIDE;
+    virtual void removedFromDocument() OVERRIDE;
     virtual bool isURLAttribute(Attribute*) const;
 
 #if ENABLE(MICRODATA)
@@ -75,16 +89,18 @@ private:
     HTMLMediaElement* mediaElement() const;
 
     // TextTrackClient
-    virtual void textTrackReadyStateChanged(TextTrack*);
     virtual void textTrackModeChanged(TextTrack*);
+    virtual void textTrackKindChanged(TextTrack*);
     virtual void textTrackAddCues(TextTrack*, const TextTrackCueList*);
     virtual void textTrackRemoveCues(TextTrack*, const TextTrackCueList*);
     virtual void textTrackAddCue(TextTrack*, PassRefPtr<TextTrackCue>);
     virtual void textTrackRemoveCue(TextTrack*, PassRefPtr<TextTrackCue>);
 
     LoadableTextTrack* ensureTrack();
+    virtual bool canLoadUrl(const KURL&);
 
     RefPtr<LoadableTextTrack> m_track;
+    bool m_hasBeenConfigured;
 };
 
 }

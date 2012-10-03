@@ -27,14 +27,21 @@
 #include "CSSImportRule.h"
 #include "CSSMediaRule.h"
 #include "CSSPageRule.h"
-#include "CSSRegionStyleRule.h"
 #include "CSSStyleRule.h"
 #include "CSSUnknownRule.h"
 #include "WebKitCSSKeyframeRule.h"
 #include "WebKitCSSKeyframesRule.h"
+#include "WebKitCSSRegionRule.h"
 #include "NotImplemented.h"
 
 namespace WebCore {
+
+struct SameSizeAsCSSRule : public RefCounted<SameSizeAsCSSRule> {
+    unsigned bitfields;
+    void* pointerUnion;
+};
+
+COMPILE_ASSERT(sizeof(CSSRule) == sizeof(SameSizeAsCSSRule), CSSRule_should_stay_small);
 
 void CSSRule::setCssText(const String& /*cssText*/, ExceptionCode& /*ec*/)
 {
@@ -47,8 +54,9 @@ String CSSRule::cssText() const
     case UNKNOWN_RULE:
         return String();
     case STYLE_RULE:
-    case PAGE_RULE:
         return static_cast<const CSSStyleRule*>(this)->cssText();
+    case PAGE_RULE:
+        return static_cast<const CSSPageRule*>(this)->cssText();
     case CHARSET_RULE:
         return static_cast<const CSSCharsetRule*>(this)->cssText();
     case IMPORT_RULE:
@@ -61,8 +69,8 @@ String CSSRule::cssText() const
         return static_cast<const WebKitCSSKeyframesRule*>(this)->cssText();
     case WEBKIT_KEYFRAME_RULE:
         return static_cast<const WebKitCSSKeyframeRule*>(this)->cssText();
-    case WEBKIT_REGION_STYLE_RULE:
-        return static_cast<const CSSRegionStyleRule*>(this)->cssText();
+    case WEBKIT_REGION_RULE:
+        return static_cast<const WebKitCSSRegionRule*>(this)->cssText();
     }
     ASSERT_NOT_REACHED();
     return String();
@@ -98,8 +106,8 @@ void CSSRule::destroy()
     case WEBKIT_KEYFRAME_RULE:
         delete static_cast<WebKitCSSKeyframeRule*>(this);
         return;
-    case WEBKIT_REGION_STYLE_RULE:
-        delete static_cast<CSSRegionStyleRule*>(this);
+    case WEBKIT_REGION_RULE:
+        delete static_cast<WebKitCSSRegionRule*>(this);
         return;
     }
     ASSERT_NOT_REACHED();

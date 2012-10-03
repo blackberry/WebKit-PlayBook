@@ -28,8 +28,8 @@
 
 #include "DrawingArea.h"
 #include "LayerTreeHost.h"
-#include "RunLoop.h"
 #include <WebCore/Region.h>
+#include <WebCore/RunLoop.h>
 
 namespace WebCore {
     class GraphicsContext;
@@ -54,10 +54,8 @@ private:
     virtual void setNeedsDisplay(const WebCore::IntRect&);
     virtual void scroll(const WebCore::IntRect& scrollRect, const WebCore::IntSize& scrollOffset);
     virtual void setLayerTreeStateIsFrozen(bool);
+    virtual bool layerTreeStateIsFrozen() const { return m_layerTreeStateIsFrozen; }
     virtual void forceRepaint();
-
-    virtual void enableDisplayThrottling();
-    virtual void disableDisplayThrottling();
 
     virtual void didInstallPageOverlay();
     virtual void didUninstallPageOverlay();
@@ -72,7 +70,7 @@ private:
     virtual void scheduleChildWindowGeometryUpdate(const WindowGeometry&);
 #endif
 
-#if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
+#if USE(UI_SIDE_COMPOSITING)
     virtual void didReceiveLayerTreeHostMessage(CoreIPC::Connection*, CoreIPC::MessageID, CoreIPC::ArgumentDecoder*);
 #endif
 
@@ -81,6 +79,8 @@ private:
     virtual void didUpdate();
     virtual void suspendPainting();
     virtual void resumePainting();
+    
+    virtual void pageCustomRepresentationChanged();
 
     void sendDidUpdateBackingStoreState();
 
@@ -131,13 +131,8 @@ private:
     bool m_isPaintingSuspended;
     bool m_alwaysUseCompositing;
 
-    // Whether we should throttle displays to a set update rate on the WebProcess side.
-    bool m_shouldThrottleDisplay;
-
-    double m_lastDisplayTime;
-
-    RunLoop::Timer<DrawingAreaImpl> m_displayTimer;
-    RunLoop::Timer<DrawingAreaImpl> m_exitCompositingTimer;
+    WebCore::RunLoop::Timer<DrawingAreaImpl> m_displayTimer;
+    WebCore::RunLoop::Timer<DrawingAreaImpl> m_exitCompositingTimer;
 
     // The layer tree host that handles accelerated compositing.
     RefPtr<LayerTreeHost> m_layerTreeHost;

@@ -45,6 +45,7 @@
 
 namespace JSC {
 
+    class LLIntOffsetsExtractor;
     class PropertyNameArray;
     class PropertyNameArrayData;
     class StructureChain;
@@ -60,7 +61,7 @@ namespace JSC {
         {
             ASSERT(globalData.structureStructure);
             ASSERT(classInfo);
-            Structure* structure = new (allocateCell<Structure>(globalData.heap)) Structure(globalData, globalObject, prototype, typeInfo, classInfo);
+            Structure* structure = new (NotNull, allocateCell<Structure>(globalData.heap)) Structure(globalData, globalObject, prototype, typeInfo, classInfo);
             structure->finishCreation(globalData);
             return structure;
         }
@@ -84,12 +85,12 @@ namespace JSC {
     public:
         static void dumpStatistics();
 
-        static Structure* addPropertyTransition(JSGlobalData&, Structure*, const Identifier& propertyName, unsigned attributes, JSCell* specificValue, size_t& offset);
-        static Structure* addPropertyTransitionToExistingStructure(Structure*, const Identifier& propertyName, unsigned attributes, JSCell* specificValue, size_t& offset);
+        JS_EXPORT_PRIVATE static Structure* addPropertyTransition(JSGlobalData&, Structure*, const Identifier& propertyName, unsigned attributes, JSCell* specificValue, size_t& offset);
+        JS_EXPORT_PRIVATE static Structure* addPropertyTransitionToExistingStructure(Structure*, const Identifier& propertyName, unsigned attributes, JSCell* specificValue, size_t& offset);
         static Structure* removePropertyTransition(JSGlobalData&, Structure*, const Identifier& propertyName, size_t& offset);
-        static Structure* changePrototypeTransition(JSGlobalData&, Structure*, JSValue prototype);
-        static Structure* despecifyFunctionTransition(JSGlobalData&, Structure*, const Identifier&);
-        static Structure* getterSetterTransition(JSGlobalData&, Structure*);
+        JS_EXPORT_PRIVATE static Structure* changePrototypeTransition(JSGlobalData&, Structure*, JSValue prototype);
+        JS_EXPORT_PRIVATE static Structure* despecifyFunctionTransition(JSGlobalData&, Structure*, const Identifier&);
+        static Structure* attributeChangeTransition(JSGlobalData&, Structure*, const Identifier& propertyName, unsigned attributes);
         static Structure* toCacheableDictionaryTransition(JSGlobalData&, Structure*);
         static Structure* toUncacheableDictionaryTransition(JSGlobalData&, Structure*);
         static Structure* sealTransition(JSGlobalData&, Structure*);
@@ -103,10 +104,10 @@ namespace JSC {
 
         Structure* flattenDictionaryStructure(JSGlobalData&, JSObject*);
 
-        ~Structure();
+        static void destroy(JSCell*);
 
         // These should be used with caution.  
-        size_t addPropertyWithoutTransition(JSGlobalData&, const Identifier& propertyName, unsigned attributes, JSCell* specificValue);
+        JS_EXPORT_PRIVATE size_t addPropertyWithoutTransition(JSGlobalData&, const Identifier& propertyName, unsigned attributes, JSCell* specificValue);
         size_t removePropertyWithoutTransition(JSGlobalData&, const Identifier& propertyName);
         void setPrototypeWithoutTransition(JSGlobalData& globalData, JSValue prototype) { m_prototype.set(globalData, this, prototype); }
         
@@ -136,7 +137,7 @@ namespace JSC {
 
         size_t get(JSGlobalData&, const Identifier& propertyName);
         size_t get(JSGlobalData&, const UString& name);
-        size_t get(JSGlobalData&, StringImpl* propertyName, unsigned& attributes, JSCell*& specificValue);
+        JS_EXPORT_PRIVATE size_t get(JSGlobalData&, StringImpl* propertyName, unsigned& attributes, JSCell*& specificValue);
         size_t get(JSGlobalData& globalData, const Identifier& propertyName, unsigned& attributes, JSCell*& specificValue)
         {
             ASSERT(!propertyName.isNull());
@@ -145,13 +146,23 @@ namespace JSC {
         }
 
         bool hasGetterSetterProperties() const { return m_hasGetterSetterProperties; }
-        void setHasGetterSetterProperties(bool hasGetterSetterProperties) { m_hasGetterSetterProperties = hasGetterSetterProperties; }
+        bool hasReadOnlyOrGetterSetterPropertiesExcludingProto() const { return m_hasReadOnlyOrGetterSetterPropertiesExcludingProto; }
+        void setHasGetterSetterProperties(bool is__proto__)
+        {
+            m_hasGetterSetterProperties = true;
+            if (!is__proto__)
+                m_hasReadOnlyOrGetterSetterPropertiesExcludingProto = true;
+        }
+        void setContainsReadOnlyProperties()
+        {
+            m_hasReadOnlyOrGetterSetterPropertiesExcludingProto = true;
+        }
 
         bool hasNonEnumerableProperties() const { return m_hasNonEnumerableProperties; }
         
         bool isEmpty() const { return m_propertyTable ? m_propertyTable->isEmpty() : m_offset == noOffset; }
 
-        void despecifyDictionaryFunction(JSGlobalData&, const Identifier& propertyName);
+        JS_EXPORT_PRIVATE void despecifyDictionaryFunction(JSGlobalData&, const Identifier& propertyName);
         void disableSpecificFunctionTracking() { m_specificFunctionThrashCount = maxSpecificFunctionThrashCount; }
 
         void setEnumerationCache(JSGlobalData&, JSPropertyNameIterator* enumerationCache); // Defined in JSPropertyNameIterator.h.
@@ -188,7 +199,7 @@ namespace JSC {
         static Structure* createStructure(JSGlobalData& globalData)
         {
             ASSERT(!globalData.structureStructure);
-            Structure* structure = new (allocateCell<Structure>(globalData.heap)) Structure(globalData);
+            Structure* structure = new (NotNull, allocateCell<Structure>(globalData.heap)) Structure(globalData);
             structure->finishCreation(globalData, CreatingEarlyCell);
             return structure;
         }
@@ -196,14 +207,16 @@ namespace JSC {
         static JS_EXPORTDATA const ClassInfo s_info;
 
     private:
-        Structure(JSGlobalData&, JSGlobalObject*, JSValue prototype, const TypeInfo&, const ClassInfo*);
+        friend class LLIntOffsetsExtractor;
+        
+        JS_EXPORT_PRIVATE Structure(JSGlobalData&, JSGlobalObject*, JSValue prototype, const TypeInfo&, const ClassInfo*);
         Structure(JSGlobalData&);
         Structure(JSGlobalData&, const Structure*);
 
         static Structure* create(JSGlobalData& globalData, const Structure* structure)
         {
             ASSERT(globalData.structureStructure);
-            Structure* newStructure = new (allocateCell<Structure>(globalData.heap)) Structure(globalData, structure);
+            Structure* newStructure = new (NotNull, allocateCell<Structure>(globalData.heap)) Structure(globalData, structure);
             newStructure->finishCreation(globalData);
             return newStructure;
         }
@@ -226,7 +239,7 @@ namespace JSC {
 
         PassOwnPtr<PropertyTable> copyPropertyTable(JSGlobalData&, Structure* owner);
         PassOwnPtr<PropertyTable> copyPropertyTableForPinning(JSGlobalData&, Structure* owner);
-        void materializePropertyMap(JSGlobalData&);
+        JS_EXPORT_PRIVATE void materializePropertyMap(JSGlobalData&);
         void materializePropertyMapIfNecessary(JSGlobalData& globalData)
         {
             ASSERT(structure()->classInfo() == &s_info);
@@ -282,6 +295,7 @@ namespace JSC {
         unsigned m_dictionaryKind : 2;
         bool m_isPinnedPropertyTable : 1;
         bool m_hasGetterSetterProperties : 1;
+        bool m_hasReadOnlyOrGetterSetterPropertiesExcludingProto : 1;
         bool m_hasNonEnumerableProperties : 1;
         unsigned m_attributesInPrevious : 7;
         unsigned m_specificFunctionThrashCount : 2;
@@ -335,16 +349,18 @@ namespace JSC {
     inline void JSCell::setStructure(JSGlobalData& globalData, Structure* structure)
     {
         ASSERT(structure->typeInfo().overridesVisitChildren() == this->structure()->typeInfo().overridesVisitChildren());
+        ASSERT(structure->classInfo() == m_structure->classInfo());
         m_structure.set(globalData, this, structure);
     }
 
-    inline const ClassInfo* JSCell::classInfo() const
+    inline const ClassInfo* JSCell::validatedClassInfo() const
     {
 #if ENABLE(GC_VALIDATION)
-        return m_structure.unvalidatedGet()->classInfo();
+        ASSERT(m_structure.unvalidatedGet()->classInfo() == m_classInfo);
 #else
-        return m_structure->classInfo();
+        ASSERT(m_structure->classInfo() == m_classInfo);
 #endif
+        return m_classInfo;
     }
 
     ALWAYS_INLINE void MarkStack::internalAppend(JSCell* cell)
@@ -356,6 +372,10 @@ namespace JSC {
         m_visitCount++;
         if (Heap::testAndSetMarked(cell) || !cell->structure())
             return;
+        
+        // Should never attempt to mark something that is zapped.
+        ASSERT(!cell->isZapped());
+        
         m_stack.append(cell);
     }
 
@@ -374,6 +394,25 @@ namespace JSC {
                 return true;
         }
         return false;
+    }
+
+    inline JSCell::JSCell(JSGlobalData& globalData, Structure* structure)
+        : m_classInfo(structure->classInfo())
+        , m_structure(globalData, this, structure)
+    {
+    }
+
+    inline void JSCell::finishCreation(JSGlobalData& globalData, Structure* structure, CreatingEarlyCellTag)
+    {
+#if ENABLE(GC_VALIDATION)
+        ASSERT(globalData.isInitializingObject());
+        globalData.setInitializingObject(false);
+        if (structure)
+#endif
+            m_structure.setEarlyValue(globalData, this, structure);
+        m_classInfo = structure->classInfo();
+        // Very first set of allocations won't have a real structure.
+        ASSERT(m_structure || !globalData.structureStructure);
     }
 
 } // namespace JSC

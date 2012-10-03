@@ -67,7 +67,7 @@
 #include <wtf/text/CString.h>
 
 #if PLATFORM(QT)
-#include <QScriptEngine>
+#include <QJSEngine>
 #endif
 
 namespace WebCore {
@@ -102,15 +102,9 @@ bool ScriptController::canAccessFromCurrentOrigin(Frame *frame)
     return !v8::Context::InContext() || V8BindingSecurity::canAccessFrame(V8BindingState::Only(), frame, true);
 }
 
-bool ScriptController::isSafeScript(Frame* target)
-{
-    return V8BindingSecurity::canAccessFrame(V8BindingState::Only(), target, true);
-}
-
 ScriptController::ScriptController(Frame* frame)
     : m_frame(frame)
     , m_sourceURL(0)
-    , m_inExecuteScript(false)
     , m_paused(false)
     , m_proxy(adoptPtr(new V8Proxy(frame)))
 #if ENABLE(NETSCAPE_PLUGIN_API)

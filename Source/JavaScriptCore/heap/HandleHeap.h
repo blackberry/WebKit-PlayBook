@@ -26,11 +26,11 @@
 #ifndef HandleHeap_h
 #define HandleHeap_h
 
-#include "BlockStack.h"
+#include <wtf/BlockStack.h>
 #include "Handle.h"
-#include "HashCountedSet.h"
-#include "SentinelLinkedList.h"
-#include "SinglyLinkedList.h"
+#include <wtf/HashCountedSet.h>
+#include <wtf/SentinelLinkedList.h>
+#include <wtf/SinglyLinkedList.h>
 
 namespace JSC {
 
@@ -40,7 +40,7 @@ class JSGlobalData;
 class JSValue;
 class SlotVisitor;
 
-class WeakHandleOwner {
+class JS_EXPORT_PRIVATE WeakHandleOwner {
 public:
     virtual ~WeakHandleOwner();
     virtual bool isReachableFromOpaqueRoots(Handle<Unknown>, void* context, SlotVisitor&);
@@ -65,7 +65,7 @@ public:
     void visitWeakHandles(HeapRootVisitor&);
     void finalizeWeakHandles();
 
-    void writeBarrier(HandleSlot, const JSValue&);
+    JS_EXPORT_PRIVATE void writeBarrier(HandleSlot, const JSValue&);
 
 #if !ASSERT_DISABLED
     bool hasWeakOwner(HandleSlot, WeakHandleOwner*);
@@ -111,7 +111,7 @@ private:
     static HandleSlot toHandle(Node*);
     static Node* toNode(HandleSlot);
 
-    void grow();
+    JS_EXPORT_PRIVATE void grow();
     
 #if ENABLE(GC_VALIDATION) || !ASSERT_DISABLED
     bool isValidWeakNode(Node*);
@@ -158,7 +158,7 @@ inline HandleSlot HandleHeap::allocate()
         grow();
 
     Node* node = m_freeList.pop();
-    new (node) Node(this);
+    new (NotNull, node) Node(this);
     m_immediateList.push(node);
     return toHandle(node);
 }

@@ -9,26 +9,29 @@ TARGET = QtWebKit
 
 DESTDIR = $${ROOT_BUILD_DIR}/lib
 
+runSyncQt() # Generate forwarding headers for the QtWebKit API
+
 load(features)
 
 include(WebKit/WebKit.pri)
 
-!v8:CONFIG += javascriptcore
+WEBKIT += wtf
 
-CONFIG += webcore
+!v8:WEBKIT += javascriptcore
+
+WEBKIT += webcore
 
 !no_webkit2 {
-    CONFIG += webkit2
+    WEBKIT += webkit2
     QT += declarative
-}
 
-v8:linux-* {
-    QMAKE_LIBDIR += $${V8_LIB_DIR}
-    LIBS = -lv8 $$LIBS
+    # Ensure that changes to the WebKit2 API will trigger a qmake of this
+    # file, which in turn runs syncqt to update the forwarding headers.
+    QMAKE_INTERNAL_INCLUDED_FILES *= WebKit2/Target.pri
 }
 
 QT += network
-haveQt(5): QT += widgets printsupport
+haveQt(5): QT += widgets printsupport quick
 
 win32*:!win32-msvc* {
     # Make sure OpenGL libs are after the webcore lib so MinGW can resolve symbols
@@ -45,10 +48,11 @@ SOURCES += \
     $$PWD/WebKit/qt/WebCoreSupport/DragClientQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/DumpRenderTreeSupportQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/EditorClientQt.cpp \
-    $$PWD/WebKit/qt/WebCoreSupport/EditCommandQt.cpp \
+    $$PWD/WebKit/qt/WebCoreSupport/UndoStepQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/FrameLoaderClientQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/FrameNetworkingContextQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/GeolocationPermissionClientQt.cpp \
+    $$PWD/WebKit/qt/WebCoreSupport/InitWebCoreQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/InspectorClientQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/InspectorServerQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/NotificationPresenterClientQt.cpp \
@@ -57,9 +61,11 @@ SOURCES += \
     $$PWD/WebKit/qt/WebCoreSupport/QtPlatformPlugin.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/SearchPopupMenuQt.cpp \
     $$PWD/WebKit/qt/WebCoreSupport/TextCheckerClientQt.cpp \
-    $$PWD/WebKit/qt/WebCoreSupport/PlatformStrategiesQt.cpp
+    $$PWD/WebKit/qt/WebCoreSupport/PlatformStrategiesQt.cpp \
+    $$PWD/WebKit/qt/WebCoreSupport/WebEventConversion.cpp
 
 HEADERS += \
+    $$PWD/WebKit/qt/WebCoreSupport/InitWebCoreQt.h \
     $$PWD/WebKit/qt/WebCoreSupport/InspectorServerQt.h \
     $$PWD/WebKit/qt/WebCoreSupport/QtFallbackWebPopup.h \
     $$PWD/WebKit/qt/WebCoreSupport/QtWebComboBox.h \
@@ -72,7 +78,12 @@ HEADERS += \
     $$PWD/WebKit/qt/WebCoreSupport/PopupMenuQt.h \
     $$PWD/WebKit/qt/WebCoreSupport/SearchPopupMenuQt.h \
     $$PWD/WebKit/qt/WebCoreSupport/TextCheckerClientQt.h \
-    $$PWD/WebKit/qt/WebCoreSupport/PlatformStrategiesQt.h
+    $$PWD/WebKit/qt/WebCoreSupport/PlatformStrategiesQt.h \
+    $$PWD/WebKit/qt/WebCoreSupport/WebEventConversion.h
+
+INCLUDEPATH += \
+    $$PWD/WebKit/qt/Api \
+    $$PWD/WebKit/qt/WebCoreSupport
 
 contains(DEFINES, ENABLE_VIDEO=1) {
     !contains(DEFINES, WTF_USE_QTKIT=1):!contains(DEFINES, WTF_USE_GSTREAMER=1):contains(DEFINES, WTF_USE_QT_MULTIMEDIA=1) {
@@ -129,19 +140,21 @@ contains(DEFINES, ENABLE_ICONDATABASE=1) {
         $$PWD/WebKit/qt/WebCoreSupport/IconDatabaseClientQt.cpp
 }
 
+contains(DEFINES, ENABLE_DEVICE_ORIENTATION=1) || contains(DEFINES, ENABLE_ORIENTATION_EVENTS=1) {
+    haveQt(5): QT += sensors
+}
+
 contains(DEFINES, ENABLE_DEVICE_ORIENTATION=1) {
     HEADERS += \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceMotionClientQt.h \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceMotionProviderQt.h \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationClientQt.h \
-        $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationClientMockQt.h \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationProviderQt.h
 
     SOURCES += \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceMotionClientQt.cpp \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceMotionProviderQt.cpp \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationClientQt.cpp \
-        $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationClientMockQt.cpp \
         $$PWD/WebKit/qt/WebCoreSupport/DeviceOrientationProviderQt.cpp
 }
 
@@ -161,14 +174,11 @@ contains(CONFIG, texmap) {
 
 # ------------- Install rules -------------
 
-modulefile.files = $${ROOT_WEBKIT_DIR}/Tools/qmake/mkspecs/modules/qt_webkit.pri
+modulefile.files = $$QT.webkit.modulefile
 mkspecs = $$[QMAKE_MKSPECS]
 mkspecs = $$split(mkspecs, :)
 modulefile.path = $$last(mkspecs)/modules
 INSTALLS += modulefile
-
-include($$first(modulefile.files))
-VERSION = $${QT.webkit.VERSION}
 
 # Syncqt has already run at this point, so we can use headers.pri
 # as a basis for our install-rules
@@ -195,14 +205,8 @@ unix {
 }
 
 mac {
-    !static:contains(QT_CONFIG, qt_framework):!CONFIG(webkit_no_framework) {
-        !build_pass {
-            message("Building QtWebKit as a framework, as that's how Qt was built. You can")
-            message("override this by passing CONFIG+=webkit_no_framework to build-webkit.")
-        } else {
-            isEmpty(QT_SOURCE_TREE):debug_and_release:TARGET = $$qtLibraryTarget($$TARGET)
-        }
-
+    !static:contains(QT_CONFIG, qt_framework) {
+        # Build QtWebKit as a framework, to match how Qt was built
         CONFIG += lib_bundle qt_no_framework_direct_includes qt_framework
 
         # For debug_and_release configs, only copy headers in release
@@ -217,7 +221,5 @@ mac {
     QMAKE_LFLAGS_SONAME = "$${QMAKE_LFLAGS_SONAME}$${DESTDIR}$${QMAKE_DIR_SEP}"
 }
 
-plugin_backend_xlib {
-    CONFIG *= link_pkgconfig
-    PKGCONFIG += x11
-}
+plugin_backend_xlib: PKGCONFIG += x11
+

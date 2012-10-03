@@ -55,6 +55,7 @@
 #include "RenderSVGResourceRadialGradient.h"
 #include "RenderSVGResourceSolidColor.h"
 #include "RenderSVGRoot.h"
+#include "RenderSVGShape.h"
 #include "RenderSVGText.h"
 #include "RenderTreeAsText.h"
 #include "SVGCircleElement.h"
@@ -131,28 +132,12 @@ static void writeIfNotDefault(TextStream& ts, const char* name, ValueType value,
         writeNameValuePair(ts, name, value);
 }
 
-TextStream& operator<<(TextStream& ts, const FloatRect &r)
+TextStream& operator<<(TextStream& ts, const FloatRect& r)
 {
-    ts << "at ("; 
-    if (hasFractions(r.x())) 
-        ts << r.x();
-    else 
-        ts << int(r.x());
-    ts << ",";
-    if (hasFractions(r.y())) 
-        ts << r.y();
-    else 
-        ts << int(r.y());
-    ts << ") size ";
-    if (hasFractions(r.width())) 
-        ts << r.width(); 
-    else 
-        ts << int(r.width()); 
-    ts << "x";
-    if (hasFractions(r.height())) 
-        ts << r.height();
-    else 
-        ts << int(r.height());
+    ts << "at (" << formatNumberRespectingIntegers(r.x()); 
+    ts << "," << formatNumberRespectingIntegers(r.y());
+    ts << ") size " << formatNumberRespectingIntegers(r.width());
+    ts << "x" << formatNumberRespectingIntegers(r.height());
     return ts;
 }
 
@@ -289,18 +274,18 @@ static void writeStyle(TextStream& ts, const RenderObject& object)
         writeNameValuePair(ts, "transform", object.localTransform());
     writeIfNotDefault(ts, "image rendering", style->imageRendering(), RenderStyle::initialImageRendering());
     writeIfNotDefault(ts, "opacity", style->opacity(), RenderStyle::initialOpacity());
-    if (object.isSVGPath()) {
-        const RenderSVGPath& path = static_cast<const RenderSVGPath&>(object);
-        ASSERT(path.node());
-        ASSERT(path.node()->isSVGElement());
+    if (object.isSVGShape()) {
+        const RenderSVGShape& shape = static_cast<const RenderSVGShape&>(object);
+        ASSERT(shape.node());
+        ASSERT(shape.node()->isSVGElement());
 
         Color fallbackColor;
-        if (RenderSVGResource* strokePaintingResource = RenderSVGResource::strokePaintingResource(const_cast<RenderSVGPath*>(&path), path.style(), fallbackColor)) {
+        if (RenderSVGResource* strokePaintingResource = RenderSVGResource::strokePaintingResource(const_cast<RenderSVGShape*>(&shape), shape.style(), fallbackColor)) {
             TextStreamSeparator s(" ");
             ts << " [stroke={" << s;
             writeSVGPaintingResource(ts, strokePaintingResource);
 
-            SVGLengthContext lengthContext(static_cast<SVGElement*>(path.node()));
+            SVGLengthContext lengthContext(static_cast<SVGElement*>(shape.node()));
             double dashOffset = svgStyle->strokeDashOffset().value(lengthContext);
             double strokeWidth = svgStyle->strokeWidth().value(lengthContext);
             const Vector<SVGLength>& dashes = svgStyle->strokeDashArray();
@@ -322,7 +307,7 @@ static void writeStyle(TextStream& ts, const RenderObject& object)
             ts << "}]";
         }
 
-        if (RenderSVGResource* fillPaintingResource = RenderSVGResource::fillPaintingResource(const_cast<RenderSVGPath*>(&path), path.style(), fallbackColor)) {
+        if (RenderSVGResource* fillPaintingResource = RenderSVGResource::fillPaintingResource(const_cast<RenderSVGShape*>(&shape), shape.style(), fallbackColor)) {
             TextStreamSeparator s(" ");
             ts << " [fill={" << s;
             writeSVGPaintingResource(ts, fillPaintingResource);
@@ -346,12 +331,12 @@ static TextStream& writePositionAndStyle(TextStream& ts, const RenderObject& obj
     return ts;
 }
 
-static TextStream& operator<<(TextStream& ts, const RenderSVGPath& path)
+static TextStream& operator<<(TextStream& ts, const RenderSVGShape& shape)
 {
-    writePositionAndStyle(ts, path);
+    writePositionAndStyle(ts, shape);
 
-    ASSERT(path.node()->isSVGElement());
-    SVGElement* svgElement = static_cast<SVGElement*>(path.node());
+    ASSERT(shape.node()->isSVGElement());
+    SVGElement* svgElement = static_cast<SVGElement*>(shape.node());
     SVGLengthContext lengthContext(svgElement);
 
     if (svgElement->hasTagName(SVGNames::rectTag)) {
@@ -396,16 +381,13 @@ static TextStream& operator<<(TextStream& ts, const RenderSVGRoot& root)
     return writePositionAndStyle(ts, root);
 }
 
-static void writeRenderSVGTextBox(TextStream& ts, const RenderBlock& text)
+static void writeRenderSVGTextBox(TextStream& ts, const RenderSVGText& text)
 {
     SVGRootInlineBox* box = static_cast<SVGRootInlineBox*>(text.firstRootBox());
     if (!box)
         return;
 
-    // FIXME: For now use an int for logicalWidth, although this makes it harder
-    // to detect any changes caused by the conversion to floating point. :(
-    int logicalWidth = ceilf(box->x() + box->logicalWidth()) - box->x();
-    ts << " at (" << text.x() << "," << text.y() << ") size " << logicalWidth << "x" << box->logicalHeight();
+    ts << " " << enclosingIntRect(FloatRect(text.x(), text.y(), box->logicalWidth(), box->logicalHeight()));
     
     // FIXME: Remove this hack, once the new text layout engine is completly landed. We want to preserve the old layout test results for now.
     ts << " contains 1 chunk(s)";
@@ -618,7 +600,7 @@ void write(TextStream& ts, const RenderSVGRoot& root, int indent)
     writeChildren(ts, root, indent);
 }
 
-void writeSVGText(TextStream& ts, const RenderBlock& text, int indent)
+void writeSVGText(TextStream& ts, const RenderSVGText& text, int indent)
 {
     writeStandardPrefix(ts, text, indent);
     writeRenderSVGTextBox(ts, text);
@@ -627,12 +609,10 @@ void writeSVGText(TextStream& ts, const RenderBlock& text, int indent)
     writeChildren(ts, text, indent);
 }
 
-void writeSVGInlineText(TextStream& ts, const RenderText& text, int indent)
+void writeSVGInlineText(TextStream& ts, const RenderSVGInlineText& text, int indent)
 {
     writeStandardPrefix(ts, text, indent);
-
-    // Why not just linesBoundingBox()?
-    ts << " " << FloatRect(text.firstRunOrigin(), text.linesBoundingBox().size()) << "\n";
+    ts << " " << enclosingIntRect(FloatRect(text.firstRunOrigin(), text.floatLinesBoundingBox().size())) << "\n";
     writeResources(ts, text, indent);
     writeSVGInlineTextBoxes(ts, text, indent);
 }
@@ -645,11 +625,11 @@ void writeSVGImage(TextStream& ts, const RenderSVGImage& image, int indent)
     writeResources(ts, image, indent);
 }
 
-void write(TextStream& ts, const RenderSVGPath& path, int indent)
+void write(TextStream& ts, const RenderSVGShape& shape, int indent)
 {
-    writeStandardPrefix(ts, path, indent);
-    ts << path << "\n";
-    writeResources(ts, path, indent);
+    writeStandardPrefix(ts, shape, indent);
+    ts << shape << "\n";
+    writeResources(ts, shape, indent);
 }
 
 void writeSVGGradientStop(TextStream& ts, const RenderSVGGradientStop& stop, int indent)

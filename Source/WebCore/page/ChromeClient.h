@@ -74,10 +74,7 @@ namespace WebCore {
 
 #if ENABLE(INPUT_COLOR)
     class ColorChooser;
-#endif
-
-#if ENABLE(NOTIFICATIONS)
-    class NotificationPresenter;
+    class ColorChooserClient;
 #endif
 
 #if ENABLE(EVENT_MODE_METATAGS)
@@ -162,8 +159,8 @@ namespace WebCore {
         virtual IntRect windowResizerRect() const = 0;
 
         // Methods used by HostWindow.
-        virtual void invalidateWindow(const IntRect&, bool) = 0;
-        virtual void invalidateContentsAndWindow(const IntRect&, bool) = 0;
+        virtual void invalidateRootView(const IntRect&, bool) = 0;
+        virtual void invalidateContentsAndRootView(const IntRect&, bool) = 0;
 #if PLATFORM(BLACKBERRY)
         virtual void invalidateContentsForSlowScroll(const IntSize&, const IntRect&, bool, const ScrollView*) = 0;
 #else
@@ -173,11 +170,10 @@ namespace WebCore {
 #if USE(TILED_BACKING_STORE)
         virtual void delegatedScrollRequested(const IntPoint&) = 0;
 #endif
-
         virtual void scrollableAreasDidChange() = 0;
 
-        virtual IntPoint screenToWindow(const IntPoint&) const = 0;
-        virtual IntRect windowToScreen(const IntRect&) const = 0;
+        virtual IntPoint screenToRootView(const IntPoint&) const = 0;
+        virtual IntRect rootViewToScreen(const IntRect&) const = 0;
         virtual PlatformPageClient platformPageClient() const = 0;
         virtual void scrollbarsModeDidChange() const = 0;
         virtual void setCursor(const Cursor&) = 0;
@@ -234,10 +230,6 @@ namespace WebCore {
         virtual void dashboardRegionsChanged();
 #endif
 
-#if ENABLE(NOTIFICATIONS)
-        virtual NotificationPresenter* notificationPresenter() const = 0;
-#endif
-
         virtual void populateVisitedLinks();
 
         virtual FloatRect customHighlightRect(Node*, const AtomicString& type, const FloatRect& lineRect);
@@ -257,9 +249,7 @@ namespace WebCore {
         virtual void cancelGeolocationPermissionRequestForFrame(Frame*, Geolocation*) = 0;
 
 #if ENABLE(INPUT_COLOR)
-        virtual void openColorChooser(ColorChooser*, const Color&) = 0;
-        virtual void cleanupColorChooser(ColorChooser*) = 0;
-        virtual void setSelectedColorInColorChooser(ColorChooser*, const Color&) = 0;
+        virtual PassOwnPtr<ColorChooser> createColorChooser(ColorChooserClient*, const Color&) = 0;
 #endif
 
         virtual void runOpenPanel(Frame*, PassRefPtr<FileChooser>) = 0;
@@ -297,6 +287,7 @@ namespace WebCore {
             PluginTrigger = 1 << 2,
             CanvasTrigger = 1 << 3,
             AnimationTrigger = 1 << 4,
+            FilterTrigger = 1 << 5,
             AllTriggers = 0xFFFFFFFF
         };
         typedef unsigned CompositingTriggerFlags;
@@ -340,21 +331,15 @@ namespace WebCore {
 
         virtual bool selectItemWritingDirectionIsNatural() = 0;
         virtual bool selectItemAlignmentFollowsMenuWritingDirection() = 0;
+        // Checks if there is an opened popup, called by RenderMenuList::showPopup().
+        virtual bool hasOpenedPopup() const = 0;
         virtual PassRefPtr<PopupMenu> createPopupMenu(PopupMenuClient*) const = 0;
         virtual PassRefPtr<SearchPopupMenu> createSearchPopupMenu(PopupMenuClient*) const = 0;
 
-#if ENABLE(CONTEXT_MENUS)
-        virtual void showContextMenu() = 0;
-#endif
-
         virtual void postAccessibilityNotification(AccessibilityObject*, AXObjectCache::AXNotification) { }
-
-        virtual void didStartRubberBandForFrame(Frame*, const IntSize&) const { }
-        virtual void didCompleteRubberBandForFrame(Frame*, const IntSize&) const { }
-        virtual void didStartAnimatedScroll() const { }
-        virtual void didCompleteAnimatedScroll() const { }
         
         virtual void notifyScrollerThumbIsVisibleInRect(const IntRect&) { }
+        virtual void recommendedScrollbarStyleDidChange(int /*newStyle*/) { }
 
         enum DialogType {
             AlertDialog = 0,
@@ -365,9 +350,15 @@ namespace WebCore {
         virtual bool shouldRunModalDialogDuringPageDismissal(const DialogType&, const String& dialogMessage, FrameLoader::PageDismissalType) const { UNUSED_PARAM(dialogMessage); return true; }
 
         virtual void numWheelEventHandlersChanged(unsigned) = 0;
+        virtual void numTouchEventHandlersChanged(unsigned) = 0;
         
         virtual bool isSVGImageChromeClient() const { return false; }
 
+#if ENABLE(POINTER_LOCK)
+        virtual bool requestPointerLock() { return false; }
+        virtual void requestPointerUnlock() { }
+        virtual bool isPointerLocked() { return false; }
+#endif
 #if PLATFORM(BLACKBERRY)
         virtual void overflowExceedsContentsSize(Frame*) const = 0;
         virtual void didDiscoverFrameSet(Frame*) const = 0;
@@ -377,8 +368,6 @@ namespace WebCore {
 #if ENABLE(SVG)
         virtual void didSetSVGZoomAndPan(Frame*, unsigned short) = 0;
 #endif
-        virtual void* platformWindow() const = 0;
-        virtual void* platformCompositingWindow() const = 0;
 #endif
 
 #if ENABLE(VIEWPORT_REFLOW)

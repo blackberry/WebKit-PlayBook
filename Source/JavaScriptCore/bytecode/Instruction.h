@@ -48,9 +48,11 @@ namespace JSC {
     class JSCell;
     class Structure;
     class StructureChain;
+    struct LLIntCallLinkInfo;
+    struct ValueProfile;
 
 #if ENABLE(JIT)
-    typedef CodeLocationLabel PolymorphicAccessStructureListStubRoutineType;
+    typedef MacroAssemblerCodeRef PolymorphicAccessStructureListStubRoutineType;
 
     // Structure used by op_get_by_id_self_list and op_get_by_id_proto_list instruction to hold data off the main opcode stream.
     struct PolymorphicAccessStructureList {
@@ -99,6 +101,10 @@ namespace JSC {
             }
         } list[POLYMORPHIC_LIST_CACHE_SIZE];
         
+        PolymorphicAccessStructureList()
+        {
+        }
+        
         PolymorphicAccessStructureList(JSGlobalData& globalData, JSCell* owner, PolymorphicAccessStructureListStubRoutineType stubRoutine, Structure* firstBase, bool isDirect)
         {
             list[0].set(globalData, owner, stubRoutine, firstBase, isDirect);
@@ -114,7 +120,7 @@ namespace JSC {
             list[0].set(globalData, owner, stubRoutine, firstBase, firstChain, isDirect);
         }
 
-        void visitAggregate(SlotVisitor& visitor, int count)
+        bool visitWeak(int count)
         {
             for (int i = 0; i < count; ++i) {
                 PolymorphicStubInfo& info = list[i];
@@ -124,21 +130,31 @@ namespace JSC {
                     continue;
                 }
                 
-                visitor.append(&info.base);
-                if (info.u.proto && !info.isChain)
-                    visitor.append(&info.u.proto);
-                if (info.u.chain && info.isChain)
-                    visitor.append(&info.u.chain);
+                if (!Heap::isMarked(info.base.get()))
+                    return false;
+                if (info.u.proto && !info.isChain
+                    && !Heap::isMarked(info.u.proto.get()))
+                    return false;
+                if (info.u.chain && info.isChain
+                    && !Heap::isMarked(info.u.chain.get()))
+                    return false;
             }
+            
+            return true;
         }
     };
 
 #endif
 
     struct Instruction {
+        Instruction()
+        {
+            u.jsCell.clear();
+        }
+        
         Instruction(Opcode opcode)
         {
-#if !ENABLE(COMPUTED_GOTO_INTERPRETER)
+#if !ENABLE(COMPUTED_GOTO_CLASSIC_INTERPRETER)
             // We have to initialize one of the pointer members to ensure that
             // the entire struct is initialized, when opcode is not a pointer.
             u.jsCell.clear();
@@ -171,6 +187,10 @@ namespace JSC {
         }
 
         Instruction(PropertySlot::GetValueFunc getterFunc) { u.getterFunc = getterFunc; }
+        
+        Instruction(LLIntCallLinkInfo* callLinkInfo) { u.callLinkInfo = callLinkInfo; }
+        
+        Instruction(ValueProfile* profile) { u.profile = profile; }
 
         union {
             Opcode opcode;
@@ -179,6 +199,9 @@ namespace JSC {
             WriteBarrierBase<StructureChain> structureChain;
             WriteBarrierBase<JSCell> jsCell;
             PropertySlot::GetValueFunc getterFunc;
+            LLIntCallLinkInfo* callLinkInfo;
+            ValueProfile* profile;
+            void* pointer;
         } u;
         
     private:

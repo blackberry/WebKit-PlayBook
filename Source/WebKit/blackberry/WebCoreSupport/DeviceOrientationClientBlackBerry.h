@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,17 +21,27 @@
 
 #include "DeviceOrientation.h"
 #include "DeviceOrientationClient.h"
-#include "WebPage.h"
 
-#include <BlackBerryPlatformDeviceOrientationTracker.h>
 #include <BlackBerryPlatformDeviceOrientationTrackerListener.h>
 #include <wtf/RefPtr.h>
 
+namespace BlackBerry {
+namespace WebKit {
+class WebPagePrivate;
+}
+}
+
+namespace BlackBerry {
+namespace Platform {
+class DeviceOrientationTracker;
+}
+}
+
 namespace WebCore {
 
-class DeviceOrientationClientBlackBerry : public WebCore::DeviceOrientationClient, public BlackBerry::Platform::DeviceOrientationTrackerListener {
+class DeviceOrientationClientBlackBerry : public DeviceOrientationClient, public BlackBerry::Platform::DeviceOrientationTrackerListener {
 public:
-    DeviceOrientationClientBlackBerry(BlackBerry::WebKit::WebPage*);
+    DeviceOrientationClientBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
     virtual ~DeviceOrientationClientBlackBerry();
 
     virtual void setController(DeviceOrientationController*);
@@ -42,10 +52,11 @@ public:
     virtual void onOrientation(const BlackBerry::Platform::DeviceOrientationEvent*);
 
 private:
-    BlackBerry::WebKit::WebPage* m_webPage;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
     BlackBerry::Platform::DeviceOrientationTracker* m_tracker;
     DeviceOrientationController* m_controller;
     RefPtr<DeviceOrientation> m_currentOrientation;
 };
 }
+
 #endif // DeviceOrientationClientBlackBerry_h

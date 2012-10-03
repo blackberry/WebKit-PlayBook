@@ -30,11 +30,11 @@
 
 import codecs
 import fileinput # inplace file editing for set_reviewer_in_changelog
-import os.path
 import re
 import textwrap
 
 from webkitpy.common.config.committers import CommitterList
+from webkitpy.common.config.committers import Account
 import webkitpy.common.config.urls as config_urls
 from webkitpy.common.system.deprecated_logging import log
 
@@ -72,7 +72,7 @@ def parse_bug_id_from_changelog(message):
 
 class ChangeLogEntry(object):
     # e.g. 2009-06-03  Eric Seidel  <eric@webkit.org>
-    date_line_regexp = r'^(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<name>.+?)\s+<(?P<email>[^<>]+)>$'
+    date_line_regexp = r'^(?P<date>\d{4}-\d{2}-\d{2})\s+(?P<authors>(?P<name>[^<]+?)\s+<(?P<email>[^<>]+)>.*?)$'
 
     # e.g. * Source/WebCore/page/EventHandler.cpp: Implement FooBarQuux.
     touched_files_regexp = r'^\s*\*\s*(?P<file>[A-Za-z0-9_\-\./\\]+)\s*\:'
@@ -111,9 +111,10 @@ class ChangeLogEntry(object):
     # e.g. git-svn-id: http://svn.webkit.org/repository/webkit/trunk@96161 268f45cc-cd09-0410-ab3c-d52691b4dbfc
     svn_id_regexp = r'git-svn-id: http://svn.webkit.org/repository/webkit/trunk@(?P<svnid>\d+) '
 
-    def __init__(self, contents, committer_list=CommitterList()):
+    def __init__(self, contents, committer_list=CommitterList(), revision=None):
         self._contents = contents
         self._committer_list = committer_list
+        self._revision = revision
         self._parse_entry()
 
     @staticmethod
@@ -136,9 +137,7 @@ class ChangeLogEntry(object):
         if not len(reviewer_text):
             return None, None
 
-        # FIXME: Canonicalize reviewer names; e.g. Andy "First Time Reviewer" Estes
-        # FIXME: Ignore NOBODY (\w+) and "a spell checker"
-        reviewer_list = re.split(r'\s*(?:(?:,(?:\s+and\s+|&)?)|(?:and\s+|&)|(?:[/+]))\s*', reviewer_text)
+        reviewer_list = ChangeLogEntry._split_contributor_names(reviewer_text)
 
         # Get rid of "reviewers" like "even though this is just a..." in "Reviewed by Sam Weinig, even though this is just a..."
         # and "who wrote the original code" in "Noam Rosenthal, who wrote the original code"
@@ -146,37 +145,82 @@ class ChangeLogEntry(object):
 
         return reviewer_text, reviewer_list
 
+    @staticmethod
+    def _split_contributor_names(text):
+        return re.split(r'\s*(?:,(?:\s+and\s+|&)?|(?:^|\s+)and\s+|[/+&])\s*', text)
+
+    def _fuzz_match_reviewers(self, reviewers_text_list):
+        if not reviewers_text_list:
+            return []
+        list_of_reviewers = [self._committer_list.contributors_by_fuzzy_match(reviewer)[0] for reviewer in reviewers_text_list]
+        # Flatten lists and get rid of any reviewers with more than one candidate.
+        return [reviewers[0] for reviewers in list_of_reviewers if len(reviewers) == 1]
+
+    @staticmethod
+    def _parse_author_name_and_email(author_name_and_email):
+        match = re.match(r'(?P<name>.+?)\s+<(?P<email>[^>]+)>', author_name_and_email)
+        return {'name': match.group("name"), 'email': match.group("email")}
+
+    @staticmethod
+    def _parse_author_text(text):
+        if not text:
+            return []
+        authors = ChangeLogEntry._split_contributor_names(text)
+        assert(authors and len(authors) >= 1)
+        return [ChangeLogEntry._parse_author_name_and_email(author) for author in authors]
+
     def _parse_entry(self):
         match = re.match(self.date_line_regexp, self._contents, re.MULTILINE)
         if not match:
             log("WARNING: Creating invalid ChangeLogEntry:\n%s" % self._contents)
 
         # FIXME: group("name") does not seem to be Unicode?  Probably due to self._contents not being unicode.
-        self._author_name = match.group("name") if match else None
-        self._author_email = match.group("email") if match else None
+        self._author_text = match.group("authors") if match else None
+        self._authors = ChangeLogEntry._parse_author_text(self._author_text)
 
-        self._reviewer_text, self._reviewer_list = ChangeLogEntry._parse_reviewer_text(self._contents)
-        self._reviewer = self._committer_list.committer_by_name(self._reviewer_list[0]) if self._reviewer_list else None
-        self._author = self._committer_list.contributor_by_email(self._author_email) or self._committer_list.contributor_by_name(self._author_name)
+        self._reviewer_text, self._reviewers_text_list = ChangeLogEntry._parse_reviewer_text(self._contents)
+        self._reviewers = self._fuzz_match_reviewers(self._reviewers_text_list)
+        self._author = self._committer_list.contributor_by_email(self.author_email()) or self._committer_list.contributor_by_name(self.author_name())
 
         self._touched_files = re.findall(self.touched_files_regexp, self._contents, re.MULTILINE)
 
+    def author_text(self):
+        return self._author_text
+
+    def revision(self):
+        return self._revision
+
     def author_name(self):
-        return self._author_name
+        return self._authors[0]['name']
 
     def author_email(self):
-        return self._author_email
+        return self._authors[0]['email']
 
     def author(self):
         return self._author  # Might be None
+
+    def authors(self):
+        return self._authors
 
     # FIXME: Eventually we would like to map reviwer names to reviewer objects.
     # See https://bugs.webkit.org/show_bug.cgi?id=26533
     def reviewer_text(self):
         return self._reviewer_text
 
+    # Might be None, might also not be a Reviewer!
     def reviewer(self):
-        return self._reviewer  # Might be None, might also not be a Reviewer!
+        return self._reviewers[0] if len(self._reviewers) > 0 else None
+
+    def reviewers(self):
+        return self._reviewers
+
+    def has_valid_reviewer(self):
+        if self._reviewers_text_list:
+            for reviewer in self._reviewers_text_list:
+                reviewer = self._committer_list.committer_by_name(reviewer)
+                if reviewer:
+                    return True
+        return bool(re.search("unreviewed", self._contents, re.IGNORECASE))
 
     def contents(self):
         return self._contents
@@ -219,6 +263,15 @@ class ChangeLog(object):
             entry_lines.append(line)
         return None # We never found a date line!
 
+    svn_blame_regexp = re.compile(r'^(\s*(?P<revision>\d+) [^ ]+)\s*(?P<line>.*?\n)')
+
+    @staticmethod
+    def _separate_revision_and_line(line):
+        match = ChangeLog.svn_blame_regexp.match(line)
+        if not match:
+            return None, line
+        return int(match.group('revision')), match.group('line')
+
     @staticmethod
     def parse_entries_from_file(changelog_file):
         """changelog_file must be a file-like object which returns
@@ -226,20 +279,35 @@ class ChangeLog(object):
         to pass file objects to this class."""
         date_line_regexp = re.compile(ChangeLogEntry.date_line_regexp)
         rolled_over_regexp = re.compile(ChangeLogEntry.rolled_over_regexp)
-        entry_lines = []
-        # The first line should be a date line.
-        first_line = changelog_file.readline()
-        assert(isinstance(first_line, unicode))
-        if not date_line_regexp.match(first_line):
-            raise StopIteration
-        entry_lines.append(first_line)
 
+        # The first line should be a date line.
+        revision, first_line = ChangeLog._separate_revision_and_line(changelog_file.readline())
+        assert(isinstance(first_line, unicode))
+        if not date_line_regexp.match(ChangeLog.svn_blame_regexp.sub('', first_line)):
+            raise StopIteration
+
+        entry_lines = [first_line]
+        revisions_in_entry = {revision: 1} if revision != None else None
         for line in changelog_file:
-            if date_line_regexp.match(line) or rolled_over_regexp.match(line):
+            if revisions_in_entry:
+                revision, line = ChangeLog._separate_revision_and_line(line)
+
+            if rolled_over_regexp.match(line):
+                break
+
+            if date_line_regexp.match(line):
+                most_probable_revision = max(revisions_in_entry, key=revisions_in_entry.__getitem__) if revisions_in_entry else None
                 # Remove the extra newline at the end
-                yield ChangeLogEntry(''.join(entry_lines[:-1]))
+                yield ChangeLogEntry(''.join(entry_lines[:-1]), revision=most_probable_revision)
                 entry_lines = []
+                revisions_in_entry = {revision: 0}
+
             entry_lines.append(line)
+            if revisions_in_entry:
+                revisions_in_entry[revision] = revisions_in_entry.get(revision, 0) + 1
+
+        most_probable_revision = max(revisions_in_entry, key=revisions_in_entry.__getitem__) if revisions_in_entry else None
+        yield ChangeLogEntry(''.join(entry_lines[:-1]), revision=most_probable_revision)
 
     def latest_entry(self):
         # ChangeLog files are always UTF-8, we read them in as such to support Reviewers with unicode in their names.

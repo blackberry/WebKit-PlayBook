@@ -52,22 +52,20 @@ function sample2() {
 }
 
 function sample3() {
-    shouldBeCloseEnough("pattern.patternTransform.animVal.getItem(0).matrix.a", "2", 0.01);
-    shouldBeCloseEnough("pattern.patternTransform.baseVal.getItem(0).matrix.a", "2", 0.01);
+    shouldBeCloseEnough("pattern.patternTransform.animVal.getItem(0).matrix.a", "2");
+    shouldBeCloseEnough("pattern.patternTransform.baseVal.getItem(0).matrix.a", "2");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0,      "pattern", sample1],
-        ["animation", 2.0,    "pattern", sample2],
-        ["animation", 3.9999, "pattern", sample3],
-        ["animation", 4, "pattern", sample1]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 2.0,   sample2],
+        ["animation", 3.999, sample3],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(15, 30)", 0);
 var successfullyParsed = true;

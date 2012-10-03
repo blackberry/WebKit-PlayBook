@@ -33,7 +33,7 @@ using namespace WTF;
 
 namespace JSC {
 
-const ClassInfo JSByteArray::s_info = { "ByteArray", &Base::s_info, 0, 0, CREATE_METHOD_TABLE(JSByteArray) };
+const ClassInfo JSByteArray::s_info = { "Uint8ClampedArray", &Base::s_info, 0, 0, CREATE_METHOD_TABLE(JSByteArray) };
 
 JSByteArray::JSByteArray(ExecState* exec, Structure* structure, ByteArray* storage)
     : JSNonFinalObject(exec->globalData(), structure)
@@ -41,13 +41,15 @@ JSByteArray::JSByteArray(ExecState* exec, Structure* structure, ByteArray* stora
 {
 }
         
-#if !ASSERT_DISABLED
 JSByteArray::~JSByteArray()
 {
-    ASSERT(vptr() == JSGlobalData::jsByteArrayVPtr);
+    ASSERT(jsCast<JSByteArray*>(this));
 }
-#endif
 
+void JSByteArray::destroy(JSCell* cell)
+{
+    jsCast<JSByteArray*>(cell)->JSByteArray::~JSByteArray();
+}
 
 Structure* JSByteArray::createStructure(JSGlobalData& globalData, JSGlobalObject* globalObject, JSValue prototype, const JSC::ClassInfo* classInfo)
 {

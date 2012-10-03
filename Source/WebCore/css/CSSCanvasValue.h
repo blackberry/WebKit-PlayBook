@@ -35,7 +35,7 @@ class Document;
 
 class CSSCanvasValue : public CSSImageGeneratorValue {
 public:
-    static PassRefPtr<CSSCanvasValue> create() { return adoptRef(new CSSCanvasValue); }
+    static PassRefPtr<CSSCanvasValue> create(const String& name) { return adoptRef(new CSSCanvasValue(name)); }
     ~CSSCanvasValue();
 
     String customCssText() const;
@@ -44,12 +44,14 @@ public:
     bool isFixedSize() const { return true; }
     IntSize fixedSize(const RenderObject*);
 
-    void setName(const String& name) { m_name = name; }
+    bool isPending() const { return false; }
+    void loadSubimages(CachedResourceLoader*) { }
 
 private:
-    CSSCanvasValue()
+    CSSCanvasValue(const String& name)
         : CSSImageGeneratorValue(CanvasClass)
         , m_canvasObserver(this)
+        , m_name(name)
         , m_element(0)
     {
     }

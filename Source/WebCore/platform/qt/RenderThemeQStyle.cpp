@@ -34,7 +34,7 @@
 #include "CSSStyleSelector.h"
 #include "CSSValueKeywords.h"
 #include "Chrome.h"
-#include "ChromeClientQt.h"
+#include "ChromeClient.h"
 #include "Color.h"
 #include "Document.h"
 #include "Font.h"
@@ -47,7 +47,6 @@
 #include "Page.h"
 #include "PaintInfo.h"
 #include "QWebPageClient.h"
-#include "QtStyleOptionWebComboBox.h"
 #include "RenderBox.h"
 #if ENABLE(PROGRESS_TAG)
 #include "RenderProgress.h"
@@ -64,7 +63,9 @@
 #include <QLineEdit>
 #include <QMacStyle>
 #include <QPainter>
+#ifndef QT_NO_STYLE_PLASTIQUE
 #include <QPlastiqueStyle>
+#endif
 #include <QPushButton>
 #include <QStyleFactory>
 #include <QStyleOptionButton>
@@ -382,19 +383,6 @@ bool RenderThemeQStyle::paintButton(RenderObject* o, const PaintInfo& i, const I
     return false;
 }
 
-void RenderThemeQStyle::adjustTextFieldStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
-{
-    // Resetting the style like this leads to differences like:
-    // - RenderTextControl {INPUT} at (2,2) size 168x25 [bgcolor=#FFFFFF] border: (2px inset #000000)]
-    // + RenderTextControl {INPUT} at (2,2) size 166x26
-    // in layout tests when a CSS style is applied that doesn't affect background color, border or
-    // padding. Just worth keeping in mind!
-    style->setBackgroundColor(Color::transparent);
-    style->resetBorder();
-    style->resetPadding();
-    computeSizeBasedOnStyle(style);
-}
-
 bool RenderThemeQStyle::paintTextField(RenderObject* o, const PaintInfo& i, const IntRect& r)
 {
     StylePainterQStyle p(this, i);
@@ -453,7 +441,7 @@ bool RenderThemeQStyle::paintMenuList(RenderObject* o, const PaintInfo& i, const
     if (!p.isValid())
         return true;
 
-    QtStyleOptionWebComboBox opt(o);
+    QStyleOptionComboBox opt;
     initStyleOption(p.widget, opt);
     initializeCommonQStyleOptions(opt, o);
 
@@ -477,22 +465,13 @@ bool RenderThemeQStyle::paintMenuList(RenderObject* o, const PaintInfo& i, const
     return false;
 }
 
-void RenderThemeQStyle::adjustMenuListButtonStyle(CSSStyleSelector*, RenderStyle* style, Element*) const
+void RenderThemeQStyle::adjustMenuListButtonStyle(CSSStyleSelector* selector, RenderStyle* style, Element* e) const
 {
     // WORKAROUND because html.css specifies -webkit-border-radius for <select> so we override it here
     // see also http://bugs.webkit.org/show_bug.cgi?id=18399
     style->resetBorderRadius();
 
-    // Height is locked to auto.
-    style->setHeight(Length(Auto));
-
-    // White-space is locked to pre
-    style->setWhiteSpace(PRE);
-
-    computeSizeBasedOnStyle(style);
-
-    // Add in the padding that we'd like to use.
-    setPopupPadding(style);
+    RenderThemeQt::adjustMenuListButtonStyle(selector, style, e);
 }
 
 bool RenderThemeQStyle::paintMenuListButton(RenderObject* o, const PaintInfo& i,
@@ -502,7 +481,7 @@ bool RenderThemeQStyle::paintMenuListButton(RenderObject* o, const PaintInfo& i,
     if (!p.isValid())
         return true;
 
-    QtStyleOptionWebComboBox option(o);
+    QStyleOptionComboBox option;
     initStyleOption(p.widget, option);
     initializeCommonQStyleOptions(option, o);
     option.rect = r;
@@ -578,15 +557,33 @@ bool RenderThemeQStyle::paintSliderTrack(RenderObject* o, const PaintInfo& pi,
     if (!p.isValid())
         return true;
 
+    const QPoint topLeft = r.location();
+    p.painter->translate(topLeft);
+
     QStyleOptionSlider option;
     initStyleOption(p.widget, option);
     option.subControls = QStyle::SC_SliderGroove;
     ControlPart appearance = initializeCommonQStyleOptions(option, o);
     option.rect = r;
+    option.rect.moveTo(QPoint(0, 0));
     if (appearance == SliderVerticalPart)
         option.orientation = Qt::Vertical;
     if (isPressed(o))
         option.state |= QStyle::State_Sunken;
+
+    // some styles need this to show a highlight on one side of the groove
+    HTMLInputElement* slider = o->node()->toInputElement();
+    if (slider) {
+        option.upsideDown = (appearance == SliderHorizontalPart) && !o->style()->isLeftToRightDirection();
+        // Use the width as a multiplier in case the slider values are <= 1
+        const int width = r.width() > 0 ? r.width() : 100;
+        option.maximum = slider->maximum() * width;
+        option.minimum = slider->minimum() * width;
+        if (!option.upsideDown)
+            option.sliderPosition = slider->valueAsNumber() * width;
+        else
+            option.sliderPosition = option.minimum + option.maximum - slider->valueAsNumber() * width;
+    }
 
     p.drawComplexControl(QStyle::CC_Slider, option);
 
@@ -595,7 +592,7 @@ bool RenderThemeQStyle::paintSliderTrack(RenderObject* o, const PaintInfo& pi,
         focusOption.rect = r;
         p.drawPrimitive(QStyle::PE_FrameFocusRect, focusOption);
     }
-
+    p.painter->translate(-topLeft);
     return false;
 }
 
@@ -611,11 +608,15 @@ bool RenderThemeQStyle::paintSliderThumb(RenderObject* o, const PaintInfo& pi,
     if (!p.isValid())
         return true;
 
+    const QPoint topLeft = r.location();
+    p.painter->translate(topLeft);
+
     QStyleOptionSlider option;
     initStyleOption(p.widget, option);
     option.subControls = QStyle::SC_SliderHandle;
     ControlPart appearance = initializeCommonQStyleOptions(option, o);
     option.rect = r;
+    option.rect.moveTo(QPoint(0, 0));
     if (appearance == SliderThumbVerticalPart)
         option.orientation = Qt::Vertical;
     if (isPressed(o)) {
@@ -624,7 +625,7 @@ bool RenderThemeQStyle::paintSliderThumb(RenderObject* o, const PaintInfo& pi,
     }
 
     p.drawComplexControl(QStyle::CC_Slider, option);
-
+    p.painter->translate(-topLeft);
     return false;
 }
 
@@ -638,20 +639,6 @@ bool RenderThemeQStyle::paintSearchField(RenderObject* o, const PaintInfo& pi,
                                      const IntRect& r)
 {
     return paintTextField(o, pi, r);
-}
-
-void RenderThemeQStyle::adjustSearchFieldStyle(CSSStyleSelector* selector, RenderStyle* style,
-                                           Element* e) const
-{
-    // Resetting the style like this leads to differences like:
-    // - RenderTextControl {INPUT} at (2,2) size 168x25 [bgcolor=#FFFFFF] border: (2px inset #000000)]
-    // + RenderTextControl {INPUT} at (2,2) size 166x26
-    // in layout tests when a CSS style is applied that doesn't affect background color, border or
-    // padding. Just worth keeping in mind!
-    style->setBackgroundColor(Color::transparent);
-    style->resetBorder();
-    style->resetPadding();
-    computeSizeBasedOnStyle(style);
 }
 
 void RenderThemeQStyle::adjustSearchFieldDecorationStyle(CSSStyleSelector* selector, RenderStyle* style,

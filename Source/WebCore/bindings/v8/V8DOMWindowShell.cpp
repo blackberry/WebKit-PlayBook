@@ -32,7 +32,6 @@
 #include "V8DOMWindowShell.h"
 
 #include "PlatformSupport.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "DateExtension.h"
 #include "DocumentLoader.h"
 #include "Frame.h"
@@ -45,6 +44,7 @@
 #include "ScriptProfiler.h"
 #include "SecurityOrigin.h"
 #include "StorageNamespace.h"
+#include "StylePropertySet.h"
 #include "V8Binding.h"
 #include "V8BindingState.h"
 #include "V8Collection.h"
@@ -305,7 +305,7 @@ bool V8DOMWindowShell::initContextIfNeeded()
         isV8Initialized = true;
     }
 
-    m_context = createNewContext(m_global, 0);
+    m_context = createNewContext(m_global, 0, 0);
     if (m_context.IsEmpty())
         return false;
 
@@ -339,7 +339,7 @@ bool V8DOMWindowShell::initContextIfNeeded()
 
     setSecurityToken();
 
-    m_frame->loader()->client()->didCreateScriptContext(m_context, 0);
+    m_frame->loader()->client()->didCreateScriptContext(m_context, 0, 0);
 
     // FIXME: This is wrong. We should actually do this for the proper world once
     // we do isolated worlds the WebCore way.
@@ -348,7 +348,7 @@ bool V8DOMWindowShell::initContextIfNeeded()
     return true;
 }
 
-v8::Persistent<v8::Context> V8DOMWindowShell::createNewContext(v8::Handle<v8::Object> global, int extensionGroup)
+v8::Persistent<v8::Context> V8DOMWindowShell::createNewContext(v8::Handle<v8::Object> global, int extensionGroup, int worldId)
 {
     v8::Persistent<v8::Context> result;
 
@@ -379,7 +379,7 @@ v8::Persistent<v8::Context> V8DOMWindowShell::createNewContext(v8::Handle<v8::Ob
     for (size_t i = 0; i < extensions.size(); ++i) {
         // Ensure our date extension is always allowed.
         if (extensions[i] != DateExtension::get()
-            && !m_frame->loader()->client()->allowScriptExtension(extensions[i]->name(), extensionGroup))
+            && !m_frame->loader()->client()->allowScriptExtension(extensions[i]->name(), extensionGroup, worldId))
             continue;
 
         extensionNames[index++] = extensions[i]->name();
@@ -577,6 +577,18 @@ void V8DOMWindowShell::namedItemAdded(HTMLDocument* doc, const AtomicString& nam
 
 void V8DOMWindowShell::namedItemRemoved(HTMLDocument* doc, const AtomicString& name)
 {
+    if (doc->hasNamedItem(name.impl()) || doc->hasExtraNamedItem(name.impl()))
+        return;
+
+    if (!initContextIfNeeded())
+        return;
+
+    v8::HandleScope handleScope;
+    v8::Context::Scope contextScope(m_context);
+
+    ASSERT(!m_document.IsEmpty());
+    checkDocumentWrapper(m_document, doc);
+    m_document->Delete(v8String(name));
 }
 
 void V8DOMWindowShell::updateSecurityOrigin()

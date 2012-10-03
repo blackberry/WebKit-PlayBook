@@ -53,6 +53,9 @@ WebInspector.SourceFrame = function(url)
     this._messages = [];
     this._rowMessages = {};
     this._messageBubbles = {};
+
+    if (WebInspector.experimentsSettings.sourceFrameAlwaysEditable.isEnabled())
+        this.startEditing();
 }
 
 WebInspector.SourceFrame.Events = {
@@ -99,9 +102,14 @@ WebInspector.SourceFrame.prototype = {
         this.setReadOnly(true);
     },
 
+    focus: function()
+    {
+        this._textViewer.focus();
+    },
+
     get statusBarItems()
     {
-        return [this._editButton.element];
+        return WebInspector.experimentsSettings.sourceFrameAlwaysEditable.isEnabled() ? [] : [this._editButton.element];
     },
 
     get loaded()
@@ -480,12 +488,15 @@ WebInspector.SourceFrame.prototype = {
         rowMessage.repeatCountElement.textContent = WebInspector.UIString(" (repeated %d times)", rowMessage.repeatCount);
     },
 
-    populateLineGutterContextMenu: function(lineNumber, contextMenu)
+    populateLineGutterContextMenu: function(contextMenu, lineNumber)
     {
     },
 
-    populateTextAreaContextMenu: function(contextMenu)
+    populateTextAreaContextMenu: function(contextMenu, lineNumber)
     {
+        if (!window.getSelection().isCollapsed)
+            return;
+        WebInspector.populateResourceContextMenu(contextMenu, this._url, lineNumber);
     },
 
     suggestedFileName: function()
@@ -560,8 +571,12 @@ WebInspector.SourceFrame.prototype = {
 
     cancelEditing: function()
     {
+        if (WebInspector.experimentsSettings.sourceFrameAlwaysEditable.isEnabled())
+            return false;
+
         this._restoreViewerState();
         this.setReadOnly(true);
+        return true;
     },
 
     get readOnly()
@@ -571,9 +586,10 @@ WebInspector.SourceFrame.prototype = {
 
     setReadOnly: function(readOnly)
     {
+        if (readOnly && WebInspector.experimentsSettings.sourceFrameAlwaysEditable.isEnabled())
+            return;
         this._textViewer.readOnly = readOnly;
         this._editButton.toggled = !readOnly;
-        WebInspector.markBeingEdited(this._textViewer.element, !readOnly);
     }
 }
 
@@ -612,17 +628,17 @@ WebInspector.TextViewerDelegateForSourceFrame.prototype = {
 
     cancelEditing: function()
     {
-        this._sourceFrame.cancelEditing();
+        return this._sourceFrame.cancelEditing();
     },
 
-    populateLineGutterContextMenu: function(lineNumber, contextMenu)
+    populateLineGutterContextMenu: function(contextMenu, lineNumber)
     {
-        this._sourceFrame.populateLineGutterContextMenu(lineNumber, contextMenu);
+        this._sourceFrame.populateLineGutterContextMenu(contextMenu, lineNumber);
     },
 
-    populateTextAreaContextMenu: function(contextMenu)
+    populateTextAreaContextMenu: function(contextMenu, lineNumber)
     {
-        this._sourceFrame.populateTextAreaContextMenu(contextMenu);
+        this._sourceFrame.populateTextAreaContextMenu(contextMenu, lineNumber);
     },
 
     suggestedFileName: function()

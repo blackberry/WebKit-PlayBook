@@ -25,6 +25,7 @@
 
 #import "config.h"
 #import "DumpRenderTree.h"
+#import "AccessibilityNotificationHandler.h"
 #import "AccessibilityUIElement.h"
 
 #import <Foundation/Foundation.h>
@@ -60,7 +61,6 @@ typedef void (*AXPostedNotificationCallback)(id element, NSString* notification,
 
 @interface NSObject (WebKitAccessibilityAdditions)
 - (NSArray *)accessibilityArrayAttributeValues:(NSString *)attribute index:(NSUInteger)index maxCount:(NSUInteger)maxCount;
-- (void)accessibilitySetShouldRepostNotifications:(BOOL)repost;
 - (NSUInteger)accessibilityIndexOfChild:(id)child;
 - (NSUInteger)accessibilityArrayAttributeCount:(NSString *)attribute;
 @end
@@ -84,66 +84,6 @@ typedef void (*AXPostedNotificationCallback)(id element, NSString* notification,
 - (JSStringRef)createJSStringRef
 {
     return JSStringCreateWithCFString((CFStringRef)self);
-}
-
-@end
-
-@interface AccessibilityNotificationHandler : NSObject
-{
-    id m_platformElement;
-    JSObjectRef m_notificationFunctionCallback;
-}
-
-@end
-
-@implementation AccessibilityNotificationHandler
-
-- (id)initWithPlatformElement:(id)platformElement
-{
-    self = [super init];
-
-    m_platformElement = platformElement;
-    
-    // Once an object starts requesting notifications, it's on for the duration of the program.
-    // This is to avoid any race conditions between tests turning this flag on and off. Instead
-    // AccessibilityNotificationHandler can just listen when they want to.
-    [m_platformElement accessibilitySetShouldRepostNotifications:YES];
-    [[NSNotificationCenter defaultCenter] addObserver:self selector:@selector(_notificationReceived:) name:@"AXDRTNotification" object:nil];
-
-    return self;
-}
- 
-- (void)dealloc
-{
-    [[NSNotificationCenter defaultCenter] removeObserver:self];
-    JSValueUnprotect([mainFrame globalContext], m_notificationFunctionCallback);
-    m_notificationFunctionCallback = 0;
-    
-    [super dealloc];
-}
-
-- (void)_notificationReceived:(NSNotification *)notification
-{
-    NSString *notificationName = [[notification userInfo] objectForKey:@"notificationName"];
-    if (!notificationName)
-        return;
-    
-    JSRetainPtr<JSStringRef> jsNotification(Adopt, [notificationName createJSStringRef]);
-    JSValueRef argument = JSValueMakeString([mainFrame globalContext], jsNotification.get());
-    JSObjectCallAsFunction([mainFrame globalContext], m_notificationFunctionCallback, 0, 1, &argument, 0);
-}
-
-- (void)setCallback:(JSObjectRef)callback
-{
-    if (!callback)
-        return;
- 
-    // Release the old callback.
-    if (m_notificationFunctionCallback) 
-        JSValueUnprotect([mainFrame globalContext], m_notificationFunctionCallback);
-    
-    m_notificationFunctionCallback = callback;
-    JSValueProtect([mainFrame globalContext], m_notificationFunctionCallback);
 }
 
 @end
@@ -960,7 +900,7 @@ AccessibilityUIElement AccessibilityUIElement::uiElementForSearchPredicate(Acces
     NSMutableDictionary* parameter = [NSMutableDictionary dictionary];
     [parameter setObject:(isDirectionNext) ? @"AXDirectionNext" : @"AXDirectionPrevious" forKey:@"AXDirection"];
     [parameter setObject:[NSNumber numberWithInt:1] forKey:@"AXResultsLimit"];
-    if (startElement)
+    if (startElement && startElement->platformUIElement())
         [parameter setObject:(id)startElement->platformUIElement() forKey:@"AXStartElement"];
     if (searchKey)
         [parameter setObject:[NSString stringWithJSStringRef:searchKey] forKey:@"AXSearchKey"];
@@ -1117,6 +1057,24 @@ AccessibilityUIElement AccessibilityUIElement::cellForColumnAndRow(unsigned col,
     return 0;
 }
 
+AccessibilityUIElement AccessibilityUIElement::horizontalScrollbar() const
+{
+    BEGIN_AX_OBJC_EXCEPTIONS
+    return AccessibilityUIElement([m_element accessibilityAttributeValue:NSAccessibilityHorizontalScrollBarAttribute]);
+    END_AX_OBJC_EXCEPTIONS    
+    
+    return 0;
+}
+
+AccessibilityUIElement AccessibilityUIElement::verticalScrollbar() const
+{
+    BEGIN_AX_OBJC_EXCEPTIONS
+    return AccessibilityUIElement([m_element accessibilityAttributeValue:NSAccessibilityVerticalScrollBarAttribute]);
+    END_AX_OBJC_EXCEPTIONS        
+
+    return 0;
+}
+
 JSStringRef AccessibilityUIElement::selectedTextRange()
 {
     NSRange range = NSMakeRange(NSNotFound, 0);
@@ -1211,8 +1169,10 @@ bool AccessibilityUIElement::addNotificationListener(JSObjectRef functionCallbac
     // Other platforms may be different.
     if (m_notificationHandler)
         return false;
-    m_notificationHandler = [[AccessibilityNotificationHandler alloc] initWithPlatformElement:platformUIElement()];
+    m_notificationHandler = [[AccessibilityNotificationHandler alloc] init];
+    [m_notificationHandler setPlatformElement:platformUIElement()];
     [m_notificationHandler setCallback:functionCallback];
+    [m_notificationHandler startObserving];
 
     return true;
 }
@@ -1228,8 +1188,12 @@ void AccessibilityUIElement::removeNotificationListener()
 
 bool AccessibilityUIElement::isFocusable() const
 {
-    // FIXME: implement
-    return false;
+    bool result = false;
+    BEGIN_AX_OBJC_EXCEPTIONS
+    result = [m_element accessibilityIsAttributeSettable:NSAccessibilityFocusedAttribute];
+    END_AX_OBJC_EXCEPTIONS
+    
+    return result;
 }
 
 bool AccessibilityUIElement::isSelectable() const
@@ -1239,6 +1203,12 @@ bool AccessibilityUIElement::isSelectable() const
 }
 
 bool AccessibilityUIElement::isMultiSelectable() const
+{
+    // FIXME: implement
+    return false;
+}
+
+bool AccessibilityUIElement::isSelectedOptionActive() const
 {
     // FIXME: implement
     return false;
@@ -1325,6 +1295,21 @@ int AccessibilityUIElement::textMarkerRangeLength(AccessibilityTextMarkerRange* 
     return 0;
 }
 
+bool AccessibilityUIElement::attributedStringForTextMarkerRangeContainsAttribute(JSStringRef attribute, AccessibilityTextMarkerRange* range)
+{
+    BEGIN_AX_OBJC_EXCEPTIONS
+    NSAttributedString* string = [m_element accessibilityAttributeValue:@"AXAttributedStringForTextMarkerRange" forParameter:(id)range->platformTextMarkerRange()];
+    if (![string isKindOfClass:[NSAttributedString class]])
+        return false;
+    
+    NSDictionary* attrs = [string attributesAtIndex:0 effectiveRange:nil];
+    if ([attrs objectForKey:[NSString stringWithJSStringRef:attribute]])
+        return true;    
+    END_AX_OBJC_EXCEPTIONS
+    
+    return false;
+}
+
 AccessibilityTextMarker AccessibilityUIElement::previousTextMarker(AccessibilityTextMarker* textMarker)
 {
     BEGIN_AX_OBJC_EXCEPTIONS
@@ -1407,3 +1392,18 @@ AccessibilityUIElement AccessibilityUIElement::accessibilityElementForTextMarker
 }
 
 #endif // SUPPORTS_AX_TEXTMARKERS
+
+void AccessibilityUIElement::scrollToMakeVisible()
+{
+    // FIXME: implement
+}
+
+void AccessibilityUIElement::scrollToMakeVisibleWithSubFocus(int x, int y, int width, int height)
+{
+    // FIXME: implement
+}
+
+void AccessibilityUIElement::scrollToGlobalPoint(int x, int y)
+{
+    // FIXME: implement
+}

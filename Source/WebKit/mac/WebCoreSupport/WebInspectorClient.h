@@ -51,6 +51,8 @@ class Page;
 
 }
 
+class WebInspectorFrontendClient;
+
 class WebInspectorClient : public WebCore::InspectorClient {
 public:
     WebInspectorClient(WebView *);
@@ -58,6 +60,8 @@ public:
     virtual void inspectorDestroyed() OVERRIDE;
 
     virtual void openInspectorFrontend(WebCore::InspectorController*) OVERRIDE;
+    virtual void closeInspectorFrontend() OVERRIDE;
+    virtual void bringFrontendToFront() OVERRIDE;
 
     virtual void highlight() OVERRIDE;
     virtual void hideHighlight() OVERRIDE;
@@ -67,7 +71,7 @@ public:
     bool inspectorStartsAttached();
     void setInspectorStartsAttached(bool);
 
-    void releaseFrontendPage();
+    void releaseFrontend();
 
 private:
     WTF::PassOwnPtr<WebCore::InspectorFrontendClientLocal::Settings> createFrontendSettings();
@@ -75,6 +79,7 @@ private:
     WebView *m_webView;
     RetainPtr<WebNodeHighlighter> m_highlighter;
     WebCore::Page* m_frontendPage;
+    WebInspectorFrontendClient* m_frontendClient;
 };
 
 

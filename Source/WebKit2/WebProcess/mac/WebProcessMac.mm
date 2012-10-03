@@ -252,6 +252,10 @@ void WebProcess::platformInitializeWebProcess(const WebProcessCreationParameters
     WebInspector::setLocalizedStringsPath(parameters.webInspectorLocalizedStringsPath);
 
     m_compositingRenderServerPort = parameters.acceleratedCompositingPort.port();
+    
+#if ENABLE(NOTIFICATIONS)
+    m_notificationManager.initialize(parameters.notificationPermissions);
+#endif
 
     // rdar://9118639 accessibilityFocusedUIElement in NSApplication defaults to use the keyWindow. Since there's
     // no window in WK2, NSApplication needs to use the focused page's focused element.
@@ -270,6 +274,20 @@ void WebProcess::initializeShim()
 
 void WebProcess::platformTerminate()
 {
+}
+
+void WebProcess::secItemResponse(CoreIPC::Connection*, uint64_t requestID, const SecItemResponseData& response)
+{
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+    didReceiveSecItemResponse(requestID, response);
+#endif
+}
+
+void WebProcess::secKeychainItemResponse(CoreIPC::Connection*, uint64_t requestID, const SecKeychainItemResponseData& response)
+{
+#if defined(BUILDING_ON_SNOW_LEOPARD)
+    didReceiveSecKeychainItemResponse(requestID, response);
+#endif
 }
 
 } // namespace WebKit

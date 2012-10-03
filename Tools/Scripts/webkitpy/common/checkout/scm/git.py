@@ -34,7 +34,6 @@ import re
 from webkitpy.common.memoized import memoized
 from webkitpy.common.system.deprecated_logging import log
 from webkitpy.common.system.executive import Executive, ScriptError
-from webkitpy.common.system import ospath
 
 from .commitmessage import CommitMessage
 from .scm import AuthenticationError, SCM, commit_error_handler
@@ -62,8 +61,8 @@ class Git(SCM, SVNRepository):
     # 1 or 128, mostly.
     ERROR_FILE_IS_MISSING = 128
 
-    def __init__(self, cwd, executive=None):
-        SCM.__init__(self, cwd, executive)
+    def __init__(self, cwd, **kwargs):
+        SCM.__init__(self, cwd, **kwargs)
         self._check_git_architecture()
 
     def _machine_is_64bit(self):
@@ -106,19 +105,18 @@ class Git(SCM, SVNRepository):
             # The Windows bots seem to through a WindowsError when git isn't installed.
             return False
 
-    @classmethod
-    def find_checkout_root(cls, path):
-        # FIXME: This should use a FileSystem object instead of os.path.
+    def find_checkout_root(self, path):
         # "git rev-parse --show-cdup" would be another way to get to the root
-        (checkout_root, dot_git) = os.path.split(run_command(['git', 'rev-parse', '--git-dir'], cwd=(path or "./")))
-        if not os.path.isabs(checkout_root):  # Sometimes git returns relative paths
-            checkout_root = os.path.join(path, checkout_root)
+        git_output = self._executive.run_command(['git', 'rev-parse', '--git-dir'], cwd=(path or "./"))
+        (checkout_root, dot_git) = self._filesystem.split(git_output)
+        if not self._filesystem.isabs(checkout_root):  # Sometimes git returns relative paths
+            checkout_root = self._filesystem.join(path, checkout_root)
         return checkout_root
 
-    @classmethod
-    def to_object_name(cls, filepath):
-        # FIXME: This should use a FileSystem object instead of os.path.
-        root_end_with_slash = os.path.join(cls.find_checkout_root(os.path.dirname(filepath)), '')
+    def to_object_name(self, filepath):
+        # FIXME: This can't be the right way to append a slash.
+        root_end_with_slash = self._filesystem.join(self.find_checkout_root(self._filesystem.dirname(filepath)), '')
+        # FIXME: This seems to want some sort of rel_path instead?
         return filepath.replace(root_end_with_slash, '')
 
     @classmethod
@@ -229,9 +227,9 @@ class Git(SCM, SVNRepository):
     def display_name(self):
         return "git"
 
-    def head_svn_revision(self):
+    def svn_revision(self, path):
         _log.debug('Running git.head_svn_revision... (Temporary logging message)')
-        git_log = self.run(['git', 'log', '-25'])
+        git_log = self.run(['git', 'log', '-25', path])
         match = re.search("^\s*git-svn-id:.*@(?P<svn_revision>\d+)\ ", git_log, re.MULTILINE)
         if not match:
             return ""
@@ -401,6 +399,9 @@ class Git(SCM, SVNRepository):
     def last_svn_commit_log(self):
         return self.run(['git', 'svn', 'log', '--limit=1'])
 
+    def svn_blame(self, path):
+        return self.run(['git', 'svn', 'blame', path])
+
     # Git-specific methods:
     def _branch_ref_exists(self, branch_ref):
         return self.run(['git', 'show-ref', '--quiet', '--verify', branch_ref], return_exit_code=True) == 0
@@ -431,16 +432,11 @@ class Git(SCM, SVNRepository):
 
     def push_local_commits_to_server(self, username=None, password=None):
         dcommit_command = ['git', 'svn', 'dcommit']
-        if self.dryrun:
-            dcommit_command.append('--dry-run')
         if (not username or not password) and not self.has_authorization_for_realm(SVN.svn_server_realm):
             raise AuthenticationError(SVN.svn_server_host, prompt_for_password=True)
         if username:
             dcommit_command.extend(["--username", username])
         output = self.run(dcommit_command, error_handler=commit_error_handler, input=password, cwd=self.checkout_root)
-        # Return a string which looks like a commit so that things which parse this output will succeed.
-        if self.dryrun:
-            output += "\nCommitted r0"
         return output
 
     # This function supports the following argument formats:

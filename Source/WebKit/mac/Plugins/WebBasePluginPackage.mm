@@ -29,6 +29,7 @@
 #import <WebKit/WebBasePluginPackage.h>
 
 #import <algorithm>
+#import <WebCore/RunLoop.h>
 #import <WebCore/WebCoreObjCExtras.h>
 #import <WebKit/WebKitNSStringExtras.h>
 #import <WebKit/WebNSObjectExtras.h>
@@ -69,6 +70,7 @@ using namespace WebCore;
 {
     JSC::initializeThreading();
     WTF::initializeMainThreadToProcessMainThread();
+    WebCore::RunLoop::initializeMainRunLoop();
     WebCoreObjCFinalizeOnMainThread(self);
 }
 
@@ -93,6 +95,11 @@ using namespace WebCore;
     return WebCFAutorelease(WKCopyCFLocalizationPreferredName(NULL));
 }
 
+#if COMPILER(CLANG)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wdeprecated-declarations"
+#endif
+// FIXME: Rewrite this in terms of -[NSURL URLByResolvingBookmarkData:…].
 static NSString *pathByResolvingSymlinksAndAliases(NSString *thePath)
 {
     NSString *newPath = [thePath stringByResolvingSymlinksInPath];
@@ -118,6 +125,9 @@ static NSString *pathByResolvingSymlinksAndAliases(NSString *thePath)
 
     return newPath;
 }
+#if COMPILER(CLANG)
+#pragma clang diagnostic pop
+#endif
 
 - (id)initWithPath:(NSString *)pluginPath
 {

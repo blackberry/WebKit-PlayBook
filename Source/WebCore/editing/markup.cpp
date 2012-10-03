@@ -30,8 +30,6 @@
 #include "markup.h"
 
 #include "CDATASection.h"
-#include "CSSComputedStyleDeclaration.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "CSSPrimitiveValue.h"
 #include "CSSProperty.h"
 #include "CSSPropertyNames.h"
@@ -41,18 +39,22 @@
 #include "CSSStyleSelector.h"
 #include "CSSValue.h"
 #include "CSSValueKeywords.h"
+#include "ChildListMutationScope.h"
 #include "DeleteButtonController.h"
 #include "DocumentFragment.h"
 #include "DocumentType.h"
 #include "Editor.h"
+#include "ExceptionCode.h"
 #include "Frame.h"
 #include "HTMLBodyElement.h"
 #include "HTMLElement.h"
 #include "HTMLNames.h"
+#include "HTMLTextFormControlElement.h"
 #include "KURL.h"
 #include "MarkupAccumulator.h"
 #include "Range.h"
 #include "RenderObject.h"
+#include "StylePropertySet.h"
 #include "TextIterator.h"
 #include "VisibleSelection.h"
 #include "XMLNSNames.h"
@@ -68,7 +70,7 @@ namespace WebCore {
 
 using namespace HTMLNames;
 
-static bool propertyMissingOrEqualToNone(CSSStyleDeclaration*, int propertyID);
+static bool propertyMissingOrEqualToNone(StylePropertySet*, int propertyID);
 
 class AttributeChange {
 public:
@@ -103,10 +105,11 @@ static void completeURLs(Node* node, const String& baseURL)
     for (Node* n = node; n != end; n = n->traverseNextNode()) {
         if (n->isElementNode()) {
             Element* e = static_cast<Element*>(n);
-            NamedNodeMap* attributes = e->attributes();
-            unsigned length = attributes->length();
+            if (!e->hasAttributes())
+                continue;
+            unsigned length = e->attributeCount();
             for (unsigned i = 0; i < length; i++) {
-                Attribute* attribute = attributes->attributeItem(i);
+                Attribute* attribute = e->attributeItem(i);
                 if (e->isURLAttribute(attribute))
                     changes.append(AttributeChange(e, attribute->name(), KURL(parsedBaseURL, attribute->value()).string()));
             }
@@ -126,11 +129,11 @@ public:
     Node* serializeNodes(Node* startNode, Node* pastEnd);
     virtual void appendString(const String& s) { return MarkupAccumulator::appendString(s); }
     void wrapWithNode(Node*, bool convertBlocksToInlines = false, RangeFullySelectsNode = DoesFullySelectNode);
-    void wrapWithStyleNode(CSSStyleDeclaration*, Document*, bool isBlock = false);
+    void wrapWithStyleNode(StylePropertySet*, Document*, bool isBlock = false);
     String takeResults();
 
 private:
-    void appendStyleNodeOpenTag(StringBuilder&, CSSStyleDeclaration*, Document*, bool isBlock = false);
+    void appendStyleNodeOpenTag(StringBuilder&, StylePropertySet*, Document*, bool isBlock = false);
     const String styleNodeCloseTag(bool isBlock = false);
     virtual void appendText(StringBuilder& out, Text*);
     String renderedText(const Node*, const Range*);
@@ -175,7 +178,7 @@ void StyledMarkupAccumulator::wrapWithNode(Node* node, bool convertBlocksToInlin
         m_nodes->append(node);
 }
 
-void StyledMarkupAccumulator::wrapWithStyleNode(CSSStyleDeclaration* style, Document* document, bool isBlock)
+void StyledMarkupAccumulator::wrapWithStyleNode(StylePropertySet* style, Document* document, bool isBlock)
 {
     StringBuilder openTag;
     appendStyleNodeOpenTag(openTag, style, document, isBlock);
@@ -183,14 +186,14 @@ void StyledMarkupAccumulator::wrapWithStyleNode(CSSStyleDeclaration* style, Docu
     appendString(styleNodeCloseTag(isBlock));
 }
 
-void StyledMarkupAccumulator::appendStyleNodeOpenTag(StringBuilder& out, CSSStyleDeclaration* style, Document* document, bool isBlock)
+void StyledMarkupAccumulator::appendStyleNodeOpenTag(StringBuilder& out, StylePropertySet* style, Document* document, bool isBlock)
 {
     // wrappingStyleForSerialization should have removed -webkit-text-decorations-in-effect
     ASSERT(propertyMissingOrEqualToNone(style, CSSPropertyWebkitTextDecorationsInEffect));
     DEFINE_STATIC_LOCAL(const String, divStyle, ("<div style=\""));
     DEFINE_STATIC_LOCAL(const String, styleSpanOpen, ("<span style=\""));
     out.append(isBlock ? divStyle : styleSpanOpen);
-    appendAttributeValue(out, style->cssText(), document->isHTMLDocument());
+    appendAttributeValue(out, style->asText(), document->isHTMLDocument());
     out.append('\"');
     out.append('>');
 }
@@ -286,12 +289,11 @@ void StyledMarkupAccumulator::appendElement(StringBuilder& out, Element* element
     const bool documentIsHTML = element->document()->isHTMLDocument();
     appendOpenTag(out, element, 0);
 
-    NamedNodeMap* attributes = element->attributes();
-    const unsigned length = attributes->length();
+    const unsigned length = element->hasAttributes() ? element->attributeCount() : 0;
     const bool shouldAnnotateOrForceInline = element->isHTMLElement() && (shouldAnnotate() || addDisplayInline);
     const bool shouldOverrideStyleAttr = shouldAnnotateOrForceInline || shouldApplyWrappingStyle(element);
     for (unsigned int i = 0; i < length; i++) {
-        Attribute* attribute = attributes->attributeItem(i);
+        Attribute* attribute = element->attributeItem(i);
         // We'll handle the style attribute separately, below.
         if (attribute->name() == styleAttr && shouldOverrideStyleAttr)
             continue;
@@ -327,7 +329,7 @@ void StyledMarkupAccumulator::appendElement(StringBuilder& out, Element* element
         if (!newInlineStyle->isEmpty()) {
             DEFINE_STATIC_LOCAL(const String, stylePrefix, (" style=\""));
             out.append(stylePrefix);
-            appendAttributeValue(out, newInlineStyle->style()->cssText(), documentIsHTML);
+            appendAttributeValue(out, newInlineStyle->style()->asText(), documentIsHTML);
             out.append('\"');
         }
     }
@@ -464,7 +466,7 @@ static inline Node* ancestorToRetainStructureAndAppearanceWithNoRenderer(Node* c
     return ancestorToRetainStructureAndAppearanceForBlock(commonAncestorBlock);
 }
 
-static bool propertyMissingOrEqualToNone(CSSStyleDeclaration* style, int propertyID)
+static bool propertyMissingOrEqualToNone(StylePropertySet* style, int propertyID)
 {
     if (!style)
         return false;
@@ -691,7 +693,7 @@ static bool findNodesSurroundingContext(Document* document, RefPtr<Node>& nodeBe
 static void trimFragment(DocumentFragment* fragment, Node* nodeBeforeContext, Node* nodeAfterContext)
 {
     ExceptionCode ec = 0;
-    Node* next;
+    RefPtr<Node> next;
     for (RefPtr<Node> node = fragment->firstChild(); node; node = next) {
         if (nodeBeforeContext->isDescendantOf(node.get())) {
             next = node->traverseNextNode();
@@ -705,9 +707,9 @@ static void trimFragment(DocumentFragment* fragment, Node* nodeBeforeContext, No
     }
 
     ASSERT(nodeAfterContext->parentNode());
-    for (Node* node = nodeAfterContext; node; node = next) {
+    for (RefPtr<Node> node = nodeAfterContext; node; node = next) {
         next = node->traverseNextSibling();
-        node->parentNode()->removeChild(node, ec);
+        node->parentNode()->removeChild(node.get(), ec);
         ASSERT(!ec);
     }
 }
@@ -821,7 +823,7 @@ static void fillContainerFromString(ContainerNode* paragraph, const String& stri
 
 bool isPlainTextMarkup(Node *node)
 {
-    if (!node->isElementNode() || !node->hasTagName(divTag) || static_cast<Element*>(node)->attributes()->length())
+    if (!node->isElementNode() || !node->hasTagName(divTag) || static_cast<Element*>(node)->hasAttributes())
         return false;
     
     if (node->childNodeCount() == 1 && (node->firstChild()->isTextNode() || (node->firstChild()->firstChild())))
@@ -880,7 +882,8 @@ PassRefPtr<DocumentFragment> createFragmentFromText(Range* context, const String
         && !block->hasTagName(bodyTag)
         && !block->hasTagName(htmlTag)
         && block != editableRootForPosition(context->startPosition());
-    
+    bool useLineBreak = enclosingTextFormControl(context->startPosition());
+
     Vector<String> list;
     string.split('\n', true, list); // true gets us empty strings in the list
     size_t numLines = list.size();
@@ -891,7 +894,10 @@ PassRefPtr<DocumentFragment> createFragmentFromText(Range* context, const String
         if (s.isEmpty() && i + 1 == numLines) {
             // For last line, use the "magic BR" rather than a P.
             element = createBreakElement(document);
-            element->setAttribute(classAttr, AppleInterchangeNewline);            
+            element->setAttribute(classAttr, AppleInterchangeNewline);
+        } else if (useLineBreak) {
+            element = createBreakElement(document);
+            fillContainerFromString(fragment.get(), s);
         } else {
             if (useClonesOfEnclosingBlock)
                 element = block->cloneElementWithoutChildren();
@@ -984,6 +990,86 @@ String urlToMarkup(const KURL& url, const String& title)
     appendCharactersReplacingEntities(markup, title.characters(), title.length(), EntityMaskInPCDATA);
     markup.append("</a>");
     return markup.toString();
+}
+
+PassRefPtr<DocumentFragment> createFragmentFromSource(const String& markup, Element* contextElement, ExceptionCode& ec)
+{
+    Document* document = contextElement->document();
+    RefPtr<DocumentFragment> fragment = DocumentFragment::create(document);
+
+    if (document->isHTMLDocument()) {
+        fragment->parseHTML(markup, contextElement);
+        return fragment;
+    }
+
+    bool wasValid = fragment->parseXML(markup, contextElement);
+    if (!wasValid) {
+        ec = INVALID_STATE_ERR;
+        return 0;
+    }
+    return fragment.release();
+}
+
+static inline bool hasOneChild(ContainerNode* node)
+{
+    Node* firstChild = node->firstChild();
+    return firstChild && !firstChild->nextSibling();
+}
+
+static inline bool hasOneTextChild(ContainerNode* node)
+{
+    return hasOneChild(node) && node->firstChild()->isTextNode();
+}
+
+void replaceChildrenWithFragment(ContainerNode* container, PassRefPtr<DocumentFragment> fragment, ExceptionCode& ec)
+{
+    RefPtr<ContainerNode> containerNode(container);
+
+#if ENABLE(MUTATION_OBSERVERS)
+    ChildListMutationScope mutation(containerNode.get());
+#endif
+
+    if (!fragment->firstChild()) {
+        containerNode->removeChildren();
+        return;
+    }
+
+    if (hasOneTextChild(containerNode.get()) && hasOneTextChild(fragment.get())) {
+        toText(containerNode->firstChild())->setData(toText(fragment->firstChild())->data(), ec);
+        return;
+    }
+
+    if (hasOneChild(containerNode.get())) {
+        containerNode->replaceChild(fragment, containerNode->firstChild(), ec);
+        return;
+    }
+
+    containerNode->removeChildren();
+    containerNode->appendChild(fragment, ec);
+}
+
+void replaceChildrenWithText(ContainerNode* container, const String& text, ExceptionCode& ec)
+{
+    RefPtr<ContainerNode> containerNode(container);
+
+#if ENABLE(MUTATION_OBSERVERS)
+    ChildListMutationScope mutation(containerNode.get());
+#endif
+
+    if (hasOneTextChild(containerNode.get())) {
+        toText(containerNode->firstChild())->setData(text, ec);
+        return;
+    }
+
+    RefPtr<Text> textNode = Text::create(containerNode->document(), text);
+
+    if (hasOneChild(containerNode.get())) {
+        containerNode->replaceChild(textNode.release(), containerNode->firstChild(), ec);
+        return;
+    }
+
+    containerNode->removeChildren();
+    containerNode->appendChild(textNode.release(), ec);
 }
 
 }

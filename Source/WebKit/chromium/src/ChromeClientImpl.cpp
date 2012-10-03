@@ -34,6 +34,11 @@
 
 #include "AXObjectCache.h"
 #include "AccessibilityObject.h"
+#if ENABLE(INPUT_COLOR)
+#include "ColorChooser.h"
+#include "ColorChooserClient.h"
+#include "ColorChooserProxy.h"
+#endif
 #include "Console.h"
 #include "Cursor.h"
 #include "DatabaseTracker.h"
@@ -54,8 +59,8 @@
 #include "IntRect.h"
 #include "NavigationAction.h"
 #include "Node.h"
-#include "NotificationPresenterImpl.h"
 #include "Page.h"
+#include "PlatformScreen.h"
 #include "PlatformSupport.h"
 #include "PopupContainer.h"
 #include "PopupMenuChromium.h"
@@ -68,6 +73,10 @@
 #include "V8Proxy.h"
 #endif
 #include "WebAccessibilityObject.h"
+#if ENABLE(INPUT_COLOR)
+#include "WebColorChooser.h"
+#include "WebColorChooserClientImpl.h"
+#endif
 #include "WebConsoleMessage.h"
 #include "WebCursorInfo.h"
 #include "WebFileChooserCompletionImpl.h"
@@ -82,10 +91,10 @@
 #include "WebPopupMenuImpl.h"
 #include "WebPopupMenuInfo.h"
 #include "WebPopupType.h"
-#include "WebRect.h"
+#include "platform/WebRect.h"
 #include "WebSettings.h"
 #include "WebTextDirection.h"
-#include "WebURLRequest.h"
+#include "platform/WebURLRequest.h"
 #include "WebViewClient.h"
 #include "WebViewImpl.h"
 #include "WebWindowFeatures.h"
@@ -116,41 +125,8 @@ static WebPopupType convertPopupType(PopupContainer::PopupType type)
 // Converts a WebCore::AXObjectCache::AXNotification to a WebKit::WebAccessibilityNotification
 static WebAccessibilityNotification toWebAccessibilityNotification(AXObjectCache::AXNotification notification)
 {
-    switch (notification) {
-    case AXObjectCache::AXActiveDescendantChanged:
-        return WebAccessibilityNotificationActiveDescendantChanged;
-    case AXObjectCache::AXCheckedStateChanged:
-        return WebAccessibilityNotificationCheckedStateChanged;
-    case AXObjectCache::AXChildrenChanged:
-        return WebAccessibilityNotificationChildrenChanged;
-    case AXObjectCache::AXFocusedUIElementChanged:
-        return WebAccessibilityNotificationFocusedUIElementChanged;
-    case AXObjectCache::AXLayoutComplete:
-        return WebAccessibilityNotificationLayoutComplete;
-    case AXObjectCache::AXLoadComplete:
-        return WebAccessibilityNotificationLoadComplete;
-    case AXObjectCache::AXSelectedChildrenChanged:
-        return WebAccessibilityNotificationSelectedChildrenChanged;
-    case AXObjectCache::AXSelectedTextChanged:
-        return WebAccessibilityNotificationSelectedTextChanged;
-    case AXObjectCache::AXValueChanged:
-        return WebAccessibilityNotificationValueChanged;
-    case AXObjectCache::AXScrolledToAnchor:
-        return WebAccessibilityNotificationScrolledToAnchor;
-    case AXObjectCache::AXLiveRegionChanged:
-        return WebAccessibilityNotificationLiveRegionChanged;
-    case AXObjectCache::AXMenuListValueChanged:
-        return WebAccessibilityNotificationMenuListValueChanged;
-    case AXObjectCache::AXRowCountChanged:
-        return WebAccessibilityNotificationRowCountChanged;
-    case AXObjectCache::AXRowCollapsed:
-        return WebAccessibilityNotificationRowCollapsed;
-    case AXObjectCache::AXRowExpanded:
-        return WebAccessibilityNotificationRowExpanded;
-    default:
-        ASSERT_NOT_REACHED();
-        return WebAccessibilityNotificationInvalid;
-    }
+    // These enums have the same values; enforced in AssertMatchingEnums.cpp.
+    return static_cast<WebAccessibilityNotification>(notification);
 }
 
 ChromeClientImpl::ChromeClientImpl(WebViewImpl* webView)
@@ -506,12 +482,12 @@ void ChromeClientImpl::registerProtocolHandler(const String& scheme, const Strin
 }
 #endif
 
-void ChromeClientImpl::invalidateWindow(const IntRect&, bool)
+void ChromeClientImpl::invalidateRootView(const IntRect&, bool)
 {
     notImplemented();
 }
 
-void ChromeClientImpl::invalidateContentsAndWindow(const IntRect& updateRect, bool /*immediate*/)
+void ChromeClientImpl::invalidateContentsAndRootView(const IntRect& updateRect, bool /*immediate*/)
 {
     if (updateRect.isEmpty())
         return;
@@ -529,7 +505,7 @@ void ChromeClientImpl::invalidateContentsAndWindow(const IntRect& updateRect, bo
 void ChromeClientImpl::invalidateContentsForSlowScroll(const IntRect& updateRect, bool immediate)
 {
     m_webView->hidePopups();
-    invalidateContentsAndWindow(updateRect, immediate);
+    invalidateContentsAndRootView(updateRect, immediate);
 }
 
 #if ENABLE(REQUEST_ANIMATION_FRAME)
@@ -558,7 +534,7 @@ void ChromeClientImpl::scroll(
 #endif
 }
 
-IntPoint ChromeClientImpl::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClientImpl::screenToRootView(const IntPoint& point) const
 {
     IntPoint windowPoint(point);
 
@@ -570,7 +546,7 @@ IntPoint ChromeClientImpl::screenToWindow(const IntPoint& point) const
     return windowPoint;
 }
 
-IntRect ChromeClientImpl::windowToScreen(const IntRect& rect) const
+IntRect ChromeClientImpl::rootViewToScreen(const IntRect& rect) const
 {
     IntRect screenRect(rect);
 
@@ -584,6 +560,8 @@ IntRect ChromeClientImpl::windowToScreen(const IntRect& rect) const
 
 void ChromeClientImpl::contentsSizeChanged(Frame* frame, const IntSize& size) const
 {
+    m_webView->didChangeContentsSize();
+
     WebFrameImpl* webframe = WebFrameImpl::fromFrame(frame);
     if (webframe->client())
         webframe->client()->didChangeContentsSize(webframe, size);
@@ -591,9 +569,16 @@ void ChromeClientImpl::contentsSizeChanged(Frame* frame, const IntSize& size) co
 
 void ChromeClientImpl::layoutUpdated(Frame* frame) const
 {
-    WebFrameImpl* webframe = WebFrameImpl::fromFrame(frame);
-    if (webframe->client())
-        webframe->client()->didUpdateLayout(webframe);
+#if ENABLE(VIEWPORT)
+    if (!m_webView->isPageScaleFactorSet() && frame == frame->page()->mainFrame()) {
+        // If the page does not have a viewport tag, then compute a scale
+        // factor to make the page width fit the device width based on the
+        // default viewport parameters.
+        ViewportArguments viewport = frame->document()->viewportArguments();
+        dispatchViewportPropertiesDidChange(viewport);
+    }
+#endif
+    m_webView->layoutUpdated(WebFrameImpl::fromFrame(frame));
 }
 
 void ChromeClientImpl::scrollbarsModeDidChange() const
@@ -637,6 +622,47 @@ void ChromeClientImpl::setToolTip(const String& tooltipText, TextDirection dir)
         tooltipText, textDirection);
 }
 
+void ChromeClientImpl::dispatchViewportPropertiesDidChange(const ViewportArguments& arguments) const
+{
+#if ENABLE(VIEWPORT)
+    if (!m_webView->isFixedLayoutModeEnabled() || !m_webView->client() || !m_webView->page())
+        return;
+
+    ViewportArguments args;
+    if (arguments == args)
+        // Default viewport arguments passed in. This is a signal to reset the viewport.
+        args.width = ViewportArguments::ValueDesktopWidth;
+    else
+        args = arguments;
+
+    FrameView* frameView = m_webView->mainFrameImpl()->frameView();
+    int dpi = screenHorizontalDPI(frameView);
+    ASSERT(dpi > 0);
+
+    WebViewClient* client = m_webView->client();
+    WebRect deviceRect = client->windowRect();
+    // If the window size has not been set yet don't attempt to set the viewport
+    if (!deviceRect.width || !deviceRect.height)
+        return;
+
+    Settings* settings = m_webView->page()->settings();
+    // Call the common viewport computing logic in ViewportArguments.cpp.
+    ViewportAttributes computed = computeViewportAttributes(
+        args, settings->layoutFallbackWidth(), deviceRect.width, deviceRect.height,
+        dpi, IntSize(deviceRect.width, deviceRect.height));
+
+    int layoutWidth = computed.layoutSize.width();
+    int layoutHeight = computed.layoutSize.height();
+    m_webView->setFixedLayoutSize(IntSize(layoutWidth, layoutHeight));
+
+    // FIXME: Investigate the impact this has on layout/rendering if any.
+    // This exposes the correct device scale to javascript and media queries.
+    m_webView->setDeviceScaleFactor(computed.devicePixelRatio);
+    m_webView->setPageScaleFactorLimits(computed.minimumScale, computed.maximumScale);
+    m_webView->setPageScaleFactorPreservingScrollOffset(computed.initialScale * computed.devicePixelRatio);
+#endif
+}
+
 void ChromeClientImpl::print(Frame* frame)
 {
     if (m_webView->client())
@@ -657,6 +683,21 @@ void ChromeClientImpl::reachedApplicationCacheOriginQuota(SecurityOrigin*, int64
 {
     ASSERT_NOT_REACHED();
 }
+
+#if ENABLE(INPUT_COLOR)
+PassOwnPtr<ColorChooser> ChromeClientImpl::createColorChooser(ColorChooserClient* chooserClient, const Color& initialColor)
+{
+    WebViewClient* client = m_webView->client();
+    if (!client)
+        return nullptr;
+    WebColorChooserClientImpl* chooserClientProxy = new WebColorChooserClientImpl(chooserClient);
+    WebColor webColor = static_cast<WebColor>(initialColor.rgb());
+    WebColorChooser* chooser = client->createColorChooser(chooserClientProxy, webColor);
+    if (!chooser)
+        return nullptr;
+    return adoptPtr(new ColorChooserProxy(adoptPtr(chooser)));
+}
+#endif
 
 void ChromeClientImpl::runOpenPanel(Frame* frame, PassRefPtr<FileChooser> fileChooser)
 {
@@ -732,7 +773,7 @@ void ChromeClientImpl::popupOpened(PopupContainer* popupContainer,
         // transparent to the WebView.
         m_webView->popupOpened(popupContainer);
     }
-    static_cast<WebPopupMenuImpl*>(webwidget)->Init(popupContainer, bounds);
+    static_cast<WebPopupMenuImpl*>(webwidget)->init(popupContainer, bounds);
 }
 
 void ChromeClientImpl::popupClosed(WebCore::PopupContainer* popupContainer)
@@ -818,13 +859,6 @@ void ChromeClientImpl::postAccessibilityNotification(AccessibilityObject* obj, A
         m_webView->client()->postAccessibilityNotification(WebAccessibilityObject(obj), toWebAccessibilityNotification(notification));
 }
 
-#if ENABLE(NOTIFICATIONS)
-NotificationPresenter* ChromeClientImpl::notificationPresenter() const
-{
-    return m_webView->notificationPresenterImpl();
-}
-#endif
-
 bool ChromeClientImpl::paintCustomOverhangArea(GraphicsContext* context, const IntRect& horizontalOverhangArea, const IntRect& verticalOverhangArea, const IntRect& dirtyRect)
 {
     Frame* frame = m_webView->mainFrameImpl()->frame();
@@ -856,13 +890,12 @@ void ChromeClientImpl::attachRootGraphicsLayer(Frame* frame, GraphicsLayer* grap
 
 void ChromeClientImpl::scheduleCompositingLayerSync()
 {
-    m_webView->setRootLayerNeedsDisplay();
+    m_webView->scheduleCompositingLayerSync();
 }
 
 ChromeClient::CompositingTriggerFlags ChromeClientImpl::allowedCompositingTriggers() const
 {
-    // FIXME: RTL style not supported by the compositor yet.
-    if (!m_webView->allowsAcceleratedCompositing() || m_webView->pageHasRTLStyle())
+    if (!m_webView->allowsAcceleratedCompositing())
         return 0;
 
     CompositingTriggerFlags flags = 0;
@@ -882,48 +915,35 @@ ChromeClient::CompositingTriggerFlags ChromeClientImpl::allowedCompositingTrigge
 }
 #endif
 
-bool ChromeClientImpl::supportsFullscreenForNode(const WebCore::Node* node)
+bool ChromeClientImpl::supportsFullscreenForNode(const Node* node)
 {
-    if (m_webView->client() && node->hasTagName(WebCore::HTMLNames::videoTag))
-        return m_webView->client()->supportsFullscreen();
     return false;
 }
 
-void ChromeClientImpl::enterFullscreenForNode(WebCore::Node* node)
+void ChromeClientImpl::enterFullscreenForNode(Node* node)
 {
-    if (m_webView->client())
-        m_webView->client()->enterFullscreenForNode(WebNode(node));
+    ASSERT_NOT_REACHED();
 }
 
-void ChromeClientImpl::exitFullscreenForNode(WebCore::Node* node)
+void ChromeClientImpl::exitFullscreenForNode(Node* node)
 {
-    if (m_webView->client())
-        m_webView->client()->exitFullscreenForNode(WebNode(node));
+    ASSERT_NOT_REACHED();
 }
 
 #if ENABLE(FULLSCREEN_API)
-bool ChromeClientImpl::supportsFullScreenForElement(const WebCore::Element* element, bool withKeyboard)
+bool ChromeClientImpl::supportsFullScreenForElement(const Element* element, bool withKeyboard)
 {
-    return m_webView->page()->settings()->fullScreenEnabled();
+    return true;
 }
 
-void ChromeClientImpl::enterFullScreenForElement(WebCore::Element* element)
+void ChromeClientImpl::enterFullScreenForElement(Element* element)
 {
-    // FIXME: Make this code support asynchronous embedder implementations of
-    // enterFullscreenForElement() by restructuring this code to wait for an
-    // ACK.
-    // FIXME: We may need to call these someplace else when window resizes.
-    element->document()->webkitWillEnterFullScreenForElement(element);
-    m_webView->client()->enterFullscreen();
-    element->document()->webkitDidEnterFullScreenForElement(element);
+    m_webView->enterFullScreenForElement(element);
 }
 
-void ChromeClientImpl::exitFullScreenForElement(WebCore::Element* element)
+void ChromeClientImpl::exitFullScreenForElement(Element* element)
 {
-    // FIXME: We may need to call these someplace else when window resizes.
-    element->document()->webkitWillExitFullScreenForElement(element);
-    m_webView->client()->exitFullscreen();
-    element->document()->webkitDidExitFullScreenForElement(element);
+    m_webView->exitFullScreenForElement(element);
 }
 
 void ChromeClientImpl::fullScreenRendererChanged(RenderBox*)
@@ -940,6 +960,11 @@ bool ChromeClientImpl::selectItemWritingDirectionIsNatural()
 bool ChromeClientImpl::selectItemAlignmentFollowsMenuWritingDirection()
 {
     return true;
+}
+
+bool ChromeClientImpl::hasOpenedPopup() const
+{
+    return !!m_webView->selectPopup();
 }
 
 PassRefPtr<PopupMenu> ChromeClientImpl::createPopupMenu(PopupMenuClient* client) const
@@ -992,5 +1017,27 @@ void ChromeClientImpl::numWheelEventHandlersChanged(unsigned numberOfWheelHandle
 {
     m_webView->numberOfWheelEventHandlersChanged(numberOfWheelHandlers);
 }
+
+void ChromeClientImpl::numTouchEventHandlersChanged(unsigned numberOfTouchHandlers)
+{
+    m_webView->numberOfTouchEventHandlersChanged(numberOfTouchHandlers);
+}
+
+#if ENABLE(POINTER_LOCK)
+bool ChromeClientImpl::requestPointerLock()
+{
+    return m_webView->requestPointerLock();
+}
+
+void ChromeClientImpl::requestPointerUnlock()
+{
+    return m_webView->requestPointerUnlock();
+}
+
+bool ChromeClientImpl::isPointerLocked()
+{
+    return m_webView->isPointerLocked();
+}
+#endif
 
 } // namespace WebKit

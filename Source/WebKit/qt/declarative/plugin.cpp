@@ -23,11 +23,13 @@
 #include <QtDeclarative/qdeclarativeextensionplugin.h>
 
 #if defined(HAVE_WEBKIT2)
-#include "qquickwebpage.h"
-#include "qquickwebview.h"
-#include "qwebdownloaditem.h"
-#include "qwebpreferences.h"
+#include "qquickwebpage_p.h"
+#include "qquickwebview_p.h"
+#include "qwebiconimageprovider_p.h"
+#include "qwebloadrequest_p.h"
+#include "qwebnavigationrequest_p.h"
 
+#include <QtDeclarative/qdeclarativeengine.h>
 #include <QtNetwork/qnetworkreply.h>
 #endif
 
@@ -36,6 +38,14 @@ QT_BEGIN_NAMESPACE
 class WebKitQmlPlugin : public QDeclarativeExtensionPlugin {
     Q_OBJECT
 public:
+#if defined(HAVE_WEBKIT2)
+    virtual void initializeEngine(QDeclarativeEngine* engine, const char* uri)
+    {
+        Q_ASSERT(QLatin1String(uri) == QLatin1String("QtWebKit"));
+        engine->addImageProvider(QLatin1String("webicon"), new QWebIconImageProvider);
+    }
+#endif
+
     virtual void registerTypes(const char* uri)
     {
         Q_ASSERT(QLatin1String(uri) == QLatin1String("QtWebKit"));
@@ -49,10 +59,10 @@ public:
 
 #if defined(HAVE_WEBKIT2)
         qmlRegisterType<QQuickWebView>(uri, 3, 0, "WebView");
-        qmlRegisterUncreatableType<QWebPreferences>(uri, 3, 0, "WebPreferences", QObject::tr("Cannot create separate instance of WebPreferences"));
         qmlRegisterUncreatableType<QQuickWebPage>(uri, 3, 0, "WebPage", QObject::tr("Cannot create separate instance of WebPage, use WebView"));
         qmlRegisterUncreatableType<QNetworkReply>(uri, 3, 0, "NetworkReply", QObject::tr("Cannot create separate instance of NetworkReply"));
-        qmlRegisterUncreatableType<QWebDownloadItem>(uri, 5, 0, "DownloadItem", QObject::tr("Cannot create separate instance of DownloadItem"));
+        qmlRegisterUncreatableType<QWebNavigationRequest>(uri, 3, 0, "NavigationRequest", QObject::tr("Cannot create separate instance of NavigationRequest"));
+        qmlRegisterUncreatableType<QWebLoadRequest>(uri, 3, 0, "WebLoadRequest", QObject::tr("Cannot create separate instance of WebLoadRequest"));
 #endif
     }
 };

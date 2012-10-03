@@ -30,6 +30,7 @@
 #if ENABLE(ASSEMBLER) && CPU(ARM_TRADITIONAL)
 
 #include "AssemblerBufferWithConstantPool.h"
+#include "JITCompilationEffort.h"
 #include <wtf/Assertions.h>
 namespace JSC {
 
@@ -748,11 +749,9 @@ namespace JSC {
             return loadBranchTarget(ARMRegisters::pc, cc, useConstantPool);
         }
 
-        void* executableCopy(JSGlobalData&, ExecutablePool* allocator);
+        PassRefPtr<ExecutableMemoryHandle> executableCopy(JSGlobalData&, void* ownerUID, JITCompilationEffort);
 
-#ifndef NDEBUG
         unsigned debugOffset() { return m_buffer.debugOffset(); }
-#endif
 
         // Patching helpers
 
@@ -875,6 +874,11 @@ namespace JSC {
         static void relinkCall(void* from, void* to)
         {
             patchPointerInternal(getAbsoluteJumpAddress(from), to);
+        }
+
+        static void* readCallTarget(void* from)
+        {
+            return reinterpret_cast<void*>(readPointer(reinterpret_cast<void*>(getAbsoluteJumpAddress(from))));
         }
 
         // Address operations

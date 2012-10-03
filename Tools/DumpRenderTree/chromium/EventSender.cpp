@@ -45,10 +45,10 @@
 
 #include "TestShell.h"
 #include "WebContextMenuData.h"
-#include "WebDragData.h"
+#include "platform/WebDragData.h"
 #include "WebDragOperation.h"
-#include "WebPoint.h"
-#include "WebString.h"
+#include "platform/WebPoint.h"
+#include "platform/WebString.h"
 #include "WebTouchPoint.h"
 #include "WebView.h"
 #include "webkit/support/webkit_support.h"
@@ -270,6 +270,7 @@ EventSender::EventSender(TestShell* shell)
     bindMethod("mouseUp", &EventSender::mouseUp);
     bindMethod("releaseTouchPoint", &EventSender::releaseTouchPoint);
     bindMethod("scheduleAsynchronousClick", &EventSender::scheduleAsynchronousClick);
+    bindMethod("scheduleAsynchronousKeyDown", &EventSender::scheduleAsynchronousKeyDown);
     bindMethod("setTouchModifier", &EventSender::setTouchModifier);
     bindMethod("textZoomIn", &EventSender::textZoomIn);
     bindMethod("textZoomOut", &EventSender::textZoomOut);
@@ -353,7 +354,15 @@ void EventSender::doDragDrop(const WebDragData& dragData, WebDragOperationsMask 
 
 void EventSender::dumpFilenameBeingDragged(const CppArgumentList&, CppVariant*)
 {
-    printf("Filename being dragged: %s\n", currentDragData.fileContentFilename().utf8().data());
+    WebString filename;
+    WebVector<WebDragData::Item> items = currentDragData.items();
+    for (size_t i = 0; i < items.size(); ++i) {
+        if (items[i].storageType == WebDragData::Item::StorageTypeBinaryData) {
+            filename = items[i].title;
+            break;
+        }
+    }
+    printf("Filename being dragged: %s\n", filename.utf8().data());
 }
 
 WebMouseEvent::Button EventSender::getButtonTypeFromButtonNumber(int buttonCode)
@@ -500,7 +509,8 @@ void EventSender::doMouseMove(const WebMouseEvent& e)
 
 void EventSender::keyDown(const CppArgumentList& arguments, CppVariant* result)
 {
-    result->setNull();
+    if (result)
+        result->setNull();
     if (arguments.size() < 1 || !arguments[0].isString())
         return;
     bool generateChar = false;
@@ -576,7 +586,7 @@ void EventSender::keyDown(const CppArgumentList& arguments, CppVariant* result)
     eventDown.type = WebInputEvent::RawKeyDown;
     eventDown.modifiers = 0;
     eventDown.windowsKeyCode = code;
-#if OS(LINUX)
+#if OS(LINUX) && USE(GTK)
     eventDown.nativeKeyCode = webkit_support::NativeKeyCodeForWindowsKeyCode(code, needsShiftKeyModifier);
 #endif
 
@@ -847,12 +857,32 @@ void EventSender::scheduleAsynchronousClick(const CppArgumentList& arguments, Cp
     postTask(new MouseUpTask(this, arguments));
 }
 
+class KeyDownTask : public MethodTask<EventSender> {
+public:
+    KeyDownTask(EventSender* obj, const CppArgumentList& arg)
+        : MethodTask<EventSender>(obj), m_arguments(arg) { }
+    virtual void runIfValid() { m_object->keyDown(m_arguments, 0); }
+
+private:
+    CppArgumentList m_arguments;
+};
+
+void EventSender::scheduleAsynchronousKeyDown(const CppArgumentList& arguments, CppVariant* result)
+{
+    result->setNull();
+    postTask(new KeyDownTask(this, arguments));
+}
+
 void EventSender::beginDragWithFiles(const CppArgumentList& arguments, CppVariant* result)
 {
     currentDragData.initialize();
     Vector<string> files = arguments[0].toStringVector();
-    for (size_t i = 0; i < files.size(); ++i)
-        currentDragData.appendToFilenames(webkit_support::GetAbsoluteWebStringFromUTF8Path(files[i]));
+    for (size_t i = 0; i < files.size(); ++i) {
+        WebDragData::Item item;
+        item.storageType = WebDragData::Item::StorageTypeFilename;
+        item.filenameData = webkit_support::GetAbsoluteWebStringFromUTF8Path(files[i]);
+        currentDragData.addItem(item);
+    }
     currentDragEffectsAllowed = WebKit::WebDragOperationCopy;
 
     // Provide a drag source.

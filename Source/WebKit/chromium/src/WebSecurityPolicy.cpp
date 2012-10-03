@@ -36,8 +36,8 @@
 #include "SecurityOrigin.h"
 #include "SecurityPolicy.h"
 
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 
 using namespace WebCore;
 
@@ -61,6 +61,11 @@ void WebSecurityPolicy::registerURLSchemeAsDisplayIsolated(const WebString& sche
 void WebSecurityPolicy::registerURLSchemeAsSecure(const WebString& scheme)
 {
     SchemeRegistry::registerURLSchemeAsSecure(scheme);
+}
+
+void WebSecurityPolicy::registerURLSchemeAsCORSEnabled(const WebString& scheme)
+{
+    SchemeRegistry::registerURLSchemeAsCORSEnabled(scheme);
 }
 
 void WebSecurityPolicy::addOriginAccessWhitelistEntry(
@@ -93,6 +98,11 @@ void WebSecurityPolicy::resetOriginAccessWhitelists()
 bool WebSecurityPolicy::shouldHideReferrer(const WebURL& url, const WebString& referrer)
 {
     return SecurityPolicy::shouldHideReferrer(url, referrer);
+}
+
+WebString WebSecurityPolicy::generateReferrerHeader(WebReferrerPolicy referrerPolicy, const WebURL& url, const WebString& referrer)
+{
+    return SecurityPolicy::generateReferrerHeader(static_cast<SecurityPolicy::ReferrerPolicy>(referrerPolicy), url, referrer);
 }
 
 void WebSecurityPolicy::registerURLSchemeAsNotAllowingJavascriptURLs(const WebString& scheme)

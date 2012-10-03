@@ -34,6 +34,13 @@
 
 namespace WebCore {
 
+#define LOG_AND_DELETE(format, ...) \
+    { \
+        LOG_ERROR(format, ## __VA_ARGS__); \
+        delete res; \
+        return 0; \
+    }
+
 static inline bool isCookieHeaderSeparator(UChar c)
 {
     return (c == '\r' || c =='\n');
@@ -58,16 +65,17 @@ Vector<ParsedCookie*> CookieParser::parse(const String& cookies)
     unsigned cookieStart, cookieEnd = 0;
     double curTime = currentTime();
     Vector<ParsedCookie*, 4> parsedCookies;
- 
-    if (!cookies.length()) // Code below doesn't handle this case
+
+    unsigned cookiesLength = cookies.length();
+    if (!cookiesLength) // Code below doesn't handle this case
         return parsedCookies;
 
     // Iterate over the header to parse all the cookies.
-    while (cookieEnd <= cookies.length()) {
+    while (cookieEnd <= cookiesLength) {
         cookieStart = cookieEnd;
         
         // Find a cookie separator.
-        while (cookieEnd <= cookies.length() && !isCookieHeaderSeparator(cookies[cookieEnd]))
+        while (cookieEnd <= cookiesLength && !isCookieHeaderSeparator(cookies[cookieEnd]))
             cookieEnd++;
 
         // Detect an empty cookie and go to the next one.
@@ -76,7 +84,7 @@ Vector<ParsedCookie*> CookieParser::parse(const String& cookies)
             continue;
         }
 
-        if (cookieEnd < cookies.length() && isCookieHeaderSeparator(cookies[cookieEnd]))
+        if (cookieEnd < cookiesLength && isCookieHeaderSeparator(cookies[cookieEnd]))
             ++cookieEnd;
 
         ParsedCookie* cookie = parseOneCookie(cookies, cookieStart, cookieEnd - 1, curTime);
@@ -86,22 +94,18 @@ Vector<ParsedCookie*> CookieParser::parse(const String& cookies)
     return parsedCookies;
 }
 
-// Parse the string without "Set-Cookie" according to Firefox grammar (loosely RFC 2109 compliant)
-// see netwerk/cookie/src/nsCookieService.cpp comment for it
+// The cookie String passed into this method will only contian the name value pairs as well as other related cookie
+// attributes such as max-age and domain. Set-Cookie should never be part of this string.
 ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start, unsigned end, double curTime)
 {
     ParsedCookie* res = new ParsedCookie(curTime);
 
-    if (!res) {
-        LOG_ERROR("Out of memory");
-        return 0;
-    }
+    if (!res)
+        LOG_AND_DELETE("Out of memory");
 
-    // Extract protocol
     res->setProtocol(m_defaultCookieURL.protocol());
 
     // Parse [NAME "="] VALUE
-
     unsigned tokenEnd = start; // Token end contains the position of the '=' or the end of a token
     unsigned pairEnd = start; // Pair end contains always the position of the ';'
 
@@ -136,11 +140,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
         while (tokenStart < nameEnd && isLightweightSpace(cookie[tokenStart]))
             tokenStart++;
 
-        if (nameEnd + 1 <= tokenStart) {
-            LOG_ERROR("Empty name. Rejecting the cookie");
-            delete res;
-            return 0;
-        }
+        if (nameEnd + 1 <= tokenStart)
+            LOG_AND_DELETE("Empty name. Rejecting the cookie");
 
         String name = cookie.substring(tokenStart, nameEnd + 1 - start);
         res->setName(name);
@@ -224,11 +225,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
                 // The path attribute may or may not include percent-encoded characters. Fortunately
                 // if there are no percent-encoded characters, decoding the url is a no-op.
                 res->setPath(decodeURLEscapeSequences(parsedValue));
-            } else {
-                LOG_ERROR("Invalid cookie %s (path)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            } else
+                LOG_AND_DELETE("Invalid cookie %s (path)", cookie.ascii().data());
             break;
         }
 
@@ -241,11 +239,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
                 // For example: ab.c.com dose not domain match b.c.com;
                 String realDomain = parsedValue[0] == '.' ? parsedValue : "." + parsedValue;
                 res->setDomain(realDomain);
-            } else {
-                LOG_ERROR("Invalid cookie %s (domain)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            } else
+                LOG_AND_DELETE("Invalid cookie %s (domain)", cookie.ascii().data());
             break;
         }
 
@@ -253,11 +248,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
         case 'e' : {
             if (length >= 7 && cookie.find("xpires", tokenStartSvg + 1, false))
                 res->setExpiry(parsedValue);
-            else {
-                LOG_ERROR("Invalid cookie %s (expires)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            else
+                LOG_AND_DELETE("Invalid cookie %s (expires)", cookie.ascii().data());
             break;
         }
 
@@ -265,11 +257,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
         case 'm' : {
             if (length >= 7 && cookie.find("ax-age", tokenStartSvg + 1, false))
                 res->setMaxAge(parsedValue);
-            else {
-                LOG_ERROR("Invalid cookie %s (max-age)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            else
+                LOG_AND_DELETE("Invalid cookie %s (max-age)", cookie.ascii().data());
             break;
         }
 
@@ -278,11 +267,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
             if (length >= 7 && cookie.find("omment", tokenStartSvg + 1, false))
                 // We do not have room for the comment part (and so do Mozilla) so just log the comment.
                 LOG(Network, "Comment %s for ParsedCookie : %s\n", parsedValue.ascii().data(), cookie.ascii().data());
-            else {
-                LOG_ERROR("Invalid cookie %s (comment)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            else
+                LOG_AND_DELETE("Invalid cookie %s (comment)", cookie.ascii().data());
             break;
         }
 
@@ -295,16 +281,10 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
                 if (parsedValue.length() > 1 && parsedValue[0] == '"' && parsedValue[parsedValue.length() - 1] == '"')
                     parsedValue = parsedValue.substring(1, parsedValue.length() - 2);
 
-                if (parsedValue.toInt() != 1) {
-                    LOG_ERROR("ParsedCookie version %d not supported (only support version=1)", parsedValue.toInt());
-                    delete res;
-                    return 0;
-                }
-            } else {
-                LOG_ERROR("Invalid cookie %s (version)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+                if (parsedValue.toInt() != 1)
+                    LOG_AND_DELETE("ParsedCookie version %d not supported (only support version=1)", parsedValue.toInt());
+            } else
+                LOG_AND_DELETE("Invalid cookie %s (version)", cookie.ascii().data());
             break;
         }
 
@@ -313,11 +293,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
             // Secure is a standalone token ("Secure;")
             if (length >= 6 && cookie.find("ecure", tokenStartSvg + 1, false))
                 res->setSecureFlag(true);
-            else {
-                LOG_ERROR("Invalid cookie %s (secure)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            else
+                LOG_AND_DELETE("Invalid cookie %s (secure)", cookie.ascii().data());
             break;
         }
         case 'H':
@@ -325,11 +302,8 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
             // HttpOnly is a standalone token ("HttpOnly;")
             if (length >= 8 && cookie.find("ttpOnly", tokenStartSvg + 1, false))
                 res->setIsHttpOnly(true);
-            else {
-                LOG_ERROR("Invalid cookie %s (HttpOnly)", cookie.ascii().data());
-                delete res;
-                return 0;
-            }
+            else
+                LOG_AND_DELETE("Invalid cookie %s (HttpOnly)", cookie.ascii().data());
             break;
         }
 
@@ -341,12 +315,9 @@ ParsedCookie* CookieParser::parseOneCookie(const String& cookie, unsigned start,
         }
     }
 
-    // Check if the cookie is valid with respect to the size limit/
-    if (!res->isUnderSizeLimit()) {
-        LOG_ERROR("ParsedCookie %s is above the 4kb in length : REJECTED", cookie.ascii().data());
-        delete res;
-        return 0;
-    }
+    // Check if the cookie is valid with respect to the size limit.
+    if (!res->isUnderSizeLimit())
+        LOG_AND_DELETE("ParsedCookie %s is above the 4kb in length : REJECTED", cookie.ascii().data());
 
     // If some pair was not provided, during parsing then apply some default value
     // the rest has been done in the constructor.

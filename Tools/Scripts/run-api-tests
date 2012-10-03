@@ -1,6 +1,6 @@
 #!/usr/bin/perl -w
 
-# Copyright (C) 2010, 2011 Apple Inc. All rights reserved.
+# Copyright (C) 2010, 2011, 2012 Apple Inc. All rights reserved.
 #
 # Redistribution and use in source and binary forms, with or without
 # modification, are permitted provided that the following conditions
@@ -23,10 +23,6 @@
 # ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 # THE POSSIBILITY OF SUCH DAMAGE.
 
-# Features to add:
-#   - Command line option to run a single test.
-#   - Command line option to run all tests in a suite.
-
 use strict;
 use warnings;
 
@@ -39,11 +35,10 @@ use webkitdirs;
 use VCSUtils;
 
 sub buildTestTool();
-sub dumpAllTests();
-sub populateTests();
-sub runAllTests();
-sub runAllTestsInSuite($);
-sub runTest($$);
+sub dumpTestsBySuite(\@);
+sub listAllTests();
+sub runTest($$$);
+sub runTestsBySuite(\@$);
 sub prepareEnvironmentForRunningTestTool();
 sub testToolPath();
 
@@ -55,7 +50,7 @@ my $timeout = 10;
 
 my $showHelp = 0;
 my $verbose = 0;
-my $dump = 0;
+my $dumpTests = 0;
 my $build = 1;
 my $buildDefault = $build ? "build" : "do not build";
 my @testsFailed;
@@ -63,7 +58,7 @@ my @testsTimedOut;
 
 my $programName = basename($0);
 my $usage = <<EOF;
-Usage: $programName [options]
+Usage: $programName [options] [suite or test prefixes]
   --help                Show this help message
   -v|--verbose          Verbose output
   -d|--dump-tests       Dump the names of testcases without running them
@@ -74,7 +69,7 @@ EOF
 GetOptions(
     'help' => \$showHelp,
     'verbose|v' => \$verbose,
-    'dump|d' => \$dump,
+    'dump|d' => \$dumpTests,
     'build!' => \$build
 );
 
@@ -86,41 +81,52 @@ if ($showHelp) {
 setConfiguration();
 buildTestTool() if $build;
 setPathForRunningWebKitApp(\%ENV);
-my %testsToRun = populateTests();
+my @testsToRun = listAllTests();
 
-if ($dump) {
-    dumpAllTests();
+@testsToRun = grep { my $test = $_; grep { $test =~ m/^\Q$_\E/ } @ARGV; } @testsToRun if @ARGV;
+
+if ($dumpTests) {
+    dumpTestsBySuite(@testsToRun);
     exit 0;
 }
 
-if (runAllTests()) {
-    exit 1;
-}
+exit runTestsBySuite(@testsToRun, $verbose);
 
 sub isSupportedPlatform()
 {
     return isAppleMacWebKit() || isAppleWinWebKit() || isChromium();
 }
 
-sub dumpAllTests()
+sub dumpTestsBySuite(\@)
 {
+    my ($tests) = @_;
     print "Dumping test cases\n";
     print "------------------\n";
-    for my $suite (keys %testsToRun) {
-        print $suite . ":\n";
-        print map { "   " . $_ . "\n" } @{ $testsToRun{$suite} };
+    my $lastSuite = "";
+    for my $suiteAndTest (sort @$tests) {
+        my ($suite, $test) = split(/\./, $suiteAndTest);
+        if ($lastSuite ne $suite) {
+            $lastSuite = $suite;
+            print "$suite:\n";
+        }
+        print "   $test\n";
     }
     print "------------------\n";
 }
 
-sub runAllTests()
+sub runTestsBySuite(\@$)
 {
+    my ($tests, $verbose) = @_;
     my $anyFailures = 0;
-    for my $suite (sort keys %testsToRun) {
-        my $failed = runAllTestsInSuite($suite);
-        if ($failed) {
-            $anyFailures = 1;
+    my $lastSuite = "";
+    for my $suiteAndTest (sort @$tests) {
+        my ($suite, $test) = split(/\./, $suiteAndTest);
+        if ($lastSuite ne $suite) {
+            $lastSuite = $suite;
+            print "Suite: $suite\n" unless $verbose;
         }
+        my $failed = runTest($suite, $test, $verbose);
+        $anyFailures ||= $failed;
     }
     
     if ($verbose) {
@@ -140,25 +146,9 @@ sub runAllTests()
     return $anyFailures;
 }
 
-sub runAllTestsInSuite($)
+sub runTest($$$)
 {
-    my ($suite) = @_;
-    print "Suite: $suite\n" unless $verbose;
-
-    my $anyFailures = 0;
-    for my $test (sort @{$testsToRun{$suite}}) {
-        my $failed = runTest($suite, $test);
-        if ($failed) {
-            $anyFailures = 1;
-        }
-    }
-   
-    return $anyFailures;
-}
-
-sub runTest($$)
-{
-    my ($suite, $testName) = @_;
+    my ($suite, $testName, $verbose) = @_;
     my $test = $suite . "." . $testName;
 
     my $gtestArg = "--gtest_filter=" . $test;
@@ -208,10 +198,10 @@ sub runTest($$)
     }
 
     if ($result) {
-        push @testsFailed, "$suite.$test";
+        push @testsFailed, $test;
     }
     if ($timedOut) {
-        push @testsTimedOut, "$suite.$test";
+        push @testsTimedOut, $test;
         print possiblyColored("bold yellow", "Timeout"), "\n";
     } elsif (!$verbose) {
         if ($result) {
@@ -224,9 +214,9 @@ sub runTest($$)
     return $timedOut || $result;
 }
 
-sub populateTests()
+sub listAllTests()
 {
-    my @tests;
+    my @toolOutput;
     my $timedOut;
 
     die "run-api-tests is not supported on this platform.\n" unless isSupportedPlatform();
@@ -250,7 +240,7 @@ sub populateTests()
     }
 
     close($childIn);
-    @tests = <$childOut>;
+    @toolOutput = <$childOut>;
     close($childOut);
     close($childErr);
     close(DEVNULL) unless ($verbose);
@@ -263,22 +253,20 @@ sub populateTests()
         exit exitStatus($result);
     }
 
-    my %keyedTests = ();
+    my @tests = ();
     my $suite;
-    for my $test (@tests) {
-       $test =~ s/[\r\n]*$//;
-       if ($test =~ m/\.$/) {
-          $test =~ s/\.$//;
-          $suite = $test;
+    for my $line (@toolOutput) {
+       $line =~ s/[\r\n]*$//;
+       if ($line =~ m/\.$/) {
+          $suite = $line; # "SuiteName."
        } else {
-          $test =~ s/^\s*//;
-          push @{$keyedTests{$suite}}, $test;
+          $line =~ s/^\s*//; # "TestName"
+          push @tests, $suite . $line; # "SuiteName.TestName"
         }
     }
- 
-    return %keyedTests;
-}
 
+    return @tests;
+}
 
 sub buildTestTool()
 {

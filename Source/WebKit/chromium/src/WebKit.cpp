@@ -37,11 +37,17 @@
 #include "Settings.h"
 #include "TextEncoding.h"
 #include "V8Binding.h"
-#include "WebKitPlatformSupport.h"
+#include "WebKitMutationObserver.h"
+#include "platform/WebKitPlatformSupport.h"
 #include "WebMediaPlayerClientImpl.h"
 #include "WebSocket.h"
+#include "platform/WebThread.h"
 #include "WorkerContextExecutionProxy.h"
 #include "v8.h"
+
+#if OS(DARWIN)
+#include "WebSystemInterface.h"
+#endif
 
 #include <wtf/Assertions.h>
 #include <wtf/MainThread.h>
@@ -49,6 +55,22 @@
 #include <wtf/text/AtomicString.h>
 
 namespace WebKit {
+
+#if ENABLE(MUTATION_OBSERVERS)
+namespace {
+
+class EndOfTaskRunner : public WebThread::TaskObserver {
+public:
+    virtual void didProcessTask()
+    {
+        WebCore::WebKitMutationObserver::deliverAllMutations();
+    }
+};
+
+} // namespace
+
+static WebThread::TaskObserver* s_endOfTaskRunner = 0;
+#endif // ENABLE(MUTATION_OBSERVERS)
 
 // Make sure we are not re-initialized in the same address space.
 // Doing so may cause hard to reproduce crashes.
@@ -73,12 +95,25 @@ void initialize(WebKitPlatformSupport* webKitPlatformSupport)
     v8::V8::SetEntropySource(&generateEntropy);
     v8::V8::Initialize();
     WebCore::V8BindingPerIsolateData::ensureInitialized(v8::Isolate::GetCurrent());
+
+#if ENABLE(MUTATION_OBSERVERS)
+    // currentThread will always be non-null in production, but can be null in Chromium unit tests.
+    if (WebThread* currentThread = webKitPlatformSupport->currentThread()) {
+        ASSERT(!s_endOfTaskRunner);
+        s_endOfTaskRunner = new EndOfTaskRunner;
+        currentThread->addTaskObserver(s_endOfTaskRunner);
+    }
+#endif
 }
 
 void initializeWithoutV8(WebKitPlatformSupport* webKitPlatformSupport)
 {
     ASSERT(!s_webKitInitialized);
     s_webKitInitialized = true;
+
+#if OS(DARWIN)
+    InitWebCoreSystemInterface();
+#endif
 
     ASSERT(webKitPlatformSupport);
     ASSERT(!s_webKitPlatformSupport);
@@ -96,13 +131,19 @@ void initializeWithoutV8(WebKitPlatformSupport* webKitPlatformSupport)
     // the initialization thread-safe, but given that so many code paths use
     // this, initializing this lazily probably doesn't buy us much.
     WebCore::UTF8Encoding();
-
- 
 }
 
 
 void shutdown()
 {
+#if ENABLE(MUTATION_OBSERVERS)
+    if (s_endOfTaskRunner) {
+        ASSERT(s_webKitPlatformSupport->currentThread());
+        s_webKitPlatformSupport->currentThread()->removeTaskObserver(s_endOfTaskRunner);
+        delete s_endOfTaskRunner;
+        s_endOfTaskRunner = 0;
+    }
+#endif
     s_webKitPlatformSupport = 0;
 }
 

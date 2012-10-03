@@ -27,6 +27,7 @@
 #define PlatformWheelEvent_h
 
 #include "IntPoint.h"
+#include "PlatformEvent.h"
 
 #if PLATFORM(GTK)
 typedef struct _GdkEventScroll GdkEventScroll;
@@ -34,13 +35,6 @@ typedef struct _GdkEventScroll GdkEventScroll;
 
 #if PLATFORM(EFL)
 typedef struct _Evas_Event_Mouse_Wheel Evas_Event_Mouse_Wheel;
-#endif
-
-#if PLATFORM(QT)
-QT_BEGIN_NAMESPACE
-class QWheelEvent;
-class QGraphicsSceneWheelEvent;
-QT_END_NAMESPACE
 #endif
 
 #if PLATFORM(WIN)
@@ -76,32 +70,29 @@ namespace WebCore {
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
     enum PlatformWheelEventPhase {
         PlatformWheelEventPhaseNone        = 0,
-        PlatformWheelEventPhaseBegan       = 1 << 1,
-        PlatformWheelEventPhaseStationary  = 1 << 2,
-        PlatformWheelEventPhaseChanged     = 1 << 3,
-        PlatformWheelEventPhaseEnded       = 1 << 4,
-        PlatformWheelEventPhaseCancelled   = 1 << 5,
+        PlatformWheelEventPhaseBegan       = 1 << 0,
+        PlatformWheelEventPhaseStationary  = 1 << 1,
+        PlatformWheelEventPhaseChanged     = 1 << 2,
+        PlatformWheelEventPhaseEnded       = 1 << 3,
+        PlatformWheelEventPhaseCancelled   = 1 << 4,
+        PlatformWheelEventPhaseMayBegin    = 1 << 5,
     };
 #endif
 
-    class PlatformWheelEvent {
+    class PlatformWheelEvent : public PlatformEvent {
     public:
         PlatformWheelEvent()
-            : m_deltaX(0)
+            : PlatformEvent(PlatformEvent::Wheel)
+            , m_deltaX(0)
             , m_deltaY(0)
             , m_wheelTicksX(0)
             , m_wheelTicksY(0)
             , m_granularity(ScrollByPixelWheelEvent)
-            , m_shiftKey(false)
-            , m_ctrlKey(false)
-            , m_altKey(false)
-            , m_metaKey(false)
             , m_directionInvertedFromDevice(false)
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
             , m_hasPreciseScrollingDeltas(false)
             , m_phase(PlatformWheelEventPhaseNone)
             , m_momentumPhase(PlatformWheelEventPhaseNone)
-            , m_timestamp(0)
 #endif
         {
         }
@@ -116,38 +107,42 @@ namespace WebCore {
             , m_wheelTicksX(0)
             , m_wheelTicksY(-delta)
             , m_granularity(ScrollByPixelWheelEvent)
-            , m_shiftKey(false)
-            , m_ctrlKey(false)
-            , m_altKey(false)
-            , m_metaKey(false)
         {
         }
 #endif
 
         PlatformWheelEvent(IntPoint position, IntPoint globalPosition, float deltaX, float deltaY, float wheelTicksX, float wheelTicksY, PlatformWheelEventGranularity granularity, bool shiftKey, bool ctrlKey, bool altKey, bool metaKey)
-            : m_position(position)
+            : PlatformEvent(PlatformEvent::Wheel, shiftKey, ctrlKey, altKey, metaKey, 0)
+            , m_position(position)
             , m_globalPosition(globalPosition)
             , m_deltaX(deltaX)
             , m_deltaY(deltaY)
             , m_wheelTicksX(wheelTicksX)
             , m_wheelTicksY(wheelTicksY)
             , m_granularity(granularity)
-            , m_shiftKey(shiftKey)
-            , m_ctrlKey(ctrlKey)
-            , m_altKey(altKey)
-            , m_metaKey(metaKey)
             , m_directionInvertedFromDevice(false)
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
             , m_hasPreciseScrollingDeltas(false)
             , m_phase(PlatformWheelEventPhaseNone)
             , m_momentumPhase(PlatformWheelEventPhaseNone)
-            , m_timestamp(0)
 #endif
         {
         }
 
-        const IntPoint& pos() const { return m_position; } // PlatformWindow coordinates.
-        const IntPoint& globalPos() const { return m_globalPosition; } // Screen coordinates.
+        PlatformWheelEvent copyTurningVerticalTicksIntoHorizontalTicks() const
+        {
+            PlatformWheelEvent copy = *this;
+
+            copy.m_deltaX = copy.m_deltaY;
+            copy.m_deltaY = 0;
+            copy.m_wheelTicksX = copy.m_wheelTicksY;
+            copy.m_wheelTicksY = 0;
+
+            return copy;
+        }
+
+        const IntPoint& position() const { return m_position; } // PlatformWindow coordinates.
+        const IntPoint& globalPosition() const { return m_globalPosition; } // Screen coordinates.
 
         float deltaX() const { return m_deltaX; }
         float deltaY() const { return m_deltaY; }
@@ -157,26 +152,7 @@ namespace WebCore {
 
         PlatformWheelEventGranularity granularity() const { return m_granularity; }
 
-        bool shiftKey() const { return m_shiftKey; }
-        bool ctrlKey() const { return m_ctrlKey; }
-        bool altKey() const { return m_altKey; }
-        bool metaKey() const { return m_metaKey; }
-
-        int x() const { return m_position.x(); } // PlatformWindow coordinates.
-        int y() const { return m_position.y(); }
-        int globalX() const { return m_globalPosition.x(); } // Screen coordinates.
-        int globalY() const { return m_globalPosition.y(); }
-
-        bool webkitDirectionInvertedFromDevice() const { return m_directionInvertedFromDevice; }
-
-        void turnVerticalTicksIntoHorizontal()
-        {
-            m_deltaX = m_deltaY;
-            m_deltaY = 0;
-
-            m_wheelTicksX = m_wheelTicksY;
-            m_wheelTicksY = 0;
-        }
+        bool directionInvertedFromDevice() const { return m_directionInvertedFromDevice; }
 
 #if PLATFORM(GTK)
         PlatformWheelEvent(GdkEventScroll*);
@@ -186,23 +162,10 @@ namespace WebCore {
         PlatformWheelEvent(const Evas_Event_Mouse_Wheel*);
 #endif
 
-#if PLATFORM(MAC)
-#if defined(__OBJC__)
-        PlatformWheelEvent(NSEvent *, NSView *windowView);
-#endif
-#endif
-
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
         PlatformWheelEventPhase phase() const { return m_phase; }
         PlatformWheelEventPhase momentumPhase() const { return m_momentumPhase; }
         bool hasPreciseScrollingDeltas() const { return m_hasPreciseScrollingDeltas; }
-        double timestamp() const { return m_timestamp; }
-#endif
-
-#if PLATFORM(QT)
-        PlatformWheelEvent(QWheelEvent*);
-        PlatformWheelEvent(QGraphicsSceneWheelEvent*);
-        void applyDelta(int delta, Qt::Orientation);
 #endif
 
 #if PLATFORM(WIN)
@@ -226,16 +189,11 @@ namespace WebCore {
         float m_wheelTicksX;
         float m_wheelTicksY;
         PlatformWheelEventGranularity m_granularity;
-        bool m_shiftKey;
-        bool m_ctrlKey;
-        bool m_altKey;
-        bool m_metaKey;
         bool m_directionInvertedFromDevice;
 #if PLATFORM(MAC) || (PLATFORM(CHROMIUM) && OS(DARWIN))
         bool m_hasPreciseScrollingDeltas;
         PlatformWheelEventPhase m_phase;
         PlatformWheelEventPhase m_momentumPhase;
-        double m_timestamp;
 #endif
     };
 

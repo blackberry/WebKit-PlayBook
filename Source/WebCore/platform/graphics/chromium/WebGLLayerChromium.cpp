@@ -42,15 +42,19 @@
 
 namespace WebCore {
 
-PassRefPtr<WebGLLayerChromium> WebGLLayerChromium::create(CCLayerDelegate* delegate)
+PassRefPtr<WebGLLayerChromium> WebGLLayerChromium::create()
 {
-    return adoptRef(new WebGLLayerChromium(delegate));
+    return adoptRef(new WebGLLayerChromium());
 }
 
-WebGLLayerChromium::WebGLLayerChromium(CCLayerDelegate* delegate)
-    : CanvasLayerChromium(delegate)
+WebGLLayerChromium::WebGLLayerChromium()
+    : CanvasLayerChromium()
+    , m_hasAlpha(true)
+    , m_premultipliedAlpha(true)
+    , m_textureId(0)
     , m_textureChanged(true)
     , m_textureUpdated(false)
+    , m_drawingBuffer(0)
 {
 }
 
@@ -62,7 +66,7 @@ WebGLLayerChromium::~WebGLLayerChromium()
 
 bool WebGLLayerChromium::drawsContent() const
 {
-    return (context() && context()->getExtensions()->getGraphicsResetStatusARB() == GraphicsContext3D::NO_ERROR);
+    return LayerChromium::drawsContent() && context() && (context()->getExtensions()->getGraphicsResetStatusARB() == GraphicsContext3D::NO_ERROR);
 }
 
 void WebGLLayerChromium::updateCompositorResources(GraphicsContext3D* rendererContext, CCTextureUpdater&)
@@ -70,7 +74,7 @@ void WebGLLayerChromium::updateCompositorResources(GraphicsContext3D* rendererCo
     if (!drawsContent())
         return;
 
-    if (m_dirtyRect.isEmpty())
+    if (!m_needsDisplay)
         return;
 
     if (m_textureChanged) {
@@ -84,14 +88,23 @@ void WebGLLayerChromium::updateCompositorResources(GraphicsContext3D* rendererCo
         m_textureChanged = false;
     }
     // Update the contents of the texture used by the compositor.
-    if (!m_dirtyRect.isEmpty() && m_textureUpdated) {
+    if (m_needsDisplay && m_textureUpdated) {
         // publishToPlatformLayer prepares the contents of the off-screen render target for use by the compositor.
         drawingBuffer()->publishToPlatformLayer();
         context()->markLayerComposited();
-        m_updateRect = FloatRect(FloatPoint(), bounds());
-        resetNeedsDisplay();
+        m_needsDisplay = false;
         m_textureUpdated = false;
     }
+}
+
+void WebGLLayerChromium::pushPropertiesTo(CCLayerImpl* layer)
+{
+    CanvasLayerChromium::pushPropertiesTo(layer);
+
+    CCCanvasLayerImpl* canvasLayer = static_cast<CCCanvasLayerImpl*>(layer);
+    canvasLayer->setTextureId(m_textureId);
+    canvasLayer->setHasAlpha(m_hasAlpha);
+    canvasLayer->setPremultipliedAlpha(m_premultipliedAlpha);
 }
 
 bool WebGLLayerChromium::paintRenderedResultsToCanvas(ImageBuffer* imageBuffer)
@@ -113,9 +126,12 @@ bool WebGLLayerChromium::paintRenderedResultsToCanvas(ImageBuffer* imageBuffer)
     return true;
 }
 
-void WebGLLayerChromium::contentChanged()
+void WebGLLayerChromium::setNeedsDisplayRect(const FloatRect& dirtyRect)
 {
+    LayerChromium::setNeedsDisplayRect(dirtyRect);
+
     m_textureUpdated = true;
+
     // If WebGL commands are issued outside of a the animation callbacks, then use
     // call rateLimitOffscreenContextCHROMIUM() to keep the context from getting too far ahead.
     if (layerTreeHost())
@@ -125,11 +141,16 @@ void WebGLLayerChromium::contentChanged()
 void WebGLLayerChromium::setDrawingBuffer(DrawingBuffer* drawingBuffer)
 {
     bool drawingBufferChanged = (m_drawingBuffer != drawingBuffer);
+
+    // The GraphicsContext3D used by the layer is the context associated with
+    // the drawing buffer. If the drawing buffer is changing, make sure
+    // to stop the rate limiter on the old context, not the new context from the
+    // new drawing buffer.
+    GraphicsContext3D* context3D = context();
+    if (layerTreeHost() && drawingBufferChanged && context3D)
+        layerTreeHost()->stopRateLimiter(context3D);
+
     m_drawingBuffer = drawingBuffer;
-
-    if (layerTreeHost() && drawingBufferChanged)
-        layerTreeHost()->stopRateLimiter(context());
-
     if (!m_drawingBuffer)
         return;
 
@@ -156,7 +177,7 @@ GraphicsContext3D* WebGLLayerChromium::layerRendererContext()
 {
     // FIXME: In the threaded case, paintRenderedResultsToCanvas must be
     // refactored to be asynchronous. Currently this is unimplemented.
-    if (!layerTreeHost() || layerTreeHost()->settings().enableCompositorThread)
+    if (!layerTreeHost() || CCProxy::hasImplThread())
         return 0;
     return layerTreeHost()->context();
 }

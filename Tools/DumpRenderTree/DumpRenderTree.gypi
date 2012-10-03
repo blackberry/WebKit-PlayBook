@@ -16,10 +16,14 @@
             'chromium/DumpRenderTree.cpp',
             'chromium/EventSender.cpp',
             'chromium/EventSender.h',
+            'chromium/GamepadController.cpp',
+            'chromium/GamepadController.h',
             'chromium/LayoutTestController.cpp',
             'chromium/LayoutTestController.h',
             'chromium/MockSpellCheck.cpp',
             'chromium/MockSpellCheck.h',
+            'chromium/MockWebSpeechInputController.cpp',
+            'chromium/MockWebSpeechInputController.h',
             'chromium/NotificationPresenter.h',
             'chromium/NotificationPresenter.cpp',
             'chromium/PlainTextController.cpp',
@@ -32,7 +36,7 @@
             'chromium/TestNavigationController.h',
             'chromium/TestShell.cpp',
             'chromium/TestShell.h',
-            'chromium/TestShellAndroid.cpp',
+            'chromium/TestShellLinux.cpp',
             'chromium/TestShellGtk.cpp',
             'chromium/TestShellMac.mm',
             'chromium/TestShellWin.cpp',
@@ -44,6 +48,8 @@
             'chromium/WebPermissions.h',
             'chromium/WebPreferences.cpp',
             'chromium/WebPreferences.h',
+            'chromium/WebUserMediaClientMock.cpp',
+            'chromium/WebUserMediaClientMock.h',
             'chromium/WebViewHost.cpp',
             'chromium/WebViewHost.h',
         ],
@@ -71,6 +77,11 @@
             'TestNetscapePlugIn/main.cpp',
         ],
         'conditions': [
+            ['(OS=="linux" and toolkit_uses_gtk!=1) or OS=="android"', {
+                'drt_files': [
+                    'chromium/TestShellStub.cpp',
+                ],
+            }],
             ['OS=="win"', {
                 'drt_files': [
                     'chromium/WebThemeControlDRTWin.cpp',

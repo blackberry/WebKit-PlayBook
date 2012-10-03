@@ -2,25 +2,25 @@ layer at (0,0) size 800x600
   RenderView at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
-    RenderBody {BODY} at (8,8) size 784x575
-      RenderBlock {P} at (0,0) size 784x36
-        RenderText {#text} at (0,0) size 433x18
-          text run at (0,0) width 433: "Test for monospace width cache bug mentioned in "
-        RenderInline {A} at (0,0) size 93x18 [color=#0000EE]
-          RenderText {#text} at (433,0) size 93x18
-            text run at (433,0) width 93: "bug 11197"
-        RenderText {#text} at (526,0) size 5x18
-          text run at (526,0) width 5: " "
-        RenderInline {I} at (0,0) size 758x36
-          RenderText {#text} at (531,0) size 758x36
-            text run at (531,0) width 227: "REGRESSION: Specifying a"
-            text run at (0,18) width 684: "counter for a CODE tag's content style property on before or after causes a crash"
-        RenderText {#text} at (684,18) size 5x18
-          text run at (684,18) width 5: "."
-      RenderBlock {P} at (0,53) size 784x18
-        RenderText {#text} at (0,0) size 503x18
-          text run at (0,0) width 503: "The blue line and the black line should be the same length."
-      RenderBlock {P} at (0,88) size 784x21
-        RenderInline {SPAN} at (0,0) size 145x22 [border: (1px solid #0000FF) none]
-          RenderText {#text} at (0,0) size 145x21
-            text run at (0,0) width 145: "\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}"
+    RenderBody {BODY} at (8,8) size 784x576
+      RenderBlock {P} at (0,0) size 784x40
+        RenderText {#text} at (0,0) size 322x19
+          text run at (0,0) width 322: "Test for monospace width cache bug mentioned in "
+        RenderInline {A} at (0,0) size 68x19 [color=#0000EE]
+          RenderText {#text} at (322,0) size 68x19
+            text run at (322,0) width 68: "bug 11197"
+        RenderText {#text} at (390,0) size 4x19
+          text run at (390,0) width 4: " "
+        RenderInline {I} at (0,0) size 744x39
+          RenderText {#text} at (394,0) size 744x39
+            text run at (394,0) width 350: "REGRESSION: Specifying a counter for a CODE tag's"
+            text run at (0,20) width 348: "content style property on before or after causes a crash"
+        RenderText {#text} at (348,20) size 4x19
+          text run at (348,20) width 4: "."
+      RenderBlock {P} at (0,56) size 784x20
+        RenderText {#text} at (0,0) size 369x19
+          text run at (0,0) width 369: "The blue line and the black line should be the same length."
+      RenderBlock {P} at (0,92) size 784x18
+        RenderInline {SPAN} at (0,0) size 120x19 [border: (1px solid #0000FF) none]
+          RenderText {#text} at (0,0) size 120x18
+            text run at (0,0) width 120: "\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}\x{2500}"

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -37,19 +37,19 @@ LayerTile::~LayerTile()
     setVisible(false);
 }
 
-void LayerTile::setContents(GLES2Context* context, const SkBitmap& contents, const IntRect& tileRect, const TileIndex& index, bool isOpaque)
+void LayerTile::setContents(const SkBitmap& contents, const IntRect& tileRect, const TileIndex& index, bool isOpaque)
 {
-    setTexture(textureCacheCompositingThread()->textureForTiledContents(context, contents, tileRect, index, isOpaque));
+    setTexture(textureCacheCompositingThread()->textureForTiledContents(contents, tileRect, index, isOpaque));
 }
 
-void LayerTile::setContentsToColor(GLES2Context* context, const Color& color)
+void LayerTile::setContentsToColor(const Color& color)
 {
-    setTexture(textureCacheCompositingThread()->textureForColor(context, color));
+    setTexture(textureCacheCompositingThread()->textureForColor(color));
 }
 
-void LayerTile::updateContents(GLES2Context* context, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect)
+void LayerTile::updateContents(const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect, bool isOpaque)
 {
-    setTexture(textureCacheCompositingThread()->updateContents(m_texture, context, contents, dirtyRect, tileRect));
+    setTexture(textureCacheCompositingThread()->updateContents(m_texture, contents, dirtyRect, tileRect, isOpaque));
 }
 
 void LayerTile::discardContents()
@@ -87,7 +87,7 @@ void LayerTile::setTexture(PassRefPtr<Texture> texture)
     if (texture == m_texture)
         return;
 
-    // Move protection over to the new texture
+    // Move protection over to the new texture.
     if (m_visible) {
         if (m_texture)
             m_texture->unprotect();

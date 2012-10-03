@@ -105,6 +105,18 @@ typedef struct WKContextDownloadClient WKContextDownloadClient;
 
 enum { kWKContextDownloadClientCurrentVersion = 0 };
 
+// Connection Client
+typedef void (*WKContextDidCreateConnection)(WKContextRef context, WKConnectionRef connection, const void* clientInfo);
+
+struct WKContextConnectionClient {
+    int                                                                 version;
+    const void *                                                        clientInfo;
+    WKContextDidCreateConnection                                        didCreateConnection;
+};
+typedef struct WKContextConnectionClient WKContextConnectionClient;
+
+enum { kWKContextConnectionClientCurrentVersion = 0 };
+
 WK_EXPORT WKTypeID WKContextGetTypeID();
 
 WK_EXPORT WKContextRef WKContextCreate();
@@ -114,6 +126,7 @@ WK_EXPORT WKContextRef WKContextGetSharedProcessContext();
 WK_EXPORT void WKContextSetInjectedBundleClient(WKContextRef context, const WKContextInjectedBundleClient* client);
 WK_EXPORT void WKContextSetHistoryClient(WKContextRef context, const WKContextHistoryClient* client);
 WK_EXPORT void WKContextSetDownloadClient(WKContextRef context, const WKContextDownloadClient* client);
+WK_EXPORT void WKContextSetConnectionClient(WKContextRef context, const WKContextConnectionClient* client);
 
 WK_EXPORT WKDownloadRef WKContextDownloadURLRequest(WKContextRef context, const WKURLRequestRef request);
 
@@ -135,6 +148,7 @@ WK_EXPORT WKGeolocationManagerRef WKContextGetGeolocationManager(WKContextRef co
 WK_EXPORT WKIconDatabaseRef WKContextGetIconDatabase(WKContextRef context);
 WK_EXPORT WKKeyValueStorageManagerRef WKContextGetKeyValueStorageManager(WKContextRef context);
 WK_EXPORT WKMediaCacheManagerRef WKContextGetMediaCacheManager(WKContextRef context);
+WK_EXPORT WKNotificationManagerRef WKContextGetNotificationManager(WKContextRef context);
 WK_EXPORT WKPluginSiteDataManagerRef WKContextGetPluginSiteDataManager(WKContextRef context);
 WK_EXPORT WKResourceCacheManagerRef WKContextGetResourceCacheManager(WKContextRef context);
     

@@ -23,14 +23,34 @@
 
 #include "Cookie.h"
 #include "Document.h"
+#include "Frame.h"
+#include "FrameLoader.h"
 #include "GOwnPtrSoup.h"
 #include "KURL.h"
+#include "NetworkingContext.h"
+#include "ResourceHandle.h"
 #include <wtf/text/CString.h>
 
 namespace WebCore {
 
 static bool cookiesInitialized;
 static SoupCookieJar* cookieJar;
+
+static SoupCookieJar* cookieJarForDocument(const Document* document)
+{
+    if (!document)
+        return 0;
+    const Frame* frame = document->frame();
+    if (!frame)
+        return 0;
+    const FrameLoader* loader = frame->loader();
+    if (!loader)
+        return 0;
+    const NetworkingContext* context = loader->networkingContext();
+    if (!context)
+        return 0;
+    return SOUP_COOKIE_JAR(soup_session_get_feature(context->soupSession(), SOUP_TYPE_COOKIE_JAR));
+}
 
 SoupCookieJar* defaultCookieJar()
 {
@@ -59,7 +79,7 @@ void setDefaultCookieJar(SoupCookieJar* jar)
 
 void setCookies(Document* document, const KURL& url, const String& value)
 {
-    SoupCookieJar* jar = defaultCookieJar();
+    SoupCookieJar* jar = cookieJarForDocument(document);
     if (!jar)
         return;
 
@@ -73,9 +93,9 @@ void setCookies(Document* document, const KURL& url, const String& value)
                                                 value.utf8().data());
 }
 
-String cookies(const Document* /*document*/, const KURL& url)
+String cookies(const Document* document, const KURL& url)
 {
-    SoupCookieJar* jar = defaultCookieJar();
+    SoupCookieJar* jar = cookieJarForDocument(document);
     if (!jar)
         return String();
 
@@ -89,9 +109,9 @@ String cookies(const Document* /*document*/, const KURL& url)
     return result;
 }
 
-String cookieRequestHeaderFieldValue(const Document* /*document*/, const KURL& url)
+String cookieRequestHeaderFieldValue(const Document* document, const KURL& url)
 {
-    SoupCookieJar* jar = defaultCookieJar();
+    SoupCookieJar* jar = cookieJarForDocument(document);
     if (!jar)
         return String();
 
@@ -105,9 +125,9 @@ String cookieRequestHeaderFieldValue(const Document* /*document*/, const KURL& u
     return result;
 }
 
-bool cookiesEnabled(const Document* /*document*/)
+bool cookiesEnabled(const Document* document)
 {
-    return defaultCookieJar();
+    return !!cookieJarForDocument(document);
 }
 
 bool getRawCookies(const Document*, const KURL&, Vector<Cookie>& rawCookies)
@@ -124,17 +144,40 @@ void deleteCookie(const Document*, const KURL&, const String&)
 
 void getHostnamesWithCookies(HashSet<String>& hostnames)
 {
-    // FIXME: Not yet implemented
+    SoupCookieJar* cookieJar = WebCore::defaultCookieJar();
+    GSList* cookies = soup_cookie_jar_all_cookies(cookieJar);
+    for (GSList* item = cookies; item; item = item->next) {
+        SoupCookie* soupCookie = static_cast<SoupCookie*>(item->data);
+        if (char* domain = const_cast<char*>(soup_cookie_get_domain(soupCookie)))
+            hostnames.add(String::fromUTF8(domain));
+    }
+
+    soup_cookies_free(cookies);
 }
 
 void deleteCookiesForHostname(const String& hostname)
 {
-    // FIXME: Not yet implemented
+    CString hostNameString = hostname.utf8();
+
+    SoupCookieJar* cookieJar = WebCore::defaultCookieJar();
+    GSList* cookies = soup_cookie_jar_all_cookies(cookieJar);
+    for (GSList* item = cookies; item; item = item->next) {
+        SoupCookie* soupCookie = static_cast<SoupCookie*>(item->data);
+        if (hostNameString == soup_cookie_get_domain(soupCookie))
+            soup_cookie_jar_delete_cookie(cookieJar, soupCookie);
+    }
+
+    soup_cookies_free(cookies);
 }
 
 void deleteAllCookies()
 {
-    // FIXME: Not yet implemented
+    SoupCookieJar* cookieJar = WebCore::defaultCookieJar();
+    GSList* cookies = soup_cookie_jar_all_cookies(cookieJar);
+    for (GSList* item = cookies; item; item = item->next)
+        soup_cookie_jar_delete_cookie(cookieJar, static_cast<SoupCookie*>(item->data));
+
+    soup_cookies_free(cookies);
 }
 
 }

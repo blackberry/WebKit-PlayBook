@@ -30,12 +30,11 @@
 # A tool for automating dealing with bugzilla, posting patches, committing
 # patches, etc.
 
-from webkitpy.common.checkout.changelog import view_source_url
+from webkitpy.common.config import urls
 
 
 def bug_comment_from_svn_revision(svn_revision):
-    return "Committed r%s: <%s>" % (svn_revision,
-                                    view_source_url(svn_revision))
+    return "Committed r%s: <%s>" % (svn_revision, urls.view_revision_url(svn_revision))
 
 
 def bug_comment_from_commit_text(scm, commit_text):

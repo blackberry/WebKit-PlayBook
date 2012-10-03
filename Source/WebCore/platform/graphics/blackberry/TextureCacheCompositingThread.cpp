@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,14 +21,16 @@
 
 #if USE(ACCELERATED_COMPOSITING)
 
-#include "LayerTiler.h"
+#include "IntRect.h"
+
 #include <GLES2/gl2.h>
+#include <SkBitmap.h>
 
 #define DEBUG_TEXTURE_MEMORY_USAGE 0
 
 namespace WebCore {
 
-static const int defaultMemoryLimit = 64 * 1024 * 1024; // Bytes
+static const int defaultMemoryLimit = 64 * 1024 * 1024; // Measured in bytes.
 
 // Used to protect a newly created texture from being immediately evicted
 // before someone has a chance to protect it for legitimate reasons.
@@ -55,7 +57,7 @@ TextureCacheCompositingThread::TextureCacheCompositingThread()
 {
 }
 
-unsigned TextureCacheCompositingThread::allocateTextureId(GLES2Context* context)
+unsigned TextureCacheCompositingThread::allocateTextureId()
 {
     unsigned texid;
     glGenTextures(1, &texid);
@@ -72,19 +74,19 @@ unsigned TextureCacheCompositingThread::allocateTextureId(GLES2Context* context)
     return texid;
 }
 
-void TextureCacheCompositingThread::freeTextureId(GLES2Context*, unsigned id)
+void TextureCacheCompositingThread::freeTextureId(unsigned id)
 {
     if (id)
         glDeleteTextures(1, &id);
 }
 
-void TextureCacheCompositingThread::collectGarbage(GLES2Context* context)
+void TextureCacheCompositingThread::collectGarbage()
 {
     int delta = 0;
 
     for (Garbage::iterator it = m_garbage.begin(); it != m_garbage.end(); ++it) {
         ZombieTexture& zombie = *it;
-        freeTextureId(context, zombie.id);
+        freeTextureId(zombie.id);
         delta += zombie.size.width() * zombie.size.height() * Texture::bytesPerPixel();
     }
     m_garbage.clear();
@@ -95,7 +97,7 @@ void TextureCacheCompositingThread::collectGarbage(GLES2Context* context)
 
 void TextureCacheCompositingThread::textureResized(Texture* texture, const IntSize& oldSize)
 {
-    int delta = (texture->width() * texture->height() - oldSize.width() * oldSize.height()) * texture->bytesPerPixel();
+    int delta = (texture->width() * texture->height() - oldSize.width() * oldSize.height()) * Texture::bytesPerPixel();
     incMemoryUsage(delta);
     if (delta > 0)
         prune();
@@ -111,13 +113,13 @@ void TextureCacheCompositingThread::textureDestroyed(Texture* texture)
     evict(m_textures.find(texture));
 }
 
-bool TextureCacheCompositingThread::install(Texture* texture, GLES2Context* context)
+bool TextureCacheCompositingThread::install(Texture* texture)
 {
     if (!texture)
         return true;
 
     if (!texture->hasTexture()) {
-        unsigned textureId = allocateTextureId(context);
+        unsigned textureId = allocateTextureId();
         if (!textureId)
             return false;
 
@@ -182,11 +184,11 @@ void TextureCacheCompositingThread::prune(size_t limit)
     }
 }
 
-void TextureCacheCompositingThread::clear(GLES2Context* context)
+void TextureCacheCompositingThread::clear()
 {
     m_cache.clear();
     m_colors.clear();
-    collectGarbage(context);
+    collectGarbage();
 }
 
 void TextureCacheCompositingThread::setMemoryUsage(size_t memoryUsage)
@@ -197,7 +199,7 @@ void TextureCacheCompositingThread::setMemoryUsage(size_t memoryUsage)
 #endif
 }
 
-PassRefPtr<Texture> TextureCacheCompositingThread::textureForTiledContents(GLES2Context* context, const SkBitmap& contents, const IntRect& tileRect, const TileIndex& index, bool isOpaque)
+PassRefPtr<Texture> TextureCacheCompositingThread::textureForTiledContents(const SkBitmap& contents, const IntRect& tileRect, const TileIndex& index, bool isOpaque)
 {
     HashMap<ContentsKey, TextureMap>::iterator it = m_cache.add(key(contents), TextureMap()).first;
     TextureMap& map = (*it).second;
@@ -205,14 +207,14 @@ PassRefPtr<Texture> TextureCacheCompositingThread::textureForTiledContents(GLES2
     TextureMap::iterator jt = map.add(index, RefPtr<Texture>()).first;
     RefPtr<Texture> texture = (*jt).second;
     if (!texture) {
-        texture = createTexture(context);
+        texture = createTexture();
 #if DEBUG_TEXTURE_MEMORY_USAGE
         fprintf(stderr, "Creating texture 0x%x for 0x%x+%d @ (%d, %d)\n", texture.get(), contents.pixelRef(), contents.pixelRefOffset(), index.i(), index.j());
 #endif
         map.set(index, texture);
     }
 
-    // Protect newly created texture from being evicted
+    // Protect newly created texture from being evicted.
     TextureProtector protector(texture.get());
 
     IntSize contentsSize(contents.width(), contents.height());
@@ -221,12 +223,12 @@ PassRefPtr<Texture> TextureCacheCompositingThread::textureForTiledContents(GLES2
 #if DEBUG_TEXTURE_MEMORY_USAGE
         fprintf(stderr, "Updating texture 0x%x for 0x%x+%d @ (%d, %d)\n", texture.get(), contents.pixelRef(), contents.pixelRefOffset(), index.i(), index.j());
 #endif
-        texture->updateContents(context, contents, dirtyRect, tileRect, isOpaque);
+        texture->updateContents(contents, dirtyRect, tileRect, isOpaque);
     }
     return texture.release();
 }
 
-PassRefPtr<Texture> TextureCacheCompositingThread::textureForColor(GLES2Context* context, const Color& color)
+PassRefPtr<Texture> TextureCacheCompositingThread::textureForColor(const Color& color)
 {
     // Just to make sure we don't get fooled by some malicious web page
     // into caching millions of color textures.
@@ -236,7 +238,7 @@ PassRefPtr<Texture> TextureCacheCompositingThread::textureForColor(GLES2Context*
     ColorTextureMap::iterator it = m_colors.find(color);
     RefPtr<Texture> texture;
     if (it == m_colors.end()) {
-        texture = Texture::createColor(context);
+        texture = Texture::create(true /* isColor */);
 #if DEBUG_TEXTURE_MEMORY_USAGE
         fprintf(stderr, "Creating texture 0x%x for color 0x%x\n", texture.get(), color.rgb());
 #endif
@@ -244,27 +246,27 @@ PassRefPtr<Texture> TextureCacheCompositingThread::textureForColor(GLES2Context*
     } else
         texture = (*it).second;
 
-    // Color textures can't be evicted, so no need for TextureProtector
+    // Color textures can't be evicted, so no need for TextureProtector.
 
     if (texture->size() != IntSize(1, 1))
-        texture->setContentsToColor(context, color);
+        texture->setContentsToColor(color);
 
     return texture.release();
 }
 
-PassRefPtr<Texture> TextureCacheCompositingThread::updateContents(const RefPtr<Texture>& textureIn, GLES2Context* context, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect)
+PassRefPtr<Texture> TextureCacheCompositingThread::updateContents(const RefPtr<Texture>& textureIn, const SkBitmap& contents, const IntRect& dirtyRect, const IntRect& tileRect, bool isOpaque)
 {
     RefPtr<Texture> texture(textureIn);
 
     // If the texture was 0, or needs to transition from a solid color texture to a contents texture,
     // create a new texture.
     if (!texture || texture->isColor())
-        texture = createTexture(context);
+        texture = createTexture();
 
-    // Protect newly created texture from being evicted
+    // Protect newly created texture from being evicted.
     TextureProtector protector(texture.get());
 
-    texture->updateContents(context, contents, dirtyRect, tileRect);
+    texture->updateContents(contents, dirtyRect, tileRect, isOpaque);
 
     return texture.release();
 }

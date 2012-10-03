@@ -44,10 +44,6 @@ namespace WebCore {
     struct ViewportArguments;
 }
 
-#if PLATFORM(QT)
-class QtWebPageProxy;
-#endif
-
 namespace WebKit {
 
 class DrawingAreaProxy;
@@ -55,6 +51,9 @@ class FindIndicator;
 class NativeWebKeyboardEvent;
 #if ENABLE(TOUCH_EVENTS)
 class NativeWebTouchEvent;
+#endif
+#if ENABLE(GESTURE_EVENTS)
+class WebGestureEvent;
 #endif
 class WebContextMenuProxy;
 class WebEditCommandProxy;
@@ -109,7 +108,11 @@ public:
     virtual void didFindZoomableArea(const WebCore::IntPoint&, const WebCore::IntRect&) = 0;
     virtual void didReceiveMessageFromNavigatorQtObject(const String&) = 0;
     virtual void handleDownloadRequest(DownloadProxy*) = 0;
-#endif
+    virtual void updateTextInputState() = 0;
+    virtual void handleAuthenticationRequiredRequest(const String& hostname, const String& realm, const String& prefilledUsername, String& username, String& password) = 0;
+    virtual void handleCertificateVerificationRequest(const String& hostname, bool& ignoreErrors) = 0;
+    virtual void handleProxyAuthenticationRequiredRequest(const String& hostname, uint16_t port, const String& prefilledUsername, String& username, String& password) = 0;
+#endif // PLATFORM(QT).
 
 #if PLATFORM(QT) || PLATFORM(GTK)
     virtual void startDrag(const WebCore::DragData&, PassRefPtr<ShareableBitmap> dragImage) = 0;
@@ -144,6 +147,9 @@ public:
     virtual WebCore::IntRect windowToScreen(const WebCore::IntRect&) = 0;
     
     virtual void doneWithKeyEvent(const NativeWebKeyboardEvent&, bool wasEventHandled) = 0;
+#if ENABLE(GESTURE_EVENTS)
+    virtual void doneWithGestureEvent(const WebGestureEvent&, bool wasEventHandled) = 0;
+#endif
 #if ENABLE(TOUCH_EVENTS)
     virtual void doneWithTouchEvent(const NativeWebTouchEvent&, bool wasEventHandled) = 0;
 #endif
@@ -177,6 +183,7 @@ public:
     virtual void dismissCorrectionPanel(WebCore::ReasonForDismissingCorrectionPanel) = 0;
     virtual String dismissCorrectionPanelSoon(WebCore::ReasonForDismissingCorrectionPanel) = 0;
     virtual void recordAutocorrectionResponse(WebCore::EditorClient::AutocorrectionResponseType, const String& replacedString, const String& replacementString) = 0;
+    virtual void recommendedScrollbarStyleDidChange(int32_t newStyle) = 0;
     
     virtual WKView* wkView() const = 0;
 #endif

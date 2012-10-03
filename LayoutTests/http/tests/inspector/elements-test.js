@@ -19,11 +19,6 @@ InspectorTest.findNode = function(matchFunction, callback)
                 callback(result);
                 return;
             }
-            if (childNode.shadowRoot && matchFunction(childNode.shadowRoot)) {
-                result = childNode.shadowRoot;
-                callback(result);
-                return;
-            }
             pendingRequests++;
             childNode.getChildNodes(processChildren.bind(null, false));
         }
@@ -74,13 +69,13 @@ InspectorTest.selectNodeWithId = function(idValue, callback)
     InspectorTest.nodeWithId(idValue, onNodeFound);
 }
 
-InspectorTest.waitForStyles = function(idValue, callback)
+InspectorTest.waitForStyles = function(idValue, callback, requireRebuild)
 {
     callback = InspectorTest.safeWrap(callback);
 
-    (function sniff(node)
+    (function sniff(node, rebuild)
     {
-        if (node && node.getAttribute("id") === idValue) {
+        if ((rebuild || !requireRebuild) && node && node.getAttribute("id") === idValue) {
             callback();
             return;
         }
@@ -96,7 +91,7 @@ InspectorTest.selectNodeAndWaitForStyles = function(idValue, callback)
 
     var targetNode;
 
-    InspectorTest.waitForStyles(idValue, stylesUpdated);
+    InspectorTest.waitForStyles(idValue, stylesUpdated, true);
     InspectorTest.selectNodeWithId(idValue, nodeSelected);
 
     function nodeSelected(node)
@@ -110,8 +105,30 @@ InspectorTest.selectNodeAndWaitForStyles = function(idValue, callback)
     }
 }
 
+InspectorTest.selectNodeAndWaitForStylesWithComputed = function(idValue, callback)
+{
+    callback = InspectorTest.safeWrap(callback);
+
+    function stylesCallback(targetNode)
+    {
+        InspectorTest.addSniffer(WebInspector.SidebarPane.prototype, "expand", callback);
+        WebInspector.panels.elements.sidebarPanes.computedStyle.expand();
+    }
+
+    InspectorTest.selectNodeAndWaitForStyles(idValue, stylesCallback);
+}
+
 InspectorTest.dumpSelectedElementStyles = function(excludeComputed, excludeMatched, omitLonghands)
 {
+    function extractText(element)
+    {
+        var text = element.textContent;
+        if (text)
+            return text;
+        element = element.querySelector("[data-uncopyable]");
+        return element ? element.getAttribute("data-uncopyable") : "";
+    }
+
     var styleSections = WebInspector.panels.elements.sidebarPanes.styles.sections;
     for (var pseudoId in styleSections) {
         var pseudoName = WebInspector.StylesSidebarPane.PseudoIdNames[pseudoId];
@@ -128,11 +145,10 @@ InspectorTest.dumpSelectedElementStyles = function(excludeComputed, excludeMatch
             var chainEntries = section.titleElement.children;
             for (var j = 0; j < chainEntries.length; ++j) {
                 var chainEntry = chainEntries[j];
-                var entryLine = chainEntry.children[0].textContent;
+                var entryLine = chainEntry.children[1].textContent;
                 if (chainEntry.children[2])
-                    entryLine += " " + chainEntry.children[1].textContent;
-                if (chainEntry.children.length > 1)
-                    entryLine += " (" + chainEntry.lastChild.textContent + ")";
+                    entryLine += " " + chainEntry.children[2].textContent;
+                entryLine += " (" + extractText(chainEntry.children[0]) + ")";
                 InspectorTest.addResult(entryLine);
             }
             section.expand();
@@ -378,6 +394,44 @@ InspectorTest.rangeText = function(range)
     if (!range)
         return "[undefined-undefined]";
     return "[" + range.start + "-" + range.end + "]";
-};
+}
+
+InspectorTest.generateUndoTest = function(testBody)
+{
+    function result(next)
+    {
+        var testNode = InspectorTest.expandedNodeWithId(/function\s([^(]*)/.exec(testBody)[1]);
+        InspectorTest.addResult("Initial:");
+        InspectorTest.dumpElementsTree(testNode);
+
+        testBody(undo);
+
+        function undo()
+        {
+            InspectorTest.addResult("Post-action:");
+            InspectorTest.dumpElementsTree(testNode);
+            WebInspector.domAgent.undo(redo);
+        }
+
+        function redo()
+        {
+            InspectorTest.addResult("Post-undo (initial):");
+            InspectorTest.dumpElementsTree(testNode);
+            WebInspector.domAgent.redo(done);
+        }
+
+        function done()
+        {
+            InspectorTest.addResult("Post-redo (action):");
+            InspectorTest.dumpElementsTree(testNode);
+            next();
+        }
+    }
+    result.toString = function()
+    {
+        return testBody.toString();
+    }
+    return result;
+}
 
 };

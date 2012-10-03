@@ -34,6 +34,4 @@ IntSize::operator BlackBerry::Platform::IntSize() const
     return BlackBerry::Platform::IntSize(m_width, m_height);
 }
 
-}
-
-// vim: ts=4 sw=4 et
+} // namespace WebCore

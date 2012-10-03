@@ -84,6 +84,8 @@ public:
     static bool webkitPointerLockEnabled() { return isPointerLockEnabled; }
     static void setWebkitPointerLockEnabled(bool isEnabled) { isPointerLockEnabled = isEnabled; }
     static bool webkitPointerEnabled() { return isPointerLockEnabled; }
+    static bool webkitMovementXEnabled() { return isPointerLockEnabled; }
+    static bool webkitMovementYEnabled() { return isPointerLockEnabled; }
 #endif
 
 #if ENABLE(VIDEO)
@@ -170,8 +172,8 @@ public:
 #endif
 
 #if ENABLE(GAMEPAD)
-    static void setGamepadsEnabled(bool isEnabled) { isGamepadEnabled = isEnabled; }
-    static bool gamepadsEnabled() { return isGamepadEnabled; }
+    static void setWebkitGamepadsEnabled(bool isEnabled) { isGamepadEnabled = isEnabled; }
+    static bool webkitGamepadsEnabled() { return isGamepadEnabled; }
 #endif
 
 #if ENABLE(QUOTA)
@@ -187,6 +189,19 @@ public:
 #if ENABLE(VIDEO_TRACK)
     static bool webkitVideoTrackEnabled() { return isVideoTrackEnabled; }
     static void setWebkitVideoTrackEnabled(bool isEnabled) { isVideoTrackEnabled = isEnabled; }
+#endif
+
+#if ENABLE(SHADOW_DOM)
+    static bool shadowDOMEnabled() { return isShadowDOMEnabled; }
+    static void setShadowDOMEnabled(bool isEnabled) { isShadowDOMEnabled = isEnabled; }
+
+    static bool multipleShadowSubtreesEnabled() { return isMultipleShadowSubtreesEnabled; }
+    static void setMultipleShadowSubtreesEnabled(bool isEnabled);
+#endif
+
+#if ENABLE(STYLE_SCOPED)
+    static bool styleScopedEnabled() { return isStyleScopedEnabled; }
+    static void setStyleScopedEnabled(bool isEnabled) { isStyleScopedEnabled = isEnabled; }
 #endif
 
 private:
@@ -244,6 +259,15 @@ private:
 
 #if ENABLE(VIDEO_TRACK)
     static bool isVideoTrackEnabled;
+#endif
+
+#if ENABLE(SHADOW_DOM)
+    static bool isShadowDOMEnabled;
+    static bool isMultipleShadowSubtreesEnabled;
+#endif
+
+#if ENABLE(STYLE_SCOPED)
+    static bool isStyleScopedEnabled;
 #endif
 };
 

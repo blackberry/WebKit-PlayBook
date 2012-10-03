@@ -32,12 +32,14 @@
 #include "V8Binding.h"
 
 #include "DOMStringList.h"
+#include "DOMWrapperVisitor.h"
 #include "Element.h"
 #include "MathExtras.h"
 #include "PlatformString.h"
 #include "QualifiedName.h"
 #include "StdLibExtras.h"
 #include "Threading.h"
+#include "V8DOMStringList.h"
 #include "V8Element.h"
 #include "V8Proxy.h"
 #include <wtf/MainThread.h>
@@ -52,6 +54,7 @@ namespace WebCore {
 V8BindingPerIsolateData::V8BindingPerIsolateData(v8::Isolate* isolate)
     : m_domDataStore(0)
     , m_constructorMode(ConstructorMode::CreateNewObject)
+    , m_recursionLevel(0)
 {
 }
 
@@ -143,6 +146,13 @@ public:
         return m_atomicString;
     }
 
+    void visitStrings(DOMWrapperVisitor* visitor)
+    {
+        visitor->visitJSExternalString(m_plainString.impl());
+        if (m_plainString.impl() != m_atomicString.impl() && !m_atomicString.isNull())
+            visitor->visitJSExternalString(m_atomicString.impl());
+    }
+
     static WebCoreStringResource* toStringResource(v8::Handle<v8::String> v8String)
     {
         return static_cast<WebCoreStringResource*>(v8String->GetExternalStringResource());
@@ -162,6 +172,25 @@ private:
     WTF::ThreadIdentifier m_threadId;
 #endif
 };
+
+void V8BindingPerIsolateData::visitJSExternalStrings(DOMWrapperVisitor* visitor)
+{
+    v8::HandleScope handleScope;
+    class VisitorImpl : public v8::ExternalResourceVisitor {
+    public:
+        VisitorImpl(DOMWrapperVisitor* visitor) : m_visitor(visitor) { }
+        virtual ~VisitorImpl() { }
+        virtual void VisitExternalString(v8::Handle<v8::String> string)
+        {
+            WebCoreStringResource* resource = static_cast<WebCoreStringResource*>(string->GetExternalStringResource());
+            if (resource)
+                resource->visitStrings(m_visitor);
+        }
+    private:
+        DOMWrapperVisitor* m_visitor;
+    } v8Visitor(visitor);
+    v8::V8::VisitExternalResources(&v8Visitor);
+}
 
 String v8ValueToWebCoreString(v8::Handle<v8::Value> value)
 {
@@ -500,7 +529,6 @@ void StringCache::remove(StringImpl* stringImpl)
     m_stringCache.remove(stringImpl);
 }
 
-
 v8::Local<v8::String> StringCache::v8ExternalStringSlow(StringImpl* stringImpl)
 {
     if (!stringImpl->length())
@@ -619,6 +647,12 @@ void setElementStringAttr(const v8::AccessorInfo& info,
 PassRefPtr<DOMStringList> v8ValueToWebCoreDOMStringList(v8::Handle<v8::Value> value)
 {
     v8::Local<v8::Value> v8Value(v8::Local<v8::Value>::New(value));
+
+    if (V8DOMStringList::HasInstance(v8Value)) {
+        RefPtr<DOMStringList> ret = V8DOMStringList::toNative(v8::Handle<v8::Object>::Cast(v8Value));
+        return ret.release();
+    }
+
     if (!v8Value->IsArray())
         return 0;
 

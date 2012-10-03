@@ -200,67 +200,75 @@ namespace JSC {
 
     public:
 #if defined(DISASSEMBLE) && !defined(NDEBUG)
-        static JITCode compile(JSGlobalData* globalData, CodeBlock* codeBlock, ExecState* exec, CodePtr* functionEntryArityCheck = 0)
+        static JITCode compile(JSGlobalData* globalData, CodeBlock* codeBlock, JITCompilationEffort effort, ExecState* exec, CodePtr* functionEntryArityCheck = 0)
         {
-            return JIT(globalData, codeBlock).privateCompile(functionEntryArityCheck, exec);
+            return JIT(globalData, codeBlock).privateCompile(functionEntryArityCheck, effort, exec);
         }
 #else
-        static JITCode compile(JSGlobalData* globalData, CodeBlock* codeBlock, CodePtr* functionEntryArityCheck = 0)
+        static JITCode compile(JSGlobalData* globalData, CodeBlock* codeBlock, JITCompilationEffort effort, CodePtr* functionEntryArityCheck = 0)
         {
-            return JIT(globalData, codeBlock).privateCompile(functionEntryArityCheck);
+            return JIT(globalData, codeBlock).privateCompile(functionEntryArityCheck, effort);
         }
 #endif
 
         static void compileGetByIdProto(JSGlobalData* globalData, CallFrame* callFrame, CodeBlock* codeBlock, StructureStubInfo* stubInfo, Structure* structure, Structure* prototypeStructure, const Identifier& ident, const PropertySlot& slot, size_t cachedOffset, ReturnAddressPtr returnAddress)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompileGetByIdProto(stubInfo, structure, prototypeStructure, ident, slot, cachedOffset, returnAddress, callFrame);
         }
 
         static void compileGetByIdSelfList(JSGlobalData* globalData, CodeBlock* codeBlock, StructureStubInfo* stubInfo, PolymorphicAccessStructureList* polymorphicStructures, int currentIndex, Structure* structure, const Identifier& ident, const PropertySlot& slot, size_t cachedOffset)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompileGetByIdSelfList(stubInfo, polymorphicStructures, currentIndex, structure, ident, slot, cachedOffset);
         }
         static void compileGetByIdProtoList(JSGlobalData* globalData, CallFrame* callFrame, CodeBlock* codeBlock, StructureStubInfo* stubInfo, PolymorphicAccessStructureList* prototypeStructureList, int currentIndex, Structure* structure, Structure* prototypeStructure, const Identifier& ident, const PropertySlot& slot, size_t cachedOffset)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompileGetByIdProtoList(stubInfo, prototypeStructureList, currentIndex, structure, prototypeStructure, ident, slot, cachedOffset, callFrame);
         }
         static void compileGetByIdChainList(JSGlobalData* globalData, CallFrame* callFrame, CodeBlock* codeBlock, StructureStubInfo* stubInfo, PolymorphicAccessStructureList* prototypeStructureList, int currentIndex, Structure* structure, StructureChain* chain, size_t count, const Identifier& ident, const PropertySlot& slot, size_t cachedOffset)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompileGetByIdChainList(stubInfo, prototypeStructureList, currentIndex, structure, chain, count, ident, slot, cachedOffset, callFrame);
         }
 
         static void compileGetByIdChain(JSGlobalData* globalData, CallFrame* callFrame, CodeBlock* codeBlock, StructureStubInfo* stubInfo, Structure* structure, StructureChain* chain, size_t count, const Identifier& ident, const PropertySlot& slot, size_t cachedOffset, ReturnAddressPtr returnAddress)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompileGetByIdChain(stubInfo, structure, chain, count, ident, slot, cachedOffset, returnAddress, callFrame);
         }
         
         static void compilePutByIdTransition(JSGlobalData* globalData, CodeBlock* codeBlock, StructureStubInfo* stubInfo, Structure* oldStructure, Structure* newStructure, size_t cachedOffset, StructureChain* chain, ReturnAddressPtr returnAddress, bool direct)
         {
             JIT jit(globalData, codeBlock);
+            jit.m_bytecodeOffset = stubInfo->bytecodeIndex;
             jit.privateCompilePutByIdTransition(stubInfo, oldStructure, newStructure, cachedOffset, chain, returnAddress, direct);
         }
 
-        static void compileCTIMachineTrampolines(JSGlobalData* globalData, RefPtr<ExecutablePool>* executablePool, TrampolineStructure *trampolines)
+        static PassRefPtr<ExecutableMemoryHandle> compileCTIMachineTrampolines(JSGlobalData* globalData, TrampolineStructure *trampolines)
         {
             if (!globalData->canUseJIT())
-                return;
+                return 0;
             JIT jit(globalData, 0);
-            jit.privateCompileCTIMachineTrampolines(executablePool, globalData, trampolines);
+            return jit.privateCompileCTIMachineTrampolines(globalData, trampolines);
         }
 
-        static CodePtr compileCTINativeCall(JSGlobalData* globalData, PassRefPtr<ExecutablePool> executablePool, NativeFunction func)
+        static CodeRef compileCTINativeCall(JSGlobalData* globalData, NativeFunction func)
         {
             if (!globalData->canUseJIT())
-                return CodePtr();
+                return CodeRef();
             JIT jit(globalData, 0);
-            return jit.privateCompileCTINativeCall(executablePool, globalData, func);
+            return jit.privateCompileCTINativeCall(globalData, func);
         }
 
+        static void resetPatchGetById(RepatchBuffer&, StructureStubInfo*);
+        static void resetPatchPutById(RepatchBuffer&, StructureStubInfo*);
         static void patchGetByIdSelf(CodeBlock* codeblock, StructureStubInfo*, Structure*, size_t cachedOffset, ReturnAddressPtr returnAddress);
         static void patchPutByIdReplace(CodeBlock* codeblock, StructureStubInfo*, Structure*, size_t cachedOffset, ReturnAddressPtr returnAddress, bool direct);
         static void patchMethodCallProto(JSGlobalData&, CodeBlock* codeblock, MethodCallLinkInfo&, JSObject*, Structure*, JSObject*, ReturnAddressPtr);
@@ -291,9 +299,9 @@ namespace JSC {
         void privateCompileLinkPass();
         void privateCompileSlowCases();
 #if defined(DISASSEMBLE) && !defined(NDEBUG)
-        JITCode privateCompile(CodePtr* functionEntryArityCheck, ExecState* exec);
+        JITCode privateCompile(CodePtr* functionEntryArityCheck, JITCompilationEffort, ExecState* exec);
 #else
-        JITCode privateCompile(CodePtr* functionEntryArityCheck);
+        JITCode privateCompile(CodePtr* functionEntryArityCheck, JITCompilationEffort);
 #endif
         void privateCompileGetByIdProto(StructureStubInfo*, Structure*, Structure* prototypeStructure, const Identifier&, const PropertySlot&, size_t cachedOffset, ReturnAddressPtr returnAddress, CallFrame* callFrame);
         void privateCompileGetByIdSelfList(StructureStubInfo*, PolymorphicAccessStructureList*, int, Structure*, const Identifier&, const PropertySlot&, size_t cachedOffset);
@@ -302,10 +310,12 @@ namespace JSC {
         void privateCompileGetByIdChain(StructureStubInfo*, Structure*, StructureChain*, size_t count, const Identifier&, const PropertySlot&, size_t cachedOffset, ReturnAddressPtr returnAddress, CallFrame* callFrame);
         void privateCompilePutByIdTransition(StructureStubInfo*, Structure*, Structure*, size_t cachedOffset, StructureChain*, ReturnAddressPtr returnAddress, bool direct);
 
-        void privateCompileCTIMachineTrampolines(RefPtr<ExecutablePool>* executablePool, JSGlobalData* data, TrampolineStructure *trampolines);
+        PassRefPtr<ExecutableMemoryHandle> privateCompileCTIMachineTrampolines(JSGlobalData* data, TrampolineStructure *trampolines);
         Label privateCompileCTINativeCall(JSGlobalData*, bool isConstruct = false);
-        CodePtr privateCompileCTINativeCall(PassRefPtr<ExecutablePool> executablePool, JSGlobalData* data, NativeFunction func);
+        CodeRef privateCompileCTINativeCall(JSGlobalData* data, NativeFunction func);
         void privateCompilePatchGetArrayLength(ReturnAddressPtr returnAddress);
+
+        static bool isDirectPutById(StructureStubInfo*);
 
         void addSlowCase(Jump);
         void addSlowCase(JumpList);
@@ -338,17 +348,21 @@ namespace JSC {
         void emitWriteBarrier(RegisterID owner, RegisterID valueTag, RegisterID scratch, RegisterID scratch2, WriteBarrierMode, WriteBarrierUseKind);
         void emitWriteBarrier(JSCell* owner, RegisterID value, RegisterID scratch, WriteBarrierMode, WriteBarrierUseKind);
 
-        template<typename ClassType, typename StructureType> void emitAllocateBasicJSObject(StructureType, void* vtable, RegisterID result, RegisterID storagePtr);
+        template<typename ClassType, bool destructor, typename StructureType> void emitAllocateBasicJSObject(StructureType, RegisterID result, RegisterID storagePtr);
+        void emitAllocateBasicStorage(size_t, RegisterID result, RegisterID storagePtr);
         template<typename T> void emitAllocateJSFinalObject(T structure, RegisterID result, RegisterID storagePtr);
         void emitAllocateJSFunction(FunctionExecutable*, RegisterID scopeChain, RegisterID result, RegisterID storagePtr);
-
-        enum ValueProfilingSiteKind { FirstProfilingSite, SubsequentProfilingSite };
+        void emitAllocateJSArray(unsigned valuesRegister, unsigned length, RegisterID cellResult, RegisterID storageResult, RegisterID storagePtr);
+        
 #if ENABLE(VALUE_PROFILER)
         // This assumes that the value to profile is in regT0 and that regT3 is available for
         // scratch.
-        void emitValueProfilingSite(ValueProfilingSiteKind);
+        void emitValueProfilingSite(ValueProfile*);
+        void emitValueProfilingSite(unsigned bytecodeOffset);
+        void emitValueProfilingSite();
 #else
-        void emitValueProfilingSite(ValueProfilingSiteKind) { }
+        void emitValueProfilingSite(unsigned) { }
+        void emitValueProfilingSite() { }
 #endif
 
 #if USE(JSVALUE32_64)
@@ -408,9 +422,9 @@ namespace JSC {
         static const int patchOffsetGetByIdPropertyMapOffset2 = 22;
         static const int patchOffsetGetByIdPutResult = 22;
 #if ENABLE(OPCODE_SAMPLING)
-        static const int patchOffsetGetByIdSlowCaseCall = 37;
+        static const int patchOffsetGetByIdSlowCaseCall = 44;
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 33;
+        static const int patchOffsetGetByIdSlowCaseCall = 40;
 #endif
         static const int patchOffsetOpCallCompareToJump = 6;
 
@@ -441,9 +455,9 @@ namespace JSC {
         #error "OPCODE_SAMPLING is not yet supported"
 #else
 #if defined(INST_STRD)
-        static const int patchOffsetGetByIdSlowCaseCall = 28;
+        static const int patchOffsetGetByIdSlowCaseCall = 36;
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 40;
+        static const int patchOffsetGetByIdSlowCaseCall = 48;
 #endif
 #endif
         static const int patchOffsetOpCallCompareToJump = 12;
@@ -471,9 +485,9 @@ namespace JSC {
         // FIXME: this is probably too large and could be reduced
         static const int sequenceGetByIdSlowCaseInstructionSpace = 56;
 #else
-        static const int sequenceGetByIdSlowCaseInstructionSpace = 56;
+        static const int sequenceGetByIdSlowCaseInstructionSpace = 64;
 #endif
-        static const int sequenceGetByIdSlowCaseConstantSpace = 3;
+        static const int sequenceGetByIdSlowCaseConstantSpace = 4;
         // sequencePutById
 #ifdef OPT_FASTACCESS
         static const int sequencePutByIdInstructionSpace = 28;
@@ -500,7 +514,7 @@ namespace JSC {
 #if ENABLE(OPCODE_SAMPLING)
         #error "OPCODE_SAMPLING is not yet supported"
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 40;
+        static const int patchOffsetGetByIdSlowCaseCall = 52;
 #endif
         static const int patchOffsetOpCallCompareToJump = 16;
 
@@ -536,7 +550,7 @@ namespace JSC {
 #if ENABLE(OPCODE_SAMPLING)
         #error "OPCODE_SAMPLING is not yet supported"
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 56;
+        static const int patchOffsetGetByIdSlowCaseCall = 64;
 #endif
         static const int patchOffsetOpCallCompareToJump = 32;
         static const int patchOffsetMethodCheckProtoObj = 32;
@@ -554,7 +568,7 @@ namespace JSC {
 #if ENABLE(OPCODE_SAMPLING)
         #error "OPCODE_SAMPLING is not yet supported"
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 56;
+        static const int patchOffsetGetByIdSlowCaseCall = 64;
 #endif
         static const int patchOffsetOpCallCompareToJump = 32;
         static const int patchOffsetMethodCheckProtoObj = 32;
@@ -680,9 +694,9 @@ namespace JSC {
         static const int patchOffsetGetByIdPropertyMapOffset = 28;
         static const int patchOffsetGetByIdPutResult = 28;
 #if ENABLE(OPCODE_SAMPLING)
-        static const int patchOffsetGetByIdSlowCaseCall = 64;
+        static const int patchOffsetGetByIdSlowCaseCall = 72;
 #else
-        static const int patchOffsetGetByIdSlowCaseCall = 54;
+        static const int patchOffsetGetByIdSlowCaseCall = 62;
 #endif
         static const int patchOffsetOpCallCompareToJump = 9;
 
@@ -818,7 +832,6 @@ namespace JSC {
 
         void emit_op_add(Instruction*);
         void emit_op_bitand(Instruction*);
-        void emit_op_bitnot(Instruction*);
         void emit_op_bitor(Instruction*);
         void emit_op_bitxor(Instruction*);
         void emit_op_call(Instruction*);
@@ -903,10 +916,9 @@ namespace JSC {
         void emit_op_put_by_id(Instruction*);
         void emit_op_put_by_index(Instruction*);
         void emit_op_put_by_val(Instruction*);
-        void emit_op_put_getter(Instruction*);
+        void emit_op_put_getter_setter(Instruction*);
         void emit_op_put_global_var(Instruction*);
         void emit_op_put_scoped_var(Instruction*);
-        void emit_op_put_setter(Instruction*);
         void emit_op_resolve(Instruction*);
         void emit_op_resolve_base(Instruction*);
         void emit_op_ensure_property_exists(Instruction*);
@@ -939,7 +951,6 @@ namespace JSC {
 
         void emitSlow_op_add(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_bitand(Instruction*, Vector<SlowCaseEntry>::iterator&);
-        void emitSlow_op_bitnot(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_bitor(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_bitxor(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_call(Instruction*, Vector<SlowCaseEntry>::iterator&);
@@ -998,7 +1009,7 @@ namespace JSC {
         void emitSlow_op_urshift(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_new_func(Instruction*, Vector<SlowCaseEntry>::iterator&);
         void emitSlow_op_new_func_exp(Instruction*, Vector<SlowCaseEntry>::iterator&);
-
+        void emitSlow_op_new_array(Instruction*, Vector<SlowCaseEntry>::iterator&);
         
         void emitRightShift(Instruction*, bool isUnsigned);
         void emitRightShiftSlowCase(Instruction*, Vector<SlowCaseEntry>::iterator&, bool isUnsigned);
@@ -1134,7 +1145,7 @@ namespace JSC {
 #endif
 #endif
         WeakRandom m_randomGenerator;
-        static CodePtr stringGetByValStubGenerator(JSGlobalData* globalData, ExecutablePool* pool);
+        static CodeRef stringGetByValStubGenerator(JSGlobalData* globalData);
         
 #if ENABLE(VALUE_PROFILER)
         bool m_canBeOptimized;

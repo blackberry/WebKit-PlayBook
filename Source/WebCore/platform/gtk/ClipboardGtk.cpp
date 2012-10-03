@@ -116,9 +116,10 @@ void ClipboardGtk::clearData(const String& typeString)
     case ClipboardDataTypeText:
         m_dataObject->clearText();
         break;
+    case ClipboardDataTypeImage:
+        m_dataObject->clearImage();
     case ClipboardDataTypeUnknown:
-    default:
-        m_dataObject->clear();
+        m_dataObject->clearAll();
     }
 
     if (m_clipboard)
@@ -131,19 +132,18 @@ void ClipboardGtk::clearAllData()
     if (policy() != ClipboardWritable)
         return;
 
-    m_dataObject->clear();
+    // We do not clear filenames. According to the spec: "The clearData() method
+    // does not affect whether any files were included in the drag, so the types
+    // attribute's list might still not be empty after calling clearData() (it would 
+    // still contain the "Files" string if any files were included in the drag)."
+    m_dataObject->clearAllExceptFilenames();
 
     if (m_clipboard)
         PasteboardHelper::defaultPasteboardHelper()->writeClipboardContents(m_clipboard);
 }
 
-String ClipboardGtk::getData(const String& typeString, bool& success) const
+String ClipboardGtk::getData(const String& typeString) const
 {
-    success = true; // According to http://www.whatwg.org/specs/web-apps/current-work/multipage/dnd.html
-    // "The getData(format) method must return the data that is associated with the type format converted
-    // to ASCII lowercase, if any, and must return the empty string otherwise." Since success == false 
-    // results in an 'undefined' return value, we always want to return success == true. This parameter
-    // should eventually be removed.
     if (policy() != ClipboardReadable || !m_dataObject)
         return String();
 

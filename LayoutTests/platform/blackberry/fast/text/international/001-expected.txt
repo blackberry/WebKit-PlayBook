@@ -3,26 +3,24 @@ layer at (0,0) size 800x600
 layer at (0,0) size 800x600
   RenderBlock {HTML} at (0,0) size 800x600
     RenderBody {BODY} at (8,8) size 784x584
-      RenderInline {A} at (0,0) size 40x18 [color=#0000EE]
-        RenderText {#text} at (0,0) size 40x18
-          text run at (0,0) width 40: "\x{B7}\x{FA}\x{C3}\x{DB}"
-      RenderText {#text} at (40,0) size 10x18
-        text run at (40,0) width 10: ", "
-      RenderInline {A} at (0,0) size 72x18 [color=#0000EE]
-        RenderText {#text} at (50,0) size 72x18
-          text run at (50,0) width 72: "\x{C8}\x{FE}\x{BD}\x{D1}\x{B4}\x{DB}"
-      RenderText {#text} at (122,0) size 10x18
-        text run at (122,0) width 10: ", "
-      RenderInline {A} at (0,0) size 36x18 [color=#0000EE]
-        RenderText {#text} at (132,0) size 36x18
-          text run at (132,0) width 36: "\x{CE}\x{F2}\x{BB}\x{CB}"
-      RenderText {#text} at (168,0) size 10x18
-        text run at (168,0) width 10: ", "
-      RenderInline {A} at (0,0) size 40x18 [color=#0000EE]
-        RenderText {#text} at (178,0) size 40x18
-          text run at (178,0) width 40: "\x{CA}\x{B8}\x{B3}\x{D8}"
-      RenderText {#text} at (218,0) size 30x18
-        text run at (218,0) width 5: " "
-        text run at (223,0) width 25: "...a"
-      RenderText {#text} at (0,0) size 0x0
-      RenderText {#text} at (0,0) size 0x0
+      RenderInline {A} at (0,0) size 32x19 [color=#0000EE]
+        RenderText {#text} at (0,0) size 32x19
+          text run at (0,0) width 32: "\x{5EFA}\x{7BC9}"
+      RenderText {#text} at (32,0) size 8x19
+        text run at (32,0) width 8: ", "
+      RenderInline {A} at (0,0) size 48x19 [color=#0000EE]
+        RenderText {#text} at (40,0) size 48x19
+          text run at (40,0) width 48: "\x{7F8E}\x{8853}\x{9928}"
+      RenderText {#text} at (88,0) size 8x19
+        text run at (88,0) width 8: ", "
+      RenderInline {A} at (0,0) size 32x19 [color=#0000EE]
+        RenderText {#text} at (96,0) size 32x19
+          text run at (96,0) width 32: "\x{6B74}\x{53F2}"
+      RenderText {#text} at (128,0) size 8x19
+        text run at (128,0) width 8: ", "
+      RenderInline {A} at (0,0) size 32x19 [color=#0000EE]
+        RenderText {#text} at (136,0) size 32x19
+          text run at (136,0) width 32: "\x{6587}\x{5B66}"
+      RenderText {#text} at (168,0) size 23x19
+        text run at (168,0) width 4: " "
+        text run at (172,0) width 19: "...a"

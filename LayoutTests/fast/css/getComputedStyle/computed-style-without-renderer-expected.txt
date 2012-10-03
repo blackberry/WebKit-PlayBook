@@ -55,7 +55,7 @@ Computed style of an element whose parent's 'display' value is 'none':
     list-style-position: outside
     list-style-type: disc
     margin-bottom: 0px
-    margin-left: 0px
+    margin-left: auto
     margin-right: 0px
     margin-top: 0px
     max-height: none
@@ -144,19 +144,25 @@ Computed style of an element whose parent's 'display' value is 'none':
     -webkit-flex-order: 0
     -webkit-flex-pack: start
     -webkit-flex-align: stretch
-    -webkit-flex-flow: row
+    -webkit-flex-item-align: stretch
+    -webkit-flex-direction: row
+    -webkit-flex-flow: row none
+    -webkit-flex-wrap: none
+    -webkit-font-kerning: auto
     -webkit-font-smoothing: auto
+    -webkit-font-variant-ligatures: normal
     -webkit-highlight: none
     -webkit-hyphenate-character: auto
     -webkit-hyphenate-limit-after: auto
     -webkit-hyphenate-limit-before: auto
     -webkit-hyphenate-limit-lines: no-limit
     -webkit-hyphens: manual
+    -webkit-line-align: none
     -webkit-line-box-contain: block inline replaced
     -webkit-line-break: normal
     -webkit-line-clamp: none
     -webkit-line-grid: none
-    -webkit-line-grid-snap: none
+    -webkit-line-snap: none
     -webkit-locale: auto
     -webkit-margin-before-collapse: collapse
     -webkit-margin-after-collapse: collapse
@@ -204,12 +210,16 @@ Computed style of an element whose parent's 'display' value is 'none':
     -webkit-user-modify: read-only
     -webkit-user-select: text
     -webkit-writing-mode: horizontal-tb
-    -webkit-flow-into: auto
+    -webkit-flow-into: none
     -webkit-flow-from: none
     -webkit-region-overflow: auto
     -webkit-region-break-after: auto
     -webkit-region-break-before: auto
     -webkit-region-break-inside: auto
+    -webkit-wrap-flow: auto
+    -webkit-wrap-margin: 0px
+    -webkit-wrap-padding: 0px
+    -webkit-wrap-through: wrap
     clip-path: none
     clip-rule: nonzero
     mask: none
@@ -262,12 +272,12 @@ After changing grandparent's 'color' and the parent's 'font-size' inherited prop
 
 After changing the parent's 'display' property to 'block', so that the child gets a renderer:
     height: 100px
-    margin-left: 0px
+    margin-left: 384px
     width: 384px
 
 After changing the parent's 'display' property back to 'none':
     height: 100px
-    margin-left: 0px
+    margin-left: auto
     width: 50%
 
 

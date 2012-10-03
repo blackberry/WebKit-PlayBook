@@ -36,19 +36,11 @@
 #include "Timer.h"
 #include <wtf/RetainPtr.h>
 
-#ifdef __OBJC__
-@class WebScrollAnimationHelperDelegate;
-@class WebScrollbarPainterControllerDelegate;
-@class WebScrollbarPainterDelegate;
-#else
-class WebScrollAnimationHelperDelegate;
-class WebScrollbarPainterControllerDelegate;
-class WebScrollbarPainterDelegate;
-#endif
+OBJC_CLASS WebScrollAnimationHelperDelegate;
+OBJC_CLASS WebScrollbarPainterControllerDelegate;
+OBJC_CLASS WebScrollbarPainterDelegate;
 
-#if USE(SCROLLBAR_PAINTER)
 typedef id ScrollbarPainterController;
-#endif
 
 #if !ENABLE(RUBBER_BANDING)
 class ScrollElasticityControllerClient { };
@@ -64,38 +56,14 @@ public:
     ScrollAnimatorMac(ScrollableArea*);
     virtual ~ScrollAnimatorMac();
 
-    virtual bool scroll(ScrollbarOrientation, ScrollGranularity, float step, float multiplier);
-    virtual void scrollToOffsetWithoutAnimation(const FloatPoint&);
-
-#if ENABLE(RUBBER_BANDING)
-    virtual bool handleWheelEvent(const PlatformWheelEvent&) OVERRIDE;
-#if ENABLE(GESTURE_EVENTS)
-    virtual void handleGestureEvent(const PlatformGestureEvent&);
-#endif
-#endif
-
-    virtual void cancelAnimations();
-
-    void immediateScrollToPoint(const FloatPoint& newPosition);
-    void immediateScrollByDeltaX(float deltaX);
-    void immediateScrollByDeltaY(float deltaY);
-
     void immediateScrollToPointForScrollAnimation(const FloatPoint& newPosition);
-
-    void setIsDrawingIntoLayer(bool b) { m_drawingIntoLayer = b; }
-    bool isDrawingIntoLayer() const { return m_drawingIntoLayer; }
-
     bool haveScrolledSincePageLoad() const { return m_haveScrolledSincePageLoad; }
 
-    virtual void setIsActive();
-
-#if USE(SCROLLBAR_PAINTER)
     void updateScrollerStyle();
 
     bool scrollbarPaintTimerIsActive() const;
     void startScrollbarPaintTimer();
     void stopScrollbarPaintTimer();
-#endif
 
     void setVisibleScrollerThumbRect(const IntRect&);
 
@@ -103,14 +71,25 @@ private:
     RetainPtr<id> m_scrollAnimationHelper;
     RetainPtr<WebScrollAnimationHelperDelegate> m_scrollAnimationHelperDelegate;
 
-#if USE(SCROLLBAR_PAINTER)
     RetainPtr<ScrollbarPainterController> m_scrollbarPainterController;
     RetainPtr<WebScrollbarPainterControllerDelegate> m_scrollbarPainterControllerDelegate;
-    RetainPtr<WebScrollbarPainterDelegate> m_scrollbarPainterDelegate;
+    RetainPtr<WebScrollbarPainterDelegate> m_horizontalScrollbarPainterDelegate;
+    RetainPtr<WebScrollbarPainterDelegate> m_verticalScrollbarPainterDelegate;
 
     void initialScrollbarPaintTimerFired(Timer<ScrollAnimatorMac>*);
     Timer<ScrollAnimatorMac> m_initialScrollbarPaintTimer;
+
+    virtual bool scroll(ScrollbarOrientation, ScrollGranularity, float step, float multiplier);
+    virtual void scrollToOffsetWithoutAnimation(const FloatPoint&);
+
+#if ENABLE(RUBBER_BANDING)
+    virtual bool handleWheelEvent(const PlatformWheelEvent&) OVERRIDE;
 #endif
+
+    virtual void handleWheelEventPhase(PlatformWheelEventPhase) OVERRIDE;
+
+    virtual void cancelAnimations();
+    virtual void setIsActive();
     
     virtual void notifyPositionChanged();
     virtual void contentAreaWillPaint() const;
@@ -126,41 +105,43 @@ private:
     virtual void contentAreaDidHide() const;
     void didBeginScrollGesture() const;
     void didEndScrollGesture() const;
+    void mayBeginScrollGesture() const;
 
     virtual void didAddVerticalScrollbar(Scrollbar*);
     virtual void willRemoveVerticalScrollbar(Scrollbar*);
     virtual void didAddHorizontalScrollbar(Scrollbar*);
     virtual void willRemoveHorizontalScrollbar(Scrollbar*);
 
-    void setNeedsScrollerStyleUpdate(bool needsUpdate) { m_needsScrollerStyleUpdate = needsUpdate; }
-    bool needsScrollerStyleUpdate() const { return m_needsScrollerStyleUpdate; }
+    virtual bool shouldScrollbarParticipateInHitTesting(Scrollbar*);
 
-    float adjustScrollXPositionIfNecessary(float) const;
-    float adjustScrollYPositionIfNecessary(float) const;
+    virtual void notifyContentAreaScrolled() OVERRIDE;
+
     FloatPoint adjustScrollPositionIfNecessary(const FloatPoint&) const;
+
+    void immediateScrollTo(const FloatPoint&);
 
 #if ENABLE(RUBBER_BANDING)
     /// ScrollElasticityControllerClient member functions.
-    virtual bool isHorizontalScrollerPinnedToMinimumPosition() OVERRIDE;
-    virtual bool isHorizontalScrollerPinnedToMaximumPosition() OVERRIDE;
     virtual IntSize stretchAmount() OVERRIDE;
+    virtual bool allowsHorizontalStretching() OVERRIDE;
+    virtual bool allowsVerticalStretching() OVERRIDE;
+    virtual bool pinnedInDirection(const FloatSize&) OVERRIDE;
+    virtual bool canScrollHorizontally() OVERRIDE;
+    virtual bool canScrollVertically() OVERRIDE;
+    virtual bool shouldRubberBandInDirection(ScrollDirection) OVERRIDE;
+    virtual WebCore::IntPoint absoluteScrollPosition() OVERRIDE;
+    virtual void immediateScrollByWithoutContentEdgeConstraints(const FloatSize&) OVERRIDE;
+    virtual void immediateScrollBy(const FloatSize&) OVERRIDE;
     virtual void startSnapRubberbandTimer() OVERRIDE;
     virtual void stopSnapRubberbandTimer() OVERRIDE;
 
-    bool allowsVerticalStretching() const;
-    bool allowsHorizontalStretching() const;
     bool pinnedInDirection(float deltaX, float deltaY);
-    void snapRubberBand();
     void snapRubberBandTimerFired(Timer<ScrollAnimatorMac>*);
-    void smoothScrollWithEvent(const PlatformWheelEvent&);
-    void beginScrollGesture();
-    void endScrollGesture();
 
     ScrollElasticityController m_scrollElasticityController;
     Timer<ScrollAnimatorMac> m_snapRubberBandTimer;
 #endif
 
-    bool m_drawingIntoLayer;
     bool m_haveScrolledSincePageLoad;
     bool m_needsScrollerStyleUpdate;
     IntRect m_visibleScrollerThumbRect;

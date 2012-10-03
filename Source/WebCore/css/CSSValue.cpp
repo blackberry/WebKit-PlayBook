@@ -28,8 +28,8 @@
 #include "CSSValue.h"
 
 #include "CSSAspectRatioValue.h"
-#include "CSSBorderImageValue.h"
 #include "CSSBorderImageSliceValue.h"
+#include "CSSCalculationValue.h"
 #include "CSSCanvasValue.h"
 #include "CSSCrossfadeValue.h"
 #include "CSSCursorImageValue.h"
@@ -48,7 +48,6 @@
 #include "CSSUnicodeRangeValue.h"
 #include "CSSValueList.h"
 #include "FontValue.h"
-#include "FontFamilyValue.h"
 #include "FontFeatureValue.h"
 #include "ShadowValue.h"
 #include "SVGColor.h"
@@ -58,6 +57,17 @@
 #include "WebKitCSSTransformValue.h"
 
 namespace WebCore {
+
+class SameSizeAsCSSValue : public RefCounted<SameSizeAsCSSValue> {
+    unsigned char bitfields[2];
+};
+
+COMPILE_ASSERT(sizeof(CSSValue) == sizeof(SameSizeAsCSSValue), CSS_value_should_stay_small);
+
+bool CSSValue::isImplicitInitialValue() const
+{
+    return m_classType == InitialClass && static_cast<const CSSInitialValue*>(this)->isImplicit();
+}
 
 CSSValue::Type CSSValue::cssValueType() const
 {
@@ -78,8 +88,6 @@ void CSSValue::addSubresourceStyleURLs(ListHashSet<KURL>& urls, const CSSStyleSh
         static_cast<CSSPrimitiveValue*>(this)->addSubresourceStyleURLs(urls, styleSheet);
     else if (isValueList())
         static_cast<CSSValueList*>(this)->addSubresourceStyleURLs(urls, styleSheet);
-    else if (classType() == BorderImageClass)
-        static_cast<CSSBorderImageValue*>(this)->addSubresourceStyleURLs(urls, styleSheet);
     else if (classType() == FontFaceSrcClass)
         static_cast<CSSFontFaceSrcValue*>(this)->addSubresourceStyleURLs(urls, styleSheet);
     else if (classType() == ReflectClass)
@@ -91,8 +99,6 @@ String CSSValue::cssText() const
     switch (classType()) {
     case AspectRatioClass:
         return static_cast<const CSSAspectRatioValue*>(this)->customCssText();
-    case BorderImageClass:
-        return static_cast<const CSSBorderImageValue*>(this)->customCssText();
     case BorderImageSliceClass:
         return static_cast<const CSSBorderImageSliceValue*>(this)->customCssText();
     case CanvasClass:
@@ -103,8 +109,6 @@ String CSSValue::cssText() const
         return static_cast<const FontValue*>(this)->customCssText();
     case FontFaceSrcClass:
         return static_cast<const CSSFontFaceSrcValue*>(this)->customCssText();
-    case FontFamilyClass:
-        return static_cast<const FontFamilyValue*>(this)->customCssText();
     case FontFeatureClass:
         return static_cast<const FontFeatureValue*>(this)->customCssText();
     case FunctionClass:
@@ -120,7 +124,6 @@ String CSSValue::cssText() const
     case InheritedClass:
         return static_cast<const CSSInheritedValue*>(this)->customCssText();
     case InitialClass:
-    case ImplicitInitialClass:
         return static_cast<const CSSInitialValue*>(this)->customCssText();
     case PrimitiveClass:
         return static_cast<const CSSPrimitiveValue*>(this)->customCssText();
@@ -144,6 +147,8 @@ String CSSValue::cssText() const
         return static_cast<const CSSLineBoxContainValue*>(this)->customCssText();
     case FlexClass:
         return static_cast<const CSSFlexValue*>(this)->customCssText();
+    case CalculationClass:
+        return static_cast<const CSSCalcValue*>(this)->customCssText();
 #if ENABLE(CSS_FILTERS)
     case WebKitCSSFilterClass:
         return static_cast<const WebKitCSSFilterValue*>(this)->customCssText();
@@ -169,9 +174,6 @@ void CSSValue::destroy()
     case AspectRatioClass:
         delete static_cast<CSSAspectRatioValue*>(this);
         return;
-    case BorderImageClass:
-        delete static_cast<CSSBorderImageValue*>(this);
-        return;
     case BorderImageSliceClass:
         delete static_cast<CSSBorderImageSliceValue*>(this);
         return;
@@ -186,9 +188,6 @@ void CSSValue::destroy()
         return;
     case FontFaceSrcClass:
         delete static_cast<CSSFontFaceSrcValue*>(this);
-        return;
-    case FontFamilyClass:
-        delete static_cast<FontFamilyValue*>(this);
         return;
     case FontFeatureClass:
         delete static_cast<FontFeatureValue*>(this);
@@ -212,7 +211,6 @@ void CSSValue::destroy()
         delete static_cast<CSSInheritedValue*>(this);
         return;
     case InitialClass:
-    case ImplicitInitialClass:
         delete static_cast<CSSInitialValue*>(this);
         return;
     case PrimitiveClass:
@@ -247,6 +245,9 @@ void CSSValue::destroy()
         return;
     case FlexClass:
         delete static_cast<CSSFlexValue*>(this);
+        return;
+    case CalculationClass:
+        delete static_cast<CSSCalcValue*>(this);
         return;
 #if ENABLE(CSS_FILTERS)
     case WebKitCSSFilterClass:

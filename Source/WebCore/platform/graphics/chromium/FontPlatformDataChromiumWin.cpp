@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006, 2007 Apple Computer, Inc.
- * Copyright (c) 2006, 2007, 2008, 2009, Google Inc. All rights reserved.
+ * Copyright (c) 2006, 2007, 2008, 2009, 2012 Google Inc. All rights reserved.
  * 
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -36,17 +36,36 @@
 #include <objidl.h>
 #include <mlang.h>
 
+#include "HWndDC.h"
 #include "PlatformSupport.h"
+#include "SkTypeface_win.h"
 #include "SkiaFontWin.h"
 #include "StdLibExtras.h"
 
 namespace WebCore {
+
+SkTypeface* CreateTypefaceFromHFont(HFONT hfont, int* size, int* lfQuality)
+{
+    LOGFONT info;
+    GetObject(hfont, sizeof(info), &info);
+    if (size) {
+        int height = info.lfHeight;
+        if (height < 0)
+            height = -height;
+        *size = height;
+    }
+    if (lfQuality)
+        *lfQuality = info.lfQuality;
+    return SkCreateTypefaceFromLOGFONT(info);
+}
 
 FontPlatformData::FontPlatformData(WTF::HashTableDeletedValueType)
     : m_font(hashTableDeletedFontValue())
     , m_size(-1)
     , m_scriptCache(0)
     , m_scriptFontProperties(0)
+    , m_typeface(0)
+    , m_lfQuality(DEFAULT_QUALITY)
 {
 }
 
@@ -55,6 +74,8 @@ FontPlatformData::FontPlatformData()
     , m_size(0)
     , m_scriptCache(0)
     , m_scriptFontProperties(0)
+    , m_typeface(0)
+    , m_lfQuality(DEFAULT_QUALITY)
 {
 }
 
@@ -63,6 +84,7 @@ FontPlatformData::FontPlatformData(HFONT font, float size)
     , m_size(size)
     , m_scriptCache(0)
     , m_scriptFontProperties(0)
+    , m_typeface(CreateTypefaceFromHFont(font, 0, &m_lfQuality))
 {
 }
 
@@ -72,6 +94,8 @@ FontPlatformData::FontPlatformData(float size, bool bold, bool oblique)
     , m_size(size)
     , m_scriptCache(0)
     , m_scriptFontProperties(0)
+    , m_typeface(0)
+    , m_lfQuality(DEFAULT_QUALITY)
 {
 }
 
@@ -80,7 +104,10 @@ FontPlatformData::FontPlatformData(const FontPlatformData& data)
     , m_size(data.m_size)
     , m_scriptCache(0)
     , m_scriptFontProperties(0)
+    , m_typeface(data.m_typeface)
+    , m_lfQuality(data.m_lfQuality)
 {
+    SkSafeRef(m_typeface);
 }
 
 FontPlatformData& FontPlatformData::operator=(const FontPlatformData& data)
@@ -88,6 +115,8 @@ FontPlatformData& FontPlatformData::operator=(const FontPlatformData& data)
     if (this != &data) {
         m_font = data.m_font;
         m_size = data.m_size;
+        SkRefCnt_SafeAssign(m_typeface, data.m_typeface);
+        m_lfQuality = data.m_lfQuality;
 
         // The following fields will get re-computed if necessary.
         ScriptFreeCache(&m_scriptCache);
@@ -101,6 +130,8 @@ FontPlatformData& FontPlatformData::operator=(const FontPlatformData& data)
 
 FontPlatformData::~FontPlatformData()
 {
+    SkSafeUnref(m_typeface);
+
     ScriptFreeCache(&m_scriptCache);
     m_scriptCache = 0;
 
@@ -131,7 +162,7 @@ SCRIPT_FONTPROPERTIES* FontPlatformData::scriptFontProperties() const
         HRESULT result = ScriptGetFontProperties(0, scriptCache(),
                                                  m_scriptFontProperties);
         if (result == E_PENDING) {
-            HDC dc = GetDC(0);
+            HWndDC dc(0);
             HGDIOBJ oldFont = SelectObject(dc, hfont());
             HRESULT hr = ScriptGetFontProperties(dc, scriptCache(),
                                                  m_scriptFontProperties);
@@ -147,7 +178,6 @@ SCRIPT_FONTPROPERTIES* FontPlatformData::scriptFontProperties() const
             }
 
             SelectObject(dc, oldFont);
-            ReleaseDC(0, dc);
         }
     }
     return m_scriptFontProperties;

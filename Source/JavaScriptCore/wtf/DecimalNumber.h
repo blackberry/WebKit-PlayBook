@@ -40,7 +40,7 @@ class DecimalNumber {
 public:
     DecimalNumber(double d)
     {
-        ASSERT(!isnan(d) && !isinf(d));
+        ASSERT(isfinite(d));
         dtoa(m_significand, d, m_sign, m_exponent, m_precision);
 
         ASSERT(m_precision);
@@ -54,7 +54,7 @@ public:
 
     DecimalNumber(double d, RoundingSignificantFiguresType, unsigned significantFigures)
     {
-        ASSERT(!isnan(d) && !isinf(d));
+        ASSERT(isfinite(d));
         dtoaRoundSF(m_significand, d, significantFigures, m_sign, m_exponent, m_precision);
 
         ASSERT(significantFigures && significantFigures <= sizeof(DtoaBuffer));
@@ -68,7 +68,7 @@ public:
 
     DecimalNumber(double d, RoundingDecimalPlacesType, unsigned decimalPlaces)
     {
-        ASSERT(!isnan(d) && !isinf(d));
+        ASSERT(isfinite(d));
         dtoaRoundDP(m_significand, d, decimalPlaces, m_sign, m_exponent, m_precision);
 
         unsigned significantFigures = 1 + m_exponent + decimalPlaces;
@@ -81,17 +81,17 @@ public:
         ASSERT(m_significand[0] != '0' || !m_exponent);
     }
 
-    unsigned bufferLengthForStringDecimal() const;
-    unsigned bufferLengthForStringExponential() const;
+    WTF_EXPORT_PRIVATE unsigned bufferLengthForStringDecimal() const;
+    WTF_EXPORT_PRIVATE unsigned bufferLengthForStringExponential() const;
 
-    unsigned toStringDecimal(UChar* buffer, unsigned bufferLength) const;
-    unsigned toStringDecimal(char* buffer, unsigned bufferLength) const;
-    unsigned toStringExponential(UChar* buffer, unsigned bufferLength) const;
+    WTF_EXPORT_PRIVATE unsigned toStringDecimal(UChar* buffer, unsigned bufferLength) const;
+    WTF_EXPORT_PRIVATE unsigned toStringDecimal(char* buffer, unsigned bufferLength) const;
+    WTF_EXPORT_PRIVATE unsigned toStringExponential(UChar* buffer, unsigned bufferLength) const;
 
-    bool sign() { return m_sign; }
-    int exponent() { return m_exponent; }
-    const char* significand() { return m_significand; } // significand contains precision characters, is not null-terminated.
-    unsigned precision() { return m_precision; }
+    bool sign() const { return m_sign; }
+    int exponent() const { return m_exponent; }
+    const char* significand() const { return m_significand; } // significand contains precision characters, is not null-terminated.
+    unsigned precision() const { return m_precision; }
 
 private:
     bool m_sign;

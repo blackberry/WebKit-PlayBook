@@ -31,8 +31,8 @@
 #ifndef WebScrollbar_h
 #define WebScrollbar_h
 
-#include "WebCanvas.h"
-#include "WebCommon.h"
+#include "platform/WebCanvas.h"
+#include "platform/WebCommon.h"
 
 namespace WebKit {
 

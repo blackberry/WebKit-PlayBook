@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,7 +22,6 @@
 #include "TileIndex.h"
 #include <limits>
 #include <wtf/HashMap.h>
-#include <wtf/HashSet.h>
 
 using BlackBerry::WebKit::TileIndex;
 

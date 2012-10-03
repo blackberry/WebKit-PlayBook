@@ -48,7 +48,7 @@ namespace JSC {
         JITCode() { }
 #endif
     public:
-        enum JITType { HostCallThunk, BaselineJIT, DFGJIT };
+        enum JITType { None, HostCallThunk, InterpreterThunk, BaselineJIT, DFGJIT };
         
         static JITType bottomTierJIT()
         {
@@ -66,8 +66,19 @@ namespace JSC {
             return DFGJIT;
         }
         
+        static bool isOptimizingJIT(JITType jitType)
+        {
+            return jitType == DFGJIT;
+        }
+        
+        static bool isBaselineCode(JITType jitType)
+        {
+            return jitType == InterpreterThunk || jitType == BaselineJIT;
+        }
+        
 #if ENABLE(JIT)
         JITCode()
+            : m_jitType(None)
         {
         }
 
@@ -75,28 +86,29 @@ namespace JSC {
             : m_ref(ref)
             , m_jitType(jitType)
         {
+            ASSERT(jitType != None);
         }
         
         bool operator !() const
         {
-            return !m_ref.m_code.executableAddress();
+            return !m_ref;
         }
 
         CodePtr addressForCall()
         {
-            return m_ref.m_code;
+            return m_ref.code();
         }
 
         void* executableAddressAtOffset(size_t offset) const
         {
             ASSERT(offset < size());
-            return reinterpret_cast<char*>(m_ref.m_code.executableAddress()) + offset;
+            return reinterpret_cast<char*>(m_ref.code().executableAddress()) + offset;
         }
         
         void* dataAddressAtOffset(size_t offset) const
         {
             ASSERT(offset < size());
-            return reinterpret_cast<char*>(m_ref.m_code.dataLocation()) + offset;
+            return reinterpret_cast<char*>(m_ref.code().dataLocation()) + offset;
         }
 
         // This function returns the offset in bytes of 'pointerIntoCode' into
@@ -104,7 +116,7 @@ namespace JSC {
         // block of code.  It is ASSERTed that no codeblock >4gb in size.
         unsigned offsetOf(void* pointerIntoCode)
         {
-            intptr_t result = reinterpret_cast<intptr_t>(pointerIntoCode) - reinterpret_cast<intptr_t>(m_ref.m_code.executableAddress());
+            intptr_t result = reinterpret_cast<intptr_t>(pointerIntoCode) - reinterpret_cast<intptr_t>(m_ref.code().executableAddress());
             ASSERT(static_cast<intptr_t>(static_cast<unsigned>(result)) == result);
             return static_cast<unsigned>(result);
         }
@@ -112,24 +124,24 @@ namespace JSC {
         // Execute the code!
         inline JSValue execute(RegisterFile* registerFile, CallFrame* callFrame, JSGlobalData* globalData)
         {
-            JSValue result = JSValue::decode(ctiTrampoline(m_ref.m_code.executableAddress(), registerFile, callFrame, 0, Profiler::enabledProfilerReference(), globalData));
+            JSValue result = JSValue::decode(ctiTrampoline(m_ref.code().executableAddress(), registerFile, callFrame, 0, Profiler::enabledProfilerReference(), globalData));
             return globalData->exception ? jsNull() : result;
         }
 
         void* start() const
         {
-            return m_ref.m_code.dataLocation();
+            return m_ref.code().dataLocation();
         }
 
         size_t size() const
         {
-            ASSERT(m_ref.m_code.executableAddress());
-            return m_ref.m_size;
+            ASSERT(m_ref.code().executableAddress());
+            return m_ref.size();
         }
 
-        ExecutablePool* getExecutablePool()
+        ExecutableMemoryHandle* getExecutableMemory()
         {
-            return m_ref.m_executablePool.get();
+            return m_ref.executableMemory();
         }
         
         JITType jitType()
@@ -139,20 +151,20 @@ namespace JSC {
 
         // Host functions are a bit special; they have a m_code pointer but they
         // do not individully ref the executable pool containing the trampoline.
-        static JITCode HostFunction(CodePtr code)
+        static JITCode HostFunction(CodeRef code)
         {
-            return JITCode(code.dataLocation(), 0, 0, HostCallThunk);
+            return JITCode(code, HostCallThunk);
         }
 
         void clear()
         {
             m_ref.~CodeRef();
-            new (&m_ref) CodeRef();
+            new (NotNull, &m_ref) CodeRef();
         }
 
     private:
-        JITCode(void* code, PassRefPtr<ExecutablePool> executablePool, size_t size, JITType jitType)
-            : m_ref(code, executablePool, size)
+        JITCode(PassRefPtr<ExecutableMemoryHandle> executableMemory, JITType jitType)
+            : m_ref(executableMemory)
             , m_jitType(jitType)
         {
         }

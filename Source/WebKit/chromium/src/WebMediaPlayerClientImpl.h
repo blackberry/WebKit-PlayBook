@@ -40,7 +40,9 @@
 #include "VideoLayerChromium.h"
 #include "WebAudioSourceProviderClient.h"
 #include "WebMediaPlayerClient.h"
+#include "WebStreamTextureClient.h"
 #include <wtf/OwnPtr.h>
+#include <wtf/PassOwnPtr.h>
 
 namespace WebCore { class AudioSourceProviderClient; }
 
@@ -56,7 +58,8 @@ class WebMediaPlayerClientImpl : public WebCore::MediaPlayerPrivateInterface
 #if USE(ACCELERATED_COMPOSITING)
                                , public WebCore::VideoFrameProvider
 #endif
-                               , public WebMediaPlayerClient {
+                               , public WebMediaPlayerClient
+                               , public WebStreamTextureClient {
 
 public:
     static bool isEnabled();
@@ -79,12 +82,14 @@ public:
     virtual void durationChanged();
     virtual void rateChanged();
     virtual void sizeChanged();
+    virtual void setOpaque(bool);
     virtual void sawUnsupportedTracks();
     virtual float volume() const;
     virtual void playbackStateChanged();
     virtual WebMediaPlayer::Preload preload() const;
     virtual void sourceOpened();
     virtual WebKit::WebURL sourceURL() const;
+    virtual void disableAcceleratedCompositing();
 
     // MediaPlayerPrivateInterface methods:
     virtual void load(const WTF::String& url);
@@ -129,7 +134,7 @@ public:
     virtual unsigned droppedFrameCount() const;
     virtual unsigned audioDecodedByteCount() const;
     virtual unsigned videoDecodedByteCount() const;
-    
+
 #if ENABLE(WEB_AUDIO)
     virtual WebCore::AudioSourceProvider* audioSourceProvider();
 #endif
@@ -138,6 +143,7 @@ public:
     virtual bool supportsAcceleratedRendering() const;
 
     // VideoFrameProvider methods:
+    virtual void setVideoFrameProviderClient(VideoFrameProvider::Client*);
     virtual WebCore::VideoFrameChromium* getCurrentFrame();
     virtual void putCurrentFrame(WebCore::VideoFrameChromium*);
 #endif
@@ -146,6 +152,10 @@ public:
     virtual bool sourceAppend(const unsigned char* data, unsigned length);
     virtual void sourceEndOfStream(WebCore::MediaPlayer::EndOfStreamStatus);
 #endif
+
+    // WebStreamTextureClient methods:
+    virtual void didReceiveFrame();
+    virtual void didUpdateMatrix(const float*);
 
 private:
     WebMediaPlayerClientImpl();
@@ -160,6 +170,7 @@ private:
     bool acceleratedRenderingInUse();
 #endif
 
+    Mutex m_compositingMutex; // Guards m_currentVideoFrame and m_videoFrameProviderClient.
     WebCore::MediaPlayer* m_mediaPlayer;
     OwnPtr<WebMediaPlayer> m_webMediaPlayer;
     OwnPtr<WebCore::VideoFrameChromium> m_currentVideoFrame;
@@ -169,6 +180,8 @@ private:
 #if USE(ACCELERATED_COMPOSITING)
     RefPtr<WebCore::VideoLayerChromium> m_videoLayer;
     bool m_supportsAcceleratedCompositing;
+    bool m_opaque;
+    VideoFrameProvider::Client* m_videoFrameProviderClient;
 #endif
     static bool m_isEnabled;
 
@@ -178,8 +191,8 @@ private:
 
     class AudioClientImpl : public WebKit::WebAudioSourceProviderClient {
     public:
-        AudioClientImpl()
-            : m_client(0)
+        AudioClientImpl(WebCore::AudioSourceProviderClient* client)
+            : m_client(client)
         {
         }
 
@@ -188,14 +201,12 @@ private:
         // WebAudioSourceProviderClient
         virtual void setFormat(size_t numberOfChannels, float sampleRate);
 
-        void wrap(WebCore::AudioSourceProviderClient* client) { m_client = client; }
-        
     private:
         WebCore::AudioSourceProviderClient* m_client;
     };
 
     // AudioSourceProviderImpl wraps a WebAudioSourceProvider.
-    // provideInput() calls into Chromium to get a rendered audio stream. 
+    // provideInput() calls into Chromium to get a rendered audio stream.
 
     class AudioSourceProviderImpl : public WebCore::AudioSourceProvider {
     public:
@@ -215,7 +226,7 @@ private:
 
     private:
         WebAudioSourceProvider* m_webAudioSourceProvider;
-        AudioClientImpl m_client;
+        OwnPtr<AudioClientImpl> m_client;
     };
 
     AudioSourceProviderImpl m_audioSourceProvider;

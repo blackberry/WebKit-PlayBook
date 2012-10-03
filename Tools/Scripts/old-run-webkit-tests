@@ -234,19 +234,7 @@ if (isBlackBerry()) {
         $platform = "mac";
     }
 } elsif (isQt()) {
-    if (isDarwin()) {
-        $platform = "qt-mac";
-    } elsif (isARM()) {
-        $platform = "qt-arm";
-    } elsif (getQtVersion() eq "4.8") {
-        $platform = "qt-4.8";
-    } elsif (isLinux()) {
-        $platform = "qt-linux";
-    } elsif (isWindows() || isCygwin()) {
-        $platform = "qt-win";
-    } else {
-        $platform = "qt";
-    }
+    $platform = "qt";
 } elsif (isGtk()) {
     $platform = "gtk";
 } elsif (isWx()) {
@@ -406,7 +394,7 @@ if ($useWebKitTestRunner) {
         $platform = "win-wk2";
     } elsif (isQt()) {
         $realPlatform = $platform;
-        $platform = "qt-wk2";
+        $platform = "qt-5.0-wk2";
     } elsif (isGtk()) {
         $realPlatform = $platform;
         $platform = "gtk-wk2";
@@ -561,7 +549,6 @@ my $supportedFeaturesResult = "";
 
 if (isCygwin()) {
     # Collect supported features list
-    setPathForRunningWebKitApp(\%ENV);
     my $supportedFeaturesCommand = "\"$dumpTool\" --print-supported-features 2>&1";
     $supportedFeaturesResult = `$supportedFeaturesCommand 2>&1`;
 }
@@ -1245,7 +1232,10 @@ if (isGtk()) {
   push(@configurationArgs, '-2') if $useWebKitTestRunner;
   system "Tools/Scripts/run-launcher", @configurationArgs, "file://".$testResults if $launchSafari;
 } elsif (isQt()) {
-  unshift @configurationArgs, qw(-graphicssystem raster -style windows);
+  unshift @configurationArgs, qw(-style windows);
+  if (getQtVersion() lt "5.0") {
+    unshift @configurationArgs, qw(-graphicssystem raster);
+  }
   if (isCygwin()) {
     $testResults = "/" . toWindowsPath($testResults);
     $testResults =~ s/\\/\//g;
@@ -1257,7 +1247,7 @@ if (isGtk()) {
 } elsif (isWindows()) {
   system "start", $testResults if $launchSafari;
 } elsif (isBlackBerry()) {
-  if (isMsys()) { 
+  if (isMsys()) {
     system "start $testResults" if $launchSafari;
   } else {  # For PlayBook
     if (isLinux()) {
@@ -1290,7 +1280,8 @@ sub countAndPrintLeaks($$$)
     );
 
     my @callStacksToExclude = (
-        "Flash_EnforceLocalSecurity" # leaks in Flash plug-in code, rdar://problem/4449747
+        "Flash_EnforceLocalSecurity", # leaks in Flash plug-in code, rdar://problem/4449747
+        "ScanFromString", # <http://code.google.com/p/angleproject/issues/detail?id=249> leak in ANGLE
     );
 
     if (isLeopard()) {
@@ -1315,6 +1306,15 @@ sub countAndPrintLeaks($$$)
             "Java_java_lang_System_initProperties", # <rdar://problem/7714465> leak in Java
             "glrCompExecuteKernel", # <rdar://problem/7815391> leak in graphics driver while using OpenGL
             "NSNumberFormatter getObjectValue:forString:errorDescription:", # <rdar://problem/7149350> Leak in NSNumberFormatter
+        );
+    }
+
+    if (isLion()) {
+        push @callStacksToExclude, (
+            "FigByteFlumeCustomURLCreateWithURL", # <rdar://problem/10461926> leak in CoreMedia
+            "PDFPage\\(PDFPageInternal\\) pageLayoutIfAvail", # <rdar://problem/10462055> leak in PDFKit
+            "SecTransformExecute", # <rdar://problem/10470667> leak in Security.framework
+            "_NSCopyStyleRefForFocusRingStyleClip", # <rdar://problem/10462031> leak in AppKit
         );
     }
 
@@ -1547,8 +1547,6 @@ sub openDumpTool()
         $CLEAN_ENV{HOMEDRIVE} = $ENV{'HOMEDRIVE'};
         $CLEAN_ENV{HOMEPATH} = $ENV{'HOMEPATH'};
         $CLEAN_ENV{_NT_SYMBOL_PATH} = $ENV{_NT_SYMBOL_PATH};
-
-        setPathForRunningWebKitApp(\%CLEAN_ENV);
     }
 
     # Port specifics
@@ -1575,7 +1573,7 @@ sub openDumpTool()
         $CLEAN_ENV{FLEDGE_PATH} = $ENV{'FLEDGE_PATH'};
         $CLEAN_ENV{FLEDGE_WD} = $ENV{'FLEDGE_WD'};
     }
-
+    
     my @args = ($dumpTool, @toolArgs);
     if (isAppleMacWebKit()) { 
         unshift @args, "arch", "-" . architecture();             
@@ -2228,8 +2226,32 @@ sub buildPlatformResultHierarchy()
         if ($platform eq "wincairo") {
             @platforms = $platform;
         }
-    } elsif ($platform =~ /^qt-/) {
-        push @platforms, $platform;
+    } elsif ($platform =~ /^qt/) {
+        if ($platform eq "qt-5.0-wk2") {
+            push @platforms, $platform;
+        }
+
+        if (isARM() || $platform eq "qt-arm") {
+            push @platforms, "qt-arm";
+        }
+
+        if (isDarwin() || $platform eq "qt-mac") {
+            push @platforms, "qt-mac";
+        }
+        elsif (isWindows() || isCygwin() || $platform eq "qt-win") {
+            push @platforms, "qt-win";
+        }
+        elsif (isLinux() || $platform eq "qt-linux") {
+            push @platforms, "qt-linux";
+        }
+
+        if (getQtVersion() eq "4.8" || $platform eq "qt-4.8") {
+            push @platforms, "qt-4.8";
+        }
+        elsif (getQtVersion() eq "5.0" || $platform eq "qt-5.0") {
+            push @platforms, "qt-5.0";
+        }
+
         push @platforms, "qt";
     } elsif ($platform =~ /^gtk-/) {
         push @platforms, $platform;
@@ -2253,18 +2275,34 @@ sub buildPlatformTestHierarchy(@)
 {
     my (@platformHierarchy) = @_;
 
-    my $wk2Platform;
-    for (my $i = 0; $i < @platformHierarchy; ++$i) {
-        if ($platformHierarchy[$i] =~ /-wk2/) {
-            $wk2Platform = splice @platformHierarchy, $i, 1;
-            last;
+    my @result;
+    if ($platform =~ /^qt/) {
+        for (my $i = 0; $i < @platformHierarchy; ++$i) {
+           push @result, $platformHierarchy[$i];
         }
+    } else {
+        my $wk2Platform;
+        for (my $i = 0; $i < @platformHierarchy; ++$i) {
+            if ($platformHierarchy[$i] =~ /-wk2/) {
+                $wk2Platform = splice @platformHierarchy, $i, 1;
+                last;
+            }
+        }
+
+       push @result, $platformHierarchy[0];
+       push @result, $wk2Platform if defined $wk2Platform;
+       push @result, $platformHierarchy[$#platformHierarchy] if @platformHierarchy >= 2;
     }
 
-    my @result;
-    push @result, $platformHierarchy[0];
-    push @result, $wk2Platform if defined $wk2Platform;
-    push @result, $platformHierarchy[$#platformHierarchy] if @platformHierarchy >= 2;
+    if ($verbose) {
+        my @searchPaths;
+        foreach my $searchPath (@result) {
+            my ($dir, $name) = splitpath($searchPath);
+            push @searchPaths, $name;
+        }
+        my $searchPathHierarchy = join(' -> ', @searchPaths);
+        print "Baseline search path: $searchPathHierarchy\n";
+    }
 
     return @result;
 }
@@ -2523,10 +2561,16 @@ sub readSkippedFiles($)
     # Because nearly all of the skipped tests for WebKit 2 on Mac are due to
     # cross-platform issues, the Windows and Qt ports use the Mac skipped list
     # additionally to their own to avoid maintaining separate lists.
-    push(@skippedFileDirectories, catdir($platformBaseDirectory, "wk2")) if ($platform eq "win-wk2" || $platform eq "qt-wk2" || $platform eq "mac-wk2" || $platform eq "gtk-wk2");
+    push(@skippedFileDirectories, catdir($platformBaseDirectory, "wk2")) if ($platform eq "win-wk2" || $platform eq "qt-5.0-wk2" || $platform eq "mac-wk2" || $platform eq "gtk-wk2");
 
     # Add Qt WK1-only skipped tests.
-    push(@skippedFileDirectories, catdir($platformBaseDirectory, "qt-wk1")) if (isQt() && !$useWebKitTestRunner);
+    push(@skippedFileDirectories, catdir($platformBaseDirectory, "qt-5.0-wk1")) if (isQt() && !$useWebKitTestRunner);
+
+    if ($verbose) {
+        foreach my $skippedPath (@skippedFileDirectories) {
+            print "Using Skipped file: $skippedPath\n";
+        }
+    }
 
     foreach my $level (@skippedFileDirectories) {
         if (open SKIPPED, "<", "$level/Skipped") {
@@ -2584,9 +2628,9 @@ sub readChecksumFromPng($)
 
 my @testsFound;
 
-sub isUsedInReftest
+sub isUsedInReftest($)
 {
-    my $filename = $_;
+    my $filename = $_[0];
     if ($filename =~ /-$expectedTag(-$mismatchTag)?\.html$/) {
         return 1;
     }
@@ -2622,7 +2666,7 @@ sub findTestsToRun
         my $fullPath = catfile($testDirectory, $test);
         if (file_name_is_absolute($test)) {
             print "can't run test $test outside $testDirectory\n";
-        } elsif (-f $fullPath) {
+        } elsif (-f $fullPath && !isUsedInReftest($fullPath)) {
             my ($filename, $pathname, $fileExtension) = fileparse($test, qr{\.[^.]+$});
             if (!exists $supportedFileExtensions{substr($fileExtension, 1)}) {
                 print "test $test does not have a supported extension\n";
@@ -2763,25 +2807,6 @@ sub createDebuggerCommandFile()
     }
 
     return $commandFile;
-}
-
-sub readRegistryString($)
-{
-    my ($valueName) = @_;
-    chomp(my $string = `regtool --wow32 get "$valueName"`);
-    return $string;
-}
-
-sub writeRegistryString($$)
-{
-    my ($valueName, $string) = @_;
-
-    my $error = system "regtool", "--wow32", "set", "-s", $valueName, $string;
-
-    # On Windows Vista/7 with UAC enabled, regtool will fail to modify the registry, but will still
-    # return a successful exit code. So we double-check here that the value we tried to write to the
-    # registry was really written.
-    return !$error && readRegistryString($valueName) eq $string;
 }
 
 sub setUpWindowsCrashLogSaving()

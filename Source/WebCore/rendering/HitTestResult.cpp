@@ -54,8 +54,8 @@ HitTestResult::HitTestResult()
     , m_rightPadding(0)
     , m_bottomPadding(0)
     , m_leftPadding(0)
+    , m_shadowContentFilterPolicy(DoNotAllowShadowContent)
     , m_region(0)
-    , m_allowShadowContent(DontHitTestShadowDOM)
 {
 }
 
@@ -67,20 +67,20 @@ HitTestResult::HitTestResult(const LayoutPoint& point)
     , m_rightPadding(0)
     , m_bottomPadding(0)
     , m_leftPadding(0)
+    , m_shadowContentFilterPolicy(DoNotAllowShadowContent)
     , m_region(0)
-    , m_allowShadowContent(DontHitTestShadowDOM)
 {
 }
 
-HitTestResult::HitTestResult(const LayoutPoint& centerPoint, unsigned topPadding, unsigned rightPadding, unsigned bottomPadding, unsigned leftPadding, CanHitTestShadowDOM allowShadowContent)
+HitTestResult::HitTestResult(const LayoutPoint& centerPoint, unsigned topPadding, unsigned rightPadding, unsigned bottomPadding, unsigned leftPadding, ShadowContentFilterPolicy allowShadowContent)
     : m_point(centerPoint)
     , m_isOverWidget(false)
     , m_topPadding(topPadding)
     , m_rightPadding(rightPadding)
     , m_bottomPadding(bottomPadding)
     , m_leftPadding(leftPadding)
+    , m_shadowContentFilterPolicy(allowShadowContent)
     , m_region(0)
-    , m_allowShadowContent(allowShadowContent)
 {
     // If all padding values passed in are zero then it is not a rect based hit test.
     m_isRectBased = topPadding || rightPadding || bottomPadding || leftPadding;
@@ -98,6 +98,7 @@ HitTestResult::HitTestResult(const HitTestResult& other)
     , m_innerURLElement(other.URLElement())
     , m_scrollbar(other.scrollbar())
     , m_isOverWidget(other.isOverWidget())
+    , m_shadowContentFilterPolicy(other.shadowContentFilterPolicy())
     , m_region(other.region())
 {
     // Only copy the padding and NodeSet in case of rect hit test.
@@ -107,11 +108,8 @@ HitTestResult::HitTestResult(const HitTestResult& other)
         m_rightPadding = other.m_rightPadding;
         m_bottomPadding = other.m_bottomPadding;
         m_leftPadding = other.m_leftPadding;
-        m_allowShadowContent = other.m_allowShadowContent;
-    } else {
+    } else
         m_topPadding = m_rightPadding = m_bottomPadding = m_leftPadding = 0;
-        m_allowShadowContent = DontHitTestShadowDOM;
-    }
 
     m_rectBasedTestResult = adoptPtr(other.m_rectBasedTestResult ? new NodeSet(*other.m_rectBasedTestResult) : 0);
 }
@@ -136,13 +134,11 @@ HitTestResult& HitTestResult::operator=(const HitTestResult& other)
         m_rightPadding = other.m_rightPadding;
         m_bottomPadding = other.m_bottomPadding;
         m_leftPadding = other.m_leftPadding;
-        m_allowShadowContent = other.m_allowShadowContent;
-    } else {
+    } else
         m_topPadding = m_rightPadding = m_bottomPadding = m_leftPadding = 0;
-        m_allowShadowContent = DontHitTestShadowDOM;
-    }
 
     m_rectBasedTestResult = adoptPtr(other.m_rectBasedTestResult ? new NodeSet(*other.m_rectBasedTestResult) : 0);
+    m_shadowContentFilterPolicy = other.shadowContentFilterPolicy();
     
     m_region = other.m_region;
 
@@ -561,7 +557,7 @@ bool HitTestResult::isContentEditable() const
     if (!m_innerNonSharedNode)
         return false;
 
-    if (m_innerNonSharedNode->hasTagName(textareaTag) || m_innerNonSharedNode->hasTagName(isindexTag))
+    if (m_innerNonSharedNode->hasTagName(textareaTag))
         return true;
 
     if (m_innerNonSharedNode->hasTagName(inputTag))
@@ -581,7 +577,7 @@ bool HitTestResult::addNodeToRectBasedTestResult(Node* node, const LayoutPoint& 
     if (!node)
         return true;
 
-    if (m_allowShadowContent == DontHitTestShadowDOM)
+    if (m_shadowContentFilterPolicy == DoNotAllowShadowContent)
         node = node->shadowAncestorNode();
 
     mutableRectBasedTestResult().add(node);
@@ -614,7 +610,7 @@ bool HitTestResult::addNodeToRectBasedTestResult(Node* node, const LayoutPoint& 
     if (!node)
         return true;
 
-    if (m_allowShadowContent == DontHitTestShadowDOM)
+    if (m_shadowContentFilterPolicy == DoNotAllowShadowContent)
         node = node->shadowAncestorNode();
 
     mutableRectBasedTestResult().add(node);

@@ -30,11 +30,9 @@
 #endif
 
 #if PLATFORM(BLACKBERRY)
-namespace BlackBerry
-{
-namespace Platform
-{
-    class TouchPoint;
+namespace BlackBerry {
+namespace Platform {
+class TouchPoint;
 };
 };
 #endif
@@ -54,9 +52,11 @@ public:
         TouchStateEnd // Placeholder: must remain the last item.
     };
 
+    // This is necessary for us to be able to build synthetic events.
+    PlatformTouchPoint() { };
+
 #if PLATFORM(QT)
-    PlatformTouchPoint(const QTouchEvent::TouchPoint&);
-    PlatformTouchPoint() {};
+    PlatformTouchPoint(const QTouchEvent::TouchPoint&, State);
 #elif PLATFORM(EFL)
     PlatformTouchPoint(unsigned id, const IntPoint& windowPos, State);
 #elif PLATFORM(BLACKBERRY)

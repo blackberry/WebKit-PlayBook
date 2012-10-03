@@ -32,7 +32,7 @@
 #import <WebCore/PageCache.h>
 #import <wtf/FastMalloc.h>
 
-#if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
+#if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD) && !PLATFORM(IOS)
 #import "WebCoreSystemInterface.h"
 #import <notify.h>
 #endif
@@ -41,6 +41,7 @@ namespace WebCore {
 
 #if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
 
+#if !PLATFORM(IOS)
 static dispatch_source_t _cache_event_source = 0;
 static dispatch_source_t _timer_event_source = 0;
 static int _notifyToken;
@@ -76,7 +77,15 @@ void MemoryPressureHandler::uninstall()
         return;
 
     dispatch_source_cancel(_cache_event_source);
+    dispatch_release(_cache_event_source);
     _cache_event_source = 0;
+
+    if (_timer_event_source) {
+        dispatch_source_cancel(_timer_event_source);
+        dispatch_release(_timer_event_source);
+        _timer_event_source = 0;
+    }
+
     m_installed = false;
     
     notify_cancel(_notifyToken);
@@ -93,6 +102,7 @@ void MemoryPressureHandler::holdOff(unsigned seconds)
             dispatch_source_set_timer(_timer_event_source, dispatch_time(DISPATCH_TIME_NOW, seconds * NSEC_PER_SEC), DISPATCH_TIME_FOREVER, 1 * s_secondsBetweenMemoryCleanup);
             dispatch_source_set_event_handler(_timer_event_source, ^{
                 dispatch_source_cancel(_timer_event_source);
+                dispatch_release(_timer_event_source);
                 _timer_event_source = 0;
                 memoryPressureHandler().install();
             });
@@ -105,19 +115,25 @@ void MemoryPressureHandler::respondToMemoryPressure()
 {
     holdOff(s_secondsBetweenMemoryCleanup);
 
+    releaseMemory(false);
+}
+#endif // !PLATFORM(IOS)
+
+void MemoryPressureHandler::releaseMemory(bool critical)
+{
     int savedPageCacheCapacity = pageCache()->capacity();
-    pageCache()->setCapacity(pageCache()->pageCount()/2);
+    pageCache()->setCapacity(critical ? 0 : pageCache()->pageCount() / 2);
     pageCache()->setCapacity(savedPageCacheCapacity);
     pageCache()->releaseAutoreleasedPagesNow();
 
     NSURLCache *nsurlCache = [NSURLCache sharedURLCache];
     NSUInteger savedNsurlCacheMemoryCapacity = [nsurlCache memoryCapacity];
-    [nsurlCache setMemoryCapacity:[nsurlCache currentMemoryUsage]/2];
+    [nsurlCache setMemoryCapacity:critical ? 0 : [nsurlCache currentMemoryUsage] / 2];
     [nsurlCache setMemoryCapacity:savedNsurlCacheMemoryCapacity];
- 
+
     fontCache()->purgeInactiveFontData();
 
-    memoryCache()->pruneToPercentage(0.5f);
+    memoryCache()->pruneToPercentage(critical ? 0 : 0.5f);
 
     gcController().garbageCollectNow();
 

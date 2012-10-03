@@ -78,7 +78,7 @@ RenderObject* RenderObjectChildList::removeChildNode(RenderObject* owner, Render
     // So that we'll get the appropriate dirty bit set (either that a normal flow child got yanked or
     // that a positioned child got yanked).  We also repaint, so that the area exposed when the child
     // disappears gets repainted properly.
-    if (!owner->documentBeingDestroyed() && fullRemove && oldChild->m_everHadLayout) {
+    if (!owner->documentBeingDestroyed() && fullRemove && oldChild->everHadLayout()) {
         oldChild->setNeedsLayoutAndPrefWidthsRecalc();
         if (oldChild->isBody())
             owner->view()->repaint();
@@ -114,8 +114,11 @@ RenderObject* RenderObjectChildList::removeChildNode(RenderObject* owner, Render
         if (oldChild->isRenderRegion())
             toRenderRegion(oldChild)->detachRegion();
 
-        if (oldChild->inRenderFlowThread() && oldChild->isBox())
+        if (oldChild->inRenderFlowThread() && oldChild->isBox()) {
             oldChild->enclosingRenderFlowThread()->removeRenderBoxRegionInfo(toRenderBox(oldChild));
+            if (oldChild->canHaveRegionStyle())
+                oldChild->enclosingRenderFlowThread()->clearRenderBoxCustomStyle(toRenderBox(oldChild));
+        }
 
         if (RenderFlowThread* containerFlowThread = renderFlowThreadContainer(owner))
             containerFlowThread->removeFlowChild(oldChild);
@@ -313,7 +316,7 @@ RenderObject* RenderObjectChildList::beforePseudoElementRenderer(const RenderObj
     if (!first)
         return 0;
 
-    if (first->style()->styleType() == BEFORE)
+    if (first->isBeforeContent())
         return first;
 
     // Check for a possible generated run-in, using run-in positioning rules.
@@ -325,7 +328,7 @@ RenderObject* RenderObjectChildList::beforePseudoElementRenderer(const RenderObj
     // We still need to skip any list markers that could exist before the run-in.
     while (first && first->isListMarker())
         first = first->nextSibling();
-    if (first && first->style()->styleType() == BEFORE && first->isRenderInline() && first->isRunIn())
+    if (first && first->isBeforeContent() && first->isRenderInline() && first->isRunIn())
         return first;
     
     return 0;
@@ -337,7 +340,7 @@ RenderObject* RenderObjectChildList::afterPseudoElementRenderer(const RenderObje
     do {
         last = last->lastChild();
     } while (last && last->isAnonymous() && last->style()->styleType() == NOPSEUDO && !last->isListMarker());
-    if (last && last->style()->styleType() != AFTER)
+    if (last && !last->isAfterContent())
         return 0;
     return last;
 }
@@ -517,7 +520,15 @@ void RenderObjectChildList::updateBeforeAfterContent(RenderObject* owner, Pseudo
                     renderer->destroy();
                     return;
                 }
-                owner->addChild(generatedContentContainer, insertBefore);
+
+                // When we don't have a first child and are part of a continuation chain,
+                // insertBefore is incorrectly set to zero above, which causes the :before
+                // child to end up at the end of continuation chain.
+                // See https://bugs.webkit.org/show_bug.cgi?id=78380.
+                if (!insertBefore && type == BEFORE && owner->virtualContinuation())
+                    owner->addChildIgnoringContinuation(generatedContentContainer, 0);
+                else
+                    owner->addChild(generatedContentContainer, insertBefore);
             }
             if (generatedContentContainer->isChildAllowed(renderer, pseudoElementStyle))
                 generatedContentContainer->addChild(renderer);

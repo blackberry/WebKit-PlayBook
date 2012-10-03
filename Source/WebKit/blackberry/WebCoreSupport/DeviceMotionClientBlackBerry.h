@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -21,16 +21,26 @@
 
 #include "DeviceMotionClient.h"
 #include "DeviceMotionData.h"
-#include "WebPage.h"
 
-#include <BlackBerryPlatformDeviceMotionTracker.h>
 #include <BlackBerryPlatformDeviceMotionTrackerListener.h>
+
+namespace BlackBerry {
+namespace WebKit {
+class WebPagePrivate;
+}
+}
+
+namespace BlackBerry {
+namespace Platform {
+class DeviceMotionTracker;
+}
+}
 
 namespace WebCore {
 
-class DeviceMotionClientBlackBerry : public WebCore::DeviceMotionClient, public BlackBerry::Platform::DeviceMotionTrackerListener {
+class DeviceMotionClientBlackBerry : public DeviceMotionClient, public BlackBerry::Platform::DeviceMotionTrackerListener {
 public:
-    DeviceMotionClientBlackBerry(BlackBerry::WebKit::WebPage*);
+    DeviceMotionClientBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
     ~DeviceMotionClientBlackBerry();
 
     virtual void setController(DeviceMotionController*);
@@ -41,11 +51,12 @@ public:
     virtual void onMotion(const BlackBerry::Platform::DeviceMotionEvent*);
 
 private:
-    BlackBerry::WebKit::WebPage* m_webPage;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
     BlackBerry::Platform::DeviceMotionTracker* m_tracker;
     DeviceMotionController* m_controller;
     RefPtr<DeviceMotionData> m_currentMotion;
     double m_lastEventTime;
 };
 }
+
 #endif // DeviceMotionClientBlackBerry_h

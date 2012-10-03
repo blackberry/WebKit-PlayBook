@@ -26,8 +26,11 @@
 #ifndef StructureStubInfo_h
 #define StructureStubInfo_h
 
+#include <wtf/Platform.h>
+
 #if ENABLE(JIT)
 
+#include "CodeOrigin.h"
 #include "Instruction.h"
 #include "MacroAssembler.h"
 #include "Opcode.h"
@@ -35,20 +38,55 @@
 
 namespace JSC {
 
+    class PolymorphicPutByIdList;
+
     enum AccessType {
         access_get_by_id_self,
         access_get_by_id_proto,
         access_get_by_id_chain,
         access_get_by_id_self_list,
         access_get_by_id_proto_list,
-        access_put_by_id_transition,
+        access_put_by_id_transition_normal,
+        access_put_by_id_transition_direct,
         access_put_by_id_replace,
+        access_put_by_id_list,
         access_unset,
         access_get_by_id_generic,
         access_put_by_id_generic,
         access_get_array_length,
         access_get_string_length,
     };
+
+    inline bool isGetByIdAccess(AccessType accessType)
+    {
+        switch (accessType) {
+        case access_get_by_id_self:
+        case access_get_by_id_proto:
+        case access_get_by_id_chain:
+        case access_get_by_id_self_list:
+        case access_get_by_id_proto_list:
+        case access_get_by_id_generic:
+        case access_get_array_length:
+        case access_get_string_length:
+            return true;
+        default:
+            return false;
+        }
+    }
+    
+    inline bool isPutByIdAccess(AccessType accessType)
+    {
+        switch (accessType) {
+        case access_put_by_id_transition_normal:
+        case access_put_by_id_transition_direct:
+        case access_put_by_id_replace:
+        case access_put_by_id_list:
+        case access_put_by_id_generic:
+            return true;
+        default:
+            return false;
+        }
+    }
 
     struct StructureStubInfo {
         StructureStubInfo()
@@ -98,9 +136,12 @@ namespace JSC {
 
         // PutById*
 
-        void initPutByIdTransition(JSGlobalData& globalData, JSCell* owner, Structure* previousStructure, Structure* structure, StructureChain* chain)
+        void initPutByIdTransition(JSGlobalData& globalData, JSCell* owner, Structure* previousStructure, Structure* structure, StructureChain* chain, bool isDirect)
         {
-            accessType = access_put_by_id_transition;
+            if (isDirect)
+                accessType = access_put_by_id_transition_direct;
+            else
+                accessType = access_put_by_id_transition_normal;
 
             u.putByIdTransition.previousStructure.set(globalData, owner, previousStructure);
             u.putByIdTransition.structure.set(globalData, owner, structure);
@@ -113,10 +154,24 @@ namespace JSC {
     
             u.putByIdReplace.baseObjectStructure.set(globalData, owner, baseObjectStructure);
         }
+        
+        void initPutByIdList(PolymorphicPutByIdList* list)
+        {
+            accessType = access_put_by_id_list;
+            u.putByIdList.list = list;
+        }
+        
+        void reset()
+        {
+            accessType = access_unset;
+            deref();
+            stubRoutine = MacroAssemblerCodeRef();
+        }
 
         void deref();
-        void visitAggregate(SlotVisitor&);
 
+        bool visitWeakReferences();
+        
         bool seenOnce()
         {
             return seen;
@@ -133,6 +188,8 @@ namespace JSC {
         int8_t seen;
         
 #if ENABLE(DFG_JIT)
+        CodeOrigin codeOrigin;
+        int8_t registersFlushed;
         int8_t baseGPR;
 #if USE(JSVALUE32_64)
         int8_t valueTagGPR;
@@ -142,17 +199,18 @@ namespace JSC {
         int16_t deltaCallToDone;
         int16_t deltaCallToStructCheck;
         int16_t deltaCallToSlowCase;
+        int16_t deltaCheckImmToCall;
+#if USE(JSVALUE64)
+        int16_t deltaCallToLoadOrStore;
+#else
+        int16_t deltaCallToTagLoadOrStore;
+        int16_t deltaCallToPayloadLoadOrStore;
 #endif
+#endif // ENABLE(DFG_JIT)
 
         union {
             struct {
-                int16_t deltaCheckImmToCall;
-#if USE(JSVALUE64)
-                int16_t deltaCallToLoadOrStore;
-#elif USE(JSVALUE32_64)
-                int16_t deltaCallToTagLoadOrStore;
-                int16_t deltaCallToPayloadLoadOrStore;
-#endif
+                // It would be unwise to put anything here, as it will surely be overwritten.
             } unset;
             struct {
                 WriteBarrierBase<Structure> baseObjectStructure;
@@ -181,15 +239,28 @@ namespace JSC {
             struct {
                 WriteBarrierBase<Structure> baseObjectStructure;
             } putByIdReplace;
+            struct {
+                PolymorphicPutByIdList* list;
+            } putByIdList;
         } u;
 
-        CodeLocationLabel stubRoutine;
+        MacroAssemblerCodeRef stubRoutine;
         CodeLocationCall callReturnLocation;
         CodeLocationLabel hotPathBegin;
     };
 
+    inline void* getStructureStubInfoReturnLocation(StructureStubInfo* structureStubInfo)
+    {
+        return structureStubInfo->callReturnLocation.executableAddress();
+    }
+
+    inline unsigned getStructureStubInfoBytecodeIndex(StructureStubInfo* structureStubInfo)
+    {
+        return structureStubInfo->bytecodeIndex;
+    }
+
 } // namespace JSC
 
-#endif
+#endif // ENABLE(JIT)
 
 #endif // StructureStubInfo_h

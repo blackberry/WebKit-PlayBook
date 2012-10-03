@@ -9,7 +9,7 @@ Page reloaded.
     }
     pages : [
         {
-            startedDateTime : <object>
+            startedDateTime : <plausible>
             id : <string>
             title : ""
             pageTimings : {
@@ -21,7 +21,7 @@ Page reloaded.
     entries : [
         {
             pageref : "http://127.0.0.1:8000/inspector/resource-har-conversion.html"
-            startedDateTime : <object>
+            startedDateTime : <plausible>
             time : <number>
             request : {
                 method : "GET"
@@ -98,7 +98,6 @@ Page reloaded.
                 ]
                 content : {
                     size : <number>
-                    compression : <number>
                     mimeType : "application/x-javascript"
                 }
                 redirectURL : ""
@@ -111,7 +110,7 @@ Page reloaded.
         }
         {
             pageref : "http://127.0.0.1:8000/inspector/resource-har-conversion.html"
-            startedDateTime : <object>
+            startedDateTime : <plausible>
             time : <number>
             request : {
                 method : "GET"
@@ -134,8 +133,8 @@ Page reloaded.
                 ]
                 content : {
                     size : <number>
-                    compression : <number>
                     mimeType : "text/html"
+                    compression : <number>
                 }
                 redirectURL : ""
                 headersSize : <number>
@@ -147,7 +146,7 @@ Page reloaded.
         }
         {
             pageref : "http://127.0.0.1:8000/inspector/resource-har-conversion.html"
-            startedDateTime : <object>
+            startedDateTime : <plausible>
             time : <number>
             request : {
                 method : "GET"
@@ -170,7 +169,6 @@ Page reloaded.
                 ]
                 content : {
                     size : <number>
-                    compression : <number>
                     mimeType : "application/x-javascript"
                 }
                 redirectURL : ""
@@ -183,7 +181,7 @@ Page reloaded.
         }
         {
             pageref : "http://127.0.0.1:8000/inspector/resource-har-conversion.html"
-            startedDateTime : <object>
+            startedDateTime : <plausible>
             time : <number>
             request : {
                 method : "POST"
@@ -210,8 +208,8 @@ Page reloaded.
                 ]
                 content : {
                     size : <number>
-                    compression : <number>
                     mimeType : "application/xml"
+                    compression : <number>
                 }
                 redirectURL : ""
                 headersSize : <number>

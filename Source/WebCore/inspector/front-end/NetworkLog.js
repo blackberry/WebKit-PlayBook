@@ -35,7 +35,9 @@ WebInspector.NetworkLog = function()
 {
     this._resources = [];
     WebInspector.networkManager.addEventListener(WebInspector.NetworkManager.EventTypes.ResourceStarted, this._onResourceStarted, this);
-    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.FrameNavigated, this._frameNavigated, this);
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.MainFrameNavigated, this._onMainFrameNavigated, this);
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.OnLoad, this._onLoad, this);
+    WebInspector.resourceTreeModel.addEventListener(WebInspector.ResourceTreeModel.EventTypes.DOMContentLoaded, this._onDOMContentLoaded, this);
 }
 
 WebInspector.NetworkLog.prototype = {
@@ -47,15 +49,32 @@ WebInspector.NetworkLog.prototype = {
         return this._resources;
     },
 
-    _frameNavigated: function(event)
+    /**
+     * @param {WebInspector.Resource} resource
+     * @return {WebInspector.PageLoad}
+     */
+    pageLoadForResource: function(resource)
     {
-        if (!event.data.isMainFrame)
-            return;
+        return resource.__page;
+    },
+
+    /**
+     * @param {WebInspector.Event} event
+     */
+    _onMainFrameNavigated: function(event)
+    {
+        var mainFrame = /** type {WebInspector.ResourceTreeFrame} */ event.data;
         // Preserve resources from the new session.
+        this._currentPageLoad = null;
         var oldResources = this._resources.splice(0, this._resources.length);
         for (var i = 0; i < oldResources.length; ++i) {
-            if (oldResources[i].loaderId === event.data.loaderId)
-                this._resources.push(oldResources[i]);
+            var resource = oldResources[i];
+            if (resource.loaderId === mainFrame.loaderId) {
+                if (!this._currentPageLoad)
+                    this._currentPageLoad = new WebInspector.PageLoad(resource);
+                this._resources.push(resource);
+                resource.__page = this._currentPageLoad;
+            }
         }
     },
 
@@ -66,10 +85,43 @@ WebInspector.NetworkLog.prototype = {
     {
         var resource = /** @type {WebInspector.Resource} */ event.data;
         this._resources.push(resource);
-    }
+        resource.__page = this._currentPageLoad;
+    },
+
+    /**
+     * @param {WebInspector.Event} event
+     */
+    _onDOMContentLoaded: function(event)
+    {
+        if (this._currentPageLoad)
+            this._currentPageLoad.contentLoadTime = event.data;
+    },
+
+    /**
+     * @param {WebInspector.Event} event
+     */
+    _onLoad: function(event)
+    {
+        if (this._currentPageLoad)
+            this._currentPageLoad.loadTime = event.data;
+    },
+
 }
 
 /**
  * @type {WebInspector.NetworkLog}
  */
 WebInspector.networkLog = null;
+
+/**
+ * @constructor
+ * @param {WebInspector.Resource} mainResource
+ */
+WebInspector.PageLoad = function(mainResource)
+{
+    this.id = ++WebInspector.PageLoad._lastIdentifier;
+    this.url = mainResource.url;
+    this.startTime = mainResource.startTime;
+}
+
+WebInspector.PageLoad._lastIdentifier = 0;

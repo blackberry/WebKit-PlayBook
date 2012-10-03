@@ -33,6 +33,7 @@
 
 #include "ScriptDebugServer.h"
 
+#include "ContentSearchUtils.h"
 #include "EventLoop.h"
 #include "Frame.h"
 #include "JSDOMWindowCustom.h"
@@ -198,6 +199,11 @@ void ScriptDebugServer::stepOutOfFunction()
     m_doneProcessingDebuggerEvents = true;
 }
 
+bool ScriptDebugServer::canSetScriptSource()
+{
+    return false;
+}
+
 bool ScriptDebugServer::setScriptSource(const String&, const String&, bool, String*, ScriptValue*, ScriptObject*)
 {
     // FIXME(40300): implement this.
@@ -244,10 +250,13 @@ void ScriptDebugServer::dispatchDidParseSource(const ListenerSet& listeners, Sou
     script.startColumn = sourceProvider->startPosition().m_column.zeroBasedInt();
     script.isContentScript = isContentScript;
 
+    if (script.url.isEmpty())
+        script.url = ContentSearchUtils::findSourceURL(script.source);
+
     int sourceLength = script.source.length();
     int lineCount = 1;
     int lastLineStart = 0;
-    for (int i = 0; i < sourceLength - 1; ++i) {
+    for (int i = 0; i < sourceLength; ++i) {
         if (script.source[i] == '\n') {
             lineCount += 1;
             lastLineStart = i + 1;

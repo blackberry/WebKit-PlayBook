@@ -32,12 +32,12 @@
 #include "V8DOMWrapper.h"
 
 #include "ArrayBufferView.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "DOMDataStore.h"
 #include "DocumentLoader.h"
 #include "EventTargetHeaders.h"
 #include "EventTargetInterfaces.h"
 #include "FrameLoaderClient.h"
+#include "StylePropertySet.h"
 #include "V8AbstractEventListener.h"
 #include "V8Binding.h"
 #include "V8Collection.h"
@@ -72,6 +72,20 @@ namespace WebCore {
 typedef HashMap<Node*, v8::Object*> DOMNodeMap;
 typedef HashMap<void*, v8::Object*> DOMObjectMap;
 
+static ALWAYS_INLINE v8::Handle<v8::Object> getExistingWrapperInline(Node* node)
+{
+    V8IsolatedContext* context = V8IsolatedContext::getEntered();
+    if (LIKELY(!context)) {
+        v8::Persistent<v8::Object>* wrapper = node->wrapper();
+        if (!wrapper)
+            return v8::Handle<v8::Object>();
+        return *wrapper;
+    }
+    DOMDataStore* store = context->world()->domDataStore();
+    DOMNodeMapping& domNodeMap = node->isActiveNode() ? store->activeDomNodeMap() : store->domNodeMap();
+    return domNodeMap.get(node);
+}
+
 // The caller must have increased obj's ref count.
 void V8DOMWrapper::setJSWrapperForDOMObject(void* object, v8::Persistent<v8::Object> wrapper)
 {
@@ -92,7 +106,10 @@ void V8DOMWrapper::setJSWrapperForActiveDOMObject(void* object, v8::Persistent<v
 void V8DOMWrapper::setJSWrapperForDOMNode(Node* node, v8::Persistent<v8::Object> wrapper)
 {
     ASSERT(V8DOMWrapper::maybeDOMWrapper(wrapper));
-    getDOMNodeMap().set(node, wrapper);
+    if (node->isActiveNode())
+        getActiveDOMNodeMap().set(node, wrapper);
+    else
+        getDOMNodeMap().set(node, wrapper);
 }
 
 v8::Local<v8::Function> V8DOMWrapper::getConstructor(WrapperTypeInfo* type, v8::Handle<v8::Value> objectPrototype)
@@ -213,8 +230,11 @@ v8::Local<v8::Object> V8DOMWrapper::instantiateV8Object(V8Proxy* proxy, WrapperT
         v8::Handle<v8::Context> context = v8::Context::GetCurrent();
         if (!context.IsEmpty()) {
             v8::Handle<v8::Object> globalPrototype = v8::Handle<v8::Object>::Cast(context->Global()->GetPrototype());
-            if (isWrapperOfType(globalPrototype, &V8DOMWindow::info))
-                proxy = V8Proxy::retrieve(V8DOMWindow::toNative(globalPrototype)->frame());
+            if (isWrapperOfType(globalPrototype, &V8DOMWindow::info)) {
+                Frame* frame = V8DOMWindow::toNative(globalPrototype)->frame();
+                if (frame && frame->script()->canExecuteScripts(NotAboutToExecuteScript))
+                    proxy = V8Proxy::retrieve(frame);
+            }
 #if ENABLE(WORKERS)
             else
                 workerContext = V8WorkerContext::toNative(lookupDOMWrapper(V8WorkerContext::GetTemplate(), context->Global()));
@@ -286,17 +306,17 @@ bool V8DOMWrapper::isWrapperOfType(v8::Handle<v8::Value> value, WrapperTypeInfo*
     return typeInfo == type;
 }
 
-v8::Handle<v8::Object> V8DOMWrapper::getWrapperSlow(Node* node)
+v8::Handle<v8::Object> V8DOMWrapper::getExistingWrapperSlow(Node* node)
 {
-    V8IsolatedContext* context = V8IsolatedContext::getEntered();
-    if (LIKELY(!context)) {
-        v8::Persistent<v8::Object>* wrapper = node->wrapper();
-        if (!wrapper)
-            return v8::Handle<v8::Object>();
-        return *wrapper;
-    }
-    DOMNodeMapping& domNodeMap = context->world()->domDataStore()->domNodeMap();
-    return domNodeMap.get(node);
+    return getExistingWrapperInline(node);
+}
+
+v8::Handle<v8::Value> V8DOMWrapper::getWrapperSlow(Node* node)
+{
+    v8::Handle<v8::Object> wrapper = getExistingWrapperInline(node);
+    if (!wrapper.IsEmpty())
+        return wrapper;
+    return toV8Slow(node, false);
 }
 
 #define TRY_TO_WRAP_WITH_INTERFACE(interfaceName) \

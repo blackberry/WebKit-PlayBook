@@ -165,7 +165,6 @@ public:
     typedef Dictionary::iterator iterator;
     typedef Dictionary::const_iterator const_iterator;
 
-public:
     static PassRefPtr<InspectorObject> create()
     {
         return adoptRef(new InspectorObject());
@@ -206,14 +205,21 @@ public:
     const_iterator begin() const { return m_data.begin(); }
     const_iterator end() const { return m_data.end(); }
 
-private:
+    int size() const { return m_data.size(); }
+
+protected:
     InspectorObject();
+
+private:
     Dictionary m_data;
     Vector<String> m_order;
 };
 
 class InspectorArray : public InspectorValue {
 public:
+    typedef Vector<RefPtr<InspectorValue> >::iterator iterator;
+    typedef Vector<RefPtr<InspectorValue> >::const_iterator const_iterator;
+
     static PassRefPtr<InspectorArray> create()
     {
         return adoptRef(new InspectorArray());
@@ -235,8 +241,15 @@ public:
 
     virtual void writeJSON(StringBuilder* output) const;
 
-private:
+    iterator begin() { return m_data.begin(); }
+    iterator end() { return m_data.end(); }
+    const_iterator begin() const { return m_data.begin(); }
+    const_iterator end() const { return m_data.end(); }
+
+protected:
     InspectorArray();
+
+private:
     Vector<RefPtr<InspectorValue> > m_data;
 };
 

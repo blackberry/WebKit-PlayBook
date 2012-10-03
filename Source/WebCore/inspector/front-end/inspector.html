@@ -29,7 +29,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 <html>
 <head>
     <meta http-equiv="content-type" content="text/html; charset=utf-8">
-    <link rel="stylesheet" type="text/css" href="goToLineDialog.css">
+    <link rel="stylesheet" type="text/css" href="dialog.css">
     <link rel="stylesheet" type="text/css" href="inspector.css">
     <link rel="stylesheet" type="text/css" href="inspectorCommon.css">
     <link rel="stylesheet" type="text/css" href="inspectorSyntaxHighlight.css">
@@ -40,8 +40,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="treeoutline.js"></script>
     <script type="text/javascript" src="inspector.js"></script>
     <script type="text/javascript" src="UIUtils.js"></script>
+    <script type="text/javascript" src="InspectorBackend.js"></script>
     <script type="text/javascript" src="InspectorBackendStub.js"></script>
     <script type="text/javascript" src="ExtensionRegistryStub.js"></script>
+    <script type="text/javascript" src="InspectorFrontendAPI.js"></script>
     <script type="text/javascript" src="Object.js"></script>
     <script type="text/javascript" src="Settings.js"></script>
     <script type="text/javascript" src="InspectorFrontendHostStub.js"></script>
@@ -70,6 +72,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="ResourceUtils.js"></script>
     <script type="text/javascript" src="ResourceCategory.js"></script>
     <script type="text/javascript" src="TimelineManager.js"></script>
+    <script type="text/javascript" src="TimelineModel.js"></script>
     <script type="text/javascript" src="Database.js"></script>
     <script type="text/javascript" src="DOMStorage.js"></script>
     <script type="text/javascript" src="DOMStorageItemsView.js"></script>
@@ -79,7 +82,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="CookieItemsView.js"></script>
     <script type="text/javascript" src="ApplicationCacheModel.js"></script>
     <script type="text/javascript" src="ApplicationCacheItemsView.js"></script>
+    <script type="text/javascript" src="IndexedDBModel.js"></script>
+    <script type="text/javascript" src="IndexedDBViews.js"></script>
     <script type="text/javascript" src="Script.js"></script>
+    <script type="text/javascript" src="Spectrum.js"></script>
     <script type="text/javascript" src="SidebarPane.js"></script>
     <script type="text/javascript" src="ElementsTreeOutline.js"></script>
     <script type="text/javascript" src="DOMPresentationUtils.js"></script>
@@ -103,7 +109,6 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="CSSKeywordCompletions.js"></script>
     <script type="text/javascript" src="StylesSidebarPane.js"></script>
     <script type="text/javascript" src="PanelEnablerView.js"></script>
-    <script type="text/javascript" src="WelcomeView.js"></script>
     <script type="text/javascript" src="StatusBarButton.js"></script>
     <script type="text/javascript" src="ElementsPanel.js"></script>
     <script type="text/javascript" src="NetworkPanel.js"></script>
@@ -112,7 +117,10 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="SourceFrame.js"></script>
     <script type="text/javascript" src="ResourceView.js"></script>
     <script type="text/javascript" src="JavaScriptSourceFrame.js"></script>
+    <script type="text/javascript" src="SplitView.js"></script>
+    <script type="text/javascript" src="TabbedEditorContainer.js"></script>
     <script type="text/javascript" src="ScriptsPanel.js"></script>
+    <script type="text/javascript" src="ScriptsNavigator.js"></script>
     <script type="text/javascript" src="ResourcesPanel.js"></script>
     <script type="text/javascript" src="ProfilesPanel.js"></script>
     <script type="text/javascript" src="ConsolePanel.js"></script>
@@ -147,10 +155,12 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="ImageView.js"></script>
     <script type="text/javascript" src="DatabaseTableView.js"></script>
     <script type="text/javascript" src="DatabaseQueryView.js"></script>
+    <script type="text/javascript" src="ProfileLauncherView.js"></script>
     <script type="text/javascript" src="ProfileDataGridTree.js"></script>
     <script type="text/javascript" src="BottomUpProfileDataGridTree.js"></script>
     <script type="text/javascript" src="TopDownProfileDataGridTree.js"></script>
     <script type="text/javascript" src="ProfileView.js"></script>
+    <script type="text/javascript" src="CSSSelectorProfileView.js"></script>
     <script type="text/javascript" src="PartialQuickSort.js"></script>
     <script type="text/javascript" src="HeapSnapshot.js"></script>
     <script type="text/javascript" src="HeapSnapshotProxy.js"></script>
@@ -166,12 +176,15 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="CompilerSourceMapping.js"></script>
     <script type="text/javascript" src="ScriptsSearchScope.js"></script>
     <script type="text/javascript" src="DOMAgent.js"></script>
-    <script type="text/javascript" src="TimelineAgent.js"></script>
+    <script type="text/javascript" src="TimelinePresentationModel.js"></script>
     <script type="text/javascript" src="TimelinePanel.js"></script>
     <script type="text/javascript" src="TimelineOverviewPane.js"></script>
     <script type="text/javascript" src="TestController.js"></script>
     <script type="text/javascript" src="HelpScreen.js"></script>
+    <script type="text/javascript" src="Dialog.js"></script>
     <script type="text/javascript" src="GoToLineDialog.js"></script>
+    <script type="text/javascript" src="FilteredItemSelectionDialog.js"></script>
+    <script type="text/javascript" src="SidebarOverlay.js"></script>
     <script type="text/javascript" src="SettingsScreen.js"></script>
     <script type="text/javascript" src="ShortcutsScreen.js"></script>
     <script type="text/javascript" src="HAREntry.js"></script>
@@ -182,6 +195,7 @@ THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
     <script type="text/javascript" src="UserMetrics.js"></script>
     <script type="text/javascript" src="JavaScriptContextManager.js"></script>
     <script type="text/javascript" src="HandlerRegistry.js"></script>
+    <script type="text/javascript" src="MemoryStatistics.js"></script>
 </head>
 <body class="detached" id="-webkit-web-inspector">
     <div id="toolbar">

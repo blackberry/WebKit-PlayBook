@@ -33,11 +33,13 @@
 #include "WebData.h"
 #include "WebPageProxy.h"
 #include "WebProcessProxy.h"
+#include <WebCore/Page.h>
 
 #ifdef __BLOCKS__
 #include <Block.h>
 #endif
 
+using namespace WebCore;
 using namespace WebKit;
 
 WKTypeID WKPageGetTypeID()
@@ -343,6 +345,75 @@ bool WKPageIsPinnedToRightSide(WKPageRef pageRef)
     return toImpl(pageRef)->isPinnedToRightSide();
 }
 
+void WKPageSetPaginationMode(WKPageRef pageRef, WKPaginationMode paginationMode)
+{
+    Page::Pagination::Mode mode;
+    switch (paginationMode) {
+    case kWKPaginationModeUnpaginated:
+        mode = Page::Pagination::Unpaginated;
+        break;
+    case kWKPaginationModeHorizontal:
+        mode = Page::Pagination::HorizontallyPaginated;
+        break;
+    case kWKPaginationModeVertical:
+        mode = Page::Pagination::VerticallyPaginated;
+        break;
+    default:
+        return;
+    }
+    toImpl(pageRef)->setPaginationMode(mode);
+}
+
+WKPaginationMode WKPageGetPaginationMode(WKPageRef pageRef)
+{
+    switch (toImpl(pageRef)->paginationMode()) {
+    case Page::Pagination::Unpaginated:
+        return kWKPaginationModeUnpaginated;
+    case Page::Pagination::HorizontallyPaginated:
+        return kWKPaginationModeHorizontal;
+    case Page::Pagination::VerticallyPaginated:
+        return kWKPaginationModeVertical;
+    }
+
+    ASSERT_NOT_REACHED();
+    return kWKPaginationModeUnpaginated;
+}
+
+void WKPageSetPaginationBehavesLikeColumns(WKPageRef pageRef, bool behavesLikeColumns)
+{
+    toImpl(pageRef)->setPaginationBehavesLikeColumns(behavesLikeColumns);
+}
+
+bool WKPageGetPaginationBehavesLikeColumns(WKPageRef pageRef)
+{
+    return toImpl(pageRef)->paginationBehavesLikeColumns();
+}
+
+void WKPageSetPageLength(WKPageRef pageRef, double pageLength)
+{
+    toImpl(pageRef)->setPageLength(pageLength);
+}
+
+double WKPageGetPageLength(WKPageRef pageRef)
+{
+    return toImpl(pageRef)->pageLength();
+}
+
+void WKPageSetGapBetweenPages(WKPageRef pageRef, double gap)
+{
+    toImpl(pageRef)->setGapBetweenPages(gap);
+}
+
+double WKPageGetGapBetweenPages(WKPageRef pageRef)
+{
+    return toImpl(pageRef)->gapBetweenPages();
+}
+
+unsigned WKPageGetPageCount(WKPageRef pageRef)
+{
+    return toImpl(pageRef)->pageCount();
+}
+
 bool WKPageCanDelete(WKPageRef pageRef)
 {
     return toImpl(pageRef)->canDelete();
@@ -585,9 +656,9 @@ void WKPageBeginPrinting(WKPageRef page, WKFrameRef frame, WKPrintInfo printInfo
     toImpl(page)->beginPrinting(toImpl(frame), printInfoFromWKPrintInfo(printInfo));
 }
 
-void WKPageDrawPagesToPDF(WKPageRef page, WKFrameRef frame, uint32_t first, uint32_t count, WKPageDrawToPDFFunction callback, void* context)
+void WKPageDrawPagesToPDF(WKPageRef page, WKFrameRef frame, WKPrintInfo printInfo, uint32_t first, uint32_t count, WKPageDrawToPDFFunction callback, void* context)
 {
-    toImpl(page)->drawPagesToPDF(toImpl(frame), first, count, DataCallback::create(context, callback));
+    toImpl(page)->drawPagesToPDF(toImpl(frame), printInfoFromWKPrintInfo(printInfo), first, count, DataCallback::create(context, callback));
 }
 #endif
 
@@ -599,4 +670,9 @@ WKImageRef WKPageCreateSnapshotOfVisibleContent(WKPageRef)
 void WKPageSetShouldSendEventsSynchronously(WKPageRef page, bool sync)
 {
     toImpl(page)->setShouldSendEventsSynchronously(sync);
+}
+
+void WKPageSetMediaVolume(WKPageRef page, float volume)
+{
+    toImpl(page)->setMediaVolume(volume);    
 }

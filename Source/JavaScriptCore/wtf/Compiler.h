@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Apple Inc. All rights reserved.
+ * Copyright (C) 2011, 2012 Apple Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -29,6 +29,9 @@
 /* COMPILER() - the compiler being used to build the project */
 #define COMPILER(WTF_FEATURE) (defined WTF_COMPILER_##WTF_FEATURE  && WTF_COMPILER_##WTF_FEATURE)
 
+/* COMPILER_SUPPORTS() - whether the compiler being used to build the project supports the given feature. */
+#define COMPILER_SUPPORTS(WTF_COMPILER_FEATURE) (defined WTF_COMPILER_SUPPORTS_##WTF_COMPILER_FEATURE  && WTF_COMPILER_SUPPORTS_##WTF_COMPILER_FEATURE)
+
 /* ==== COMPILER() - the compiler being used to build the project ==== */
 
 /* COMPILER(CLANG) - Clang  */
@@ -38,6 +41,16 @@
 #ifndef __has_extension
 #define __has_extension __has_feature /* Compatibility with older versions of clang */
 #endif
+
+/* Specific compiler features */
+#define WTF_COMPILER_SUPPORTS_CXX_VARIADIC_TEMPLATES __has_feature(cxx_variadic_templates)
+#define WTF_COMPILER_SUPPORTS_CXX_RVALUE_REFERENCES __has_feature(cxx_rvalue_references)
+#define WTF_COMPILER_SUPPORTS_CXX_DELETED_FUNCTIONS __has_feature(cxx_deleted_functions)
+#define WTF_COMPILER_SUPPORTS_CXX_NULLPTR __has_feature(cxx_nullptr)
+#define WTF_COMPILER_SUPPORTS_BLOCKS __has_feature(blocks)
+#define WTF_COMPILER_SUPPORTS_C_STATIC_ASSERT __has_extension(c_static_assert)
+
+#define WTF_COMPILER_SUPPORTS_HAS_TRIVIAL_DESTRUCTOR __has_extension(has_trivial_destructor)
 
 #endif
 
@@ -51,6 +64,12 @@
 #elif _MSC_VER < 1600
 #define WTF_COMPILER_MSVC9_OR_LOWER 1
 #endif
+
+/* Specific compiler features */
+#if _MSC_VER >= 1600
+#define WTF_COMPILER_SUPPORTS_CXX_NULLPTR 1
+#endif
+
 #endif
 
 /* COMPILER(RVCT) - ARM RealView Compilation Tools */
@@ -76,6 +95,12 @@
 #define WTF_COMPILER_GCC 1
 #define GCC_VERSION (__GNUC__ * 10000 + __GNUC_MINOR__ * 100 + __GNUC_PATCHLEVEL__)
 #define GCC_VERSION_AT_LEAST(major, minor, patch) (GCC_VERSION >= (major * 10000 + minor * 100 + patch))
+
+/* Specific compiler features */
+#if !COMPILER(CLANG) && GCC_VERSION_AT_LEAST(4, 6, 0) && defined(__GXX_EXPERIMENTAL_CXX0X__)
+#define WTF_COMPILER_SUPPORTS_CXX_NULLPTR 1 
+#endif
+
 #else
 /* Define this for !GCC compilers, just so we can write things like GCC_VERSION_AT_LEAST(4, 1, 0). */
 #define GCC_VERSION_AT_LEAST(major, minor, patch) 0
@@ -215,6 +240,16 @@
 
 #ifndef FINAL
 #define FINAL
+#endif
+
+/* OBJC_CLASS */
+
+#ifndef OBJC_CLASS
+#ifdef __OBJC__
+#define OBJC_CLASS @class
+#else
+#define OBJC_CLASS class
+#endif
 #endif
 
 #endif /* WTF_Compiler_h */

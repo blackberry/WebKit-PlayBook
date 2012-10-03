@@ -27,39 +27,37 @@ function sample1() {
 }
 
 function sample2() {
-    shouldBeCloseEnough("rect.width.animVal.value", "130", 0.01);
-    shouldBeCloseEnough("rect.width.baseVal.value", "130", 0.01);
+    shouldBe("rect.width.animVal.value", "130");
+    shouldBe("rect.width.baseVal.value", "130");
 }
 
 function sample3() {
-    shouldBeCloseEnough("rect.width.animVal.value", "151.18", 0.01);
-    shouldBeCloseEnough("rect.width.baseVal.value", "151.18", 0.01);
+    shouldBeCloseEnough("rect.width.animVal.value", "151.2");
+    shouldBeCloseEnough("rect.width.baseVal.value", "151.2");
 }
 
 function sample4() {
-    shouldBeCloseEnough("rect.width.animVal.value", "576", 0.01);
-    shouldBeCloseEnough("rect.width.baseVal.value", "576", 0.01);
+    shouldBe("rect.width.animVal.value", "576");
+    shouldBe("rect.width.baseVal.value", "576");
 }
 
 function sample5() {
-    shouldBeCloseEnough("rect.width.animVal.value", "266.7", 0.01);
-    shouldBeCloseEnough("rect.width.baseVal.value", "266.7", 0.01);
+    shouldBeCloseEnough("rect.width.animVal.value", "267");
+    shouldBeCloseEnough("rect.width.baseVal.value", "267");
 }
 
 function executeTest() {
     const expectedValues = [
-        // [animationId, time, elementId, sampleCallback]
-        ["animation", 0.0,    "rect", sample1],
-        ["animation", 1.0,    "rect", sample2],
-        ["animation", 2.0,    "rect", sample3],
-        ["animation", 3.0,    "rect", sample4],
-        ["animation", 3.9999, "rect", sample5],
-        ["animation", 4.0 ,   "rect", sample1]
+        // [animationId, time, sampleCallback]
+        ["animation", 0.0,   sample1],
+        ["animation", 1.0,   sample2],
+        ["animation", 2.0,   sample3],
+        ["animation", 3.0,   sample4],
+        ["animation", 3.999, sample5],
+        ["animation", 4.0,   sample1]
     ];
 
     runAnimationTest(expectedValues);
 }
 
-// Begin test async
-window.setTimeout("triggerUpdate(50, 30)", 0);
 var successfullyParsed = true;

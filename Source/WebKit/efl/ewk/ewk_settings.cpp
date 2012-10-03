@@ -21,38 +21,45 @@
 #include "config.h"
 #include "ewk_settings.h"
 
-#include "EWebKit.h"
-#if ENABLE(SQL_DATABASE)
+#include "ApplicationCacheStorage.h"
+#include "CrossOriginPreflightResultCache.h"
 #include "DatabaseTracker.h"
-#endif
+#include "StorageTracker.h"
+#include "FontCache.h"
 #include "FrameView.h"
 #include "IconDatabase.h"
 #include "Image.h"
 #include "IntSize.h"
 #include "KURL.h"
 #include "MemoryCache.h"
-// FIXME: Why is there a directory in this include?
-#include "appcache/ApplicationCacheStorage.h"
+#include "PageCache.h"
+#include "Settings.h"
+#include "ewk_logging.h"
 #include "ewk_private.h"
-
+#include "ewk_util.h"
 #include <Eina.h>
 #include <eina_safety_checks.h>
 #include <errno.h>
 #include <string.h>
-#include <sys/stat.h>
-#include <sys/types.h>
-#include <sys/utsname.h>
 #include <unistd.h>
 #include <wtf/text/CString.h>
 #include <wtf/text/StringConcatenate.h>
 
-static const char* _ewk_cache_directory_path = 0;
+#if OS(UNIX)
+#include <sys/stat.h>
+#include <sys/types.h>
+#include <sys/utsname.h>
+#elif OS(WINDOWS)
+#include "SystemInfo.h"
+#endif
+
+static const char* s_offlineAppCachePath = 0;
 
 static const char* _ewk_icon_database_path = 0;
-#if ENABLE(SQL_DATABASE)
-static const char* _ewk_default_web_database_path = 0;
-static uint64_t _ewk_default_web_database_quota = 1 * 1024 * 1024;
-#endif
+
+static const char* s_webDatabasePath = 0;
+static const char* s_localStoragePath = 0;
+static uint64_t s_webDatabaseQuota = 1 * 1024 * 1024; // 1MB.
 
 static WTF::String _ewk_settings_webkit_platform_get()
 {
@@ -68,40 +75,79 @@ static WTF::String _ewk_settings_webkit_platform_get()
 static WTF::String _ewk_settings_webkit_os_version_get()
 {
     WTF::String uaOsVersion;
+#if OS(DARWIN)
+#if CPU(X86)
+    uaOsVersion = "Intel Mac OS X";
+#else
+    uaOsVersion = "PPC Mac OS X";
+#endif
+#elif OS(UNIX)
     struct utsname name;
 
     if (uname(&name) != -1)
         uaOsVersion = makeString(name.sysname, ' ', name.machine);
     else
         uaOsVersion = "Unknown";
-
+#elif OS(WINDOWS)
+    uaOsVersion = windowsVersionFroUAString();
+#else
+    uaOsVersion = "Unknown";
+#endif
     return uaOsVersion;
 }
 
 uint64_t ewk_settings_web_database_default_quota_get()
 {
+    return s_webDatabaseQuota;
+}
+
+void ewk_settings_web_database_default_quota_set(uint64_t maximumSize)
+{
+    s_webDatabaseQuota = maximumSize;
+}
+
+void ewk_settings_web_database_clear()
+{
 #if ENABLE(SQL_DATABASE)
-    return _ewk_default_web_database_quota;
-#else
-    return 0;
+    WebCore::DatabaseTracker::tracker().deleteAllDatabases();
 #endif
+}
+
+void ewk_settings_local_storage_path_set(const char* path)
+{
+    WebCore::StorageTracker::tracker().setDatabaseDirectoryPath(WTF::String::fromUTF8(path));
+    eina_stringshare_replace(&s_localStoragePath, path);
+}
+
+const char* ewk_settings_local_storage_path_get(void)
+{
+    return s_localStoragePath;
+}
+
+void ewk_settings_local_storage_database_clear()
+{
+    WebCore::StorageTracker::tracker().deleteAllOrigins();
+}
+
+void ewk_settings_local_storage_database_origin_clear(const char* url)
+{
+    EINA_SAFETY_ON_NULL_RETURN(url);
+
+    const WebCore::KURL kurl(WebCore::KURL(), WTF::String::fromUTF8(url));
+    WebCore::StorageTracker::tracker().deleteOrigin(WebCore::SecurityOrigin::create(kurl).get());
 }
 
 void ewk_settings_web_database_path_set(const char* path)
 {
 #if ENABLE(SQL_DATABASE)
     WebCore::DatabaseTracker::tracker().setDatabaseDirectoryPath(WTF::String::fromUTF8(path));
-    eina_stringshare_replace(&_ewk_default_web_database_path, path);
+    eina_stringshare_replace(&s_webDatabasePath, path);
 #endif
 }
 
 const char* ewk_settings_web_database_path_get(void)
 {
-#if ENABLE(SQL_DATABASE)
-    return _ewk_default_web_database_path;
-#else
-    return 0;
-#endif
+    return s_webDatabasePath;
 }
 
 Eina_Bool ewk_settings_icon_database_path_set(const char* directory)
@@ -200,24 +246,42 @@ Evas_Object* ewk_settings_icon_database_icon_object_add(const char* url, Evas* c
     return ewk_util_image_from_cairo_surface_add(canvas, surface);
 }
 
-Eina_Bool ewk_settings_cache_enable_get(void)
+void ewk_settings_object_cache_capacity_set(unsigned minDeadCapacity, unsigned maxDeadCapacity, unsigned totalCapacity)
 {
-    WebCore::MemoryCache* cache = WebCore::memoryCache();
-    return !cache->disabled();
+    WebCore::memoryCache()->setCapacities(minDeadCapacity, maxDeadCapacity, totalCapacity);
 }
 
-void ewk_settings_cache_enable_set(Eina_Bool set)
+Eina_Bool ewk_settings_object_cache_enable_get()
 {
-    WebCore::MemoryCache* cache = WebCore::memoryCache();
-    set = !set;
-    if (cache->disabled() != set)
-        cache->setDisabled(set);
+    return !WebCore::memoryCache()->disabled();
 }
 
-void ewk_settings_cache_capacity_set(unsigned capacity)
+void ewk_settings_object_cache_enable_set(Eina_Bool enable)
 {
-    WebCore::MemoryCache* cache = WebCore::memoryCache();
-    cache->setCapacities(0, capacity, capacity);
+    WebCore::memoryCache()->setDisabled(!enable);
+}
+
+void ewk_settings_memory_cache_clear()
+{
+    // Turn the cache on and off. Disabling the object cache will remove all
+    // resources from the cache. They may still live on if they are referenced
+    // by some Web page though.
+    if (!WebCore::memoryCache()->disabled()) {
+        WebCore::memoryCache()->setDisabled(true);
+        WebCore::memoryCache()->setDisabled(false);
+    }
+
+    int pageCapacity = WebCore::pageCache()->capacity();
+    // Setting size to 0, makes all pages be released.
+    WebCore::pageCache()->setCapacity(0);
+    WebCore::pageCache()->releaseAutoreleasedPagesNow();
+    WebCore::pageCache()->setCapacity(pageCapacity);
+
+    // Invalidating the font cache and freeing all inactive font data.
+    WebCore::fontCache()->invalidate();
+
+    // Empty the Cross-Origin Preflight cache
+    WebCore::CrossOriginPreflightResultCache::shared().empty();
 }
 
 void ewk_settings_repaint_throttling_set(double deferredRepaintDelay, double initialDeferredRepaintDelayDuringLoading, double maxDeferredRepaintDelayDuringLoading, double deferredRepaintDelayIncrementDuringLoading)
@@ -235,7 +299,7 @@ void ewk_settings_repaint_throttling_set(double deferredRepaintDelay, double ini
  *
  * @return a pointer to an eina_stringshare containing the user agent string
  */
-const char* ewk_settings_default_user_agent_get(void)
+const char* ewk_settings_default_user_agent_get()
 {
     WTF::String uaVersion = makeString(String::number(WEBKIT_USER_AGENT_MAJOR_VERSION), '.', String::number(WEBKIT_USER_AGENT_MINOR_VERSION), '+');
     WTF::String staticUa = makeString("Mozilla/5.0 (", _ewk_settings_webkit_platform_get(), "; ", _ewk_settings_webkit_os_version_get(), ") AppleWebKit/", uaVersion) + makeString(" (KHTML, like Gecko) Version/5.0 Safari/", uaVersion);
@@ -243,20 +307,32 @@ const char* ewk_settings_default_user_agent_get(void)
     return eina_stringshare_add(staticUa.utf8().data());
 }
 
-Eina_Bool ewk_settings_cache_directory_path_set(const char* path)
+void ewk_settings_application_cache_path_set(const char* path)
 {
-    if (!path)
-        return false;
-
     WebCore::cacheStorage().setCacheDirectory(WTF::String::fromUTF8(path));
-    eina_stringshare_replace(&_ewk_cache_directory_path, path);
-
-    return true;
+    eina_stringshare_replace(&s_offlineAppCachePath, path);
 }
 
-const char* ewk_settings_cache_directory_path_get()
+const char* ewk_settings_application_cache_path_get()
 {
-    return _ewk_cache_directory_path;
+    return s_offlineAppCachePath;
+}
+
+int64_t ewk_settings_application_cache_max_quota_get()
+{
+    return WebCore::cacheStorage().maximumSize();
+}
+
+void ewk_settings_application_cache_max_quota_set(int64_t maximumSize)
+{
+    ewk_settings_application_cache_clear();
+
+    WebCore::cacheStorage().setMaximumSize(maximumSize);
+}
+
+void ewk_settings_application_cache_clear()
+{
+    WebCore::cacheStorage().deleteAllEntries();
 }
 
 double ewk_settings_default_timer_interval_get(void)

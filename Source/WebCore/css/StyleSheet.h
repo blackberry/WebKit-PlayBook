@@ -28,8 +28,7 @@
 
 namespace WebCore {
 
-class CachedCSSStyleSheet;
-class CSSRule;
+class CSSImportRule;
 class MediaList;
 class Node;
 
@@ -40,13 +39,13 @@ public:
     bool disabled() const { return m_disabled; }
     void setDisabled(bool);
 
-    Node* ownerNode() const { return m_parentNode; }
-    void clearOwnerNode() { m_parentNode = 0; }
+    Node* ownerNode() const { return m_ownerNode; }
+    void clearOwnerNode() { m_ownerNode = 0; }
+
+    CSSImportRule* ownerRule() const { return m_ownerRule; }
+    void clearOwnerRule() { m_ownerRule = 0; }
 
     StyleSheet* parentStyleSheet() const;
-
-    CSSRule* parentRule() const { return m_parentRule; }
-    void setParentRule(CSSRule* rule) { m_parentRule = rule; }
 
     // Note that href is the URL that started the redirect chain that led to
     // this style sheet. This property probably isn't useful for much except
@@ -64,7 +63,6 @@ public:
     virtual String type() const = 0;
     virtual bool isLoading() = 0;
 
-    virtual KURL completeURL(const String& url) const;
     virtual bool parseString(const String&, bool strict = true) = 0;
 
     virtual bool isCSSStyleSheet() const { return false; }
@@ -74,12 +72,12 @@ public:
 
 protected:
     StyleSheet(Node* ownerNode, const String& href, const KURL& finalURL);
-    StyleSheet(CSSRule* parentRule, const String& href, const KURL& finalURL);
+    StyleSheet(CSSImportRule* parentRule, const String& href, const KURL& finalURL);
 
 private:
     bool m_disabled;
-    CSSRule* m_parentRule;
-    Node* m_parentNode;
+    CSSImportRule* m_ownerRule;
+    Node* m_ownerNode;
     String m_originalURL;
     KURL m_finalURL;
     String m_strTitle;

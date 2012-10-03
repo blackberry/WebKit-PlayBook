@@ -440,6 +440,10 @@
 			Name="text"
 			>
 			<File
+				RelativePath="..\..\wtf\text\ASCIIFastPath.h"
+				>
+			</File>
+			<File
 				RelativePath="..\..\wtf\text\AtomicString.cpp"
 				>
 			</File>
@@ -613,6 +617,22 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\ArrayBuffer.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\ArrayBuffer.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\ArrayBufferView.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\ArrayBufferView.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\ASCIICType.h"
 			>
 		</File>
@@ -673,6 +693,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\CheckedBoolean.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\Compiler.h"
 			>
 		</File>
@@ -709,6 +733,14 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\DataLog.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\DataLog.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\Deque.h"
 			>
 		</File>
@@ -726,6 +758,14 @@
 		</File>
 		<File
 			RelativePath="..\..\wtf\DynamicAnnotations.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\Float32Array.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\Float64Array.h"
 			>
 		</File>
 		<File
@@ -793,6 +833,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\Functional.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\GetPtr.h"
 			>
 		</File>
@@ -830,6 +874,18 @@
 		</File>
 		<File
 			RelativePath="..\..\wtf\HexNumber.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\Int16Array.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\Int32Array.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\Int8Array.h"
 			>
 		</File>
 		<File
@@ -905,6 +961,14 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\NumberOfCores.cpp"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\NumberOfCores.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\OSAllocatorWin.cpp"
 			>
 		</File>
@@ -918,10 +982,6 @@
 		</File>
 		<File
 			RelativePath="..\..\wtf\OwnArrayPtr.h"
-			>
-		</File>
-		<File
-			RelativePath="..\..\wtf\OwnFastMallocPtr.h"
 			>
 		</File>
 		<File
@@ -1117,6 +1177,10 @@
 			>
 		</File>
 		<File
+			RelativePath="..\..\wtf\TemporaryChange.h"
+			>
+		</File>
+		<File
 			RelativePath="..\..\wtf\Threading.cpp"
 			>
 		</File>
@@ -1154,6 +1218,18 @@
 		</File>
 		<File
 			RelativePath="..\..\wtf\TypeTraits.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\UInt16Array.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\UInt32Array.h"
+			>
+		</File>
+		<File
+			RelativePath="..\..\wtf\UInt8Array.h"
 			>
 		</File>
 		<File

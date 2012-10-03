@@ -82,6 +82,8 @@ bool CanvasRenderingContext::wouldTaintOrigin(const HTMLVideoElement* video)
 
     if (!video->hasSingleSecurityOrigin())
         return true;
+#else
+    UNUSED_PARAM(video);
 #endif
 
     return false;
@@ -94,6 +96,9 @@ bool CanvasRenderingContext::wouldTaintOrigin(const KURL& url)
 
     if (canvas()->securityOrigin()->taintsCanvas(url))
         return true;
+
+    if (url.protocolIsData())
+        return false;
 
     m_cleanURLs.add(url.string());
     return false;

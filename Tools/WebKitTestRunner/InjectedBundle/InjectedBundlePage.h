@@ -41,9 +41,10 @@ public:
     void dump();
 
     void stopLoading();
-    bool isLoading() { return m_isLoading; }
 
     void reset();
+
+    void dumpBackForwardList();
 
 private:
     // Loader Client
@@ -58,7 +59,7 @@ private:
     static void didClearWindowForFrame(WKBundlePageRef, WKBundleFrameRef, WKBundleScriptWorldRef, const void*);
     static void didCancelClientRedirectForFrame(WKBundlePageRef, WKBundleFrameRef, const void*);
     static void willPerformClientRedirectForFrame(WKBundlePageRef, WKBundleFrameRef, WKURLRef url, double delay, double date, const void*);
-    static void didChangeLocationWithinPageForFrame(WKBundlePageRef, WKBundleFrameRef, const void*);
+    static void didSameDocumentNavigationForFrame(WKBundlePageRef, WKBundleFrameRef, WKSameDocumentNavigationType, WKTypeRef*, const void*);
     static void didHandleOnloadEventsForFrame(WKBundlePageRef, WKBundleFrameRef, const void*);
     static void didDisplayInsecureContentForFrame(WKBundlePageRef, WKBundleFrameRef, WKTypeRef*, const void*);
     static void didRunInsecureContentForFrame(WKBundlePageRef, WKBundleFrameRef, WKTypeRef*, const void*);
@@ -80,12 +81,30 @@ private:
     void didClearWindowForFrame(WKBundleFrameRef, WKBundleScriptWorldRef);
     void didCancelClientRedirectForFrame(WKBundleFrameRef);
     void willPerformClientRedirectForFrame(WKBundleFrameRef, WKURLRef url, double delay, double date);
-    void didChangeLocationWithinPageForFrame(WKBundleFrameRef);
+    void didSameDocumentNavigationForFrame(WKBundleFrameRef, WKSameDocumentNavigationType);
     void didFinishDocumentLoadForFrame(WKBundleFrameRef);
     void didHandleOnloadEventsForFrame(WKBundleFrameRef);
     void didDisplayInsecureContentForFrame(WKBundleFrameRef);
     void didRunInsecureContentForFrame(WKBundleFrameRef);
     void didDetectXSSForFrame(WKBundleFrameRef);
+
+    // Resource Load Client
+    void didInitiateLoadForResource(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier, WKURLRequestRef, bool pageLoadIsProvisional);
+    WKURLRequestRef willSendRequestForFrame(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier, WKURLRequestRef, WKURLResponseRef);
+    void didReceiveResponseForResource(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier, WKURLResponseRef);
+    void didReceiveContentLengthForResource(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier, uint64_t length);
+    void didFinishLoadForResource(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier);
+    void didFailLoadForResource(WKBundlePageRef, WKBundleFrameRef, uint64_t identifier, WKErrorRef);
+
+    // WKBundlePagePolicyClient
+    static WKBundlePagePolicyAction decidePolicyForNavigationAction(WKBundlePageRef, WKBundleFrameRef, WKBundleNavigationActionRef, WKURLRequestRef, WKTypeRef*, const void*);
+    static WKBundlePagePolicyAction decidePolicyForNewWindowAction(WKBundlePageRef, WKBundleFrameRef, WKBundleNavigationActionRef, WKURLRequestRef, WKStringRef frameName, WKTypeRef*, const void*);
+    static WKBundlePagePolicyAction decidePolicyForResponse(WKBundlePageRef, WKBundleFrameRef, WKURLResponseRef, WKURLRequestRef, WKTypeRef*, const void*);
+    static void unableToImplementPolicy(WKBundlePageRef, WKBundleFrameRef, WKErrorRef, WKTypeRef*, const void*);
+    WKBundlePagePolicyAction decidePolicyForNavigationAction(WKBundlePageRef, WKBundleFrameRef, WKBundleNavigationActionRef, WKURLRequestRef, WKTypeRef*);
+    WKBundlePagePolicyAction decidePolicyForNewWindowAction(WKBundlePageRef, WKBundleFrameRef, WKBundleNavigationActionRef, WKURLRequestRef, WKStringRef frameName, WKTypeRef*);
+    WKBundlePagePolicyAction decidePolicyForResponse(WKBundlePageRef, WKBundleFrameRef, WKURLResponseRef, WKURLRequestRef, WKTypeRef*);
+    void unableToImplementPolicy(WKBundlePageRef, WKBundleFrameRef, WKErrorRef, WKTypeRef*);
 
     // UI Client
     static void willAddMessageToConsole(WKBundlePageRef, WKStringRef message, uint32_t lineNumber, const void* clientInfo);
@@ -98,6 +117,13 @@ private:
     void willRunJavaScriptAlert(WKStringRef message, WKBundleFrameRef);
     void willRunJavaScriptConfirm(WKStringRef message, WKBundleFrameRef);
     void willRunJavaScriptPrompt(WKStringRef message, WKStringRef defaultValue, WKBundleFrameRef);
+
+#if ENABLE(FULLSCREEN_API)
+    // Full Screen client
+    static bool supportsFullScreen(WKBundlePageRef, WKFullScreenKeyboardRequestType);
+    static void enterFullScreenForElement(WKBundlePageRef, WKBundleNodeHandleRef element);
+    static void exitFullScreenForElement(WKBundlePageRef, WKBundleNodeHandleRef element);
+#endif
 
     // Editor client
     static bool shouldBeginEditing(WKBundlePageRef, WKBundleRangeHandleRef, const void* clientInfo);
@@ -128,7 +154,7 @@ private:
 
     WKBundlePageRef m_page;
     WKRetainPtr<WKBundleScriptWorldRef> m_world;
-    bool m_isLoading;
+    WKRetainPtr<WKBundleBackForwardListItemRef> m_previousTestBackForwardListItem;
 };
 
 } // namespace WTR

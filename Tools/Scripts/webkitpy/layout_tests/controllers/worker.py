@@ -33,20 +33,31 @@ import sys
 import threading
 import time
 
+from webkitpy.common.host import Host
 from webkitpy.layout_tests.controllers import manager_worker_broker
 from webkitpy.layout_tests.controllers import single_test_runner
 from webkitpy.layout_tests.models import test_expectations
 from webkitpy.layout_tests.models import test_results
+from webkitpy.layout_tests.views import printing
 
 
 _log = logging.getLogger(__name__)
 
 
+class WorkerArguments(object):
+    def __init__(self, worker_number, results_directory, options):
+        self.worker_number = worker_number
+        self.results_directory = results_directory
+        self.options = options
+
+
 class Worker(manager_worker_broker.AbstractWorker):
-    def __init__(self, worker_connection, worker_number, options):
-        manager_worker_broker.AbstractWorker.__init__(self, worker_connection, worker_number, options)
-        self._done = False
-        self._canceled = False
+    def __init__(self, worker_connection, worker_arguments):
+        super(Worker, self).__init__(worker_connection, worker_arguments)
+        self._worker_number = worker_arguments.worker_number
+        self._name = 'worker/%d' % self._worker_number
+        self._results_directory = worker_arguments.results_directory
+        self._options = worker_arguments.options
         self._port = None
         self._batch_size = None
         self._batch_count = None
@@ -54,52 +65,55 @@ class Worker(manager_worker_broker.AbstractWorker):
         self._driver = None
         self._tests_run_file = None
         self._tests_run_filename = None
+        self._printer = None
 
     def __del__(self):
         self.cleanup()
 
-    def safe_init(self, port):
+    def safe_init(self):
         """This method should only be called when it is is safe for the mixin
         to create state that can't be Pickled.
 
         This routine exists so that the mixin can be created and then marshaled
         across into a child process."""
-        self._port = port
-        self._filesystem = port.filesystem
+        self._filesystem = self._port.host.filesystem
         self._batch_count = 0
         self._batch_size = self._options.batch_size or 0
-        tests_run_filename = self._filesystem.join(port.results_directory(), "tests_run%d.txt" % self._worker_number)
+        tests_run_filename = self._filesystem.join(self._results_directory, "tests_run%d.txt" % self._worker_number)
         self._tests_run_file = self._filesystem.open_text_file_for_writing(tests_run_filename)
 
-    def cancel(self):
-        """Attempt to abort processing (best effort)."""
-        self._canceled = True
+    def set_inline_arguments(self, port):
+        self._port = port
 
-    def is_done(self):
-        return self._done or self._canceled
+    def run(self):
+        if not self._port:
+            # We are running in a child process and need to create a new Host.
+            if self._options.platform and 'test' in self._options.platform:
+                # It is lame to import mocks into real code, but this allows us to use the test port in multi-process tests as well.
+                from webkitpy.common.host_mock import MockHost
+                host = MockHost()
+            else:
+                host = Host()
 
-    def name(self):
-        return self._name
+            options = self._options
+            self._port = host.port_factory.get(options.platform, options)
 
-    def run(self, port):
-        self.safe_init(port)
+            # The unix multiprocessing implementation clones the
+            # log handler configuration into the child processes,
+            # but the win implementation doesn't.
+            configure_logging = (sys.platform == 'win32')
 
-        exception_msg = ""
-        _log.debug("%s starting" % self._name)
+            # FIXME: This won't work if the calling process is logging
+            # somewhere other than sys.stderr and sys.stdout, but I'm not sure
+            # if this will be an issue in practice.
+            self._printer = printing.Printer(self._port, options, sys.stderr, sys.stdout, configure_logging)
+
+        self.safe_init()
 
         try:
-            self._worker_connection.run_message_loop()
-            if not self.is_done():
-                raise AssertionError("%s: ran out of messages in worker queue."
-                                     % self._name)
-        except KeyboardInterrupt:
-            exception_msg = ", interrupted"
-            self._worker_connection.raise_exception(sys.exc_info())
-        except:
-            exception_msg = ", exception raised"
-            self._worker_connection.raise_exception(sys.exc_info())
+            _log.debug("%s starting" % self._name)
+            super(Worker, self).run()
         finally:
-            _log.debug("%s done with message loop%s" % (self._name, exception_msg))
             self._worker_connection.post_message('done')
             self.cleanup()
             _log.debug("%s exiting" % self._name)
@@ -108,6 +122,9 @@ class Worker(manager_worker_broker.AbstractWorker):
         start_time = time.time()
         num_tests = 0
         for test_input in test_list:
+            #FIXME: When the DRT support also this function, that would be useful
+            if self._port.driver_name() == "WebKitTestRunner" and self._port.get_option('skip_pixel_test_if_no_baseline') and self._port.get_option('pixel_tests'):
+                test_input.should_run_pixel_test = (self._port.expected_image(test_input.test_name) != None)
             self._run_test(test_input)
             num_tests += 1
             self._worker_connection.yield_to_broker()
@@ -116,7 +133,7 @@ class Worker(manager_worker_broker.AbstractWorker):
         self._worker_connection.post_message('finished_list', list_name, num_tests, elapsed_time)
 
     def handle_stop(self, src):
-        self._done = True
+        self.stop_handling_messages()
 
     def _run_test(self, test_input):
         test_timeout_sec = self.timeout(test_input)
@@ -136,6 +153,9 @@ class Worker(manager_worker_broker.AbstractWorker):
         if self._tests_run_file:
             self._tests_run_file.close()
             self._tests_run_file = None
+        if self._printer:
+            self._printer.cleanup()
+            self._printer = None
 
     def timeout(self, test_input):
         """Compute the appropriate timeout value for a test."""
@@ -243,7 +263,9 @@ class Worker(manager_worker_broker.AbstractWorker):
 
         Returns: a TestResult object.
         """
-        if not self._driver or self._driver.poll() is not None:
+        if self._driver and self._driver.has_crashed():
+            self.kill_driver()
+        if not self._driver:
             self._driver = self._port.create_driver(self._worker_number)
         return self.run_single_test(self._driver, test_input)
 

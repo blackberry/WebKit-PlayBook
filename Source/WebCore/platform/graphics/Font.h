@@ -116,7 +116,31 @@ public:
     TypesettingFeatures typesettingFeatures() const
     {
         TextRenderingMode textRenderingMode = m_fontDescription.textRenderingMode();
-        return textRenderingMode == OptimizeLegibility || textRenderingMode == GeometricPrecision ? Kerning | Ligatures : 0;
+        TypesettingFeatures features = textRenderingMode == OptimizeLegibility || textRenderingMode == GeometricPrecision ? Kerning | Ligatures : 0;
+
+        switch (m_fontDescription.kerning()) {
+        case FontDescription::NoneKerning:
+            features &= ~Kerning;
+            break;
+        case FontDescription::NormalKerning:
+            features |= Kerning;
+            break;
+        case FontDescription::AutoKerning:
+            break;
+        }
+
+        switch (m_fontDescription.commonLigaturesState()) {
+        case FontDescription::DisabledLigaturesState:
+            features &= ~Ligatures;
+            break;
+        case FontDescription::EnabledLigaturesState:
+            features |= Ligatures;
+            break;
+        case FontDescription::NormalLigaturesState:
+            break;
+        }
+
+        return features;
     }
 
     FontFamily& firstFamily() { return m_fontDescription.firstFamily(); }
@@ -158,6 +182,7 @@ public:
     static bool shouldUseSmoothing();
 
     enum CodePath { Auto, Simple, Complex, SimpleWithGlyphOverflow };
+    CodePath codePath(const TextRun&) const;
 
 private:
     enum ForTextEmphasisOrNot { NotForTextEmphasis, ForTextEmphasis };
@@ -177,8 +202,6 @@ private:
 
     static bool canReturnFallbackFontsForComplexText();
     static bool canExpandAroundIdeographsInComplexText();
-
-    CodePath codePath(const TextRun&) const;
 
     // Returns the initial in-stream advance.
     float getGlyphsAndAdvancesForComplexText(const TextRun&, int from, int to, GlyphBuffer&, ForTextEmphasisOrNot = NotForTextEmphasis) const;

@@ -34,6 +34,10 @@
 
 #include <wtf/DisallowCType.h>
 #include <wtf/Platform.h>
+#include <wtf/ExportMacros.h>
+#if USE(JSC)
+#include <runtime/JSExportMacros.h>
+#endif
 
 #ifdef __cplusplus
 #ifndef EXTERN_C_BEGIN
@@ -55,30 +59,7 @@ static const type& name() \
     return name##Value; \
 }
 
-#if defined (BUILDING_WITH_CMAKE)
-
-#define JS_EXPORTDATA
-#define JS_EXPORTCLASS
-#define WTF_EXPORT_PRIVATE
-#define JS_EXPORT_PRIVATE
-
-#elif defined(BUILDING_QT__) || defined(BUILDING_GTK__)
-
-#define WTF_USE_JSC 1
-#define WTF_USE_V8 0
-
-#define JS_EXPORTDATA
-#define JS_EXPORTCLASS
-#define WTF_EXPORT_PRIVATE
-#define JS_EXPORT_PRIVATE
-
-#elif defined(__APPLE__)
-
-#ifdef __OBJC__
-#define OBJC_CLASS @class
-#else
-#define OBJC_CLASS class
-#endif
+#if PLATFORM(MAC)
 
 #if !defined(BUILDING_ON_LEOPARD) && !defined(BUILDING_ON_SNOW_LEOPARD)
 #define ENABLE_WEB_PROCESS_SANDBOX 1
@@ -96,17 +77,6 @@ static const type& name() \
 #import <Cocoa/Cocoa.h>
 #endif
 
-/* WebKit has no way to pull settings from WebCore/config.h for now */
-/* so we assume WebKit is always being compiled on top of JavaScriptCore */
-#define WTF_USE_JSC 1
-#define WTF_USE_V8 0
-
-#define JS_EXPORTDATA
-#define JS_EXPORTCLASS
-#define WEBKIT_EXPORTDATA
-
-#define WTF_EXPORT_PRIVATE
-#define JS_EXPORT_PRIVATE
 
 #include <WebCore/EmptyProtocolDefinitions.h>
 

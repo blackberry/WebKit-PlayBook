@@ -61,11 +61,15 @@ public:
 
     virtual void bringToFront();
     virtual void closeWindow();
-    virtual void disconnectFromBackend();
 
     virtual void requestAttachWindow();
     virtual void requestDetachWindow();
+    virtual void requestSetDockSide(const String&);
     virtual void changeAttachedWindowHeight(unsigned);
+
+    virtual void openInNewTab(const String& url);
+
+    virtual bool canSaveAs();
     virtual void saveAs(const WTF::String& fileName, const WTF::String& content);
 
     virtual void inspectedURLChanged(const WTF::String&);

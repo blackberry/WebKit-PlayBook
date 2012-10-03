@@ -35,23 +35,18 @@ import time
 
 from webkitpy.common.net import resultsjsonparser
 from webkitpy.layout_tests.views.metered_stream import MeteredStream
-from webkitpy.layout_tests.models import test_expectations
+from webkitpy.layout_tests.models.test_expectations import TestExpectations
 
 
 _log = logging.getLogger(__name__)
 
 
-TestExpectations = test_expectations.TestExpectations
-
 NUM_SLOW_TESTS_TO_LOG = 10
 FAST_UPDATES_SECONDS = 0.03
 SLOW_UPDATES_SECONDS = 10.0
 
-PRINT_DEFAULT = ("misc,one-line-progress,one-line-summary,unexpected,"
-                 "unexpected-results,updates")
-PRINT_EVERYTHING = ("actual,config,expected,misc,one-line-progress,"
-                    "one-line-summary,slowest,timing,unexpected,"
-                    "unexpected-results,updates")
+PRINT_DEFAULT = "misc,one-line-progress,one-line-summary,unexpected,unexpected-results,updates"
+PRINT_EVERYTHING = "actual,config,expected,misc,one-line-progress,one-line-summary,slowest,timing,unexpected,unexpected-results,updates"
 
 HELP_PRINTING = """
 Output for run-webkit-tests is controlled by a comma-separated list of
@@ -164,8 +159,7 @@ def _configure_logging(stream, verbose):
     log_datefmt = '%y%m%d %H:%M:%S'
     log_level = logging.INFO
     if verbose:
-        log_fmt = ('%(asctime)s %(process)d %(filename)s:%(lineno)d '
-                   '%(levelname)s %(message)s')
+        log_fmt = '%(asctime)s %(process)d %(filename)s:%(lineno)d %(levelname)s %(message)s'
         log_level = logging.DEBUG
 
     root = logging.getLogger()
@@ -193,8 +187,7 @@ class Printer(object):
 
     By default the buildbot-parsed code gets logged to stdout, and regular
     output gets logged to stderr."""
-    def __init__(self, port, options, regular_output, buildbot_output,
-                 configure_logging):
+    def __init__(self, port, options, regular_output, buildbot_output, configure_logging):
         """
         Args
           port               interface to port-specific routines
@@ -206,11 +199,11 @@ class Printer(object):
           configure_loggign  Whether a logging handler should be registered
 
         """
-        self._buildbot_stream = buildbot_output
-        self._options = options
         self._port = port
-        self._meter = None
+        self._options = options
         self._stream = regular_output
+        self._buildbot_stream = buildbot_output
+        self._meter = None
 
         # These are used for --print one-line-progress
         self._last_remaining = None
@@ -322,18 +315,25 @@ class Printer(object):
            - actual result
            - timing info
         """
-        filename = self._port.abspath_for_test(result.test_name)
         test_name = result.test_name
         self._write('trace: %s' % test_name)
+
+        base = self._port.lookup_virtual_test_base(test_name)
+        if base:
+            args = ' '.join(self._port.lookup_virtual_test_args(test_name))
+            self._write(' base: %s' % base)
+            self._write(' args: %s' % args)
+
         for extension in ('.txt', '.png', '.wav', '.webarchive'):
-            self._print_baseline(filename, extension)
+            self._print_baseline(test_name, extension)
+
         self._write('  exp: %s' % exp_str)
         self._write('  got: %s' % got_str)
         self._write(' took: %-.3f' % result.test_run_time)
         self._write('')
 
-    def _print_baseline(self, filename, extension):
-        baseline = self._port.expected_filename(filename, extension)
+    def _print_baseline(self, test_name, extension):
+        baseline = self._port.expected_filename(test_name, extension)
         if self._port._filesystem.exists(baseline):
             relpath = self._port.relative_test_filename(baseline)
         else:

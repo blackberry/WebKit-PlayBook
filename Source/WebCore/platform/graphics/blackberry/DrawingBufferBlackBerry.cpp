@@ -1,6 +1,6 @@
 /*
  * Copyright (c) 2010, Google Inc. All rights reserved.
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -35,7 +35,6 @@
 #include "GraphicsContext3D.h"
 
 #if USE(ACCELERATED_COMPOSITING)
-#include "LayerCompositingThread.h"
 #include "LayerWebKitThread.h"
 #endif
 
@@ -64,7 +63,6 @@ static unsigned generateColorTexture(GraphicsContext3D* context, const IntSize& 
     return offscreenColorTexture;
 }
 
-// FIXME: The last two params are ignored for the BlackBerry platform. Is this still true?
 DrawingBuffer::DrawingBuffer(GraphicsContext3D* context, const IntSize& size)
     : m_context(context)
     , m_size(size)
@@ -95,6 +93,7 @@ void DrawingBuffer::publishToPlatformLayer()
 
     if (m_callback)
         m_callback->willPublish();
+
     // FIXME: We do the copy in the canvas' (child) context so that it executes in the correct order relative to
     // other commands in the child context. This ensures that the parent texture always contains a complete
     // frame and not some intermediate result. However, there is no synchronization to ensure that this copy
@@ -112,6 +111,7 @@ bool DrawingBuffer::reset(const IntSize& newSize)
 
     if (m_size == newSize)
         return false;
+
     m_size = newSize;
 
     m_context->bindTexture(GraphicsContext3D::TEXTURE_2D, m_internal->offscreenColorTexture);

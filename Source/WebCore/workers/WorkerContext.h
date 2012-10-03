@@ -20,7 +20,7 @@
  * PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY
  * OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
  * (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
- * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE. 
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  *
  */
 
@@ -29,6 +29,7 @@
 
 #if ENABLE(WORKERS)
 
+#include "ContentSecurityPolicy.h"
 #include "EventListener.h"
 #include "EventNames.h"
 #include "EventTarget.h"
@@ -46,15 +47,10 @@
 namespace WebCore {
 
     class Blob;
-    class DOMFileSystemSync;
     class DOMURL;
     class Database;
     class DatabaseCallback;
     class DatabaseSync;
-    class EntryCallback;
-    class EntrySync;
-    class ErrorCallback;
-    class FileSystemCallback;
     class NotificationCenter;
     class ScheduledAction;
     class WorkerInspectorController;
@@ -110,7 +106,6 @@ namespace WebCore {
         void clearInterval(int timeoutId);
 
         // ScriptExecutionContext
-        virtual void addMessage(MessageSource, MessageType, MessageLevel, const String& message, unsigned lineNumber, const String& sourceURL, PassRefPtr<ScriptCallStack>);
         virtual WorkerEventQueue* eventQueue() const;
 
 #if ENABLE(NOTIFICATIONS)
@@ -130,21 +125,6 @@ namespace WebCore {
         virtual bool isContextThread() const;
         virtual bool isJSExecutionForbidden() const;
 
-#if ENABLE(BLOB)
-        DOMURL* webkitURL() const;
-#endif
-
-#if ENABLE(FILE_SYSTEM)
-        enum FileSystemType {
-            TEMPORARY,
-            PERSISTENT,
-            EXTERNAL,
-        };
-        void webkitRequestFileSystem(int type, long long size, PassRefPtr<FileSystemCallback> successCallback, PassRefPtr<ErrorCallback>);
-        PassRefPtr<DOMFileSystemSync> webkitRequestFileSystemSync(int type, long long size, ExceptionCode&);
-        void webkitResolveLocalFileSystemURL(const String& url, PassRefPtr<EntryCallback> successCallback, PassRefPtr<ErrorCallback>);
-        PassRefPtr<EntrySync> webkitResolveLocalFileSystemSyncURL(const String& url, ExceptionCode&);
-#endif
 #if ENABLE(INSPECTOR)
         WorkerInspectorController* workerInspectorController() { return m_workerInspectorController.get(); }
 #endif
@@ -176,7 +156,10 @@ namespace WebCore {
         void notifyObserversOfStop();
 
     protected:
-        WorkerContext(const KURL&, const String&, WorkerThread*);
+        WorkerContext(const KURL&, const String&, WorkerThread*, const String& contentSecurityPolicy, ContentSecurityPolicy::HeaderType);
+
+        virtual void logExceptionToConsole(const String& errorMessage, const String& sourceURL, int lineNumber, PassRefPtr<ScriptCallStack>);
+        void addMessageToWorkerConsole(MessageSource, MessageType, MessageLevel, const String& message, const String& sourceURL, unsigned lineNumber, PassRefPtr<ScriptCallStack>);
 
     private:
         virtual void refScriptExecutionContext() { ref(); }
@@ -190,8 +173,9 @@ namespace WebCore {
         virtual const KURL& virtualURL() const;
         virtual KURL virtualCompleteURL(const String&) const;
 
+        virtual void addMessage(MessageSource, MessageType, MessageLevel, const String& message, const String& sourceURL, unsigned lineNumber, PassRefPtr<ScriptCallStack>);
+
         virtual EventTarget* errorEventTarget();
-        virtual void logExceptionToConsole(const String& errorMessage, int lineNumber, const String& sourceURL, PassRefPtr<ScriptCallStack>);
 
         KURL m_url;
         String m_userAgent;

@@ -32,11 +32,7 @@
 
 #if PLATFORM(MAC)
 #include <wtf/RetainPtr.h>
-#ifdef __OBJC__
-@class NSImage;
-#else
-class NSImage;
-#endif
+OBJC_CLASS NSImage;
 #elif PLATFORM(QT)
 QT_BEGIN_NAMESPACE
 class QPixmap;
@@ -72,9 +68,7 @@ namespace WebCore {
     typedef wxDragImage* DragImageRef;
 #elif PLATFORM(GTK)
     typedef cairo_surface_t* DragImageRef;
-#elif PLATFORM(BLACKBERRY)
-    typedef void* DragImageRef;
-#elif PLATFORM(EFL)
+#elif PLATFORM(EFL) || PLATFORM(BLACKBERRY)
     typedef void* DragImageRef;
 #endif
     

@@ -17,39 +17,44 @@
  * Boston, MA 02110-1301, USA.
  *
  */
+
 #ifndef DeviceMotionProviderQt_h
 #define DeviceMotionProviderQt_h
 
 #include "DeviceMotionData.h"
-#include "RefPtr.h"
 
+#include <wtf/RefPtr.h>
 #include <QAccelerometerFilter>
-#include <QObject>
 
-QTM_USE_NAMESPACE
+#if QT_VERSION < QT_VERSION_CHECK(5, 0, 0)
+using QTM_NAMESPACE::QAccelerometer;
+using QTM_NAMESPACE::QAccelerometerFilter;
+using QTM_NAMESPACE::QAccelerometerReading;
+#endif
 
 namespace WebCore {
 
+class DeviceMotionController;
 class DeviceOrientationProviderQt;
 
-class DeviceMotionProviderQt : public QObject, public QAccelerometerFilter {
-    Q_OBJECT
+class DeviceMotionProviderQt : public QAccelerometerFilter {
 public:
     DeviceMotionProviderQt();
     ~DeviceMotionProviderQt();
 
+    void setController(DeviceMotionController*);
+
     bool filter(QAccelerometerReading*);
+
     void start();
     void stop();
     DeviceMotionData* currentDeviceMotion() const { return m_motion.get(); }
-
-Q_SIGNALS:
-    void deviceMotionChanged();
 
 private:
     RefPtr<DeviceMotionData> m_motion;
     QAccelerometer m_acceleration;
     DeviceOrientationProviderQt* m_deviceOrientation;
+    DeviceMotionController* m_controller;
 };
 
 } // namespace WebCore

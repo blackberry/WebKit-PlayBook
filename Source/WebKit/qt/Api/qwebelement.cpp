@@ -20,8 +20,8 @@
 #include "config.h"
 #include "qwebelement.h"
 
+#include "qwebelement_p.h"
 #include "CSSComputedStyleDeclaration.h"
-#include "CSSMutableStyleDeclaration.h"
 #include "CSSParser.h"
 #include "CSSRule.h"
 #include "CSSRuleList.h"
@@ -32,6 +32,8 @@
 #include "FrameView.h"
 #include "GraphicsContext.h"
 #include "HTMLElement.h"
+#include "StylePropertySet.h"
+#include "StyleRule.h"
 #if USE(JSC)
 #include "Completion.h"
 #include "JSGlobalObject.h"
@@ -53,15 +55,12 @@
 #include "qwebframe_p.h"
 #if USE(JSC)
 #include "runtime_root.h"
+#include <JSDocument.h>
 #endif
 #include <wtf/Vector.h>
 #include <wtf/text/CString.h>
 
 #include <QPainter>
-
-#if USE(V8)
-using namespace V8::Bindings;
-#endif
 
 using namespace WebCore;
 
@@ -465,8 +464,7 @@ void QWebElement::removeAttribute(const QString &name)
 {
     if (!m_element)
         return;
-    ExceptionCode exception = 0;
-    m_element->removeAttribute(name, exception);
+    m_element->removeAttribute(name);
 }
 
 /*!
@@ -479,8 +477,7 @@ void QWebElement::removeAttributeNS(const QString &namespaceUri, const QString &
 {
     if (!m_element)
         return;
-    WebCore::ExceptionCode exception = 0;
-    m_element->removeAttributeNS(namespaceUri, name, exception);
+    m_element->removeAttributeNS(namespaceUri, name);
 }
 
 /*!
@@ -507,12 +504,11 @@ QStringList QWebElement::attributeNames(const QString& namespaceUri) const
         return QStringList();
 
     QStringList attributeNameList;
-    const NamedNodeMap* const attrs = m_element->attributes(/* read only = */ true);
-    if (attrs) {
+    if (m_element->hasAttributes()) {
         const String namespaceUriString(namespaceUri); // convert QString -> String once
-        const unsigned attrsCount = attrs->length();
+        const unsigned attrsCount = m_element->attributeCount();
         for (unsigned i = 0; i < attrsCount; ++i) {
-            const Attribute* const attribute = attrs->attributeItem(i);
+            const Attribute* const attribute = m_element->attributeItem(i);
             if (namespaceUriString == attribute->namespaceURI())
                 attributeNameList.append(attribute->localName());
         }
@@ -848,13 +844,13 @@ QString QWebElement::styleProperty(const QString &name, StyleResolveStrategy str
     if (!propID)
         return QString();
 
-    CSSStyleDeclaration* style = static_cast<StyledElement*>(m_element)->style();
+    StylePropertySet* style = static_cast<StyledElement*>(m_element)->ensureInlineStyleDecl();
 
     if (strategy == InlineStyle)
         return style->getPropertyValue(propID);
 
     if (strategy == CascadedStyle) {
-        if (style->getPropertyPriority(propID))
+        if (style->propertyIsImportant(propID))
             return style->getPropertyValue(propID);
 
         // We are going to resolve the style property by walking through the
@@ -870,11 +866,11 @@ QString QWebElement::styleProperty(const QString &name, StyleResolveStrategy str
             for (int i = rules->length(); i > 0; --i) {
                 CSSStyleRule* rule = static_cast<CSSStyleRule*>(rules->item(i - 1));
 
-                if (rule->style()->getPropertyPriority(propID))
-                    return rule->style()->getPropertyValue(propID);
+                if (rule->styleRule()->properties()->propertyIsImportant(propID))
+                    return rule->styleRule()->properties()->getPropertyValue(propID);
 
                 if (style->getPropertyValue(propID).isEmpty())
-                    style = rule->style();
+                    style = rule->styleRule()->properties();
             }
         }
 
@@ -887,7 +883,7 @@ QString QWebElement::styleProperty(const QString &name, StyleResolveStrategy str
 
         int propID = cssPropertyID(name);
 
-        RefPtr<CSSComputedStyleDeclaration> style = computedStyle(m_element, true);
+        RefPtr<CSSComputedStyleDeclaration> style = CSSComputedStyleDeclaration::create(m_element, true);
         if (!propID || !style)
             return QString();
 
@@ -913,12 +909,11 @@ void QWebElement::setStyleProperty(const QString &name, const QString &value)
         return;
 
     int propID = cssPropertyID(name);
-    CSSStyleDeclaration* style = static_cast<StyledElement*>(m_element)->style();
+    StylePropertySet* style = static_cast<StyledElement*>(m_element)->ensureInlineStyleDecl();
     if (!propID || !style)
         return;
 
-    ExceptionCode exception = 0;
-    style->setProperty(name, value, exception);
+    style->setProperty(propID, value);
 }
 
 /*!
@@ -2086,3 +2081,53 @@ QList<QWebElement> QWebElementCollection::toList() const
     Returns true if the element pointed to by this iterator is greater than or equal to the
     element pointed to by the \a other iterator.
 */
+
+#if USE(JSC)
+QWebElement QtWebElementRuntime::create(Element* element)
+{
+    return QWebElement(element);
+}
+
+Element* QtWebElementRuntime::get(const QWebElement& element)
+{
+    return element.m_element;
+}
+
+static QVariant convertJSValueToWebElementVariant(JSC::JSObject* object, int *distance, HashSet<JSC::JSObject*>* visitedObjects)
+{
+    Element* element = 0;
+    QVariant ret;
+    if (object && object->inherits(&JSElement::s_info)) {
+        element =(static_cast<JSElement*>(object))->impl();
+        *distance = 0;
+        // Allow other objects to reach this one. This won't cause our algorithm to
+        // loop since when we find an Element we do not recurse.
+        visitedObjects->remove(object);
+    } else if (object && object->inherits(&JSDocument::s_info)) {
+        // To support LayoutTestControllerQt::nodesFromRect(), used in DRT, we do an implicit
+        // conversion from 'document' to the QWebElement representing the 'document.documentElement'.
+        // We can't simply use a QVariantMap in nodesFromRect() because it currently times out
+        // when serializing DOMMimeType and DOMPlugin, even if we limit the recursion.
+        element =(static_cast<JSDocument*>(object))->impl()->documentElement();
+    }
+
+    return QVariant::fromValue<QWebElement>(QtWebElementRuntime::create(element));
+}
+
+static JSC::JSValue convertWebElementVariantToJSValue(JSC::ExecState* exec, WebCore::JSDOMGlobalObject* globalObject, const QVariant& variant)
+{
+    return WebCore::toJS(exec, globalObject, QtWebElementRuntime::get(variant.value<QWebElement>()));
+}
+#endif
+
+void QtWebElementRuntime::initialize()
+{
+    static bool initialized = false;
+    if (initialized)
+        return;
+    initialized = true;
+#if USE(JSC)
+    int id = qRegisterMetaType<QWebElement>();
+    JSC::Bindings::registerCustomType(id, convertJSValueToWebElementVariant, convertWebElementVariantToJSValue);
+#endif
+}

@@ -77,11 +77,13 @@ WebInspectorClient::WebInspectorClient(WebView *webView)
     : m_webView(webView)
     , m_highlighter(AdoptNS, [[WebNodeHighlighter alloc] initWithInspectedWebView:webView])
     , m_frontendPage(0)
+    , m_frontendClient(0)
 {
 }
 
 void WebInspectorClient::inspectorDestroyed()
 {
+    closeInspectorFrontend();
     delete this;
 }
 
@@ -92,9 +94,21 @@ void WebInspectorClient::openInspectorFrontend(InspectorController* inspectorCon
 
     m_frontendPage = core([windowController.get() webView]);
     OwnPtr<WebInspectorFrontendClient> frontendClient = adoptPtr(new WebInspectorFrontendClient(m_webView, windowController.get(), inspectorController, m_frontendPage, createFrontendSettings()));
+    m_frontendClient = frontendClient.get();
     RetainPtr<WebInspectorFrontend> webInspectorFrontend(AdoptNS, [[WebInspectorFrontend alloc] initWithFrontendClient:frontendClient.get()]);
     [[m_webView inspector] setFrontend:webInspectorFrontend.get()];
     m_frontendPage->inspectorController()->setInspectorFrontendClient(frontendClient.release());
+}
+
+void WebInspectorClient::closeInspectorFrontend()
+{
+    if (m_frontendClient)
+        m_frontendClient->disconnectFromBackend();
+}
+
+void WebInspectorClient::bringFrontendToFront()
+{
+    m_frontendClient->bringToFront();
 }
 
 void WebInspectorClient::highlight()
@@ -105,6 +119,12 @@ void WebInspectorClient::highlight()
 void WebInspectorClient::hideHighlight()
 {
     [m_highlighter.get() hideHighlight];
+}
+
+void WebInspectorClient::releaseFrontend()
+{
+    m_frontendClient = 0;
+    m_frontendPage = 0;
 }
 
 WebInspectorFrontendClient::WebInspectorFrontendClient(WebView* inspectedWebView, WebInspectorWindowController* windowController, InspectorController* inspectorController, Page* frontendPage, WTF::PassOwnPtr<Settings> settings)
@@ -208,24 +228,21 @@ void WebInspectorFrontendClient::updateWindowTitle() const
     // Keep preferences separate from the rest of the client, making sure we are using expected preference values.
 
     WebPreferences *preferences = [[WebPreferences alloc] init];
-    [preferences setAutosaves:NO];
-    [preferences setLoadsImagesAutomatically:YES];
-    [preferences setAuthorAndUserStylesEnabled:YES];
-    [preferences setJavaScriptEnabled:YES];
     [preferences setAllowsAnimatedImages:YES];
-    [preferences setPlugInsEnabled:NO];
+    [preferences setApplicationChromeModeEnabled:YES];
+    [preferences setAuthorAndUserStylesEnabled:YES];
+    [preferences setAutosaves:NO];
+    [preferences setDefaultFixedFontSize:11];
+    [preferences setFixedFontFamily:@"Menlo"];
     [preferences setJavaEnabled:NO];
-    [preferences setUserStyleSheetEnabled:NO];
-    [preferences setTabsToLinks:NO];
+    [preferences setJavaScriptEnabled:YES];
+    [preferences setLoadsImagesAutomatically:YES];
     [preferences setMinimumFontSize:0];
     [preferences setMinimumLogicalFontSize:9];
-#ifndef BUILDING_ON_LEOPARD
-    [preferences setFixedFontFamily:@"Menlo"];
-    [preferences setDefaultFixedFontSize:11];
-#else
-    [preferences setFixedFontFamily:@"Monaco"];
-    [preferences setDefaultFixedFontSize:10];
-#endif
+    [preferences setPlugInsEnabled:NO];
+    [preferences setSuppressesIncrementalRendering:YES];
+    [preferences setTabsToLinks:NO];
+    [preferences setUserStyleSheetEnabled:NO];
 
     _webView = [[WebView alloc] init];
     [_webView setPreferences:preferences];
@@ -431,6 +448,9 @@ void WebInspectorFrontendClient::updateWindowTitle() const
 
 - (void)destroyInspectorView:(bool)notifyInspectorController
 {
+    [[_inspectedWebView.get() inspector] releaseFrontend];
+    _inspectorClient->releaseFrontend();
+
     if (_destroyingInspectorView)
         return;
     _destroyingInspectorView = YES;
@@ -443,8 +463,6 @@ void WebInspectorFrontendClient::updateWindowTitle() const
     if (notifyInspectorController) {
         if (Page* inspectedPage = [_inspectedWebView.get() page])
             inspectedPage->inspectorController()->disconnectFrontend();
-
-        _inspectorClient->releaseFrontendPage();
     }
 
     [_webView close];

@@ -33,6 +33,7 @@ class QQuickWebView;
 typedef QQuickWebView* PlatformWKView;
 class QQuickView;
 typedef QQuickView* PlatformWindow;
+class QEventLoop;
 #elif defined(__APPLE__) && __APPLE__
 #if __OBJC__
 @class WKView;
@@ -46,13 +47,17 @@ typedef WebKitTestRunnerWindow* PlatformWindow;
 #elif defined(WIN32) || defined(_WIN32)
 typedef WKViewRef PlatformWKView;
 typedef HWND PlatformWindow;
+#elif defined(BUILDING_GTK__)
+typedef struct _GtkWidget GtkWidget;
+typedef WKViewRef PlatformWKView;
+typedef GtkWidget* PlatformWindow;
 #endif
 
 namespace WTR {
 
 class PlatformWebView {
 public:
-    PlatformWebView(WKPageNamespaceRef);
+    PlatformWebView(WKContextRef, WKPageGroupRef);
     ~PlatformWebView();
 
     WKPageRef page();
@@ -64,6 +69,7 @@ public:
 #if PLATFORM(QT)
     bool sendEvent(QEvent*);
     void postEvent(QEvent*);
+    void setModalEventLoop(QEventLoop* eventLoop) { m_modalEventLoop = eventLoop; }
 #endif
 
     WKRect windowFrame();
@@ -81,6 +87,9 @@ private:
     PlatformWKView m_view;
     PlatformWindow m_window;
     bool m_windowIsKey;
+#if PLATFORM(QT)
+    QEventLoop* m_modalEventLoop;
+#endif
 };
 
 } // namespace WTR

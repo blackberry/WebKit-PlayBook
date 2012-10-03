@@ -29,6 +29,8 @@
 #include "ScopedEventQueue.h"
 #include "Text.h"
 #include "XMLNSNames.h"
+#include <wtf/text/AtomicString.h>
+#include <wtf/text/StringBuilder.h>
 
 namespace WebCore {
 
@@ -126,17 +128,19 @@ void Attr::setValue(const AtomicString& value)
     m_attribute->setValue(value);
     createTextChild();
     m_ignoreChildrenChanged--;
+
+    invalidateNodeListsCacheAfterAttributeChanged(m_attribute->name());
 }
 
 void Attr::setValue(const AtomicString& value, ExceptionCode&)
 {
-    if (m_element && m_element->isIdAttributeName(m_attribute->name()))
-        m_element->updateId(m_element->getIdAttribute(), value);
+    if (m_element)
+        m_element->willModifyAttribute(m_attribute->name(), m_attribute->value(), value);
 
     setValue(value);
 
     if (m_element)
-        m_element->attributeChanged(m_attribute.get());
+        m_element->didModifyAttribute(m_attribute.get());
 }
 
 void Attr::setNodeValue(const String& v, ExceptionCode& ec)
@@ -163,25 +167,26 @@ bool Attr::childTypeAllowed(NodeType type) const
     }
 }
 
-void Attr::childrenChanged(bool changedByParser, Node* beforeChange, Node* afterChange, int childCountDelta)
+void Attr::childrenChanged(bool, Node*, Node*, int)
 {
     if (m_ignoreChildrenChanged > 0)
         return;
- 
-    Node::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
+
+    invalidateNodeListsCacheAfterAttributeChanged(m_attribute->name());
 
     // FIXME: We should include entity references in the value
-    
-    String val = "";
+
+    StringBuilder valueBuilder;
     for (Node *n = firstChild(); n; n = n->nextSibling()) {
         if (n->isTextNode())
-            val += static_cast<Text *>(n)->data();
+            valueBuilder.append(toText(n)->data());
     }
 
-    if (m_element && m_element->isIdAttributeName(m_attribute->name()))
-        m_element->updateId(m_attribute->value(), val);
+    AtomicString newValue = valueBuilder.toString();
+    if (m_element)
+        m_element->willModifyAttribute(m_attribute->name(), m_attribute->value(), newValue);
 
-    m_attribute->setValue(val.impl());
+    m_attribute->setValue(newValue);
     if (m_element)
         m_element->attributeChanged(m_attribute.get());
 }

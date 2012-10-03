@@ -1,6 +1,5 @@
 /*
  * Copyright (C) 2007 Apple Inc. All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -97,11 +96,5 @@ JSClassRef GCController::getJSClass()
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
     };
 
-    static JSClassRef ref = 0;
-    if (!ref)
-        ref = JSClassCreate(&classDefinition);
-    else
-        JSClassRetain(ref);
-
-    return ref;
+    return JSClassCreate(&classDefinition);
 }

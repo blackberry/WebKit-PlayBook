@@ -30,6 +30,7 @@
 #define InspectorClientGtk_h
 
 #include "GOwnPtr.h"
+#include "GRefPtr.h"
 #include "InspectorClient.h"
 #include "InspectorFrontendClientLocal.h"
 #include "webkitwebview.h"
@@ -54,6 +55,8 @@ namespace WebKit {
         virtual void inspectorDestroyed();
 
         virtual void openInspectorFrontend(WebCore::InspectorController*);
+        virtual void closeInspectorFrontend();
+        virtual void bringFrontendToFront();
 
         virtual void highlight();
         virtual void hideHighlight();
@@ -85,7 +88,6 @@ namespace WebKit {
 
         virtual void bringToFront();
         virtual void closeWindow();
-        virtual void disconnectFromBackend();
 
         virtual void attachWindow();
         virtual void detachWindow();
@@ -97,7 +99,7 @@ namespace WebKit {
     private:
         WebKitWebView* m_inspectorWebView;
         WebKitWebView* m_inspectedWebView;
-        WebKitWebInspector* m_webInspector;
+        GRefPtr<WebKitWebInspector> m_webInspector;
         InspectorClient* m_inspectorClient;
     };
 }

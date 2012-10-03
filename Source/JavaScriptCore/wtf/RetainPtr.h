@@ -21,9 +21,9 @@
 #ifndef RetainPtr_h
 #define RetainPtr_h
 
-#include "HashTraits.h"
-#include "NullPtr.h"
-#include "TypeTraits.h"
+#include <wtf/HashTraits.h>
+#include <wtf/NullPtr.h>
+#include <wtf/TypeTraits.h>
 #include <algorithm>
 
 #if USE(CF)
@@ -65,6 +65,10 @@ namespace WTF {
         
         RetainPtr(const RetainPtr& o) : m_ptr(o.m_ptr) { if (PtrType ptr = m_ptr) CFRetain(ptr); }
 
+#if COMPILER_SUPPORTS(CXX_RVALUE_REFERENCES)
+        RetainPtr(RetainPtr&& o) : m_ptr(o.leakRef()) { }
+#endif
+
         // Hash table deleted values, which are only constructed and never copied or destroyed.
         RetainPtr(HashTableDeletedValueType) : m_ptr(hashTableDeletedValue()) { }
         bool isHashTableDeletedValue() const { return m_ptr == hashTableDeletedValue(); }
@@ -90,7 +94,13 @@ namespace WTF {
         template<typename U> RetainPtr& operator=(const RetainPtr<U>&);
         RetainPtr& operator=(PtrType);
         template<typename U> RetainPtr& operator=(U*);
-#if !HAVE(NULLPTR)
+
+#if COMPILER_SUPPORTS(CXX_RVALUE_REFERENCES)
+        RetainPtr& operator=(RetainPtr&&);
+        template<typename U> RetainPtr& operator=(RetainPtr<U>&&);
+#endif
+
+#if !COMPILER_SUPPORTS(CXX_NULLPTR)
         RetainPtr& operator=(std::nullptr_t) { clear(); return *this; }
 #endif
 
@@ -98,9 +108,6 @@ namespace WTF {
         void adoptNS(PtrType);
         
         void swap(RetainPtr&);
-
-        // FIXME: Remove releaseRef once we change all callers to call leakRef instead.
-        PtrType releaseRef() { return leakRef(); }
 
     private:
         static PtrType hashTableDeletedValue() { return reinterpret_cast<PtrType>(-1); }
@@ -153,7 +160,7 @@ namespace WTF {
             CFRelease(ptr);
         return *this;
     }
-    
+
     template<typename T> inline RetainPtr<T>& RetainPtr<T>::operator=(PtrType optr)
     {
         if (optr)
@@ -164,6 +171,31 @@ namespace WTF {
             CFRelease(ptr);
         return *this;
     }
+
+    template<typename T> template<typename U> inline RetainPtr<T>& RetainPtr<T>::operator=(U* optr)
+    {
+        if (optr)
+            CFRetain(optr);
+        PtrType ptr = m_ptr;
+        m_ptr = optr;
+        if (ptr)
+            CFRelease(ptr);
+        return *this;
+    }
+
+#if COMPILER_SUPPORTS(CXX_RVALUE_REFERENCES)
+    template<typename T> inline RetainPtr<T>& RetainPtr<T>::operator=(RetainPtr<T>&& o)
+    {
+        adoptCF(o.leakRef());
+        return *this;
+    }
+    
+    template<typename T> template<typename U> inline RetainPtr<T>& RetainPtr<T>::operator=(RetainPtr<U>&& o)
+    {
+        adoptCF(o.leakRef());
+        return *this;
+    }
+#endif
 
     template<typename T> inline void RetainPtr<T>::adoptCF(PtrType optr)
     {
@@ -181,17 +213,6 @@ namespace WTF {
         m_ptr = optr;
         if (ptr)
             CFRelease(ptr);
-    }
-    
-    template<typename T> template<typename U> inline RetainPtr<T>& RetainPtr<T>::operator=(U* optr)
-    {
-        if (optr)
-            CFRetain(optr);
-        PtrType ptr = m_ptr;
-        m_ptr = optr;
-        if (ptr)
-            CFRelease(ptr);
-        return *this;
     }
 
     template<typename T> inline void RetainPtr<T>::swap(RetainPtr<T>& o)
@@ -233,7 +254,26 @@ namespace WTF {
     { 
         return a != b.get(); 
     }
-    
+
+    template<typename T> inline RetainPtr<T> adoptCF(T) WARN_UNUSED_RETURN;
+    template<typename T> inline RetainPtr<T> adoptCF(T o)
+    {
+        return RetainPtr<T>(AdoptCF, o);
+    }
+
+    template<typename T> inline RetainPtr<T> adoptNS(T) WARN_UNUSED_RETURN;
+    template<typename T> inline RetainPtr<T> adoptNS(T o)
+    {
+        return RetainPtr<T>(AdoptNS, o);
+    }
+
+    // Helper function for creating a RetainPtr using template argument deduction.
+    template<typename T> inline RetainPtr<T> retainPtr(T) WARN_UNUSED_RETURN;
+    template<typename T> inline RetainPtr<T> retainPtr(T o)
+    {
+        return RetainPtr<T>(o);
+    }
+
     template<typename P> struct HashTraits<RetainPtr<P> > : SimpleClassHashTraits<RetainPtr<P> > { };
     
     template<typename P> struct PtrHash<RetainPtr<P> > : PtrHash<typename RetainPtr<P>::PtrType> {
@@ -251,6 +291,9 @@ namespace WTF {
 
 using WTF::AdoptCF;
 using WTF::AdoptNS;
+using WTF::adoptCF;
+using WTF::adoptNS;
 using WTF::RetainPtr;
+using WTF::retainPtr;
 
 #endif // WTF_RetainPtr_h

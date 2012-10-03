@@ -197,7 +197,7 @@ public:
         if (!m_historySteps) {
             // Special case for go(0) from a frame -> reload only the frame
             // To follow Firefox and IE's behavior, history reload can only navigate the self frame.
-            frame->loader()->urlSelected(frame->document()->url(), "_self", 0, lockHistory(), lockBackForwardList(), SendReferrer);
+            frame->loader()->urlSelected(frame->document()->url(), "_self", 0, lockHistory(), lockBackForwardList(), MaybeSendReferrer);
             return;
         }
         // go(i!=0) from a frame navigates into the history of the frame only,
@@ -232,7 +232,7 @@ public:
             return;
         FrameLoadRequest frameRequest(requestingFrame->document()->securityOrigin());
         m_submission->populateFrameLoadRequest(frameRequest);
-        frame->loader()->loadFrameRequest(frameRequest, lockHistory(), lockBackForwardList(), m_submission->event(), m_submission->state(), SendReferrer);
+        frame->loader()->loadFrameRequest(frameRequest, lockHistory(), lockBackForwardList(), m_submission->event(), m_submission->state(), MaybeSendReferrer);
     }
     
     virtual void didStartTimer(Frame* frame, Timer<NavigationScheduler>* timer)
@@ -422,6 +422,8 @@ void NavigationScheduler::schedule(PassOwnPtr<ScheduledNavigation> redirect)
 {
     ASSERT(m_frame->page());
 
+    RefPtr<Frame> protect(m_frame);
+
     // If a redirect was scheduled during a load, then stop the current load.
     // Otherwise when the current load transitions from a provisional to a 
     // committed state, pending redirects may be cancelled. 
@@ -436,6 +438,9 @@ void NavigationScheduler::schedule(PassOwnPtr<ScheduledNavigation> redirect)
 
     if (!m_frame->loader()->isComplete() && m_redirect->isLocationChange())
         m_frame->loader()->completed();
+
+    if (!m_frame->page())
+        return;
 
     startTimer();
 }

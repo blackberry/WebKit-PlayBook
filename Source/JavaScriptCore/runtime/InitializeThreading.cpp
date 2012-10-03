@@ -30,14 +30,13 @@
 #include "InitializeThreading.h"
 
 #include "Heap.h"
-#include "Heuristics.h"
+#include "Options.h"
 #include "Identifier.h"
 #include "JSDateMath.h"
 #include "JSGlobalObject.h"
 #include "UString.h"
 #include "WriteBarrier.h"
-#include "dtoa.h"
-#include <wtf/DateMath.h>
+#include <wtf/dtoa.h>
 #include <wtf/Threading.h>
 #include <wtf/dtoa/cached-powers.h>
 
@@ -53,13 +52,12 @@ static void initializeThreadingOnce()
 {
     WTF::double_conversion::initialize();
     WTF::initializeThreading();
-    Heuristics::initializeHeuristics();
+    Options::initializeOptions();
 #if ENABLE(WRITE_BARRIER_PROFILING)
     WriteBarrierCounters::initialize();
 #endif
-    JSGlobalData::storeVPtrs();
-#if ENABLE(JSC_MULTIPLE_THREADS)
-    RegisterFile::initializeThreading();
+#if ENABLE(JIT) && ENABLE(ASSEMBLER)
+    ExecutableAllocator::initializeAllocator();
 #endif
     RegisterFile::initializeThreading();
 }

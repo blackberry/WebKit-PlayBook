@@ -574,12 +574,10 @@ static void runOpenPanel(WKPageRef page, WKFrameRef frame, WKOpenPanelParameters
 
 - (void)awakeFromNib
 {
-    _webView = [[WKView alloc] initWithFrame:[containerView frame] contextRef:_context pageGroupRef:_pageGroup];
+    _webView = [[WKView alloc] initWithFrame:[containerView bounds] contextRef:_context pageGroupRef:_pageGroup];
 
-    [containerView addSubview:_webView];
-    [_webView setFrame:[containerView frame]];
-    
     [_webView setAutoresizingMask:(NSViewWidthSizable | NSViewHeightSizable)];
+    [containerView addSubview:_webView];
     
     WKPageLoaderClient loadClient = {
         kWKPageLoaderClientCurrentVersion,
@@ -608,8 +606,10 @@ static void runOpenPanel(WKPageRef page, WKFrameRef frame, WKOpenPanelParameters
         processDidExit,
         didChangeBackForwardList,
         0, // shouldGoToBackForwardItem
-        0,  // didFailToInitializePlugin
+        0, // didFailToInitializePlugin
         didDetectXSSForFrame,
+        0, // didNewFirstVisuallyNonEmptyLayout
+        0, // willGoToBackForwardListItem
     };
     WKPageSetPageLoaderClient(_webView.pageRef, &loadClient);
     
@@ -667,6 +667,7 @@ static void runOpenPanel(WKPageRef page, WKFrameRef frame, WKOpenPanelParameters
         0, // shouldInterruptJavaScript
         createNewPage,
         mouseDidMoveOverElement,
+        0, // decidePolicyForNotificationPermissionRequest
     };
     WKPageSetPageUIClient(_webView.pageRef, &uiClient);
 }

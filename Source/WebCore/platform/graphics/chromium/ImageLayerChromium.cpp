@@ -72,12 +72,10 @@ public:
 
     virtual ~ImageLayerTextureUpdater() { }
 
-    virtual PassRefPtr<LayerTextureUpdater::Texture> createTexture(TextureManager* manager)
+    virtual PassOwnPtr<LayerTextureUpdater::Texture> createTexture(TextureManager* manager)
     {
-        return adoptRef(new Texture(this, ManagedTexture::create(manager)));
+        return adoptPtr(new Texture(this, ManagedTexture::create(manager)));
     }
-
-    virtual Orientation orientation() { return LayerTextureUpdater::BottomUpOrientation; }
 
     virtual SampledTexelFormat sampledTexelFormat(GC3Denum textureFormat)
     {
@@ -85,7 +83,7 @@ public:
                 LayerTextureUpdater::SampledTexelFormatRGBA : LayerTextureUpdater::SampledTexelFormatBGRA;
     }
 
-    virtual void prepareToUpdate(const IntRect& /* contentRect */, const IntSize& tileSize, int /* borderTexels */)
+    virtual void prepareToUpdate(const IntRect& contentRect, const IntSize& tileSize, int /* borderTexels */, float /* contentsScale */, IntRect* /* resultingOpaqueRect */)
     {
         m_texSubImage.setSubImageSize(tileSize);
     }
@@ -131,25 +129,19 @@ private:
     LayerTextureSubImage m_texSubImage;
 };
 
-PassRefPtr<ImageLayerChromium> ImageLayerChromium::create(CCLayerDelegate* delegate)
+PassRefPtr<ImageLayerChromium> ImageLayerChromium::create()
 {
-    return adoptRef(new ImageLayerChromium(delegate));
+    return adoptRef(new ImageLayerChromium());
 }
 
-ImageLayerChromium::ImageLayerChromium(CCLayerDelegate* delegate)
-    : TiledLayerChromium(delegate)
+ImageLayerChromium::ImageLayerChromium()
+    : TiledLayerChromium()
     , m_imageForCurrentFrame(0)
 {
 }
 
 ImageLayerChromium::~ImageLayerChromium()
 {
-}
-
-void ImageLayerChromium::cleanupResources()
-{
-    m_textureUpdater.clear();
-    TiledLayerChromium::cleanupResources();
 }
 
 void ImageLayerChromium::setContents(Image* contents)
@@ -163,27 +155,31 @@ void ImageLayerChromium::setContents(Image* contents)
 
     m_contents = contents;
     m_imageForCurrentFrame = m_contents->nativeImageForCurrentFrame();
-    m_dirtyRect = IntRect(IntPoint(0, 0), bounds());
     setNeedsDisplay();
-    setOpaque(!m_contents->currentFrameHasAlpha());
 }
 
-void ImageLayerChromium::paintContentsIfDirty()
+void ImageLayerChromium::paintContentsIfDirty(const Region& /* occludedScreenSpace */)
 {
-    if (!m_dirtyRect.isEmpty()) {
+    createTextureUpdaterIfNeeded();
+    if (m_needsDisplay) {
         m_textureUpdater->updateFromImage(m_contents->nativeImageForCurrentFrame());
         updateTileSizeAndTilingOption();
-        IntRect paintRect(IntPoint(), contentBounds());
-        if (!m_dirtyRect.isEmpty()) {
-            invalidateRect(paintRect);
-            resetNeedsDisplay();
-        }
+        invalidateRect(IntRect(IntPoint(), contentBounds()));
+        m_needsDisplay = false;
     }
 
-    if (visibleLayerRect().isEmpty())
+    prepareToUpdate(visibleLayerRect());
+}
+
+void ImageLayerChromium::createTextureUpdaterIfNeeded()
+{
+    if (m_textureUpdater)
         return;
 
-    prepareToUpdate(visibleLayerRect());
+    m_textureUpdater = ImageLayerTextureUpdater::create(layerTreeHost()->layerRendererCapabilities().usingMapSub);
+    GC3Denum textureFormat = layerTreeHost()->layerRendererCapabilities().bestTextureFormat;
+    setTextureFormat(textureFormat);
+    setSampledTexelFormat(textureUpdater()->sampledTexelFormat(textureFormat));
 }
 
 LayerTextureUpdater* ImageLayerChromium::textureUpdater() const
@@ -203,9 +199,10 @@ bool ImageLayerChromium::drawsContent() const
     return m_contents && TiledLayerChromium::drawsContent();
 }
 
-void ImageLayerChromium::createTextureUpdater(const CCLayerTreeHost* host)
+bool ImageLayerChromium::needsContentsScale() const
 {
-    m_textureUpdater = ImageLayerTextureUpdater::create(host->layerRendererCapabilities().usingMapSub);
+    // Contents scale is not need for image layer because this can be done in compositor more efficiently.
+    return false;
 }
 
 }

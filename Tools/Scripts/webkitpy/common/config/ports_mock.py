@@ -28,16 +28,18 @@
 
 
 class MockPort(object):
+    results_directory = "/mock-results"
+
     def name(self):
         return "MockPort"
 
     def layout_tests_results_path(self):
-        return "/mock-results/results.html"
+        return "/mock-results/full_results.json"
 
     def check_webkit_style_command(self):
         return ["mock-check-webkit-style"]
 
-    def update_webkit_command(self):
+    def update_webkit_command(self, non_interactive=False):
         return ["mock-update-webkit"]
 
     def build_webkit_command(self, build_style=None):
@@ -54,6 +56,9 @@ class MockPort(object):
 
     def run_javascriptcore_tests_command(self):
         return ['mock-run-javacriptcore-tests']
+
+    def run_webkit_unit_tests_command(self):
+        return ['mock-run-webkit-unit-tests']
 
     def run_webkit_tests_command(self):
         return ['mock-run-webkit-tests']

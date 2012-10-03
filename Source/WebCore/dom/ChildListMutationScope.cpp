@@ -36,25 +36,24 @@
 
 #include "DocumentFragment.h"
 #include "Element.h"
+#include "MutationObserverInterestGroup.h"
 #include "MutationRecord.h"
 #include "Node.h"
 #include "StaticNodeList.h"
 #include <wtf/HashMap.h>
-#include <wtf/RefCounted.h>
+#include <wtf/OwnPtr.h>
 
 namespace WebCore {
 
-namespace {
-
-// ChildListMutationAccumulator expects that all removals from a parent take place in order
+// MutationAccumulator expects that all removals from a parent take place in order
 // and precede any additions. If this is violated (i.e. because of code changes elsewhere
 // in WebCore) it will likely result in both (a) ASSERTions failing, and (b) mutation records
 // being enqueued for delivery before the outer-most scope closes.
-class ChildListMutationAccumulator : public RefCounted<ChildListMutationAccumulator> {
-    WTF_MAKE_NONCOPYABLE(ChildListMutationAccumulator);
+class ChildListMutationScope::MutationAccumulator {
+    WTF_MAKE_NONCOPYABLE(MutationAccumulator);
 public:
-    ChildListMutationAccumulator(PassRefPtr<Node>, HashMap<WebKitMutationObserver*, MutationObserverOptions>&);
-    ~ChildListMutationAccumulator();
+    MutationAccumulator(PassRefPtr<Node>, PassOwnPtr<MutationObserverInterestGroup> observers);
+    ~MutationAccumulator();
 
     void childAdded(PassRefPtr<Node>);
     void willRemoveChild(PassRefPtr<Node>);
@@ -73,51 +72,27 @@ private:
     RefPtr<Node> m_nextSibling;
     RefPtr<Node> m_lastAdded;
 
-    HashMap<WebKitMutationObserver*, MutationObserverOptions> m_observers;
+    OwnPtr<MutationObserverInterestGroup> m_observers;
 };
 
-class MutationAccumulationRouter {
-    WTF_MAKE_NONCOPYABLE(MutationAccumulationRouter);
-public:
-    ~MutationAccumulationRouter();
-
-    static MutationAccumulationRouter* instance();
-
-    void incrementScopingLevel(Node*);
-    void decrementScopingLevel(Node*);
-
-    void childAdded(Node* target, Node* child);
-    void willRemoveChild(Node* target, Node* child);
-
-private:
-    MutationAccumulationRouter();
-    static void initialize();
-
-    typedef HashMap<Node*, unsigned> ScopingLevelMap;
-    ScopingLevelMap m_scopingLevels;
-    HashMap<Node*, RefPtr<ChildListMutationAccumulator> > m_accumulations;
-
-    static MutationAccumulationRouter* s_instance;
-};
-
-ChildListMutationAccumulator::ChildListMutationAccumulator(PassRefPtr<Node> target, HashMap<WebKitMutationObserver*, MutationObserverOptions>& observers)
+ChildListMutationScope::MutationAccumulator::MutationAccumulator(PassRefPtr<Node> target, PassOwnPtr<MutationObserverInterestGroup> observers)
     : m_target(target)
+    , m_observers(observers)
 {
-    m_observers.swap(observers);
     clear();
 }
 
-ChildListMutationAccumulator::~ChildListMutationAccumulator()
+ChildListMutationScope::MutationAccumulator::~MutationAccumulator()
 {
     ASSERT(isEmpty());
 }
 
-inline bool ChildListMutationAccumulator::isAddedNodeInOrder(Node* child)
+inline bool ChildListMutationScope::MutationAccumulator::isAddedNodeInOrder(Node* child)
 {
     return isEmpty() || (m_lastAdded == child->previousSibling() && m_nextSibling == child->nextSibling());
 }
 
-void ChildListMutationAccumulator::childAdded(PassRefPtr<Node> prpChild)
+void ChildListMutationScope::MutationAccumulator::childAdded(PassRefPtr<Node> prpChild)
 {
     RefPtr<Node> child = prpChild;
 
@@ -134,12 +109,12 @@ void ChildListMutationAccumulator::childAdded(PassRefPtr<Node> prpChild)
     m_lastAdded = child;
 }
 
-inline bool ChildListMutationAccumulator::isRemovedNodeInOrder(Node* child)
+inline bool ChildListMutationScope::MutationAccumulator::isRemovedNodeInOrder(Node* child)
 {
     return isEmpty() || m_nextSibling.get() == child;
 }
 
-void ChildListMutationAccumulator::willRemoveChild(PassRefPtr<Node> prpChild)
+void ChildListMutationScope::MutationAccumulator::willRemoveChild(PassRefPtr<Node> prpChild)
 {
     RefPtr<Node> child = prpChild;
 
@@ -158,7 +133,7 @@ void ChildListMutationAccumulator::willRemoveChild(PassRefPtr<Node> prpChild)
     m_removedNodes.append(child);
 }
 
-void ChildListMutationAccumulator::enqueueMutationRecord()
+void ChildListMutationScope::MutationAccumulator::enqueueMutationRecord()
 {
     ASSERT(!isEmpty());
     if (isEmpty()) {
@@ -166,16 +141,12 @@ void ChildListMutationAccumulator::enqueueMutationRecord()
         return;
     }
 
-    RefPtr<MutationRecord> mutation = MutationRecord::createChildList(
-        m_target, StaticNodeList::adopt(m_addedNodes), StaticNodeList::adopt(m_removedNodes), m_previousSibling.release(), m_nextSibling.release());
-
-    for (HashMap<WebKitMutationObserver*, MutationObserverOptions>::iterator iter = m_observers.begin(); iter != m_observers.end(); ++iter)
-        iter->first->enqueueMutationRecord(mutation);
-
+    m_observers->enqueueMutationRecord(MutationRecord::createChildList(
+            m_target, StaticNodeList::adopt(m_addedNodes), StaticNodeList::adopt(m_removedNodes), m_previousSibling.release(), m_nextSibling.release()));
     clear();
 }
 
-void ChildListMutationAccumulator::clear()
+void ChildListMutationScope::MutationAccumulator::clear()
 {
     if (!m_removedNodes.isEmpty())
         m_removedNodes.clear();
@@ -186,31 +157,31 @@ void ChildListMutationAccumulator::clear()
     m_lastAdded = 0;
 }
 
-bool ChildListMutationAccumulator::isEmpty()
+bool ChildListMutationScope::MutationAccumulator::isEmpty()
 {
     return m_removedNodes.isEmpty() && m_addedNodes.isEmpty();
 }
 
-MutationAccumulationRouter* MutationAccumulationRouter::s_instance = 0;
+ChildListMutationScope::MutationAccumulationRouter* ChildListMutationScope::MutationAccumulationRouter::s_instance = 0;
 
-MutationAccumulationRouter::MutationAccumulationRouter()
+ChildListMutationScope::MutationAccumulationRouter::MutationAccumulationRouter()
 {
 }
 
-MutationAccumulationRouter::~MutationAccumulationRouter()
+ChildListMutationScope::MutationAccumulationRouter::~MutationAccumulationRouter()
 {
     ASSERT(m_scopingLevels.isEmpty());
     ASSERT(m_accumulations.isEmpty());
 }
 
-void MutationAccumulationRouter::initialize()
+void ChildListMutationScope::MutationAccumulationRouter::initialize()
 {
     ASSERT(!s_instance);
-    s_instance = adoptPtr(new MutationAccumulationRouter).leakPtr();
+    s_instance = adoptPtr(new ChildListMutationScope::MutationAccumulationRouter).leakPtr();
 }
 
 
-MutationAccumulationRouter* MutationAccumulationRouter::instance()
+ChildListMutationScope::MutationAccumulationRouter* ChildListMutationScope::MutationAccumulationRouter::instance()
 {
     if (!s_instance)
         initialize();
@@ -218,25 +189,27 @@ MutationAccumulationRouter* MutationAccumulationRouter::instance()
     return s_instance;
 }
 
-void MutationAccumulationRouter::childAdded(Node* target, Node* child)
+void ChildListMutationScope::MutationAccumulationRouter::childAdded(Node* target, Node* child)
 {
-    HashMap<Node*, RefPtr<ChildListMutationAccumulator> >::iterator iter = m_accumulations.find(target);
+    HashMap<Node*, OwnPtr<ChildListMutationScope::MutationAccumulator> >::iterator iter = m_accumulations.find(target);
     ASSERT(iter != m_accumulations.end());
+    if (iter == m_accumulations.end() || !iter->second)
+        return;
 
-    if (iter->second)
-        iter->second->childAdded(child);
+    iter->second->childAdded(child);
 }
 
-void MutationAccumulationRouter::willRemoveChild(Node* target, Node* child)
+void ChildListMutationScope::MutationAccumulationRouter::willRemoveChild(Node* target, Node* child)
 {
-    HashMap<Node*, RefPtr<ChildListMutationAccumulator> >::iterator iter = m_accumulations.find(target);
+    HashMap<Node*, OwnPtr<ChildListMutationScope::MutationAccumulator> >::iterator iter = m_accumulations.find(target);
     ASSERT(iter != m_accumulations.end());
+    if (iter == m_accumulations.end() || !iter->second)
+        return;
 
-    if (iter->second)
-        iter->second->willRemoveChild(child);
+    iter->second->willRemoveChild(child);
 }
 
-void MutationAccumulationRouter::incrementScopingLevel(Node* target)
+void ChildListMutationScope::MutationAccumulationRouter::incrementScopingLevel(Node* target)
 {
     pair<ScopingLevelMap::iterator, bool> result = m_scopingLevels.add(target, 1);
     if (!result.second) {
@@ -244,15 +217,15 @@ void MutationAccumulationRouter::incrementScopingLevel(Node* target)
         return;
     }
 
-    HashMap<WebKitMutationObserver*, MutationRecordDeliveryOptions> observers;
-    target->getRegisteredMutationObserversOfType(observers, WebKitMutationObserver::ChildList);
-    if (observers.isEmpty())
-        m_accumulations.set(target, 0);
+    if (OwnPtr<MutationObserverInterestGroup> observers = MutationObserverInterestGroup::createForChildListMutation(target))
+        m_accumulations.set(target, adoptPtr(new ChildListMutationScope::MutationAccumulator(target, observers.release())));
+#ifndef NDEBUG
     else
-        m_accumulations.set(target, adoptRef(new ChildListMutationAccumulator(target, observers)));
+        m_accumulations.set(target, nullptr);
+#endif
 }
 
-void MutationAccumulationRouter::decrementScopingLevel(Node* target)
+void ChildListMutationScope::MutationAccumulationRouter::decrementScopingLevel(Node* target)
 {
     ScopingLevelMap::iterator iter = m_scopingLevels.find(target);
     ASSERT(iter != m_scopingLevels.end());
@@ -263,32 +236,9 @@ void MutationAccumulationRouter::decrementScopingLevel(Node* target)
 
     m_scopingLevels.remove(iter);
 
-    RefPtr<ChildListMutationAccumulator> record = m_accumulations.take(target);
+    OwnPtr<MutationAccumulator> record(m_accumulations.take(target));
     if (record)
         record->enqueueMutationRecord();
-}
-
-} // namespace
-
-ChildListMutationScope::ChildListMutationScope(Node* target)
-    : m_target(target)
-{
-    MutationAccumulationRouter::instance()->incrementScopingLevel(m_target);
-}
-
-ChildListMutationScope::~ChildListMutationScope()
-{
-    MutationAccumulationRouter::instance()->decrementScopingLevel(m_target);
-}
-
-void ChildListMutationScope::childAdded(Node* child)
-{
-    MutationAccumulationRouter::instance()->childAdded(m_target, child);
-}
-
-void ChildListMutationScope::willRemoveChild(Node* child)
-{
-    MutationAccumulationRouter::instance()->willRemoveChild(m_target, child);
 }
 
 } // namespace WebCore

@@ -298,6 +298,13 @@ IntRect PageClientImpl::windowToScreen(const IntRect& rect)
     return enclosingIntRect(tempRect);
 }
 
+#if ENABLE(GESTURE_EVENTS)
+void PageClientImpl::doneWithGestureEvent(const WebGestureEvent&, bool wasEventHandled)
+{
+    notImplemented();
+}
+#endif
+
 void PageClientImpl::doneWithKeyEvent(const NativeWebKeyboardEvent& event, bool eventWasHandled)
 {
     [m_wkView _doneWithKeyEvent:event.nativeEvent() eventWasHandled:eventWasHandled];
@@ -457,6 +464,34 @@ void PageClientImpl::recordAutocorrectionResponse(EditorClient::AutocorrectionRe
 #if !defined(BUILDING_ON_SNOW_LEOPARD)
     NSCorrectionResponse response = responseType == EditorClient::AutocorrectionReverted ? NSCorrectionResponseReverted : NSCorrectionResponseEdited;
     CorrectionPanel::recordAutocorrectionResponse(m_wkView, response, replacedString, replacementString);
+#endif
+}
+
+void PageClientImpl::recommendedScrollbarStyleDidChange(int32_t newStyle)
+{
+#if !defined(BUILDING_ON_SNOW_LEOPARD)
+    NSArray *trackingAreas = [m_wkView trackingAreas];
+    NSUInteger count = [trackingAreas count];
+    ASSERT(count == 1);
+    
+    for (NSUInteger i = 0; i < count; ++i)
+        [m_wkView removeTrackingArea:[trackingAreas objectAtIndex:i]];
+
+    // Now re-create a tracking area with the appropriate options given the new scrollbar style
+    NSTrackingAreaOptions options = NSTrackingMouseMoved | NSTrackingMouseEnteredAndExited | NSTrackingInVisibleRect;
+    if (newStyle == NSScrollerStyleLegacy)
+        options |= NSTrackingActiveAlways;
+    else
+        options |= NSTrackingActiveInKeyWindow;
+
+    NSTrackingArea *trackingArea = [[NSTrackingArea alloc] initWithRect:[m_wkView frame]
+                                                                options:options
+                                                                  owner:m_wkView
+                                                               userInfo:nil];
+    [m_wkView addTrackingArea:trackingArea];
+    [trackingArea release];
+#else
+    UNUSED_PARAM(newStyle);
 #endif
 }
 

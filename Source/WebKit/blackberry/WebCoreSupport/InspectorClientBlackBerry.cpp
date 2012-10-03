@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,19 +22,15 @@
 
 #include "BackingStore.h"
 #include "Frame.h"
-#include "FrameView.h"
-#include "IntRect.h"
-#include "IntSize.h"
 #include "NotImplemented.h"
 #include "RenderObject.h"
-#include "WebPage.h"
 #include "WebPageClient.h"
 #include "WebPage_p.h"
 
 namespace WebCore {
 
-InspectorClientBlackBerry::InspectorClientBlackBerry(BlackBerry::WebKit::WebPage* page)
-    : m_page(page)
+InspectorClientBlackBerry::InspectorClientBlackBerry(BlackBerry::WebKit::WebPagePrivate* webPagePrivate)
+    : m_webPagePrivate(webPagePrivate)
 {
     m_inspectorSettingsMap = adoptPtr(new SettingsMap);
 }
@@ -94,12 +90,12 @@ void InspectorClientBlackBerry::highlight()
 
 void InspectorClientBlackBerry::hideHighlight()
 {
-    // FIXME: potentially slow hack, but invalidating everything should work since the actual highlight is drawn by BackingStorePrivate::renderContents()
-    if (!m_page->d->mainFrame() || !m_page->d->mainFrame()->document() || !m_page->d->mainFrame()->document()->documentElement()
-        || !m_page->d->mainFrame()->document()->documentElement()->renderer())
+    if (!m_webPagePrivate->mainFrame() || !m_webPagePrivate->mainFrame()->document() || !m_webPagePrivate->mainFrame()->document()->documentElement()
+        || !m_webPagePrivate->mainFrame()->document()->documentElement()->renderer())
         return;
 
-    m_page->d->mainFrame()->document()->documentElement()->renderer()->repaint(true);
+    // FIXME: Potentially slow hack, but invalidating everything should work since the actual highlight is drawn by BackingStorePrivate::renderContents().
+    m_webPagePrivate->mainFrame()->document()->documentElement()->renderer()->repaint(true);
 }
 
 void InspectorClientBlackBerry::inspectedURLChanged(const String&)
@@ -128,21 +124,31 @@ void InspectorClientBlackBerry::openInspectorFrontend(InspectorController*)
     notImplemented();
 }
 
-bool InspectorClientBlackBerry::sendMessageToFrontend(const WTF::String& message)
+void InspectorClientBlackBerry::closeInspectorFrontend()
 {
-    CString utf8Message =  message.utf8();
-    m_page->client()->handleWebInspectorMessageToFrontend(0, utf8Message.data(), utf8Message.length());
+    notImplemented();
+}
+
+void InspectorClientBlackBerry::bringFrontendToFront()
+{
+    notImplemented();
+}
+
+bool InspectorClientBlackBerry::sendMessageToFrontend(const String& message)
+{
+    CString utf8Message = message.utf8();
+    m_webPagePrivate->m_client->handleWebInspectorMessageToFrontend(0, utf8Message.data(), utf8Message.length());
     return true;
 }
 
 void InspectorClientBlackBerry::clearBrowserCache()
 {
-    m_page->client()->clearCache();
+    m_webPagePrivate->m_client->clearCache();
 }
 
 void InspectorClientBlackBerry::clearBrowserCookies()
 {
-    m_page->client()->clearCookies();
+    m_webPagePrivate->m_client->clearCookies();
 }
 
 } // namespace WebCore

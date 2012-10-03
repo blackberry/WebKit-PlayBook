@@ -5,7 +5,6 @@
 # See 'Tools/qmake/README' for an overview of the build system
 # -------------------------------------------------------------------
 
-load(default_pre) # Load Qt's defaults
 load(functions)
 
 # FIXME: In this case we probably want to exit early so that we
@@ -22,28 +21,14 @@ isEmpty(pro_file): CONFIG += recursive_include
 # Resolve root directories for source and build
 ROOT_WEBKIT_DIR = $$replace(IN_PWD, /Tools/qmake/mkspecs/features,)
 WEBKIT_SUBDIR = $$replace(_PRO_FILE_PWD_, $${ROOT_WEBKIT_DIR},)
-ROOT_BUILD_DIR = $$replace(OUT_PWD, $$SOURCE_SUBDIR,)
+ROOT_BUILD_DIR = $$replace(OUT_PWD, $$WEBKIT_SUBDIR,)
 
-# Fix up root build dir in case of running qmake on a subtarget
-subdir_parts = $$split(WEBKIT_SUBDIR, $${QMAKE_DIR_SEP})
-root_build_dir_candidate = $$ROOT_BUILD_DIR
+# We want the QtWebKit API forwarding includes to live in the root build dir,
+# except when we are running the config.tests in Tools/qmake.
+pro_file_name = $$basename(_PRO_FILE_)
+!equals(pro_file_name, configure.pro): QMAKE_SYNCQT_OUTDIR = $$ROOT_BUILD_DIR
 
-for(ever) {
-    part = $$last(subdir_parts)
-
-    root_build_dir_candidate = $$replace(ROOT_BUILD_DIR, $${QMAKE_DIR_SEP}$${part}$,)
-    !equals(ROOT_BUILD_DIR, $$root_build_dir_candidate) {
-        ROOT_BUILD_DIR = $$root_build_dir_candidate
-    } else {
-        BUILD_SUBDIR = $$subdir_parts
-        break()
-    }
-
-    subdir_parts = $$member(subdir_parts, 0, -2)
-    isEmpty(subdir_parts): break()
-}
-
-BUILD_SUBDIR = $$join(BUILD_SUBDIR, $${QMAKE_DIR_SEP})
+load(default_pre) # Load Qt's defaults after we've resolved the build directory
 
 equals(OUT_PWD, $${ROOT_BUILD_DIR}) {
     !recursive_include:CONFIG += root_project_file
@@ -58,8 +43,17 @@ equals(OUT_PWD, $${ROOT_BUILD_DIR}) {
 }
 
 # Make sure QMAKEPATH is set for recursive targets
-win32-msvc*: QMAKE_QMAKE = \(set QMAKEPATH=$$(QMAKEPATH)\) && $$QMAKE_QMAKE
-else: QMAKE_QMAKE = QMAKEPATH=$$(QMAKEPATH) $$QMAKE_QMAKE
+win32* {
+    pwd = $$(PWD) # Normally empty for cmd.exe
+    is_building_under_cygwin = $$find(pwd, ^/)
+    !isEmpty(is_building_under_cygwin) {
+        QMAKE_QMAKE = QMAKEPATH=$$(QMAKEPATH) $$QMAKE_QMAKE
+    } else {
+        QMAKE_QMAKE = \(set QMAKEPATH=$$(QMAKEPATH)\) && $$QMAKE_QMAKE
+    }
+} else {
+    QMAKE_QMAKE = QMAKEPATH=$$(QMAKEPATH) $$QMAKE_QMAKE
+}
 
 # Default location of generated sources
 GENERATED_SOURCES_DESTDIR = generated
@@ -100,6 +94,10 @@ haveQt(5): {
         root_project_file: error("Building WebKit against Qt 5.0 requires the QtWidgets and QtPrintSupport modules.")
     }
 }
+
+QT.webkit.modulefile = $${ROOT_WEBKIT_DIR}/Tools/qmake/mkspecs/modules/qt_webkit.pri
+include($$QT.webkit.modulefile)
+VERSION = $${QT.webkit.VERSION}
 
 # Set some defaults for specific platforms
 CONFIG += include_webinspector

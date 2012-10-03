@@ -35,8 +35,6 @@ objects to the Manager. The Manager then aggregates the TestFailures to
 create a final report.
 """
 
-from __future__ import with_statement
-
 import errno
 import logging
 import math
@@ -46,7 +44,6 @@ import re
 import sys
 import time
 
-from webkitpy.common.checkout.scm import default_scm
 from webkitpy.layout_tests.controllers import manager_worker_broker
 from webkitpy.layout_tests.controllers import worker
 from webkitpy.layout_tests.layout_package import json_layout_results_generator
@@ -90,12 +87,10 @@ def interpret_test_failures(port, test_name, failures):
             test_dict['image_diff_percent'] = failure.diff_percent
         elif isinstance(failure, test_failures.FailureReftestMismatch):
             test_dict['is_reftest'] = True
-            if failure.reference_filename != port.reftest_expected_filename(test_name):
-                test_dict['ref_file'] = port.relative_test_filename(failure.reference_filename)
+            test_dict['ref_file'] = port.relative_test_filename(failure.reference_filename)
         elif isinstance(failure, test_failures.FailureReftestMismatchDidNotOccur):
             test_dict['is_mismatch_reftest'] = True
-            if failure.reference_filename != port.reftest_expected_mismatch_filename(test_name):
-                test_dict['ref_file'] = port.relative_test_filename(failure.reference_filename)
+            test_dict['ref_file'] = port.relative_test_filename(failure.reference_filename)
 
     if test_failures.FailureMissingResult in failure_types:
         test_dict['is_missing_text'] = True
@@ -104,6 +99,11 @@ def interpret_test_failures(port, test_name, failures):
         test_dict['is_missing_image'] = True
     return test_dict
 
+
+def use_trac_links_in_results_html(port_obj):
+    # We only use trac links on the buildbots.
+    # Use existence of builder_name as a proxy for knowing we're on a bot.
+    return port_obj.get_option("builder_name")
 
 # FIXME: This should be on the Manager class (since that's the only caller)
 # or split off from Manager onto another helper class, but should not be a free function.
@@ -231,14 +231,12 @@ def summarize_results(port_obj, expectations, result_summary, retry_summary, tes
     results['has_wdiff'] = port_obj.wdiff_available()
     results['has_pretty_patch'] = port_obj.pretty_patch_available()
     try:
-        results['revision'] = default_scm().head_svn_revision()
+        # We only use the svn revision for using trac links in the results.html file,
+        # Don't do this by default since it takes >100ms.
+        if use_trac_links_in_results_html(port_obj):
+            results['revision'] = port_obj.host.scm().head_svn_revision()
     except Exception, e:
-        # FIXME: We would like to warn here, but that would cause all passing_run integration tests
-        # to fail, since they assert that we have no logging output.
-        # The revision lookup always fails when running the tests since it tries to read from
-        # "/mock-checkout" using the real file system (since there is no way to mock out detect_scm_system at current).
-        # Once we fix detect_scm_system to use the mock file system we can add this log back.
-        #_log.warn("Failed to determine svn revision for checkout (cwd: %s, webkit_base: %s), leaving 'revision' key blank in full_results.json.\n%s" % (port_obj._filesystem.getcwd(), port_obj.path_from_webkit_base(), e))
+        _log.warn("Failed to determine svn revision for checkout (cwd: %s, webkit_base: %s), leaving 'revision' key blank in full_results.json.\n%s" % (port_obj._filesystem.getcwd(), port_obj.path_from_webkit_base(), e))
         # Handle cases where we're running outside of version control.
         import traceback
         _log.debug('Failed to learn head svn revision:')
@@ -298,7 +296,7 @@ class Manager(object):
           printer: a Printer object to record updates to.
         """
         self._port = port
-        self._fs = port.filesystem
+        self._filesystem = port.host.filesystem
         self._options = options
         self._printer = printer
         self._message_broker = None
@@ -340,7 +338,7 @@ class Manager(object):
         """
         paths = self._strip_test_dir_prefixes(args)
         if self._options.test_list:
-            paths += self._strip_test_dir_prefixes(read_test_files(self._fs, self._options.test_list, self._port.TEST_PATH_SEPARATOR))
+            paths += self._strip_test_dir_prefixes(read_test_files(self._filesystem, self._options.test_list, self._port.TEST_PATH_SEPARATOR))
         self._test_files = self._port.tests(paths)
 
     def _strip_test_dir_prefixes(self, paths):
@@ -351,35 +349,9 @@ class Manager(object):
         # the filesystem uses '\\' as a directory separator.
         if path.startswith(self.LAYOUT_TESTS_DIRECTORY + self._port.TEST_PATH_SEPARATOR):
             return path[len(self.LAYOUT_TESTS_DIRECTORY + self._port.TEST_PATH_SEPARATOR):]
-        if path.startswith(self.LAYOUT_TESTS_DIRECTORY + self._fs.sep):
-            return path[len(self.LAYOUT_TESTS_DIRECTORY + self._fs.sep):]
+        if path.startswith(self.LAYOUT_TESTS_DIRECTORY + self._filesystem.sep):
+            return path[len(self.LAYOUT_TESTS_DIRECTORY + self._filesystem.sep):]
         return path
-
-    def lint(self):
-        lint_failed = False
-        for test_configuration in self._port.all_test_configurations():
-            try:
-                self.lint_expectations(test_configuration)
-            except test_expectations.ParseError:
-                lint_failed = True
-                self._printer.write("")
-
-        if lint_failed:
-            _log.error("Lint failed.")
-            return -1
-
-        _log.info("Lint succeeded.")
-        return 0
-
-    def lint_expectations(self, config):
-        port = self._port
-        test_expectations.TestExpectations(
-            port,
-            None,
-            port.test_expectations(),
-            config,
-            self._options.lint_test_files,
-            port.test_expectations_overrides())
 
     def _is_http_test(self, test):
         return self.HTTP_SUBDIR in test or self.WEBSOCKET_SUBDIR in test
@@ -459,8 +431,8 @@ class Manager(object):
             self._printer.print_expected(extra_msg)
             tests_run_msg += "\n" + extra_msg
             files.extend(test_files[0:extra])
-        tests_run_filename = self._fs.join(self._results_directory, "tests_run.txt")
-        self._fs.write_text_file(tests_run_filename, tests_run_msg)
+        tests_run_filename = self._filesystem.join(self._results_directory, "tests_run.txt")
+        self._filesystem.write_text_file(tests_run_filename, tests_run_msg)
 
         len_skip_chunk = int(len(files) * len(skipped) / float(len(self._test_files)))
         skip_chunk_list = list(skipped)[0:len_skip_chunk]
@@ -529,7 +501,10 @@ class Manager(object):
         if self._options.iterations:
             self._test_files_list = self._test_files_list * self._options.iterations
 
-        result_summary = ResultSummary(self._expectations, self._test_files | skipped)
+        iterations =  \
+            (self._options.repeat_each if self._options.repeat_each else 1) * \
+            (self._options.iterations if self._options.iterations else 1)
+        result_summary = ResultSummary(self._expectations, self._test_files | skipped, iterations)
         self._print_expected_results_of_type(result_summary, test_expectations.PASS, "passes")
         self._print_expected_results_of_type(result_summary, test_expectations.FAIL, "failures")
         self._print_expected_results_of_type(result_summary, test_expectations.FLAKY, "flaky")
@@ -544,7 +519,11 @@ class Manager(object):
             for test in skipped:
                 result = test_results.TestResult(test)
                 result.type = test_expectations.SKIP
-                result_summary.add(result, expected=True)
+                iterations =  \
+                    (self._options.repeat_each if self._options.repeat_each else 1) * \
+                    (self._options.iterations if self._options.iterations else 1)
+                for iteration in range(iterations):
+                    result_summary.add(result, expected=True)
         self._printer.print_expected('')
 
         # Check to make sure we didn't filter out all of the tests.
@@ -676,11 +655,17 @@ class Manager(object):
         # Put a ceiling on the number of locked shards, so that we
         # don't hammer the servers too badly.
 
-        # FIXME: For now, limit to one shard. After testing to make sure we
+        # FIXME: For now, limit to one shard or set it
+        # with the --max-locked-shards. After testing to make sure we
         # can handle multiple shards, we should probably do something like
         # limit this to no more than a quarter of all workers, e.g.:
         # return max(math.ceil(num_workers / 4.0), 1)
-        return 1
+        if self._options.max_locked_shards:
+            num_of_locked_shards = self._options.max_locked_shards
+        else:
+            num_of_locked_shards = 1
+
+        return num_of_locked_shards
 
     def _resize_shards(self, old_shards, max_new_shards, shard_name_prefix):
         """Takes a list of shards and redistributes the tests into no more
@@ -767,22 +752,29 @@ class Manager(object):
         num_workers = min(int(self._options.child_processes), len(all_shards))
         self._log_num_workers(num_workers, len(all_shards), len(locked_shards))
 
-        manager_connection = manager_worker_broker.get(self._port, self._options, self, worker.Worker)
+        manager_connection = manager_worker_broker.get(self._options.worker_model, self, worker.Worker)
 
         if self._options.dry_run:
             return (keyboard_interrupted, interrupted, thread_timings, self._group_stats, self._all_results)
 
         self._printer.print_update('Starting %s ...' % grammar.pluralize('worker', num_workers))
         for worker_number in xrange(num_workers):
-            worker_connection = manager_connection.start_worker(worker_number)
-            worker_state = _WorkerState(worker_number, worker_connection)
-            self._worker_states[worker_connection.name] = worker_state
+            worker_arguments = worker.WorkerArguments(worker_number, self.results_directory(), self._options)
+            worker_connection = manager_connection.start_worker(worker_arguments)
+            if self._options.worker_model == 'inline':
+                # FIXME: We need to be able to share a port with the work so
+                # that some of the tests can query state on the port; ideally
+                # we'd rewrite the tests so that this wasn't necessary.
+                #
+                # Note that this only works because in the inline case
+                # the worker hasn't really started yet and won't start
+                # running until we call run_message_loop(), below.
+                worker_connection.set_inline_arguments(self._port)
 
-            # FIXME: If we start workers up too quickly, DumpRenderTree appears
-            # to thrash on something and time out its first few tests. Until
-            # we can figure out what's going on, sleep a bit in between
-            # workers. This needs a bug filed.
-            time.sleep(0.1)
+            worker_state = _WorkerState(worker_number, worker_connection)
+            self._worker_states[worker_connection.name()] = worker_state
+
+            time.sleep(self._port.worker_startup_delay_secs())
 
         self._printer.print_update("Starting testing ...")
         for shard in all_shards:
@@ -832,22 +824,15 @@ class Manager(object):
         # FIXME: should this be a class instead of a tuple?
         return (interrupted, keyboard_interrupted, thread_timings, self._group_stats, self._all_results)
 
+    def results_directory(self):
+        if not self._retrying:
+            return self._results_directory
+        else:
+            self._filesystem.maybe_make_directory(self._filesystem.join(self._results_directory, 'retries'))
+            return self._filesystem.join(self._results_directory, 'retries')
+
     def update(self):
         self.update_summary(self._current_result_summary)
-
-    def _collect_timing_info(self, threads):
-        test_timings = {}
-        individual_test_timings = []
-        thread_timings = []
-
-        for thread in threads:
-            thread_timings.append({'name': thread.getName(),
-                                   'num_tests': thread.get_num_tests(),
-                                   'total_time': thread.get_total_time()})
-            test_timings.update(thread.get_test_group_timing_stats())
-            individual_test_timings.extend(thread.get_test_results())
-
-        return (thread_timings, test_timings, individual_test_timings)
 
     def needs_servers(self):
         return any(self._test_requires_lock(test_name) for test_name in self._test_files) and self._options.http
@@ -875,7 +860,7 @@ class Manager(object):
             self._clobber_old_results()
 
         # Create the output directory if it doesn't already exist.
-        self._port.maybe_make_directory(self._results_directory)
+        self._port.host.filesystem.maybe_make_directory(self._results_directory)
 
         self._port.setup_test_run()
 
@@ -1019,7 +1004,7 @@ class Manager(object):
         if result.type == test_expectations.SKIP:
             result_summary.add(result, expected=True)
         else:
-            expected = self._expectations.matches_an_expected_result(result.test_name, result.type, self._options.pixel_tests)
+            expected = self._expectations.matches_an_expected_result(result.test_name, result.type, self._options.pixel_tests or test_failures.is_reftest_failure(result.failures))
             result_summary.add(result, expected)
             exp_str = self._expectations.get_expectations_string(result.test_name)
             got_str = self._expectations.expectation_to_string(result.type)
@@ -1036,8 +1021,8 @@ class Manager(object):
         layout_tests_dir = self._port.layout_tests_dir()
         possible_dirs = self._port.test_dirs()
         for dirname in possible_dirs:
-            if self._fs.isdir(self._fs.join(layout_tests_dir, dirname)):
-                self._fs.rmtree(self._fs.join(self._results_directory, dirname))
+            if self._filesystem.isdir(self._filesystem.join(layout_tests_dir, dirname)):
+                self._filesystem.rmtree(self._filesystem.join(self._results_directory, dirname))
 
     def _get_failures(self, result_summary, include_crashes, include_missing):
         """Filters a dict of results and returns only the failures.
@@ -1083,11 +1068,12 @@ class Manager(object):
         _log.debug("Writing JSON files in %s." % self._results_directory)
 
         times_trie = json_results_generator.test_timings_trie(self._port, individual_test_timings)
-        times_json_path = self._fs.join(self._results_directory, "times_ms.json")
-        json_results_generator.write_json(self._fs, times_trie, times_json_path)
+        times_json_path = self._filesystem.join(self._results_directory, "times_ms.json")
+        json_results_generator.write_json(self._filesystem, times_trie, times_json_path)
 
-        full_results_path = self._fs.join(self._results_directory, "full_results.json")
-        json_results_generator.write_json(self._fs, summarized_results, full_results_path)
+        full_results_path = self._filesystem.join(self._results_directory, "full_results.json")
+        # We write full_results.json out as jsonp because we need to load it from a file url and Chromium doesn't allow that.
+        json_results_generator.write_json(self._filesystem, summarized_results, full_results_path, callback="ADD_RESULTS")
 
         generator = json_layout_results_generator.JSONLayoutResultsGenerator(
             self._port, self._options.builder_name, self._options.build_name,
@@ -1104,12 +1090,12 @@ class Manager(object):
 
         generator.upload_json_files(json_files)
 
-        incremental_results_path = self._fs.join(self._results_directory, "incremental_results.json")
+        incremental_results_path = self._filesystem.join(self._results_directory, "incremental_results.json")
 
         # Remove these files from the results directory so they don't take up too much space on the buildbot.
         # The tools use the version we uploaded to the results server anyway.
-        self._fs.remove(times_json_path)
-        self._fs.remove(incremental_results_path)
+        self._filesystem.remove(times_json_path)
+        self._filesystem.remove(incremental_results_path)
 
     def print_config(self):
         """Prints the configuration for the test run."""
@@ -1121,7 +1107,7 @@ class Manager(object):
             p.print_config("Placing new baselines in %s" %
                            self._port.baseline_path())
 
-        fallback_path = [self._fs.split(x)[1] for x in self._port.baseline_search_path()]
+        fallback_path = [self._filesystem.split(x)[1] for x in self._port.baseline_search_path()]
         p.print_config("Baseline search path: %s -> generic" % " -> ".join(fallback_path))
 
         p.print_config("Using %s build" % self._options.configuration)
@@ -1332,9 +1318,8 @@ class Manager(object):
         Args:
           result_summary: information to log
         """
-        failed = len(result_summary.failures)
-        skipped = len(
-            result_summary.tests_by_expectation[test_expectations.SKIP])
+        failed = result_summary.total_failures
+        skipped = result_summary.total_tests_by_expectation[test_expectations.SKIP]
         total = result_summary.total
         passed = total - failed - skipped
         pct_passed = 0.0
@@ -1382,10 +1367,10 @@ class Manager(object):
 
     def _copy_results_html_file(self):
         base_dir = self._port.path_from_webkit_base('LayoutTests', 'fast', 'harness')
-        results_file = self._fs.join(base_dir, 'results.html')
+        results_file = self._filesystem.join(base_dir, 'results.html')
         # FIXME: What should we do if this doesn't exist (e.g., in unit tests)?
-        if self._fs.exists(results_file):
-            self._fs.copyfile(results_file, self._fs.join(self._results_directory, "results.html"))
+        if self._filesystem.exists(results_file):
+            self._filesystem.copyfile(results_file, self._filesystem.join(self._results_directory, "results.html"))
 
     def _show_results_html_file(self, result_summary):
         """Shows the results.html page."""
@@ -1398,7 +1383,7 @@ class Manager(object):
         if not len(test_files):
             return
 
-        results_filename = self._fs.join(self._results_directory, "results.html")
+        results_filename = self._filesystem.join(self._results_directory, "results.html")
         self._port.show_results_html_file(results_filename)
 
     def name(self):
@@ -1461,7 +1446,7 @@ class Manager(object):
         self._update_summary_with_result(self._current_result_summary, result)
 
     def _log_worker_stack(self, stack):
-        webkitpydir = self._port.path_from_webkit_base('Tools', 'Scripts', 'webkitpy') + self._port.filesystem.sep
+        webkitpydir = self._port.path_from_webkit_base('Tools', 'Scripts', 'webkitpy') + self._filesystem.sep
         for filename, line_number, function_name, text in stack:
             if filename.startswith(webkitpydir):
                 filename = filename.replace(webkitpydir, '')
@@ -1527,7 +1512,7 @@ class _WorkerState(object):
         self.current_test_name = None
         self.next_timeout = None
         self.stats = {}
-        self.stats['name'] = worker_connection.name
+        self.stats['name'] = worker_connection.name()
         self.stats['num_tests'] = 0
         self.stats['total_time'] = 0
 

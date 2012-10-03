@@ -69,6 +69,8 @@ def full_qualified_type_id(domain_name, type_id):
        return "%s.%s" % (domain_name, type_id)
     return type_id
     
+def dash_to_camelcase(word):
+    return "".join(x.capitalize() or "-" for x in word.split("-"))
 
 def param_type(domain_name, param):
     if "type" in param:

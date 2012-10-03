@@ -66,7 +66,7 @@ namespace WebCore {
         
         virtual void setDefersLoading(bool);
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
         virtual void pauseLoad(bool);
 #endif
 

@@ -51,7 +51,6 @@ public:
     WKStringRef testPluginDirectory() { return m_testPluginDirectory.get(); }
 
     PlatformWebView* mainWebView() { return m_mainWebView.get(); }
-    WKPageNamespaceRef pageNamespace() { return m_pageNamespace.get(); }
     WKContextRef context() { return m_context.get(); }
 
     // Runs the run loop until `done` is true or the timeout elapses.
@@ -67,7 +66,7 @@ private:
     void run();
 
     void runTestingServerLoop();
-    void runTest(const char* pathOrURL);
+    bool runTest(const char* pathOrURL);
 
     void platformInitialize();
     void platformInitializeContext();
@@ -76,11 +75,13 @@ private:
     void initializeInjectedBundlePath();
     void initializeTestPluginDirectory();
 
-    void resetStateToConsistentValues();
+    bool resetStateToConsistentValues();
 
     // WKContextInjectedBundleClient
-    static void didReceiveMessageFromInjectedBundle(WKContextRef context, WKStringRef messageName, WKTypeRef messageBody, const void*);
+    static void didReceiveMessageFromInjectedBundle(WKContextRef, WKStringRef messageName, WKTypeRef messageBody, const void*);
+    static void didReceiveSynchronousMessageFromInjectedBundle(WKContextRef, WKStringRef messageName, WKTypeRef messageBody, WKTypeRef* returnData, const void*);
     void didReceiveMessageFromInjectedBundle(WKStringRef messageName, WKTypeRef messageBody);
+    WKRetainPtr<WKTypeRef> didReceiveSynchronousMessageFromInjectedBundle(WKStringRef messageName, WKTypeRef messageBody);
 
     // WKPageLoaderClient
     static void didCommitLoadForFrame(WKPageRef, WKFrameRef, WKTypeRef userData, const void*);
@@ -103,17 +104,19 @@ private:
     OwnPtr<TestInvocation> m_currentInvocation;
 
     bool m_dumpPixels;
+    bool m_skipPixelTestOption;
     bool m_verbose;
     bool m_printSeparators;
     bool m_usingServerMode;
+    bool m_gcBetweenTests;
     std::vector<std::string> m_paths;
     WKRetainPtr<WKStringRef> m_injectedBundlePath;
     WKRetainPtr<WKStringRef> m_testPluginDirectory;
 
     OwnPtr<PlatformWebView> m_mainWebView;
     WKRetainPtr<WKContextRef> m_context;
-    WKRetainPtr<WKPageNamespaceRef> m_pageNamespace;
-    
+    WKRetainPtr<WKPageGroupRef> m_pageGroup;
+
     enum State {
         Initial,
         Resetting,

@@ -32,22 +32,22 @@
 #import "BlockExceptions.h"
 
 #include "ANGLE/ShaderLang.h"
-#include "ArrayBuffer.h"
-#include "ArrayBufferView.h"
 #include "CanvasRenderingContext.h"
 #include <CoreGraphics/CGBitmapContext.h>
 #include "Extensions3DOpenGL.h"
-#include "Float32Array.h"
 #include "GraphicsContext.h"
 #include "HTMLCanvasElement.h"
 #include "ImageBuffer.h"
-#include "Int32Array.h"
 #include "NotImplemented.h"
 #include <OpenGL/CGLRenderers.h>
 #include <OpenGL/gl.h>
-#include "Uint8Array.h"
 #include "WebGLLayer.h"
 #include "WebGLObject.h"
+#include <wtf/ArrayBuffer.h>
+#include <wtf/ArrayBufferView.h>
+#include <wtf/Int32Array.h>
+#include <wtf/Float32Array.h>
+#include <wtf/Uint8Array.h>
 #include <wtf/UnusedParam.h>
 #include <wtf/text/CString.h>
 
@@ -275,6 +275,10 @@ bool GraphicsContext3D::isGLES2Compliant() const
 }
 
 void GraphicsContext3D::setContextLostCallback(PassOwnPtr<ContextLostCallback>)
+{
+}
+
+void GraphicsContext3D::setErrorMessageCallback(PassOwnPtr<ErrorMessageCallback>)
 {
 }
 

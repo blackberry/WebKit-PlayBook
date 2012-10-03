@@ -24,32 +24,37 @@
 namespace JSC {
 
 enum JSType {
-    UnspecifiedType     = 0,
-    UndefinedType       = 1,
-    BooleanType         = 2,
-    NumberType          = 3,
-    NullType            = 4,
-    StringType          = 5,
-    LeafType            = 6,
+    UnspecifiedType,
+    UndefinedType,
+    BooleanType,
+    NumberType,
+    NullType,
+    StringType,
+    LeafType,
 
     // The CompoundType value must come before any JSType that may have children.
-    CompoundType        = 7,
-    GetterSetterType    = 8,
-    APIValueWrapperType = 9,
+    CompoundType,
+    GetterSetterType,
+    APIValueWrapperType,
+
+    EvalExecutableType,
+    ProgramExecutableType,
+    FunctionExecutableType,
 
     // The ObjectType value must come before any JSType that is a subclass of JSObject.
-    ObjectType          = 10,
-    FinalObjectType     = 11,
-    JSFunctionType      = 12,
-    NumberObjectType    = 13,
-    ErrorInstanceType   = 14,
-    GlobalThisType      = 15,
+    ObjectType,
+    FinalObjectType,
+    JSFunctionType,
+    NumberObjectType,
+    ErrorInstanceType,
+    GlobalThisType,
 
-    // VariableObjectType must be less than all of the types of its subclasses and only its subclasses.
-    VariableObjectType  = 16,
-    GlobalObjectType    = 17,
-    ActivationObjectType = 18,
-    StaticScopeObjectType = 19,
+    StaticScopeObjectType,
+    // VariableObjectType must be less than MOST of the types of its subclasses and only its subclasses.
+    // We use >=VariableObjectType checks to test for Global & Activation objects, but exclude StaticScopes.
+    VariableObjectType,
+    GlobalObjectType,
+    ActivationObjectType,
 };
 
 } // namespace JSC

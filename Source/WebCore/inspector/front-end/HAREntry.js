@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2011 Google Inc. All rights reserved.
+ * Copyright (C) 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -36,6 +36,7 @@
 
 /**
  * @constructor
+ * @param {WebInspector.Resource} resource
  */
 WebInspector.HAREntry = function(resource)
 {
@@ -43,10 +44,12 @@ WebInspector.HAREntry = function(resource)
 }
 
 WebInspector.HAREntry.prototype = {
+    /**
+     * @return {Object}
+     */
     build: function()
     {
-        return {
-            pageref: this._resource.documentURL,
+        var entry =  {
             startedDateTime: new Date(this._resource.startTime * 1000),
             time: WebInspector.HAREntry._toMilliseconds(this._resource.duration),
             request: this._buildRequest(),
@@ -54,8 +57,15 @@ WebInspector.HAREntry.prototype = {
             cache: { }, // Not supported yet.
             timings: this._buildTimings()
         };
+        var page = WebInspector.networkLog.pageLoadForResource(this._resource);
+        if (page)
+            entry.pageref = "page_" + page.id;
+        return entry;
     },
 
+    /**
+     * @return {Object}
+     */
     _buildRequest: function()
     {
         var res = {
@@ -74,6 +84,9 @@ WebInspector.HAREntry.prototype = {
         return res;
     },
 
+    /**
+     * @return {Object}
+     */
     _buildResponse: function()
     {
         return {
@@ -89,16 +102,25 @@ WebInspector.HAREntry.prototype = {
         };
     },
 
+    /**
+     * @return {Object}
+     */
     _buildContent: function()
     {
-        return {
+        var content = {
             size: this._resource.resourceSize,
-            compression: this.responseCompression,
             mimeType: this._resource.mimeType,
             // text: this._resource.content // TODO: pull out into a boolean flag, as content can be huge (and needs to be requested with an async call)
         };
+        var compression = this.responseCompression;
+        if (typeof compression === "number")
+            content.compression = compression;
+        return content;
     },
 
+    /**
+     * @return {Object}
+     */
     _buildTimings: function()
     {
         var waitForConnection = this._interval("connectStart", "connectEnd");
@@ -132,6 +154,9 @@ WebInspector.HAREntry.prototype = {
         };
     },
 
+    /**
+     * @return {Object}
+     */
     _buildHeaders: function(headers)
     {
         var result = [];
@@ -140,6 +165,9 @@ WebInspector.HAREntry.prototype = {
         return result;
     },
 
+    /**
+     * @return {Object}
+     */
     _buildPostData: function()
     {
         var res = {
@@ -151,21 +179,37 @@ WebInspector.HAREntry.prototype = {
         return res;
     },
 
+    /**
+     * @param {Array.<Object>} parameters
+     * @return {Array.<Object>}
+     */
     _buildParameters: function(parameters)
     {
         return parameters.slice();
     },
 
+    /**
+     * @param {string} url
+     * @return {string}
+     */
     _buildRequestURL: function(url)
     {
         return url.split("#", 2)[0];
     },
 
+    /**
+     * @param {Array.<WebInspector.Cookie>} cookies
+     * @return {Array.<Object>}
+     */
     _buildCookies: function(cookies)
     {
         return cookies.map(this._buildCookie.bind(this));
     },
 
+    /**
+     * @param {WebInspector.Cookie} cookie
+     * @return {Object}
+     */
     _buildCookie: function(cookie)
     {
         return {
@@ -179,6 +223,11 @@ WebInspector.HAREntry.prototype = {
         };
     },
 
+    /**
+     * @param {string} start
+     * @param {string} end
+     * @return {number}
+     */
     _interval: function(start, end)
     {
         var timing = this._resource.timing;
@@ -188,22 +237,39 @@ WebInspector.HAREntry.prototype = {
         return typeof startTime !== "number" || startTime === -1 ? -1 : Math.round(timing[end] - startTime);
     },
 
+    /**
+     * @return {number}
+     */
     get requestBodySize()
     {
         return !this._resource.requestFormData ? 0 : this._resource.requestFormData.length;
     },
 
+    /**
+     * @return {number}
+     */
     get responseBodySize()
     {
+        if (this._resource.cached || this._resource.statusCode === 304)
+            return 0;
         return this._resource.transferSize - this._resource.responseHeadersSize
     },
 
+    /**
+     * @return {number|undefined}
+     */
     get responseCompression()
     {
+        if (this._resource.cached || this._resource.statusCode === 304)
+            return;
         return this._resource.resourceSize - (this._resource.transferSize - this._resource.responseHeadersSize);
     }
 }
 
+/**
+ * @param {number} time
+ * @return {number}
+ */
 WebInspector.HAREntry._toMilliseconds = function(time)
 {
     return time === -1 ? -1 : Math.round(time * 1000);
@@ -211,6 +277,7 @@ WebInspector.HAREntry._toMilliseconds = function(time)
 
 /**
  * @constructor
+ * @param {Array.<WebInspector.Resource>} resources
  */
 WebInspector.HARLog = function(resources)
 {
@@ -218,6 +285,9 @@ WebInspector.HARLog = function(resources)
 }
 
 WebInspector.HARLog.prototype = {
+    /**
+     * @return {Object}
+     */
     build: function()
     {
         var webKitVersion = /AppleWebKit\/([^ ]+)/.exec(window.navigator.userAgent);
@@ -233,34 +303,57 @@ WebInspector.HARLog.prototype = {
         }
     },
 
+    /**
+     * @return {Array}
+     */
     _buildPages: function()
     {
-        return [
-            {
-                startedDateTime: new Date(WebInspector.mainResource.startTime * 1000),
-                id: WebInspector.mainResource.documentURL,
-                title: "",
-                pageTimings: this.buildMainResourceTimings()
-            }
-        ];
+        var seenIdentifiers = {};
+        var pages = [];
+        for (var i = 0; i < this._resources.length; ++i) {
+            var page = WebInspector.networkLog.pageLoadForResource(this._resources[i]);
+            if (!page || seenIdentifiers[page.id])
+                continue;
+            seenIdentifiers[page.id] = true;
+            pages.push(this._convertPage(page));
+        }
+        return pages;
     },
 
-    buildMainResourceTimings: function()
+    /**
+     * @param {WebInspector.PageLoad} page
+     * @return {Object}
+     */
+    _convertPage: function(page)
     {
         return {
-             onContentLoad: this._pageEventTime(WebInspector.mainResourceDOMContentTime),
-             onLoad: this._pageEventTime(WebInspector.mainResourceLoadTime),
+            startedDateTime: new Date(page.startTime * 1000),
+            id: "page_" + page.id,
+            title: page.url, // We don't have actual page title here. URL is probably better than nothing.
+            pageTimings: {
+                onContentLoad: this._pageEventTime(page, page.contentLoadTime),
+                onLoad: this._pageEventTime(page, page.loadTime)
+            }
         }
     },
 
+    /**
+     * @param {WebInspector.Resource} resource
+     * @return {Object}
+     */
     _convertResource: function(resource)
     {
         return (new WebInspector.HAREntry(resource)).build();
     },
 
-    _pageEventTime: function(time)
+    /**
+     * @param {WebInspector.PageLoad} page
+     * @param {number} time
+     * @return {number}
+     */
+    _pageEventTime: function(page, time)
     {
-        var startTime = WebInspector.mainResource.startTime;
+        var startTime = page.startTime;
         if (time === -1 || startTime === -1)
             return -1;
         return WebInspector.HAREntry._toMilliseconds(time - startTime);

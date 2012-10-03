@@ -65,12 +65,10 @@ DrawingAreaImpl::DrawingAreaImpl(WebPage* webPage, const WebPageCreationParamete
     , m_wantsToExitAcceleratedCompositingMode(false)
     , m_isPaintingSuspended(!parameters.isVisible)
     , m_alwaysUseCompositing(false)
-    , m_shouldThrottleDisplay(true)
-    , m_lastDisplayTime(0)
     , m_displayTimer(WebProcess::shared().runLoop(), this, &DrawingAreaImpl::displayTimerFired)
     , m_exitCompositingTimer(WebProcess::shared().runLoop(), this, &DrawingAreaImpl::exitAcceleratedCompositingMode)
 {
-    if (webPage->corePage()->settings()->acceleratedDrawingEnabled())
+    if (webPage->corePage()->settings()->acceleratedDrawingEnabled() || webPage->corePage()->settings()->forceCompositingMode())
         m_alwaysUseCompositing = true;
         
     if (m_alwaysUseCompositing)
@@ -201,16 +199,6 @@ void DrawingAreaImpl::forceRepaint()
     display();
 }
 
-void DrawingAreaImpl::enableDisplayThrottling()
-{
-    m_shouldThrottleDisplay = true;
-}
-
-void DrawingAreaImpl::disableDisplayThrottling()
-{
-    m_shouldThrottleDisplay = false;
-}
-
 void DrawingAreaImpl::didInstallPageOverlay()
 {
     if (m_layerTreeHost)
@@ -233,6 +221,18 @@ void DrawingAreaImpl::setPageOverlayNeedsDisplay(const IntRect& rect)
     }
 
     setNeedsDisplay(rect);
+}
+
+void DrawingAreaImpl::pageCustomRepresentationChanged()
+{
+    if (!m_alwaysUseCompositing)
+        return;
+
+    if (m_webPage->mainFrameHasCustomRepresentation()) {
+        if (m_layerTreeHost)
+            exitAcceleratedCompositingMode();
+    } else if (!m_layerTreeHost)
+        enterAcceleratedCompositingMode(0);
 }
 
 void DrawingAreaImpl::setPaintingEnabled(bool paintingEnabled)
@@ -460,7 +460,7 @@ void DrawingAreaImpl::enterAcceleratedCompositingMode(GraphicsLayer* graphicsLay
 
 void DrawingAreaImpl::exitAcceleratedCompositingMode()
 {
-    if (m_alwaysUseCompositing)
+    if (m_alwaysUseCompositing && !m_webPage->mainFrameHasCustomRepresentation())
         return;
 
     ASSERT(!m_layerTreeStateIsFrozen);
@@ -537,23 +537,6 @@ void DrawingAreaImpl::scheduleDisplay()
 
 void DrawingAreaImpl::displayTimerFired()
 {
-#if PLATFORM(WIN)
-    // For now we'll cap painting on Windows to 30fps because painting is much slower there for some reason.
-    static const double minimumFrameInterval = 1.0 / 30.0;
-#else
-    static const double minimumFrameInterval = 1.0 / 60.0;
-#endif
-
-    if (m_shouldThrottleDisplay) {
-        double timeSinceLastDisplay = currentTime() - m_lastDisplayTime;
-        double timeUntilNextDisplay = minimumFrameInterval - timeSinceLastDisplay;
-
-        if (timeUntilNextDisplay > 0) {
-            m_displayTimer.startOneShot(timeUntilNextDisplay);
-            return;
-        }
-    }
-
     display();
 }
 
@@ -682,11 +665,9 @@ void DrawingAreaImpl::display(UpdateInfo& updateInfo)
     // Layout can trigger more calls to setNeedsDisplay and we don't want to process them
     // until the UI process has painted the update, so we stop the timer here.
     m_displayTimer.stop();
-
-    m_lastDisplayTime = currentTime();
 }
 
-#if USE(ACCELERATED_COMPOSITING) && USE(TEXTURE_MAPPER)
+#if USE(UI_SIDE_COMPOSITING)
 void DrawingAreaImpl::didReceiveLayerTreeHostMessage(CoreIPC::Connection* connection, CoreIPC::MessageID messageID, CoreIPC::ArgumentDecoder* arguments)
 {
     if (m_layerTreeHost)

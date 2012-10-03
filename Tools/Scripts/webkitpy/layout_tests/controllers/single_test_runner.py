@@ -31,7 +31,7 @@ import logging
 import re
 import time
 
-from webkitpy.layout_tests.layout_package import test_result_writer
+from webkitpy.layout_tests.controllers import test_result_writer
 from webkitpy.layout_tests.port.driver import DriverInput, DriverOutput
 from webkitpy.layout_tests.models import test_expectations
 from webkitpy.layout_tests.models import test_failures
@@ -55,45 +55,21 @@ class SingleTestRunner:
         self._timeout = test_input.timeout
         self._worker_name = worker_name
         self._test_name = test_input.test_name
+        self._should_run_pixel_test = test_input.should_run_pixel_test
 
         self._is_reftest = False
-        self._is_mismatch_reftest = False
-        self._reference_filename = None
+        self._reference_files = port.reference_files(self._test_name)
 
-        fs = port._filesystem
-        if test_input.ref_file:
-            self._is_reftest = True
-            self._reference_filename = fs.join(self._port.layout_tests_dir(), test_input.ref_file)
-            self._is_mismatch_reftest = test_input.is_mismatch_reftest
-            return
-
-        reftest_expected_filename = port.reftest_expected_filename(self._test_name)
-        if fs.exists(reftest_expected_filename):
-            self._is_reftest = True
-            self._reference_filename = reftest_expected_filename
-
-        reftest_expected_mismatch_filename = port.reftest_expected_mismatch_filename(self._test_name)
-        if fs.exists(reftest_expected_mismatch_filename):
-            if self._is_reftest:
-                _log.error('It is not allowed that one test file has both'
-                           ' expected.html file and expected-mismatch.html file'
-                           ' at the same time. Please remove either %s or %s.',
-                           reftest_expected_filename, reftest_expected_mismatch_filename)
-            else:
-                self._is_reftest = True
-                self._is_mismatch_reftest = True
-                self._reference_filename = reftest_expected_mismatch_filename
-
-        if self._is_reftest:
+        if self._reference_files:
             # Detect and report a test which has a wrong combination of expectation files.
             # For example, if 'foo.html' has two expectation files, 'foo-expected.html' and
             # 'foo-expected.txt', we should warn users. One test file must be used exclusively
             # in either layout tests or reftests, but not in both.
             for suffix in ('.txt', '.png', '.wav'):
                 expected_filename = self._port.expected_filename(self._test_name, suffix)
-                if fs.exists(expected_filename):
-                    _log.error('The reftest (%s) can not have an expectation file (%s).'
-                               ' Please remove that file.', self._test_name, expected_filename)
+                if port.host.filesystem.exists(expected_filename):
+                    _log.error('%s is both a reftest and has an expected output file %s.',
+                        self._test_name, expected_filename)
 
     def _expected_driver_output(self):
         return DriverOutput(self._port.expected_text(self._test_name),
@@ -102,6 +78,8 @@ class SingleTestRunner:
                                  self._port.expected_audio(self._test_name))
 
     def _should_fetch_expected_checksum(self):
+        if not self._should_run_pixel_test:
+            return False
         return (self._options.pixel_tests and
                 not (self._options.new_baseline or self._options.reset_results))
 
@@ -113,26 +91,27 @@ class SingleTestRunner:
         image_hash = None
         if self._should_fetch_expected_checksum():
             image_hash = self._port.expected_checksum(self._test_name)
-        return DriverInput(self._test_name, self._timeout, image_hash)
+        return DriverInput(self._test_name, self._timeout, image_hash, bool(self._reference_files))
 
     def run(self):
+        if self._reference_files:
+            if self._port.get_option('no_ref_tests') or self._options.new_baseline or self._options.reset_results:
+                result = TestResult(self._test_name)
+                result.type = test_expectations.SKIP
+                return result
+            return self._run_reftest()
         if self._options.new_baseline or self._options.reset_results:
-            if self._is_reftest:
-                # Returns a dummy TestResult. We don't have to rebase for reftests.
-                return TestResult(self._test_name)
-            else:
-                return self._run_rebaseline()
-        if self._is_reftest:
-            if self._port.get_option('pixel_tests'):
-                return self._run_reftest()
-            result = TestResult(self._test_name)
-            result.type = test_expectations.SKIP
-            return result
+            return self._run_rebaseline()
         return self._run_compare_test()
 
     def _run_compare_test(self):
         driver_output = self._driver.run_test(self._driver_input())
         expected_driver_output = self._expected_driver_output()
+
+        if self._options.ignore_metrics:
+            expected_driver_output.strip_metrics()
+            driver_output.strip_metrics()
+
         test_result = self._compare_output(driver_output, expected_driver_output)
         if self._options.new_test_results:
             self._add_missing_baselines(test_result, driver_output)
@@ -219,11 +198,14 @@ class SingleTestRunner:
 
         if driver_output.crash:
             failures.append(test_failures.FailureCrash(bool(reference_filename)))
-            _log.debug("%s Stacktrace for %s:\n%s" % (self._worker_name, testname,
-                                                      driver_output.error))
+            if driver_output.error:
+                _log.debug("%s %s crashed, stack trace:" % (self._worker_name, testname))
+            else:
+                _log.debug("%s %s crashed, no stack trace" % (self._worker_name, testname))
         elif driver_output.error:
-            _log.debug("%s %s output stderr lines:\n%s" % (self._worker_name, testname,
-                                                           driver_output.error))
+            _log.debug("%s %s output stderr lines:" % (self._worker_name, testname))
+        for line in driver_output.error.splitlines():
+            _log.debug("  %s" % line)
         return failures
 
     def _compare_output(self, driver_output, expected_driver_output):
@@ -245,7 +227,7 @@ class SingleTestRunner:
         failures = []
         if (expected_text and actual_text and
             # Assuming expected_text is already normalized.
-            self._port.compare_text(self._get_normalized_output_text(actual_text), expected_text)):
+            self._port.do_text_results_differ(self._get_normalized_output_text(actual_text), expected_text)):
             failures.append(test_failures.FailureTextMismatch())
         elif actual_text and not expected_text:
             failures.append(test_failures.FailureMissingResult())
@@ -254,7 +236,7 @@ class SingleTestRunner:
     def _compare_audio(self, actual_audio, expected_audio):
         failures = []
         if (expected_audio and actual_audio and
-            self._port.compare_audio(actual_audio, expected_audio)):
+            self._port.do_audio_results_differ(actual_audio, expected_audio)):
             failures.append(test_failures.FailureAudioMismatch())
         elif actual_audio and not expected_audio:
             failures.append(test_failures.FailureMissingAudio())
@@ -285,18 +267,38 @@ class SingleTestRunner:
             driver_output.image_diff = diff_result[0]
             if driver_output.image_diff:
                 failures.append(test_failures.FailureImageHashMismatch(diff_result[1]))
+            else:
+                # See https://bugs.webkit.org/show_bug.cgi?id=69444 for why this isn't a full failure.
+                _log.warning('  %s -> pixel hash failed (but pixel test still passes)' % self._test_name)
         return failures
 
     def _run_reftest(self):
-        driver_output1 = self._driver.run_test(self._driver_input())
-        reference_test_name = self._port.relative_test_filename(self._reference_filename)
-        driver_output2 = self._driver.run_test(DriverInput(reference_test_name, self._timeout, driver_output1.image_hash))
-        test_result = self._compare_output_with_reference(driver_output1, driver_output2)
+        test_output = self._driver.run_test(self._driver_input())
+        total_test_time = 0
+        reference_output = None
+        test_result = None
 
-        test_result_writer.write_test_result(self._port, self._test_name, driver_output1, driver_output2, test_result.failures)
-        return test_result
+        # A reftest can have multiple match references and multiple mismatch references;
+        # the test fails if any mismatch matches and all of the matches don't match.
+        # To minimize the number of references we have to check, we run all of the mismatches first,
+        # then the matches, and short-circuit out as soon as we can.
+        # Note that sorting by the expectation sorts "!=" before "==" so this is easy to do.
 
-    def _compare_output_with_reference(self, driver_output1, driver_output2):
+        putAllMismatchBeforeMatch = sorted
+        for expectation, reference_filename in putAllMismatchBeforeMatch(self._reference_files):
+            reference_test_name = self._port.relative_test_filename(reference_filename)
+            reference_output = self._driver.run_test(DriverInput(reference_test_name, self._timeout, test_output.image_hash, is_reftest=True))
+            test_result = self._compare_output_with_reference(test_output, reference_output, reference_filename, expectation == '!=')
+
+            if (expectation == '!=' and test_result.failures) or (expectation == '==' and not test_result.failures):
+                break
+            total_test_time += test_result.test_run_time
+
+        assert(reference_output)
+        test_result_writer.write_test_result(self._port, self._test_name, test_output, reference_output, test_result.failures)
+        return TestResult(self._test_name, test_result.failures, total_test_time + test_result.test_run_time, test_result.has_stderr)
+
+    def _compare_output_with_reference(self, driver_output1, driver_output2, reference_filename, mismatch):
         total_test_time = driver_output1.test_time + driver_output2.test_time
         has_stderr = driver_output1.has_stderr() or driver_output2.has_stderr()
         failures = []
@@ -304,13 +306,15 @@ class SingleTestRunner:
         if failures:
             # Don't continue any more if we already have crash or timeout.
             return TestResult(self._test_name, failures, total_test_time, has_stderr)
-        failures.extend(self._handle_error(driver_output2, reference_filename=self._reference_filename))
+        failures.extend(self._handle_error(driver_output2, reference_filename=reference_filename))
         if failures:
             return TestResult(self._test_name, failures, total_test_time, has_stderr)
 
-        if self._is_mismatch_reftest:
+        if not driver_output1.image_hash and not driver_output2.image_hash:
+            failures.append(test_failures.FailureReftestNoImagesGenerated(reference_filename))
+        elif mismatch:
             if driver_output1.image_hash == driver_output2.image_hash:
-                failures.append(test_failures.FailureReftestMismatchDidNotOccur(self._reference_filename))
+                failures.append(test_failures.FailureReftestMismatchDidNotOccur(reference_filename))
         elif driver_output1.image_hash != driver_output2.image_hash:
-            failures.append(test_failures.FailureReftestMismatch(self._reference_filename))
+            failures.append(test_failures.FailureReftestMismatch(reference_filename))
         return TestResult(self._test_name, failures, total_test_time, has_stderr)

@@ -58,8 +58,9 @@ private:
     virtual const AtomicString& formControlType() const;
 
     virtual RenderObject* createRenderer(RenderArena*, RenderStyle*);
+    virtual bool childShouldCreateRenderer(const NodeRenderingContext&) const OVERRIDE;
 
-    virtual void parseMappedAttribute(Attribute*);
+    virtual void parseAttribute(Attribute*) OVERRIDE;
 
     virtual void attach();
 

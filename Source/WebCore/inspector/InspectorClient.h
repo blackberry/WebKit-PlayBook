@@ -44,11 +44,15 @@ public:
     virtual void inspectorDestroyed() = 0;
 
     virtual void openInspectorFrontend(InspectorController*) = 0;
+    virtual void closeInspectorFrontend() = 0;
+    virtual void bringFrontendToFront() = 0;
 
     virtual void highlight() = 0;
     virtual void hideHighlight() = 0;
 
+    virtual bool canClearBrowserCache() { return false; }
     virtual void clearBrowserCache() { }
+    virtual bool canClearBrowserCookies() { return false; }
     virtual void clearBrowserCookies() { }
 
     bool doDispatchMessageOnFrontendPage(Page* frontendPage, const String& message);

@@ -34,12 +34,6 @@
 #include "config.h"
 #include "ChromeClientEfl.h"
 
-#if ENABLE(SQL_DATABASE)
-
-#include "DatabaseDetails.h"
-#include "DatabaseTracker.h"
-#endif
-#include "EWebKit.h"
 #include "FileChooser.h"
 #include "FileIconLoader.h"
 #include "FloatRect.h"
@@ -49,9 +43,6 @@
 #include "IntRect.h"
 #include "KURL.h"
 #include "NavigationAction.h"
-#if ENABLE(NOTIFICATIONS)
-#include "NotificationPresenterClientEfl.h"
-#endif
 #include "NotImplemented.h"
 #include "PlatformString.h"
 #include "PopupMenuEfl.h"
@@ -63,6 +54,15 @@
 #include <Ecore_Evas.h>
 #include <Evas.h>
 #include <wtf/text/CString.h>
+
+#if ENABLE(NOTIFICATIONS)
+#include "NotificationPresenterClientEfl.h"
+#endif
+
+#if ENABLE(SQL_DATABASE)
+#include "DatabaseDetails.h"
+#include "DatabaseTracker.h"
+#endif
 
 using namespace WebCore;
 
@@ -325,13 +325,13 @@ void ChromeClientEfl::contentsSizeChanged(Frame* frame, const IntSize& size) con
         ewk_view_contents_size_changed(m_view, size.width(), size.height());
 }
 
-IntRect ChromeClientEfl::windowToScreen(const IntRect& rect) const
+IntRect ChromeClientEfl::rootViewToScreen(const IntRect& rect) const
 {
     notImplemented();
     return rect;
 }
 
-IntPoint ChromeClientEfl::screenToWindow(const IntPoint& point) const
+IntPoint ChromeClientEfl::screenToRootView(const IntPoint& point) const
 {
     notImplemented();
     return point;
@@ -485,12 +485,12 @@ void ChromeClientEfl::invalidateContents(const IntRect& updateRect, bool immedia
     notImplemented();
 }
 
-void ChromeClientEfl::invalidateWindow(const IntRect& updateRect, bool immediate)
+void ChromeClientEfl::invalidateRootView(const IntRect& updateRect, bool immediate)
 {
     notImplemented();
 }
 
-void ChromeClientEfl::invalidateContentsAndWindow(const IntRect& updateRect, bool immediate)
+void ChromeClientEfl::invalidateContentsAndRootView(const IntRect& updateRect, bool immediate)
 {
     if (updateRect.isEmpty())
         return;
@@ -506,12 +506,12 @@ void ChromeClientEfl::invalidateContentsAndWindow(const IntRect& updateRect, boo
 
 void ChromeClientEfl::invalidateContentsForSlowScroll(const IntRect& updateRect, bool immediate)
 {
-    invalidateContentsAndWindow(updateRect, immediate);
+    invalidateContentsAndRootView(updateRect, immediate);
 }
 
 void ChromeClientEfl::scroll(const IntSize& scrollDelta, const IntRect& rectToScroll, const IntRect& clipRect)
 {
-    ewk_view_scroll(m_view, scrollDelta.width(), scrollDelta.height(), rectToScroll.x(), rectToScroll.y(), rectToScroll.width(), rectToScroll.height(), clipRect.x(), clipRect.y(), clipRect.width(), clipRect.height(), EINA_TRUE);
+    ewk_view_scroll(m_view, scrollDelta.width(), scrollDelta.height(), rectToScroll.x(), rectToScroll.y(), rectToScroll.width(), rectToScroll.height(), clipRect.x(), clipRect.y(), clipRect.width(), clipRect.height());
 }
 
 void ChromeClientEfl::cancelGeolocationPermissionRequestForFrame(Frame*)
@@ -541,6 +541,12 @@ bool ChromeClientEfl::selectItemWritingDirectionIsNatural()
 
 bool ChromeClientEfl::selectItemAlignmentFollowsMenuWritingDirection()
 {
+    return false;
+}
+
+bool ChromeClientEfl::hasOpenedPopup() const
+{
+    notImplemented();
     return false;
 }
 

@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009, 2010, 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2009, 2010, 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -22,17 +22,7 @@
 #include "GraphicsContext.h"
 #include "SurfacePool.h"
 
-#if USE(OPENVG)
-#include "EGLDisplayOpenVG.h"
-#include "EGLUtils.h"
-#include "VGUtils.h"
-#endif
-
 #include <BlackBerryPlatformGraphics.h>
-#include <BlackBerryPlatformPrimitives.h>
-
-using namespace BlackBerry::Platform;
-using namespace BlackBerry::Platform::Graphics;
 
 namespace BlackBerry {
 namespace WebKit {
@@ -56,7 +46,7 @@ Platform::IntSize TileBuffer::size() const
 
 Platform::IntRect TileBuffer::rect() const
 {
-    return Platform::IntRect(Platform::IntPoint(0, 0), m_size);
+    return Platform::IntRect(Platform::IntPoint::zero(), m_size);
 }
 
 bool TileBuffer::isRendered() const
@@ -66,26 +56,36 @@ bool TileBuffer::isRendered() const
 
 bool TileBuffer::isRendered(const Platform::IntRectRegion& contents) const
 {
+    // FIXME: PR #138540. Remove the locker when we find a lock free way.
+    Platform::MutexLocker locker(m_mutex);
     return Platform::IntRectRegion::subtractRegions(contents, m_renderedRegion).isEmpty();
 }
 
 void TileBuffer::clearRenderedRegion(const Platform::IntRectRegion& region)
 {
+    // FIXME: PR #138540. Remove the locker when we find a lock free way.
+    Platform::MutexLocker locker(m_mutex);
     m_renderedRegion = Platform::IntRectRegion::subtractRegions(m_renderedRegion, region);
 }
 
 void TileBuffer::clearRenderedRegion()
 {
+    // FIXME: PR #138540. Remove the locker when we find a lock free way.
+    Platform::MutexLocker locker(m_mutex);
     m_renderedRegion = Platform::IntRectRegion();
 }
 
 void TileBuffer::addRenderedRegion(const Platform::IntRectRegion& region)
 {
+    // FIXME: PR #138540. Remove the locker when we find a lock free way.
+    Platform::MutexLocker locker(m_mutex);
     m_renderedRegion = Platform::IntRectRegion::unionRegions(region, m_renderedRegion);
 }
 
 Platform::IntRectRegion TileBuffer::renderedRegion() const
 {
+    // FIXME: PR #138540. Remove the locker when we find a lock free way.
+    Platform::MutexLocker locker(m_mutex);
     return m_renderedRegion;
 }
 
@@ -94,7 +94,7 @@ Platform::IntRectRegion TileBuffer::notRenderedRegion() const
     return Platform::IntRectRegion::subtractRegions(rect(), renderedRegion());
 }
 
-Buffer* TileBuffer::nativeBuffer() const
+Platform::Graphics::Buffer* TileBuffer::nativeBuffer() const
 {
     if (!m_buffer)
         m_buffer = createBuffer(m_size, Platform::Graphics::TileBuffer, SurfacePool::globalSurfacePool()->sharedPixmapGroup());
@@ -110,13 +110,12 @@ BackingStoreTile::BackingStoreTile(const Platform::IntSize& size, BufferingMode 
     , m_horizontalShift(0)
     , m_verticalShift(0)
 {
-    m_frontBuffer = reinterpret_cast<unsigned>(new TileBuffer(size));
+    m_frontBuffer = new TileBuffer(size);
 }
 
 BackingStoreTile::~BackingStoreTile()
 {
-    TileBuffer* front = reinterpret_cast<TileBuffer*>(m_frontBuffer);
-    delete front;
+    delete m_frontBuffer;
     m_frontBuffer = 0;
 }
 
@@ -133,7 +132,7 @@ Platform::IntRect BackingStoreTile::rect() const
 TileBuffer* BackingStoreTile::frontBuffer() const
 {
     ASSERT(m_frontBuffer);
-    return reinterpret_cast<TileBuffer*>(m_frontBuffer);
+    return m_frontBuffer;
 }
 
 TileBuffer* BackingStoreTile::backBuffer() const
@@ -149,17 +148,13 @@ void BackingStoreTile::swapBuffers()
     if (m_bufferingMode == SingleBuffered)
         return;
 
-#if OS(QNX)
-    // store temps
+    // Store temps.
     unsigned front = reinterpret_cast<unsigned>(frontBuffer());
     unsigned back = reinterpret_cast<unsigned>(backBuffer());
 
-    // atomic change
-    _smp_xchg(&m_frontBuffer, back);
-    _smp_xchg(&SurfacePool::globalSurfacePool()->m_backBuffer, front);
-#else
-#error "implement me!"
-#endif
+    // Atomic change.
+    _smp_xchg(reinterpret_cast<unsigned*>(&m_frontBuffer), back);
+    _smp_xchg(reinterpret_cast<unsigned*>(&SurfacePool::globalSurfacePool()->m_backBuffer), front);
 }
 
 void BackingStoreTile::reset()

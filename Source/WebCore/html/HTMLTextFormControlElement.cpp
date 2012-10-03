@@ -37,6 +37,7 @@
 #include "HTMLFormElement.h"
 #include "HTMLInputElement.h"
 #include "HTMLNames.h"
+#include "NodeRenderingContext.h"
 #include "Page.h"
 #include "RenderBox.h"
 #include "RenderTextControl.h"
@@ -62,6 +63,11 @@ HTMLTextFormControlElement::HTMLTextFormControlElement(const QualifiedName& tagN
 
 HTMLTextFormControlElement::~HTMLTextFormControlElement()
 {
+}
+
+bool HTMLTextFormControlElement::childShouldCreateRenderer(const NodeRenderingContext& childContext) const
+{
+    return childContext.isOnEncapsulationBoundary() && HTMLFormControlElementWithState::childShouldCreateRenderer(childContext);
 }
 
 void HTMLTextFormControlElement::insertedIntoDocument()
@@ -153,7 +159,7 @@ void HTMLTextFormControlElement::updatePlaceholderVisibility(bool placeholderVal
     if (!placeholder)
         return;
     ExceptionCode ec = 0;
-    placeholder->getInlineStyleDecl()->setProperty(CSSPropertyVisibility, placeholderShouldBeVisible() ? "visible" : "hidden", ec);
+    placeholder->setInlineStyleProperty(CSSPropertyVisibility, placeholderShouldBeVisible() ? "visible" : "hidden", ec);
     ASSERT(!ec);
 }
 
@@ -421,7 +427,7 @@ void HTMLTextFormControlElement::selectionChanged(bool userTriggered)
     }
 }
 
-void HTMLTextFormControlElement::parseMappedAttribute(Attribute* attr)
+void HTMLTextFormControlElement::parseAttribute(Attribute* attr)
 {
     if (attr->name() == placeholderAttr)
         updatePlaceholderVisibility(true);
@@ -430,7 +436,7 @@ void HTMLTextFormControlElement::parseMappedAttribute(Attribute* attr)
     else if (attr->name() == onchangeAttr)
         setAttributeEventListener(eventNames().changeEvent, createAttributeEventListener(this, attr));
     else
-        HTMLFormControlElementWithState::parseMappedAttribute(attr);
+        HTMLFormControlElementWithState::parseAttribute(attr);
 }
 
 void HTMLTextFormControlElement::notifyFormStateChanged()
@@ -493,7 +499,7 @@ String HTMLTextFormControlElement::innerTextValue() const
         if (node->hasTagName(brTag))
             result.append(newlineCharacter);
         else if (node->isTextNode())
-            result.append(static_cast<Text*>(node)->data());
+            result.append(toText(node)->data());
     }
     return finishText(result);
 }
@@ -540,7 +546,7 @@ String HTMLTextFormControlElement::valueWithHardLineBreaks() const
         if (node->hasTagName(brTag))
             result.append(newlineCharacter);
         else if (node->isTextNode()) {
-            String data = static_cast<Text*>(node)->data();
+            String data = toText(node)->data();
             unsigned length = data.length();
             unsigned position = 0;
             while (breakNode == node && breakOffset <= length) {
@@ -568,6 +574,36 @@ HTMLTextFormControlElement* enclosingTextFormControl(const Position& position)
         return 0;
     Node* ancestor = container->shadowAncestorNode();
     return ancestor != container ? toTextFormControl(ancestor) : 0;
+}
+
+static const Element* parentHTMLElement(const Element* element)
+{
+    while (element) {
+        element = element->parentElement();
+        if (element && element->isHTMLElement())
+            return element;
+    }
+    return 0;
+}
+
+String HTMLTextFormControlElement::directionForFormData() const
+{
+    for (const Element* element = this; element; element = parentHTMLElement(element)) {
+        const AtomicString& dirAttributeValue = element->fastGetAttribute(dirAttr);
+        if (dirAttributeValue.isNull())
+            continue;
+
+        if (equalIgnoringCase(dirAttributeValue, "rtl") || equalIgnoringCase(dirAttributeValue, "ltr"))
+            return dirAttributeValue;
+
+        if (equalIgnoringCase(dirAttributeValue, "auto")) {
+            bool isAuto;
+            TextDirection textDirection = static_cast<const HTMLElement*>(element)->directionalityIfhasDirAutoAttribute(isAuto);
+            return textDirection == RTL ? "rtl" : "ltr";
+        }
+    }
+
+    return "ltr";
 }
 
 } // namespace Webcore

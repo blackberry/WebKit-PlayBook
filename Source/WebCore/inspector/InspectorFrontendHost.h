@@ -60,19 +60,22 @@ public:
     void loaded();
     void requestAttachWindow();
     void requestDetachWindow();
+    void requestSetDockSide(const String&);
     void closeWindow();
-    void disconnectFromBackend();
     void bringToFront();
+    void setZoomFactor(float);
     void inspectedURLChanged(const String&);
 
     void setAttachedWindowHeight(unsigned height);
     void moveWindowBy(float x, float y) const;
-    void setExtensionAPI(const String& script);
+    void setInjectedScriptForOrigin(const String& origin, const String& script);
 
     String localizedStringsURL();
     String hiddenPanels();
 
     void copyText(const String& text);
+    void openInNewTab(const String& url);
+    bool canSaveAs();
     void saveAs(const String& fileName, const String& content);
 
     // Called from [Custom] implementations.

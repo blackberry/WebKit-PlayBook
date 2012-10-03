@@ -38,6 +38,10 @@
 
 namespace WebCore {
 class AccessibilityObject;
+#if ENABLE(INPUT_COLOR)
+class ColorChooser;
+class ColorChooserClient;
+#endif
 class Element;
 class FileChooser;
 class PopupContainer;
@@ -105,8 +109,8 @@ public:
 #if ENABLE(REGISTER_PROTOCOL_HANDLER)
     virtual void registerProtocolHandler(const String& scheme, const String& baseURL, const String& url, const String& title);
 #endif
-    virtual void invalidateWindow(const WebCore::IntRect&, bool);
-    virtual void invalidateContentsAndWindow(const WebCore::IntRect&, bool);
+    virtual void invalidateRootView(const WebCore::IntRect&, bool);
+    virtual void invalidateContentsAndRootView(const WebCore::IntRect&, bool);
     virtual void invalidateContentsForSlowScroll(const WebCore::IntRect&, bool);
 #if ENABLE(REQUEST_ANIMATION_FRAME)
     virtual void scheduleAnimation();
@@ -114,8 +118,8 @@ public:
     virtual void scroll(
         const WebCore::IntSize& scrollDelta, const WebCore::IntRect& rectToScroll,
         const WebCore::IntRect& clipRect);
-    virtual WebCore::IntPoint screenToWindow(const WebCore::IntPoint&) const;
-    virtual WebCore::IntRect windowToScreen(const WebCore::IntRect&) const;
+    virtual WebCore::IntPoint screenToRootView(const WebCore::IntPoint&) const;
+    virtual WebCore::IntRect rootViewToScreen(const WebCore::IntRect&) const;
     virtual PlatformPageClient platformPageClient() const { return 0; }
     virtual void contentsSizeChanged(WebCore::Frame*, const WebCore::IntSize&) const;
     virtual void layoutUpdated(WebCore::Frame*) const;
@@ -125,17 +129,18 @@ public:
     virtual void mouseDidMoveOverElement(
         const WebCore::HitTestResult& result, unsigned modifierFlags);
     virtual void setToolTip(const WTF::String& tooltipText, WebCore::TextDirection);
+    virtual void dispatchViewportPropertiesDidChange(const WebCore::ViewportArguments&) const;
     virtual void print(WebCore::Frame*);
     virtual void exceededDatabaseQuota(
         WebCore::Frame*, const WTF::String& databaseName);
     virtual void reachedMaxAppCacheSize(int64_t spaceNeeded);
     virtual void reachedApplicationCacheOriginQuota(WebCore::SecurityOrigin*, int64_t totalSpaceNeeded);
-#if ENABLE(NOTIFICATIONS)
-    virtual WebCore::NotificationPresenter* notificationPresenter() const;
-#endif
     virtual bool paintCustomOverhangArea(WebCore::GraphicsContext*, const WebCore::IntRect&, const WebCore::IntRect&, const WebCore::IntRect&);
     virtual void requestGeolocationPermissionForFrame(WebCore::Frame*, WebCore::Geolocation*);
     virtual void cancelGeolocationPermissionRequestForFrame(WebCore::Frame*, WebCore::Geolocation*);
+#if ENABLE(INPUT_COLOR)
+    virtual PassOwnPtr<WebCore::ColorChooser> createColorChooser(WebCore::ColorChooserClient*, const WebCore::Color&) OVERRIDE;
+#endif
     virtual void runOpenPanel(WebCore::Frame*, PassRefPtr<WebCore::FileChooser>);
     virtual void loadIconForFiles(const Vector<WTF::String>&, WebCore::FileIconLoader*);
 #if ENABLE(DIRECTORY_UPLOAD)
@@ -187,17 +192,21 @@ public:
 
     virtual bool selectItemWritingDirectionIsNatural();
     virtual bool selectItemAlignmentFollowsMenuWritingDirection();
+    virtual bool hasOpenedPopup() const OVERRIDE;
     virtual PassRefPtr<WebCore::PopupMenu> createPopupMenu(WebCore::PopupMenuClient*) const;
     virtual PassRefPtr<WebCore::SearchPopupMenu> createSearchPopupMenu(WebCore::PopupMenuClient*) const;
-
-#if ENABLE(CONTEXT_MENUS)
-    virtual void showContextMenu() { }
-#endif
 
     virtual bool shouldRunModalDialogDuringPageDismissal(const DialogType&, const String& dialogMessage, WebCore::FrameLoader::PageDismissalType) const;
 
     virtual bool shouldRubberBandInDirection(WebCore::ScrollDirection) const;
     virtual void numWheelEventHandlersChanged(unsigned);
+    virtual void numTouchEventHandlersChanged(unsigned);
+
+#if ENABLE(POINTER_LOCK)
+    virtual bool requestPointerLock();
+    virtual void requestPointerUnlock();
+    virtual bool isPointerLocked();
+#endif
 
 private:
     void getPopupMenuInfo(WebCore::PopupContainer*, WebPopupMenuInfo*);

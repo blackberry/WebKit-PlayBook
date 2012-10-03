@@ -23,7 +23,6 @@
 #include "config.h"
 #include "ContainerNode.h"
 
-#include "BeforeLoadEvent.h"
 #include "ChildListMutationScope.h"
 #include "ContainerNodeAlgorithms.h"
 #include "DeleteButtonController.h"
@@ -56,17 +55,10 @@ typedef pair<RefPtr<Node>, unsigned> CallbackParameters;
 typedef pair<NodeCallback, CallbackParameters> CallbackInfo;
 typedef Vector<CallbackInfo> NodeCallbackQueue;
 
-typedef Vector<RefPtr<Node>, 1> NodeVector;
 static NodeCallbackQueue* s_postAttachCallbackQueue;
 
 static size_t s_attachDepth;
 static bool s_shouldReEnableMemoryCacheCallsAfterAttach;
-
-static inline void collectNodes(Node* node, NodeVector& nodes)
-{
-    for (Node* child = node->firstChild(); child; child = child->nextSibling())
-        nodes.append(child);
-}
 
 static void collectTargetNodes(Node* node, NodeVector& nodes)
 {
@@ -74,7 +66,7 @@ static void collectTargetNodes(Node* node, NodeVector& nodes)
         nodes.append(node);
         return;
     }
-    collectNodes(node, nodes);
+    getChildNodes(node, nodes);
 }
 
 void ContainerNode::removeAllChildren()
@@ -85,7 +77,7 @@ void ContainerNode::removeAllChildren()
 void ContainerNode::takeAllChildrenFrom(ContainerNode* oldParent)
 {
     NodeVector children;
-    collectNodes(oldParent, children);
+    getChildNodes(oldParent, children);
     oldParent->removeAllChildren();
 
     for (unsigned i = 0; i < children.size(); ++i) {
@@ -99,7 +91,7 @@ void ContainerNode::takeAllChildrenFrom(ContainerNode* oldParent)
         // FIXME: Together with adoptNode above, the tree scope might get updated recursively twice
         // (if the document changed or oldParent was in a shadow tree, AND *this is in a shadow tree).
         // Can we do better?
-        child->setTreeScopeRecursively(treeScope());
+        treeScope()->adoptIfNeeded(child.get());
         if (attached() && !child->attached())
             child->attach();
     }
@@ -115,6 +107,8 @@ bool ContainerNode::insertBefore(PassRefPtr<Node> newChild, Node* refChild, Exce
     // Check that this node is not "floating".
     // If it is, it can be deleted as a side effect of sending mutation events.
     ASSERT(refCount() || parentOrHostNode());
+
+    RefPtr<Node> protect(this);
 
     ec = 0;
 
@@ -157,11 +151,6 @@ bool ContainerNode::insertBefore(PassRefPtr<Node> newChild, Node* refChild, Exce
         if (ec)
             return false;
 
-        // FIXME: After sending the mutation events, "this" could be destroyed.
-        // We can prevent that by doing a "ref", but first we have to make sure
-        // that no callers call with ref count == 0 and parent = 0 (as of this
-        // writing, there are definitely callers who call that way).
-
         // Due to arbitrary code running in response to a DOM mutation event it's
         // possible that "next" is no longer a child of "this".
         // It's also possible that "child" has been inserted elsewhere.
@@ -175,7 +164,7 @@ bool ContainerNode::insertBefore(PassRefPtr<Node> newChild, Node* refChild, Exce
         InspectorInstrumentation::willInsertDOMNode(document(), child, this);
 #endif
 
-        child->setTreeScopeRecursively(treeScope());
+        treeScope()->adoptIfNeeded(child);
 
         insertBeforeCommon(next.get(), child);
 
@@ -244,10 +233,6 @@ void ContainerNode::parserInsertBefore(PassRefPtr<Node> newChild, Node* nextChil
     for (NodeVector::const_iterator it = targets.begin(); it != targets.end(); ++it) {
         Node* child = it->get();
 
-#if ENABLE(INSPECTOR)
-        InspectorInstrumentation::willInsertDOMNode(document(), child, this);
-#endif
-
         insertBeforeCommon(next.get(), child);
 
         childrenChanged(true, nextChildPreviousSibling.get(), nextChild, 1);
@@ -260,6 +245,8 @@ bool ContainerNode::replaceChild(PassRefPtr<Node> newChild, Node* oldChild, Exce
     // Check that this node is not "floating".
     // If it is, it can be deleted as a side effect of sending mutation events.
     ASSERT(refCount() || parentOrHostNode());
+
+    RefPtr<Node> protect(this);
 
     ec = 0;
 
@@ -290,12 +277,7 @@ bool ContainerNode::replaceChild(PassRefPtr<Node> newChild, Node* oldChild, Exce
     if (ec)
         return false;
 
-    // FIXME: After sending the mutation events, "this" could be destroyed.
-    // We can prevent that by doing a "ref", but first we have to make sure
-    // that no callers call with ref count == 0 and parent = 0 (as of this
-    // writing, there are definitely callers who call that way).
-
-    bool isFragment = newChild->nodeType() == DOCUMENT_FRAGMENT_NODE;
+    bool isFragment = newChild->nodeType() == DOCUMENT_FRAGMENT_NODE && !newChild->isShadowRoot();
 
     // Add the new child(ren)
     RefPtr<Node> child = isFragment ? newChild->firstChild() : newChild;
@@ -329,7 +311,7 @@ bool ContainerNode::replaceChild(PassRefPtr<Node> newChild, Node* oldChild, Exce
         InspectorInstrumentation::willInsertDOMNode(document(), child.get(), this);
 #endif
 
-        child->setTreeScopeRecursively(treeScope());
+        treeScope()->adoptIfNeeded(child.get());
 
         // Add child after "prev".
         forbidEventDispatch();
@@ -382,11 +364,14 @@ void ContainerNode::willRemove()
 {
     RefPtr<Node> protect(this);
 
-    for (RefPtr<Node> child = firstChild(); child; child = child->nextSibling()) {
-        if (child->parentNode() != this) // Check for child being removed from subtree while removing.
-            break;
-        child->willRemove();
+    NodeVector children;
+    getChildNodes(this, children);
+    for (size_t i = 0; i < children.size(); ++i) {
+        if (children[i]->parentNode() != this) // Check for child being removed from subtree while removing.
+            continue;
+        children[i]->willRemove();
     }
+
     Node::willRemove();
 }
 
@@ -407,7 +392,7 @@ static void willRemoveChildren(ContainerNode* container)
     container->document()->incDOMTreeVersion();
 
     NodeVector children;
-    collectNodes(container, children);
+    getChildNodes(container, children);
 
 #if ENABLE(MUTATION_OBSERVERS)
     ChildListMutationScope mutation(container);
@@ -426,6 +411,8 @@ bool ContainerNode::removeChild(Node* oldChild, ExceptionCode& ec)
     // Check that this node is not "floating".
     // If it is, it can be deleted as a side effect of sending mutation events.
     ASSERT(refCount() || parentOrHostNode());
+
+    RefPtr<Node> protect(this);
 
     ec = 0;
 
@@ -464,23 +451,18 @@ bool ContainerNode::removeChild(Node* oldChild, ExceptionCode& ec)
         return false;
     }
 
-    // FIXME: After sending the mutation events, "this" could be destroyed.
-    // We can prevent that by doing a "ref", but first we have to make sure
-    // that no callers call with ref count == 0 and parent = 0 (as of this
-    // writing, there are definitely callers who call that way).
-
     Node* prev = child->previousSibling();
     Node* next = child->nextSibling();
     removeBetween(prev, next, child.get());
 
-    // Dispatch post-removal mutation events
     childrenChanged(false, prev, next, -1);
-    dispatchSubtreeModifiedEvent();
 
     if (child->inDocument())
         child->removedFromDocument();
-    else
-        child->removedFromTree(true);
+    else if (child->isContainerNode())
+        toContainerNode(child.get())->removedFromTree(true);
+
+    dispatchSubtreeModifiedEvent();
 
     return child;
 }
@@ -509,7 +491,7 @@ void ContainerNode::removeBetween(Node* previousChild, Node* nextChild, Node* ol
     oldChild->setNextSibling(0);
     oldChild->setParent(0);
 
-    oldChild->setTreeScopeRecursively(document());
+    document()->adoptIfNeeded(oldChild);
 
     allowEventDispatch();
 }
@@ -527,8 +509,8 @@ void ContainerNode::parserRemoveChild(Node* oldChild)
     childrenChanged(true, prev, next, -1);
     if (oldChild->inDocument())
         oldChild->removedFromDocument();
-    else
-        oldChild->removedFromTree(true);
+    else if (oldChild->isContainerNode())
+        toContainerNode(oldChild)->removedFromTree(true);
 }
 
 // this differs from other remove functions because it forcibly removes all the children,
@@ -564,7 +546,7 @@ void ContainerNode::removeChildren()
         n->setPreviousSibling(0);
         n->setNextSibling(0);
         n->setParent(0);
-        n->setTreeScopeRecursively(document());
+        document()->adoptIfNeeded(n.get());
 
         m_firstChild = next;
         if (n == m_lastChild)
@@ -587,24 +569,26 @@ void ContainerNode::removeChildren()
             removedChild->detach();
     }
 
+    // FIXME: This should be just above dispatchSubtreeModifiedEvent();
     allowEventDispatch();
 
-    // Dispatch a single post-removal mutation event denoting a modified subtree.
     childrenChanged(false, 0, 0, -static_cast<int>(removedChildrenCount));
-    dispatchSubtreeModifiedEvent();
 
     for (i = 0; i < removedChildrenCount; ++i) {
         Node* removedChild = removedChildren[i].get();
         if (removedChild->inDocument())
             removedChild->removedFromDocument();
-        // removeChild() calls removedFromTree(true) if the child was not in the
-        // document. There is no explanation for this discrepancy between removeChild()
-        // and its optimized version removeChildren().
+        else if (removedChild->isContainerNode())
+            toContainerNode(removedChild)->removedFromTree(true);
     }
+
+    dispatchSubtreeModifiedEvent();
 }
 
 bool ContainerNode::appendChild(PassRefPtr<Node> newChild, ExceptionCode& ec, bool shouldLazyAttach)
 {
+    RefPtr<ContainerNode> protect(this);
+
     // Check that this node is not "floating".
     // If it is, it can be deleted as a side effect of sending mutation events.
     ASSERT(refCount() || parentOrHostNode());
@@ -649,7 +633,7 @@ bool ContainerNode::appendChild(PassRefPtr<Node> newChild, ExceptionCode& ec, bo
         InspectorInstrumentation::willInsertDOMNode(document(), child, this);
 #endif
 
-        child->setTreeScopeRecursively(treeScope());
+        treeScope()->adoptIfNeeded(child);
 
         // Append child to the end of the list
         forbidEventDispatch();
@@ -689,15 +673,11 @@ void ContainerNode::parserAddChild(PassRefPtr<Node> newChild)
     ASSERT(newChild);
     ASSERT(!newChild->parentNode()); // Use appendChild if you need to handle reparenting (and want DOM mutation events).
 
-#if ENABLE(INSPECTOR)
-    InspectorInstrumentation::willInsertDOMNode(document(), newChild.get(), this);
-#endif
-
     forbidEventDispatch();
     Node* last = m_lastChild;
     // FIXME: This method should take a PassRefPtr.
     appendChildToContainer<Node, ContainerNode>(newChild.get(), this);
-    newChild->setTreeScopeRecursively(treeScope());
+    treeScope()->adoptIfNeeded(newChild.get());
     
     allowEventDispatch();
 
@@ -713,6 +693,8 @@ void ContainerNode::suspendPostAttachCallbacks()
     if (!s_attachDepth) {
         ASSERT(!s_shouldReEnableMemoryCacheCallsAfterAttach);
         if (Page* page = document()->page()) {
+            // FIXME: How can this call be specific to one Page, while the
+            // s_attachDepth is a global? Doesn't make sense.
             if (page->areMemoryCacheClientCallsEnabled()) {
                 page->setMemoryCacheClientCallsEnabled(false);
                 s_shouldReEnableMemoryCacheCallsAfterAttach = true;
@@ -780,15 +762,13 @@ void ContainerNode::scheduleSetNeedsStyleRecalc(StyleChangeType changeType)
 
 void ContainerNode::attach()
 {
-    for (Node* child = m_firstChild; child; child = child->nextSibling())
-        child->attach();
+    attachChildren();
     Node::attach();
 }
 
 void ContainerNode::detach()
 {
-    for (Node* child = m_firstChild; child; child = child->nextSibling())
-        child->detach();
+    detachChildren();
     clearChildNeedsStyleRecalc();
     Node::detach();
 }
@@ -800,13 +780,17 @@ void ContainerNode::insertedIntoDocument()
     Node::insertedIntoDocument();
     insertedIntoTree(false);
 
-    for (RefPtr<Node> child = m_firstChild; child; child = child->nextSibling()) {
-        // Guard against mutation during re-parenting.
-        if (!inDocument()) // Check for self being removed from document while reparenting.
+    NodeVector children;
+    getChildNodes(this, children);
+    for (size_t i = 0; i < children.size(); ++i) {
+        // If we have been removed from the document during this loop, then
+        // we don't want to tell the rest of our children that they've been
+        // inserted into the document because they haven't.
+        if (!inDocument())
             break;
-        if (child->parentNode() != this) // Check for child being removed from subtree while reparenting.
-            break;
-        child->insertedIntoDocument();
+        if (children[i]->parentNode() != this)
+            continue;
+        children[i]->insertedIntoDocument();
     }
 }
 
@@ -817,33 +801,46 @@ void ContainerNode::removedFromDocument()
         document()->setCSSTarget(0); 
     clearInDocument();
     removedFromTree(false);
-    for (Node* child = m_firstChild; child; child = child->nextSibling())
-        child->removedFromDocument();
+
+    NodeVector children;
+    getChildNodes(this, children);
+    for (size_t i = 0; i < children.size(); ++i) {
+        // If we have been added to the document during this loop, then we
+        // don't want to tell the rest of our children that they've been
+        // removed from the document because they haven't.
+        if (inDocument())
+            break;
+        if (children[i]->parentNode() != this)
+            continue;
+        children[i]->removedFromDocument();
+    }
 }
 
 void ContainerNode::insertedIntoTree(bool deep)
 {
     if (!deep)
         return;
-    for (Node* child = m_firstChild; child; child = child->nextSibling())
-        child->insertedIntoTree(true);
+    for (Node* child = m_firstChild; child; child = child->nextSibling()) {
+        if (child->isContainerNode())
+            toContainerNode(child)->insertedIntoTree(true);
+    }
 }
 
 void ContainerNode::removedFromTree(bool deep)
 {
     if (!deep)
         return;
-    for (Node* child = m_firstChild; child; child = child->nextSibling())
-        child->removedFromTree(true);
+    for (Node* child = m_firstChild; child; child = child->nextSibling()) {
+        if (child->isContainerNode())
+            toContainerNode(child)->removedFromTree(true);
+    }
 }
 
-void ContainerNode::childrenChanged(bool changedByParser, Node* beforeChange, Node* afterChange, int childCountDelta)
+void ContainerNode::childrenChanged(bool changedByParser, Node*, Node*, int childCountDelta)
 {
-    Node::childrenChanged(changedByParser, beforeChange, afterChange, childCountDelta);
     if (!changedByParser && childCountDelta)
-        document()->nodeChildrenChanged(this);
-    if (treeScope()->hasNodeListCaches())
-        notifyNodeListsChildrenChanged();
+        document()->updateRangesAfterChildrenChanged(this);
+    invalidateNodeListsCacheAfterChildrenChanged();
 }
 
 void ContainerNode::cloneChildNodes(ContainerNode *clone)
@@ -1099,8 +1096,8 @@ static void notifyChildInserted(Node* child)
     Node* parentOrHostNode = c->parentOrHostNode();
     if (parentOrHostNode && parentOrHostNode->inDocument())
         c->insertedIntoDocument();
-    else
-        c->insertedIntoTree(true);
+    else if (c->isContainerNode())
+        toContainerNode(c.get())->insertedIntoTree(true);
 
     document->incDOMTreeVersion();
 }
@@ -1157,17 +1154,6 @@ static void dispatchChildRemovalEvents(Node* child)
         for (; c; c = c->traverseNextNode(child))
             c->dispatchScopedEvent(MutationEvent::create(eventNames().DOMNodeRemovedFromDocumentEvent, false));
     }
-}
-
-bool ContainerNode::dispatchBeforeLoadEvent(const String& sourceURL)
-{
-    if (!document()->hasListenerType(Document::BEFORELOAD_LISTENER))
-        return true;
-
-    RefPtr<ContainerNode> protector(this);
-    RefPtr<BeforeLoadEvent> beforeLoadEvent = BeforeLoadEvent::create(sourceURL);
-    dispatchEvent(beforeLoadEvent.get());
-    return !beforeLoadEvent->defaultPrevented();
 }
 
 } // namespace WebCore

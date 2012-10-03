@@ -132,7 +132,7 @@ bool ResourceLoader::init(const ResourceRequest& r)
 
     willSendRequest(clientRequest, ResourceResponse());
     if (clientRequest.isNull()) {
-        didFail(cancelledError());
+        cancel();
         return false;
     }
 
@@ -181,7 +181,7 @@ void ResourceLoader::setDefersLoading(bool defers)
     }
 }
 
-#if PLATFORM(BLACKBERRY) && OS(QNX)
+#if PLATFORM(BLACKBERRY)
 void ResourceLoader::pauseLoad(bool pause)
 {
     if (m_handle)

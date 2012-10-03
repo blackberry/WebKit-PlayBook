@@ -36,7 +36,7 @@
 #include "QuotaTracker.h"
 #include "SecurityOrigin.h"
 #include "WebDatabaseObserver.h"
-#include "WebString.h"
+#include "platform/WebString.h"
 #include <wtf/PassRefPtr.h>
 #include <wtf/RefPtr.h>
 
@@ -82,6 +82,12 @@ WebSecurityOrigin WebDatabase::securityOrigin() const
     return WebSecurityOrigin(m_database->securityOrigin());
 }
 
+bool WebDatabase::isSyncDatabase() const
+{
+    ASSERT(m_database);
+    return m_database->isSyncDatabase();
+}
+
 void WebDatabase::setObserver(WebDatabaseObserver* observer)
 {
     databaseObserver = observer;
@@ -116,10 +122,7 @@ void WebDatabase::resetSpaceAvailable(const WebString& originIdentifier)
 void WebDatabase::closeDatabaseImmediately(const WebString& originIdentifier, const WebString& databaseName)
 {
 #if ENABLE(SQL_DATABASE)
-    HashSet<RefPtr<AbstractDatabase> > databaseHandles;
-    DatabaseTracker::tracker().getOpenDatabases(originIdentifier, databaseName, &databaseHandles);
-    for (HashSet<RefPtr<AbstractDatabase> >::iterator it = databaseHandles.begin(); it != databaseHandles.end(); ++it)
-        it->get()->closeImmediately();
+    DatabaseTracker::tracker().closeDatabasesImmediately(originIdentifier, databaseName);
 #endif
 }
 

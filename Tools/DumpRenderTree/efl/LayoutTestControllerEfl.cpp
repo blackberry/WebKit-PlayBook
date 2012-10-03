@@ -109,12 +109,6 @@ JSValueRef LayoutTestController::computedStyleIncludingVisitedInfo(JSContextRef 
     return JSValueMakeUndefined(context);
 }
 
-JSValueRef LayoutTestController::nodesFromRect(JSContextRef context, JSValueRef, int, int, unsigned, unsigned, unsigned, unsigned, bool)
-{
-    notImplemented();
-    return JSValueMakeUndefined(context);
-}
-
 JSRetainPtr<JSStringRef> LayoutTestController::layerTreeAsText() const
 {
     notImplemented();
@@ -256,9 +250,9 @@ void LayoutTestController::setUserStyleSheetLocation(JSStringRef path)
         setUserStyleSheetEnabled(true);
 }
 
-void LayoutTestController::setValueForUser(JSContextRef, JSValueRef, JSStringRef)
+void LayoutTestController::setValueForUser(JSContextRef context, JSValueRef nodeObject, JSStringRef value)
 {
-    notImplemented();
+    DumpRenderTreeSupportEfl::setValueForUser(context, nodeObject, value);
 }
 
 void LayoutTestController::setViewModeMediaFeature(JSStringRef)
@@ -337,9 +331,9 @@ void LayoutTestController::setAuthorAndUserStylesEnabled(bool)
     notImplemented();
 }
 
-void LayoutTestController::setAutofilled(JSContextRef, JSValueRef, bool)
+void LayoutTestController::setAutofilled(JSContextRef context, JSValueRef nodeObject, bool autofilled)
 {
-    notImplemented();
+    DumpRenderTreeSupportEfl::setAutofilled(context, nodeObject, autofilled);
 }
 
 void LayoutTestController::disableImageLoading()
@@ -383,6 +377,13 @@ int LayoutTestController::numberOfPendingGeolocationPermissionRequests()
 }
 
 void LayoutTestController::addMockSpeechInputResult(JSStringRef, double, JSStringRef)
+{
+    // FIXME: Implement for speech input layout tests.
+    // See https://bugs.webkit.org/show_bug.cgi?id=39485.
+    notImplemented();
+}
+
+void LayoutTestController::setMockSpeechInputDumpRect(bool)
 {
     // FIXME: Implement for speech input layout tests.
     // See https://bugs.webkit.org/show_bug.cgi?id=39485.
@@ -506,8 +507,7 @@ void LayoutTestController::clearPersistentUserStyleSheet()
 
 void LayoutTestController::clearAllApplicationCaches()
 {
-    // FIXME: Implement to support application cache quotas.
-    notImplemented();
+    ewk_settings_application_cache_clear();
 }
 
 void LayoutTestController::setApplicationCacheOriginQuota(unsigned long long)
@@ -544,12 +544,12 @@ long long LayoutTestController::applicationCacheDiskUsageForOrigin(JSStringRef)
 
 void LayoutTestController::clearAllDatabases()
 {
-    notImplemented();
+    ewk_settings_web_database_clear();
 }
 
-void LayoutTestController::setDatabaseQuota(unsigned long long)
+void LayoutTestController::setDatabaseQuota(unsigned long long quota)
 {
-    notImplemented();
+    ewk_settings_web_database_default_quota_set(quota);
 }
 
 JSValueRef LayoutTestController::originsWithLocalStorage(JSContextRef context)
@@ -597,7 +597,7 @@ void LayoutTestController::setDefersLoading(bool)
 
 void LayoutTestController::setAppCacheMaximumSize(unsigned long long size)
 {
-    ewk_settings_cache_capacity_set(size);
+    ewk_settings_application_cache_max_quota_set(size);
 }
 
 bool LayoutTestController::pauseAnimationAtTimeOnElementWithId(JSStringRef animationName, double time, JSStringRef elementId)
@@ -608,11 +608,6 @@ bool LayoutTestController::pauseAnimationAtTimeOnElementWithId(JSStringRef anima
 bool LayoutTestController::pauseTransitionAtTimeOnElementWithId(JSStringRef propertyName, double time, JSStringRef elementId)
 {
     return DumpRenderTreeSupportEfl::pauseTransition(browser->mainFrame(), propertyName->ustring().utf8().data(), elementId->ustring().utf8().data(), time);
-}
-
-bool LayoutTestController::sampleSVGAnimationForElementAtTime(JSStringRef animationId, double time, JSStringRef elementId)
-{
-    return DumpRenderTreeSupportEfl::pauseSVGAnimation(browser->mainFrame(), animationId->ustring().utf8().data(), elementId->ustring().utf8().data(), time);
 }
 
 unsigned LayoutTestController::numberOfActiveAnimations() const
@@ -735,9 +730,12 @@ bool LayoutTestController::hasGrammarMarker(int, int)
     return false;
 }
 
-void LayoutTestController::dumpConfigurationForViewport(int, int, int, int, int)
+void LayoutTestController::dumpConfigurationForViewport(int deviceDPI, int deviceWidth, int deviceHeight, int availableWidth, int availableHeight)
 {
-    notImplemented();
+    DumpRenderTreeSupportEfl::dumpConfigurationForViewport(browser->mainView(),
+            deviceDPI,
+            WebCore::IntSize(deviceWidth, deviceHeight),
+            WebCore::IntSize(availableWidth, availableHeight));
 }
 
 void LayoutTestController::setSerializeHTTPLoads(bool)
@@ -779,4 +777,8 @@ void LayoutTestController::focusWebView()
 void LayoutTestController::setBackingScaleFactor(double)
 {
     notImplemented();
+}
+
+void LayoutTestController::simulateDesktopNotificationClick(JSStringRef title)
+{
 }

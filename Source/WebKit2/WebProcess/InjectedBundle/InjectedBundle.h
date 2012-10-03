@@ -43,6 +43,10 @@
 typedef struct _GModule GModule;
 #endif
 
+#if PLATFORM(EFL)
+#include <Eina.h>
+#endif
+
 namespace CoreIPC {
     class ArgumentDecoder;
     class Connection;
@@ -59,11 +63,14 @@ typedef HMODULE PlatformBundle;
 typedef QLibrary PlatformBundle;
 #elif PLATFORM(GTK)
 typedef ::GModule* PlatformBundle;
+#elif PLATFORM(EFL)
+typedef Eina_Module* PlatformBundle;
 #endif
 
 class ImmutableArray;
 class InjectedBundleScriptWorld;
 class WebCertificateInfo;
+class WebConnection;
 class WebFrame;
 class WebPage;
 class WebPageGroupProxy;
@@ -90,16 +97,21 @@ public:
     void setClientCertificate(const String& host, const String& certificateSystemStoreName, const WebCertificateInfo*);
 #endif
 
+    WebConnection* webConnectionToUIProcess() const;
+
     // TestRunner only SPI
     void setShouldTrackVisitedLinks(bool);
     void removeAllVisitedLinks();
     void activateMacFontAscentHack();
+    void overrideBoolPreferenceForTestRunner(WebPageGroupProxy*, const String& preference, bool enabled);
     void overrideXSSAuditorEnabledForTestRunner(WebPageGroupProxy* pageGroup, bool enabled);
     void setAllowUniversalAccessFromFileURLs(WebPageGroupProxy*, bool);
     void setAllowFileAccessFromFileURLs(WebPageGroupProxy*, bool);
     void setFrameFlatteningEnabled(WebPageGroupProxy*, bool);
+    void setGeoLocationPermission(WebPageGroupProxy*, bool);
     void setJavaScriptCanAccessClipboard(WebPageGroupProxy*, bool);
     void setPrivateBrowsingEnabled(WebPageGroupProxy*, bool);
+    void setPopupBlockingEnabled(WebPageGroupProxy*, bool);
     void switchNetworkLoaderToNewTestingSession();
     void setAuthorAndUserStylesEnabled(WebPageGroupProxy*, bool);
     void addOriginAccessWhitelistEntry(const String&, const String&, const String&, bool);

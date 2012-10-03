@@ -37,6 +37,7 @@
 
 #include <gdk/gdk.h>
 #include <gdk/gdkkeysyms.h>
+#include <wtf/CurrentTime.h>
 
 namespace WebCore {
 
@@ -547,18 +548,16 @@ String PlatformKeyboardEvent::singleCharacterString(unsigned val)
 // Keep this in sync with the other platform event constructors
 // TODO: m_gdkEventKey should be refcounted
 PlatformKeyboardEvent::PlatformKeyboardEvent(GdkEventKey* event)
-    : m_type((event->type == GDK_KEY_RELEASE) ? KeyUp : KeyDown)
+    : PlatformEvent((event->type == GDK_KEY_RELEASE) ? PlatformEvent::KeyUp : PlatformEvent::KeyDown, (event->state & GDK_SHIFT_MASK) || (event->keyval == GDK_3270_BackTab), event->state & GDK_CONTROL_MASK, event->state & GDK_MOD1_MASK, event->state & GDK_META_MASK, currentTime())
     , m_text(singleCharacterString(event->keyval))
     , m_unmodifiedText(singleCharacterString(event->keyval))
     , m_keyIdentifier(keyIdentifierForGdkKeyCode(event->keyval))
-    , m_autoRepeat(false)
     , m_windowsVirtualKeyCode(windowsKeyCodeForGdkKeyCode(event->keyval))
     , m_nativeVirtualKeyCode(event->keyval)
+    , m_macCharCode(0)
+    , m_autoRepeat(false)
     , m_isKeypad(event->keyval >= GDK_KP_Space && event->keyval <= GDK_KP_9)
-    , m_shiftKey((event->state & GDK_SHIFT_MASK) || (event->keyval == GDK_3270_BackTab))
-    , m_ctrlKey(event->state & GDK_CONTROL_MASK)
-    , m_altKey(event->state & GDK_MOD1_MASK)
-    , m_metaKey(event->state & GDK_META_MASK)
+    , m_isSystemKey(false)
     , m_gdkEventKey(event)
 {
 }
@@ -572,7 +571,7 @@ void PlatformKeyboardEvent::disambiguateKeyDownEvent(Type type, bool backwardCom
     if (backwardCompatibilityMode)
         return;
 
-    if (type == RawKeyDown) {
+    if (type == PlatformEvent::RawKeyDown) {
         m_text = String();
         m_unmodifiedText = String();
     } else {

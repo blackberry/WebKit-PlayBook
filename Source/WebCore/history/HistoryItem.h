@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2006, 2008, 2011 Apple Inc. All rights reserved.
- * Copyright (C) Research In Motion Limited 2010. All rights reserved.
+ * Copyright (C) 2012 Research In Motion Limited. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -207,7 +207,7 @@ public:
 #endif
 
 #if PLATFORM(BLACKBERRY)
-    HistoryItemViewState& viewState() const { return m_viewState; }
+    HistoryItemViewState& viewState() { return m_viewState; }
 #endif
 
 #ifndef NDEBUG
@@ -302,7 +302,7 @@ private:
 #endif
 
 #if PLATFORM(BLACKBERRY)
-    mutable HistoryItemViewState m_viewState;
+    HistoryItemViewState m_viewState;
 #endif
 }; //class HistoryItem
 

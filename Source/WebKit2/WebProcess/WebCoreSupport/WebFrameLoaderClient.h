@@ -93,6 +93,7 @@ private:
 
     virtual void dispatchDidFirstLayout() OVERRIDE;
     virtual void dispatchDidFirstVisuallyNonEmptyLayout() OVERRIDE;
+    virtual void dispatchDidNewFirstVisuallyNonEmptyLayout() OVERRIDE;
     virtual void dispatchDidLayout() OVERRIDE;
 
     virtual WebCore::Frame* dispatchCreatePage(const WebCore::NavigationAction&) OVERRIDE;
@@ -178,7 +179,7 @@ private:
     virtual void dispatchDidBecomeFrameset(bool) OVERRIDE;
 
     virtual bool canCachePage() const OVERRIDE;
-    virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) OVERRIDE;
+    virtual void download(WebCore::ResourceHandle*, const WebCore::ResourceRequest&, const WebCore::ResourceResponse&) OVERRIDE;
     
     virtual PassRefPtr<WebCore::Frame> createFrame(const WebCore::KURL& url, const String& name, WebCore::HTMLFrameOwnerElement* ownerElement,
                                           const String& referrer, bool allowsScrolling, int marginWidth, int marginHeight) OVERRIDE;

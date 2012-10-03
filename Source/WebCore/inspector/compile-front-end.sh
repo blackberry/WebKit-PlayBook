@@ -45,8 +45,10 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
         --js Source/WebCore/inspector/front-end/UserMetrics.js \
         --js Source/WebCore/inspector/front-end/HandlerRegistry.js \
         --js Source/WebCore/inspector/front-end/InspectorFrontendHostStub.js \
-    --module jsmodule_sdk:25:jsmodule_common \
+    --module jsmodule_sdk:33:jsmodule_common \
+        --js Source/WebCore/inspector/front-end/InspectorBackend.js \
         --js Source/WebCore/inspector/front-end/ApplicationCacheModel.js \
+        --js Source/WebCore/inspector/front-end/Color.js \
         --js Source/WebCore/inspector/front-end/CompilerSourceMapping.js \
         --js Source/WebCore/inspector/front-end/ConsoleModel.js \
         --js Source/WebCore/inspector/front-end/ContentProviders.js \
@@ -61,24 +63,30 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
         --js Source/WebCore/inspector/front-end/DebuggerModel.js \
         --js Source/WebCore/inspector/front-end/DebuggerPresentationModel.js \
         --js Source/WebCore/inspector/front-end/HAREntry.js \
+        --js Source/WebCore/inspector/front-end/IndexedDBModel.js \
         --js Source/WebCore/inspector/front-end/NetworkLog.js \
+        --js Source/WebCore/inspector/front-end/Placard.js \
         --js Source/WebCore/inspector/front-end/Script.js \
         --js Source/WebCore/inspector/front-end/ScriptFormatter.js \
+        --js Source/WebCore/inspector/front-end/TimelineManager.js \
+        --js Source/WebCore/inspector/front-end/TimelineModel.js \
+        --js Source/WebCore/inspector/front-end/TimelinePresentationModel.js \
         --js Source/WebCore/inspector/front-end/RawSourceCode.js \
         --js Source/WebCore/inspector/front-end/RemoteObject.js \
+        --js Source/WebCore/inspector/front-end/Resource.js \
         --js Source/WebCore/inspector/front-end/ResourceCategory.js \
         --js Source/WebCore/inspector/front-end/ResourceTreeModel.js \
-        --js Source/WebCore/inspector/front-end/Resource.js \
+        --js Source/WebCore/inspector/front-end/ResourceUtils.js \
         --js Source/WebCore/inspector/front-end/NetworkManager.js \
         --js Source/WebCore/inspector/front-end/UISourceCode.js \
-    --module jsmodule_ui:35:jsmodule_common \
+    --module jsmodule_ui:36:jsmodule_common \
         --js Source/WebCore/inspector/front-end/AdvancedSearchController.js \
         --js Source/WebCore/inspector/front-end/Checkbox.js \
-        --js Source/WebCore/inspector/front-end/Color.js \
         --js Source/WebCore/inspector/front-end/ContextMenu.js \
         --js Source/WebCore/inspector/front-end/CookiesTable.js \
         --js Source/WebCore/inspector/front-end/DOMSyntaxHighlighter.js \
         --js Source/WebCore/inspector/front-end/DataGrid.js \
+        --js Source/WebCore/inspector/front-end/Dialog.js \
         --js Source/WebCore/inspector/front-end/Drawer.js \
         --js Source/WebCore/inspector/front-end/EmptyView.js \
         --js Source/WebCore/inspector/front-end/HelpScreen.js \
@@ -86,17 +94,19 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
         --js Source/WebCore/inspector/front-end/KeyboardShortcut.js \
         --js Source/WebCore/inspector/front-end/Panel.js \
         --js Source/WebCore/inspector/front-end/PanelEnablerView.js \
-        --js Source/WebCore/inspector/front-end/Placard.js \
         --js Source/WebCore/inspector/front-end/Popover.js \
         --js Source/WebCore/inspector/front-end/PropertiesSection.js \
-        --js Source/WebCore/inspector/front-end/PropertiesSidebarPane.js \
         --js Source/WebCore/inspector/front-end/SearchController.js \
         --js Source/WebCore/inspector/front-end/Section.js \
         --js Source/WebCore/inspector/front-end/SidebarPane.js \
         --js Source/WebCore/inspector/front-end/SidebarTreeElement.js \
         --js Source/WebCore/inspector/front-end/ShortcutsScreen.js \
         --js Source/WebCore/inspector/front-end/ShowMoreDataGridNode.js \
+        --js Source/WebCore/inspector/front-end/SidebarOverlay.js \
         --js Source/WebCore/inspector/front-end/SoftContextMenu.js \
+        --js Source/WebCore/inspector/front-end/SourceTokenizer.js \
+        --js Source/WebCore/inspector/front-end/Spectrum.js \
+        --js Source/WebCore/inspector/front-end/SplitView.js \
         --js Source/WebCore/inspector/front-end/StatusBarButton.js \
         --js Source/WebCore/inspector/front-end/TabbedPane.js \
         --js Source/WebCore/inspector/front-end/TextEditorModel.js \
@@ -106,24 +116,21 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
         --js Source/WebCore/inspector/front-end/Toolbar.js \
         --js Source/WebCore/inspector/front-end/UIUtils.js \
         --js Source/WebCore/inspector/front-end/View.js \
-        --js Source/WebCore/inspector/front-end/WelcomeView.js \
-    --module jsmodule_components:16:jsmodule_sdk,jsmodule_ui \
+    --module jsmodule_components:14:jsmodule_sdk,jsmodule_ui \
         --js Source/WebCore/inspector/front-end/ConsoleMessage.js \
         --js Source/WebCore/inspector/front-end/BreakpointsSidebarPane.js \
         --js Source/WebCore/inspector/front-end/DOMBreakpointsSidebarPane.js \
         --js Source/WebCore/inspector/front-end/DOMPresentationUtils.js \
         --js Source/WebCore/inspector/front-end/ElementsTreeOutline.js \
         --js Source/WebCore/inspector/front-end/EventListenersSidebarPane.js \
+        --js Source/WebCore/inspector/front-end/FilteredItemSelectionDialog.js \
         --js Source/WebCore/inspector/front-end/GoToLineDialog.js \
         --js Source/WebCore/inspector/front-end/JavaScriptContextManager.js \
         --js Source/WebCore/inspector/front-end/ObjectPopoverHelper.js \
         --js Source/WebCore/inspector/front-end/ObjectPropertiesSection.js \
-        --js Source/WebCore/inspector/front-end/ResourceUtils.js \
+        --js Source/WebCore/inspector/front-end/PropertiesSidebarPane.js \
         --js Source/WebCore/inspector/front-end/SourceFrame.js \
-        --js Source/WebCore/inspector/front-end/SourceTokenizer.js \
-        --js Source/WebCore/inspector/front-end/TimelineAgent.js \
         --js Source/WebCore/inspector/front-end/TimelineGrid.js \
-        --js Source/WebCore/inspector/front-end/TimelineManager.js \
     --module jsmodule_elements:3:jsmodule_components \
         --js Source/WebCore/inspector/front-end/StylesSidebarPane.js \
         --js Source/WebCore/inspector/front-end/MetricsSidebarPane.js \
@@ -141,17 +148,20 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
         --js Source/WebCore/inspector/front-end/ResourceTimingView.js \
         --js Source/WebCore/inspector/front-end/ResourceView.js \
         --js Source/WebCore/inspector/front-end/NetworkPanel.js \
-    --module jsmodule_resources:6:jsmodule_components \
+    --module jsmodule_resources:7:jsmodule_components \
         --js Source/WebCore/inspector/front-end/ApplicationCacheItemsView.js \
         --js Source/WebCore/inspector/front-end/CookieItemsView.js \
         --js Source/WebCore/inspector/front-end/DatabaseQueryView.js \
         --js Source/WebCore/inspector/front-end/DatabaseTableView.js \
         --js Source/WebCore/inspector/front-end/DOMStorageItemsView.js \
+        --js Source/WebCore/inspector/front-end/IndexedDBViews.js \
         --js Source/WebCore/inspector/front-end/ResourcesPanel.js \
-    --module jsmodule_scripts:8:jsmodule_components \
+    --module jsmodule_scripts:10:jsmodule_components \
         --js Source/WebCore/inspector/front-end/CallStackSidebarPane.js \
         --js Source/WebCore/inspector/front-end/ScopeChainSidebarPane.js \
         --js Source/WebCore/inspector/front-end/JavaScriptSourceFrame.js \
+        --js Source/WebCore/inspector/front-end/TabbedEditorContainer.js \
+        --js Source/WebCore/inspector/front-end/ScriptsNavigator.js \
         --js Source/WebCore/inspector/front-end/ScriptsPanel.js \
         --js Source/WebCore/inspector/front-end/ScriptsSearchScope.js \
         --js Source/WebCore/inspector/front-end/WatchExpressionsSidebarPane.js \
@@ -160,7 +170,8 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
     --module jsmodule_console:2:jsmodule_components \
         --js Source/WebCore/inspector/front-end/ConsoleView.js \
         --js Source/WebCore/inspector/front-end/ConsolePanel.js \
-    --module jsmodule_timeline:2:jsmodule_components \
+    --module jsmodule_timeline:3:jsmodule_components \
+        --js Source/WebCore/inspector/front-end/MemoryStatistics.js \
         --js Source/WebCore/inspector/front-end/TimelineOverviewPane.js \
         --js Source/WebCore/inspector/front-end/TimelinePanel.js \
     --module jsmodule_audits:6:jsmodule_components \
@@ -189,6 +200,7 @@ java -jar ~/closure/compiler.jar --summary_detail_level 3 --compilation_level SI
 # To be compiled...
 # 
 # [Profiler]
+# CSSSelectorProfileView
 # BottomUpProfileDataGridTree
 # DetailedHeapshotGridNodes
 # DetailedHeapshotView

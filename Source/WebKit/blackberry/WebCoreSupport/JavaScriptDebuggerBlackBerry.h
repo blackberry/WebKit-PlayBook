@@ -1,6 +1,6 @@
 /*
  * Copyright (C) 2009 Torch Mobile Inc. http://www.torchmobile.com/
- * Copyright (C) 2011 Research In Motion Limited. All rights reserved.
+ * Copyright (C) 2011, 2012 Research In Motion Limited. All rights reserved.
  *
  * This library is free software; you can redistribute it and/or
  * modify it under the terms of the GNU Lesser General Public
@@ -20,19 +20,14 @@
 #ifndef JavaScriptDebuggerBlackBerry_h
 #define JavaScriptDebuggerBlackBerry_h
 
+#if ENABLE(JAVASCRIPT_DEBUGGER)
+
 #include "ScriptDebugListener.h"
 
 namespace BlackBerry {
 namespace WebKit {
-class WebPage;
-class WebPageClient;
+class WebPagePrivate;
 }
-}
-
-namespace JSC {
-class ExecState;
-class SourceCode;
-class UString;
 }
 
 namespace WebCore {
@@ -42,7 +37,7 @@ class PageScriptDebugServer;
 
 class JavaScriptDebuggerBlackBerry : public ScriptDebugListener {
 public:
-    JavaScriptDebuggerBlackBerry(BlackBerry::WebKit::WebPage*);
+    JavaScriptDebuggerBlackBerry(BlackBerry::WebKit::WebPagePrivate*);
     ~JavaScriptDebuggerBlackBerry();
 
     void addBreakpoint(const unsigned short* url, unsigned urlLength, int lineNumber, const unsigned short* condition, unsigned conditionLength);
@@ -59,7 +54,7 @@ public:
     void stepIntoStatementInDebugger();
     void stepOutOfFunctionInDebugger();
 
-    /* From ScriptDebugListener */
+    // From ScriptDebugListener
     virtual void didParseSource(const String&  sourceID, const Script&);
     virtual void failedToParseSource(const String& url, const String& data, int firstLine, int errorLine, const String& errorMessage);
     virtual void didPause(ScriptState*, const ScriptValue& callFrames, const ScriptValue& exception);
@@ -70,8 +65,7 @@ protected:
     void stop();
 
 private:
-    BlackBerry::WebKit::WebPage* m_webPage;
-    BlackBerry::WebKit::WebPageClient* m_pageClient;
+    BlackBerry::WebKit::WebPagePrivate* m_webPagePrivate;
     PageScriptDebugServer& m_debugServer;
 
     JavaScriptCallFrame* m_currentCallFrame;
@@ -79,4 +73,5 @@ private:
 
 } // WebCore
 
+#endif // ENABLE(JAVASCRIPT_DEBUGGER)
 #endif // JavaScriptDebuggerBlackBerry_h

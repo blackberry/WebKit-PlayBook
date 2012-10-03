@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2009 Google Inc. All rights reserved.
+ * Copyright (C) 2009, 2012 Google Inc. All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions are
@@ -31,9 +31,9 @@
 #ifndef WebPlugin_h
 #define WebPlugin_h
 
-#include "WebCanvas.h"
-#include "WebString.h"
-#include "WebURL.h"
+#include "platform/WebCanvas.h"
+#include "platform/WebString.h"
+#include "platform/WebURL.h"
 
 struct NPObject;
 
@@ -57,6 +57,11 @@ public:
     virtual void destroy() = 0;
 
     virtual NPObject* scriptableObject() = 0;
+
+    // Returns true if the form submission value is successfully obtained
+    // from the plugin. The value would be associated with the name attribute
+    // of the corresponding object element.
+    virtual bool getFormValue(WebString&) { return false; }
 
     virtual void paint(WebCanvas*, const WebRect&) = 0;
 
@@ -119,6 +124,16 @@ public:
     virtual void selectFindResult(bool forward) { }
     // Tells the plugin that the user has stopped the find operation.
     virtual void stopFind() { }
+
+    // View rotation types.
+    enum RotationType {
+        RotationType90Clockwise,
+        RotationType90Counterclockwise
+    };
+    // Whether the plugin can rotate the view of its content.
+    virtual bool canRotateView() { return false; }
+    // Rotates the plugin's view of its content.
+    virtual void rotateView(RotationType type) { }
 
 protected:
     ~WebPlugin() { }

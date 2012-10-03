@@ -29,6 +29,7 @@
 #include <gio/gio.h>
 #include <glib.h>
 #include <glib/gstdio.h>
+#include <wtf/gobject/GlibUtilities.h>
 #include <wtf/gobject/GRefPtr.h>
 #include <wtf/text/CString.h>
 
@@ -176,15 +177,10 @@ String pathGetFileName(const String& pathName)
 
 CString applicationDirectoryPath()
 {
-#if OS(LINUX)
-    // Handle the /proc filesystem case.
-    char pathFromProc[PATH_MAX] = {0};
-    if (readlink("/proc/self/exe", pathFromProc, sizeof(pathFromProc) - 1) == -1)
-        return CString();
+    CString path = getCurrentExecutablePath();
+    if (!path.isNull())
+        return path;
 
-    GOwnPtr<char> dirname(g_path_get_dirname(pathFromProc));
-    return dirname.get();
-#elif OS(UNIX)
     // If the above fails, check the PATH env variable.
     GOwnPtr<char> currentExePath(g_find_program_in_path(g_get_prgname()));
     if (!currentExePath.get())
@@ -192,9 +188,26 @@ CString applicationDirectoryPath()
 
     GOwnPtr<char> dirname(g_path_get_dirname(currentExePath.get()));
     return dirname.get();
+}
+
+CString sharedResourcesPath()
+{
+    static CString cachedPath;
+    if (!cachedPath.isNull())
+        return cachedPath;
+
+#if OS(WINDOWS)
+    HMODULE hmodule = 0;
+    GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, reinterpret_cast<char*>(sharedResourcesPath), &hmodule);
+
+    GOwnPtr<gchar> runtimeDir(g_win32_get_package_installation_directory_of_module(hmodule));
+    GOwnPtr<gchar> dataPath(g_build_filename(runtimeDir.get(), "share", "webkitgtk-"WEBKITGTK_API_VERSION_STRING, NULL));
 #else
-    return CString();
+    GOwnPtr<gchar> dataPath(g_build_filename(DATA_DIR, "webkitgtk-"WEBKITGTK_API_VERSION_STRING, NULL));
 #endif
+
+    cachedPath = dataPath.get();
+    return cachedPath;
 }
 
 uint64_t getVolumeFreeSizeForPath(const char* path)

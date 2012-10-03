@@ -3,16 +3,17 @@ Unit tests for WebCore text iterator
 On success, you will see a series of "PASS" messages, followed by "TEST COMPLETE".
 
 
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be . Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be a. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be a. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be a
-b. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be debugging this note. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be Hello
-. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.selectNodeContents(testDocument.body); plainText.plainText(range) should be hey. Threw exception ReferenceError: Can't find variable: plainText
-FAIL range.setStartBefore(testDocument.body); range.setEndAfter(testDocument.body); plainText.plainText(range) should be hey. Threw exception ReferenceError: Can't find variable: plainText
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is ""
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is "a"
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is "a"
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is "a\nb"
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is "debugging this note"
+FAIL range.selectNodeContents(testDocument.body); internals.rangeAsText(range) should be Hello
+. Was Hello
+
+.
+PASS range.selectNodeContents(testDocument.body); internals.rangeAsText(range) is "hey"
+PASS range.setStartBefore(testDocument.body); range.setEndAfter(testDocument.body); internals.rangeAsText(range) is "hey"
 PASS successfullyParsed is true
 
 TEST COMPLETE

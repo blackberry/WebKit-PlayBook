@@ -37,7 +37,7 @@
 #include "WebIDBKey.h"
 #include "WebIDBKeyRange.h"
 #include "WebIDBTransaction.h"
-#include "WebSerializedScriptValue.h"
+#include "platform/WebSerializedScriptValue.h"
 
 using namespace WebCore;
 
@@ -82,14 +82,19 @@ void WebIDBObjectStoreImpl::deleteFunction(const WebIDBKey& key, WebIDBCallbacks
     m_objectStore->deleteFunction(key, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
 }
 
+void WebIDBObjectStoreImpl::deleteFunction(const WebIDBKeyRange& keyRange, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
+{
+    m_objectStore->deleteFunction(keyRange, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
+}
+
 void WebIDBObjectStoreImpl::clear(WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
 {
     m_objectStore->clear(IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
 }
 
-WebIDBIndex* WebIDBObjectStoreImpl::createIndex(const WebString& name, const WebString& keyPath, bool unique, const WebIDBTransaction& transaction, WebExceptionCode& ec)
+WebIDBIndex* WebIDBObjectStoreImpl::createIndex(const WebString& name, const WebString& keyPath, bool unique, bool multiEntry, const WebIDBTransaction& transaction, WebExceptionCode& ec)
 {
-    RefPtr<IDBIndexBackendInterface> index = m_objectStore->createIndex(name, keyPath, unique, transaction.getIDBTransactionBackendInterface(), ec);
+    RefPtr<IDBIndexBackendInterface> index = m_objectStore->createIndex(name, keyPath, unique, multiEntry, transaction.getIDBTransactionBackendInterface(), ec);
     if (!index)
         return 0;
     return new WebIDBIndexImpl(index);
@@ -111,6 +116,11 @@ void WebIDBObjectStoreImpl::deleteIndex(const WebString& name, const WebIDBTrans
 void WebIDBObjectStoreImpl::openCursor(const WebIDBKeyRange& keyRange, unsigned short direction, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
 {
     m_objectStore->openCursor(keyRange, direction, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
+}
+
+void WebIDBObjectStoreImpl::count(const WebIDBKeyRange& keyRange, WebIDBCallbacks* callbacks, const WebIDBTransaction& transaction, WebExceptionCode& ec)
+{
+    m_objectStore->count(keyRange, IDBCallbacksProxy::create(adoptPtr(callbacks)), transaction.getIDBTransactionBackendInterface(), ec);
 }
 
 } // namespace WebKit

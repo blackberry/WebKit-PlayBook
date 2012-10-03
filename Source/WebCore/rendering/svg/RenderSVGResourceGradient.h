@@ -44,13 +44,12 @@ class GraphicsContext;
 class RenderSVGResourceGradient : public RenderSVGResourceContainer {
 public:
     RenderSVGResourceGradient(SVGGradientElement*);
-    virtual ~RenderSVGResourceGradient();
 
     virtual void removeAllClientsFromCache(bool markForInvalidation = true);
     virtual void removeClientFromCache(RenderObject*, bool markForInvalidation = true);
 
     virtual bool applyResource(RenderObject*, RenderStyle*, GraphicsContext*&, unsigned short resourceMode);
-    virtual void postApplyResource(RenderObject*, GraphicsContext*&, unsigned short resourceMode, const Path*);
+    virtual void postApplyResource(RenderObject*, GraphicsContext*&, unsigned short resourceMode, const Path*, const RenderSVGShape*);
     virtual FloatRect resourceBoundingBox(RenderObject*) { return FloatRect(); }
 
 protected:
@@ -65,7 +64,7 @@ protected:
 
 private:
     bool m_shouldCollectGradientAttributes : 1;
-    HashMap<RenderObject*, GradientData*> m_gradient;
+    HashMap<RenderObject*, OwnPtr<GradientData> > m_gradientMap;
 
 #if USE(CG)
     GraphicsContext* m_savedContext;

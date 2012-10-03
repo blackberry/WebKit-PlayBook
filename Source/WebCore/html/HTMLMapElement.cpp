@@ -82,7 +82,7 @@ bool HTMLMapElement::mapMouseEvent(LayoutPoint location, const LayoutSize& size,
 
 HTMLImageElement* HTMLMapElement::imageElement()
 {
-    RefPtr<HTMLCollection> coll = document()->images();
+    HTMLCollection* coll = document()->images();
     for (Node* curr = coll->firstItem(); curr; curr = coll->nextItem()) {
         if (!curr->hasTagName(imgTag))
             continue;
@@ -98,7 +98,7 @@ HTMLImageElement* HTMLMapElement::imageElement()
     return 0;    
 }
 
-void HTMLMapElement::parseMappedAttribute(Attribute* attribute)
+void HTMLMapElement::parseAttribute(Attribute* attribute)
 {
     // FIXME: This logic seems wrong for XML documents.
     // Either the id or name will be used depending on the order the attributes are parsed.
@@ -107,7 +107,7 @@ void HTMLMapElement::parseMappedAttribute(Attribute* attribute)
     if (isIdAttributeName(attrName) || attrName == nameAttr) {
         if (isIdAttributeName(attrName)) {
             // Call base class so that hasID bit gets set.
-            HTMLElement::parseMappedAttribute(attribute);
+            HTMLElement::parseAttribute(attribute);
             if (document()->isHTMLDocument())
                 return;
         }
@@ -119,15 +119,16 @@ void HTMLMapElement::parseMappedAttribute(Attribute* attribute)
         m_name = document()->isHTMLDocument() ? mapName.lower() : mapName;
         if (inDocument())
             treeScope()->addImageMap(this);
+
         return;
     }
 
-    HTMLElement::parseMappedAttribute(attribute);
+    HTMLElement::parseAttribute(attribute);
 }
 
-PassRefPtr<HTMLCollection> HTMLMapElement::areas()
+HTMLCollection* HTMLMapElement::areas()
 {
-    return HTMLCollection::create(this, MapAreas);
+    return ensureCachedHTMLCollection(MapAreas);
 }
 
 void HTMLMapElement::insertedIntoDocument()
